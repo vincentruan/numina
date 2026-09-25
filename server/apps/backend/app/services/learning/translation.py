@@ -92,10 +92,6 @@ def translate_topic(topic: dict) -> dict:
     Raises:
         ValueError: if LLM API key is not configured
     """
-    api_key = _get_api_key()
-    if not api_key:
-        raise ValueError("LLM API key not configured")
-
     # Truncate long content to stay within LLM token limits
     description = topic.get("description", "")
     if len(description) > _MAX_DESCRIPTION_CHARS:

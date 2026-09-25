@@ -295,16 +295,30 @@ def notify_learning_rejected(
 
 def notify_learning_streak_3_failures(
     db: Session,
-    family_id: int,
-    child_name: str,
-    topic_name: str,
-    subject: str,
+    child_id: int,
+    topic_id: int,
 ) -> None:
-    """Notify parent that child has 3 consecutive failures on a topic."""
-    # NOTE: Do NOT use ensure_reminder here — its dedup is scoped to
-    # (family_id, reminder_type, asset_id=None), which would suppress
-    # legitimate streak notifications for different children/topics.
-    # Create the Reminder directly with streak-specific dedup.
+    """Notify parent that child has 3 consecutive failures on a topic.
+
+    Looks up the child User and topic internally. Dedup is scoped to
+    (family_id, reminder_type, child+topic in title) so that a new streak
+    after a pass can fire again.
+    """
+    from packages.db.models.learning.topic import LearningTopic
+
+    topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
+    child_user = db.query(User).filter(User.id == child_id).first()
+    if not child_user or not topic:
+        return
+
+    family_id = child_user.family_id
+    child_name = child_user.display_name or child_user.username
+    topic_name = topic.name_zh or topic.name or topic.topic_key
+    subject = topic.subject
+
+    # Dedup: only one active streak notification per child+topic combo.
+    # When the streak is broken (pass) and rebuilds, the old reminder should
+    # have been resolved, allowing a fresh notification.
     existing = (
         db.query(Reminder)
         .filter_by(

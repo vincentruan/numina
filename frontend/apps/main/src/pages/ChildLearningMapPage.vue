@@ -82,6 +82,7 @@ import {
 } from '@/api/learning'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { hasChineseChars } from '@numina/shared'
 
 const { t, locale } = useI18n()
 const { topicDisplayName, topicDescription } = useLocalizedTopic()
@@ -166,7 +167,7 @@ function masteryLabel(level: string): string {
 
 function shouldShowTranslate(topic: TopicResponse): boolean {
   if (locale.value !== 'zh-CN') return false
-  if (topic.name && /[一-鿿]/.test(topic.name)) return false
+  if (hasChineseChars(topic.name)) return false
   return true
 }
 

@@ -347,8 +347,8 @@ def record_failed_assessment(
     if the consecutive failure count has reached the threshold.
 
     Returns:
-        Current consecutive failure count. Caller should dispatch notification
-        if return value == STREAK_THRESHOLD (exactly 3, not > 3 to avoid duplicates).
+        Current consecutive failure count. Notification is dispatched
+        automatically when count reaches STREAK_THRESHOLD.
     """
     attempt = LearningAssessmentAttempt(
         child_id=child_id,
@@ -368,19 +368,8 @@ def record_failed_assessment(
         from apps.backend.app.services.notification.dispatcher import (
             notify_learning_streak_3_failures,
         )
-        from packages.db.models.user import User
 
-        topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
-        # child_id references users.id directly — children are User rows with role="child"
-        child_user = db.query(User).filter(User.id == child_id).first()
-        if child_user and topic:
-            notify_learning_streak_3_failures(
-                db,
-                family_id=child_user.family_id,
-                child_name=child_user.display_name or child_user.username,
-                topic_name=topic.name_zh or topic.name or topic.topic_key,
-                subject=topic.subject,
-            )
+        notify_learning_streak_3_failures(db, child_id=child_id, topic_id=topic_id)
 
     return streak
 

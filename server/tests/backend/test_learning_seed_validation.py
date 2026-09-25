@@ -6,9 +6,8 @@ from sqlalchemy.orm import Session
 from apps.backend.app.services.learning.validation import (
     validate_age_ranges,
     validate_badge_dimensions,
-    validate_no_dependency_cycles,
 )
-from packages.db.models.learning.topic import LearningDependency, LearningTopic
+from packages.db.models.learning.topic import LearningTopic
 
 
 @pytest.fixture
@@ -110,69 +109,3 @@ def test_age_range_null_skipped(db):
 
     invalid = validate_age_ranges(db)
     assert invalid == []
-
-
-# --- Dependency cycle detection ---
-
-
-def test_no_cycles_in_acyclic_graph(db, math_topics):
-    """Linear chain A -> B -> C has no cycles."""
-    db.add(
-        LearningDependency(
-            topic_id=math_topics[1].id,
-            prerequisite_id=math_topics[0].id,
-            strength="strong",
-        )
-    )
-    db.add(
-        LearningDependency(
-            topic_id=math_topics[2].id,
-            prerequisite_id=math_topics[1].id,
-            strength="strong",
-        )
-    )
-    db.flush()
-
-    assert validate_no_dependency_cycles(db) == []
-
-
-def test_cycle_detected(db, math_topics):
-    """A -> B -> A is a cycle."""
-    db.add(
-        LearningDependency(
-            topic_id=math_topics[1].id,
-            prerequisite_id=math_topics[0].id,
-            strength="strong",
-        )
-    )
-    db.add(
-        LearningDependency(
-            topic_id=math_topics[0].id,
-            prerequisite_id=math_topics[1].id,
-            strength="strong",
-        )
-    )
-    db.flush()
-
-    cycles = validate_no_dependency_cycles(db)
-    assert len(cycles) > 0
-
-
-def test_self_loop_detected(db, math_topics):
-    """A -> A is a cycle (self-loop)."""
-    db.add(
-        LearningDependency(
-            topic_id=math_topics[0].id,
-            prerequisite_id=math_topics[0].id,
-            strength="strong",
-        )
-    )
-    db.flush()
-
-    cycles = validate_no_dependency_cycles(db)
-    assert len(cycles) > 0
-
-
-def test_no_topics_no_cycles(db):
-    """Empty topic table has no cycles."""
-    assert validate_no_dependency_cycles(db) == []

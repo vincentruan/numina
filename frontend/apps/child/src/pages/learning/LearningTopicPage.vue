@@ -148,6 +148,7 @@ import {
   type TopicGraphResponse,
 } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
+import { hasChineseChars } from '@numina/shared'
 
 const { t, locale } = useI18n()
 const { topicDisplayName, topicDescription } = useLocalizedTopic()
@@ -187,7 +188,7 @@ const showTranslateButton = computed(() => {
   if (locale.value !== 'zh-CN') return false
   if (!topic.value) return false
   // Don't offer translation for originally-Chinese content
-  if (topic.value.name && /[一-鿿]/.test(topic.value.name)) return false
+  if (hasChineseChars(topic.value.name)) return false
   return true
 })
 

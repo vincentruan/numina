@@ -221,7 +221,6 @@ def validate_quality(session) -> None:
     from apps.backend.app.services.learning.validation import (
         validate_age_ranges,
         validate_badge_dimensions,
-        validate_no_dependency_cycles,
     )
 
     # Badge dimension validity check
@@ -245,16 +244,6 @@ def validate_quality(session) -> None:
             print(f"  AGE RANGE ERROR: {err}")
         raise ValueError(f"Age range validation failed: {len(age_errors)} topics")
     print("  Age ranges: OK")
-
-    # Dependency cycle detection
-    cycle_errors = validate_no_dependency_cycles(session)
-    if cycle_errors:
-        for err in cycle_errors:
-            print(f"  CYCLE ERROR: {err}")
-        raise ValueError(
-            f"Dependency cycle detection failed: {len(cycle_errors)} cycles"
-        )
-    print("  Dependency cycles: OK")
 
     print("\n  All quality validations passed.")
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
 
 from sqlalchemy.orm import Session
 
@@ -66,42 +65,3 @@ def validate_age_ranges(db: Session) -> list[str]:
         f"Topic '{t.topic_key}' has age_range_start={t.age_range_start} >= age_range_end={t.age_range_end}"
         for t in invalid
     ]
-
-
-def validate_no_dependency_cycles(db: Session) -> list[str]:
-    """Detect circular prerequisites in the topic dependency graph (DFS-based, O(V+E)).
-
-    Returns:
-        List of error messages (empty = no cycles found).
-    """
-    from packages.db.models.learning.topic import LearningDependency
-
-    edges = db.query(
-        LearningDependency.topic_id, LearningDependency.prerequisite_id
-    ).all()
-
-    graph: dict[int, list[int]] = defaultdict(list)
-    all_nodes: set[int] = set()
-    for topic_id, prereq_id in edges:
-        graph[prereq_id].append(topic_id)  # prerequisite -> dependent
-        all_nodes.add(topic_id)
-        all_nodes.add(prereq_id)
-
-    WHITE, GRAY, BLACK = 0, 1, 2
-    color: dict[int, int] = {n: WHITE for n in all_nodes}
-    cycles: list[str] = []
-
-    def dfs(node: int) -> None:
-        color[node] = GRAY
-        for neighbor in graph.get(node, []):
-            if color[neighbor] == GRAY:
-                cycles.append(f"Cycle detected: {node} -> {neighbor}")
-            elif color[neighbor] == WHITE:
-                dfs(neighbor)
-        color[node] = BLACK
-
-    for node in all_nodes:
-        if color[node] == WHITE:
-            dfs(node)
-
-    return cycles

@@ -171,3 +171,42 @@ def test_streak_notification_content_includes_child_and_topic(db, child, topic):
     ).first()
     assert reminder is not None
     assert "Streak Kid" in reminder.title or "Streak Kid" in reminder.body
+
+
+def test_streak_notification_retriggers_after_pass_breaks_streak(db, child, topic):
+    """After a pass breaks the streak, a new 3-failure streak fires another notification."""
+    get_or_create_progress(db, int(child["id"]), topic.id)
+    cid = int(child["id"])
+
+    # First streak of 3 → notification fires
+    for _ in range(3):
+        record_failed_assessment(db, cid, topic.id, None, 0.3)
+
+    count_after_first = db.query(Reminder).filter_by(
+        reminder_type="learning_streak_3_failures"
+    ).count()
+    assert count_after_first == 1
+
+    # Resolve the first notification (simulating parent acknowledging it)
+    reminder = db.query(Reminder).filter_by(
+        reminder_type="learning_streak_3_failures",
+        status="active",
+    ).first()
+    reminder.status = "resolved"
+    db.flush()
+
+    # A pass breaks the streak
+    db.add(LearningAssessmentAttempt(
+        child_id=cid, topic_id=topic.id,
+        assessment_type="ai", passed=True, score=0.9,
+    ))
+    db.flush()
+
+    # New streak of 3 → second notification fires
+    for _ in range(3):
+        record_failed_assessment(db, cid, topic.id, None, 0.2)
+
+    count_after_second = db.query(Reminder).filter_by(
+        reminder_type="learning_streak_3_failures"
+    ).count()
+    assert count_after_second == 2
