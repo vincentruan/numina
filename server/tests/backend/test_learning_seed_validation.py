@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.services.learning.validation import (
     validate_age_ranges,
-    validate_badge_dimensions,
+    validate_badge_subjects,
 )
 from packages.db.models.learning.topic import LearningTopic
 
@@ -33,27 +33,28 @@ def math_topics(db: Session):
     return topics
 
 
-# --- Badge dimension validity ---
+# --- Badge subject validity ---
 
 
-def test_badge_dimensions_all_valid():
-    """All recognized ability dimensions pass."""
-    valid_dims = {"numerical_reasoning", "spatial_reasoning", "creative_thinking"}
-    result = validate_badge_dimensions(valid_dims)
+def test_badge_subjects_all_valid(db, math_topics):
+    """Subjects that exist in LearningTopic pass validation."""
+    # math_topics fixture creates topics with subject="mathematics"
+    valid_subjects = {"mathematics"}
+    result = validate_badge_subjects(valid_subjects, db)
     assert result == []
 
 
-def test_badge_dimensions_unknown_dimension():
-    """An unrecognized dimension fails validation."""
-    invalid_dims = {"numerical_reasoning", "astrology"}
-    result = validate_badge_dimensions(invalid_dims)
+def test_badge_subjects_unknown_subject(db, math_topics):
+    """A subject not in any LearningTopic fails validation."""
+    invalid_subjects = {"mathematics", "astrology"}
+    result = validate_badge_subjects(invalid_subjects, db)
     assert len(result) == 1
     assert "astrology" in result[0]
 
 
-def test_badge_dimensions_empty_set_ok():
-    """No badges defined at all -> nothing to validate -> passes."""
-    result = validate_badge_dimensions(set())
+def test_badge_subjects_empty_set_ok(db):
+    """No badges defined -> nothing to validate -> passes."""
+    result = validate_badge_subjects(set(), db)
     assert result == []
 
 

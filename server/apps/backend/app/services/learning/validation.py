@@ -10,36 +10,27 @@ from packages.db.models.learning.topic import LearningTopic
 
 logger = logging.getLogger(__name__)
 
-# Known ability dimensions — must match translation.py ABILITY_DIMENSIONS
-_KNOWN_ABILITY_DIMENSIONS = {
-    "numerical_reasoning",
-    "spatial_reasoning",
-    "verbal_reasoning",
-    "scientific_inquiry",
-    "computational_thinking",
-    "social_emotional",
-    "creative_thinking",
-    "physical_kinesthetic",
-    "memory_recall",
-    "metacognition",
-}
 
-
-def validate_badge_dimensions(badge_dimensions: set[str]) -> list[str]:
-    """Verify all badge dimensions are recognized ability dimensions.
+def validate_badge_subjects(badge_subjects: set[str], db: Session) -> list[str]:
+    """Verify all badge subjects exist as LearningTopic.subject values.
 
     The badge model (LiteracyBadgeDefinition) uses a `dimension` field
-    storing ability dimension names (e.g., "numerical_reasoning"), NOT
-    topic subjects. This check ensures badge dimensions are valid.
+    storing subject slugs (e.g., "mathematics", "science") that must match
+    actual LearningTopic.subject values in the seed data.
 
     Returns:
         List of error messages (empty = all good).
     """
+    existing_subjects = {
+        row[0]
+        for row in db.query(LearningTopic.subject).distinct().all()
+        if row[0]
+    }
     errors = []
-    for dim in sorted(badge_dimensions):
-        if dim not in _KNOWN_ABILITY_DIMENSIONS:
+    for subj in sorted(badge_subjects):
+        if subj not in existing_subjects:
             errors.append(
-                f"Badge dimension '{dim}' is not a recognized ability dimension"
+                f"Badge subject '{subj}' does not match any LearningTopic.subject"
             )
     return errors
 

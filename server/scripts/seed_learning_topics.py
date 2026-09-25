@@ -220,22 +220,22 @@ def validate_quality(session) -> None:
     # --- New validations (OQ-6) ---
     from apps.backend.app.services.learning.validation import (
         validate_age_ranges,
-        validate_badge_dimensions,
+        validate_badge_subjects,
     )
 
-    # Badge dimension validity check
+    # Badge subject validity check — badge dimensions must match LearningTopic.subject
     from packages.db.models.literacy_badge import LiteracyBadgeDefinition
 
-    badge_dims = set(
+    badge_subjects = set(
         r[0]
         for r in session.query(LiteracyBadgeDefinition.dimension).distinct().all()
     )
-    dim_errors = validate_badge_dimensions(badge_dims)
-    if dim_errors:
-        for err in dim_errors:
-            print(f"  BADGE DIMENSION ERROR: {err}")
-        raise ValueError(f"Badge dimension validation failed: {dim_errors}")
-    print("  Badge dimensions: OK")
+    subject_errors = validate_badge_subjects(badge_subjects, session)
+    if subject_errors:
+        for err in subject_errors:
+            print(f"  BADGE SUBJECT ERROR: {err}")
+        raise ValueError(f"Badge subject validation failed: {subject_errors}")
+    print("  Badge subjects: OK")
 
     # Age range sanity
     age_errors = validate_age_ranges(session)
