@@ -11,6 +11,7 @@ in ``learning_family.py`` and ``learning_child.py`` respectively.
 import json
 import logging
 
+import httpx
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -24,8 +25,8 @@ from apps.backend.app.schemas.learning import (
     TopicGraphResponse,
     TopicResponse,
 )
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.learning import topic_service
-from apps.backend.app.services.learning.translation import translate_topic
 from packages.db.models.learning.topic import LearningTopic
 
 logger = logging.getLogger(__name__)
@@ -119,12 +120,16 @@ def list_subjects(db: Session = Depends(get_db)):
 
 
 @router.post("/topics/{topic_id}/translate")
-def translate_topic_endpoint(
+async def translate_topic_endpoint(
     topic_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_adult),
+    current_user: User = Depends(require_adult),
 ):
-    """Translate a topic's English content to Chinese on demand."""
+    """Translate a topic's English content to Chinese on demand.
+
+    Proxies to the agent module which uses the family's configured AI provider
+    via ``LLMClient.complete_json()`` (multi-provider, circuit-breaker-aware).
+    """
     topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
     if not topic:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
@@ -137,11 +142,16 @@ def translate_topic_endpoint(
     }
 
     try:
-        translated = translate_topic(topic_dict)
-    except ValueError:
+        agent_client = AgentClient(
+            current_user.family_id, current_user.id, timeout=60.0,
+        )
+        resp = await agent_client.post("/translate/topic", json=topic_dict)
+        resp.raise_for_status()
+        translated = resp.json()
+    except httpx.TimeoutException:
         raise AppError(ErrorCode.LEARNING_TRANSLATION_UNAVAILABLE) from None
     except Exception:
-        logger.exception("Translation LLM call failed for topic %s", topic_id)
+        logger.exception("Translation proxy call failed for topic %s", topic_id)
         raise AppError(ErrorCode.LEARNING_TRANSLATION_UNAVAILABLE) from None
 
     # Persist translated fields
