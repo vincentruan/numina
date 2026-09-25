@@ -1,8 +1,9 @@
 """Global API rate limiting middleware.
 
 Rate Limiting Strategy:
-- Uses in-memory storage (class-level dict) for rate limit counters
-- Limits: 100 requests per minute per client (configurable via GLOBAL_RATE_LIMIT_PER_MINUTE)
+- Uses unified Cache layer (memory or redis) for rate limit counters
+- Fixed-window algorithm via Cache.increment() + TTL
+- Limits: configured via GLOBAL_RATE_LIMIT_PER_MINUTE
 - Client identification: Authenticated users by decoded user_id, unauthenticated by real IP
 
 Trusted Proxy Validation:
@@ -11,13 +12,8 @@ Trusted Proxy Validation:
 - Falls back to socket address if untrusted or invalid
 
 Trade-offs:
-- Single-worker deployment: Works as expected
-- Multi-worker deployment: Each worker maintains independent rate limit state.
-  This means the effective limit = workers × configured limit.
-  For distributed rate limiting, implement RedisCacheBackend and modify
-  _check_rate_limit() to use the cache layer.
-
-See design.md for detailed trade-off analysis.
+- Memory mode: single-worker deployment, each worker independent
+- Redis mode: distributed rate limiting across all workers
 """
 
 import ipaddress

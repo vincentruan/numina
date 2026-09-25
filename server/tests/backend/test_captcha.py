@@ -57,7 +57,7 @@ class TestPayloadRegistry:
         init_cache(backend='memory')
 
     async def test_cache_factory_returns_instance(self):
-        """Test that captcha payload cache factory returns a CacheBackend."""
+        """Test that cache factory returns a Cache instance."""
         reset_cache()
         init_cache(backend='memory')
         cache = get_cache()
