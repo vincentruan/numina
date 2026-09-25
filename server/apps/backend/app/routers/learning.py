@@ -34,7 +34,7 @@ router = APIRouter(prefix="/learning", tags=["learning"])
 
 
 def _topic_to_response(topic: LearningTopic) -> dict:
-    """Convert topic to response dict, preferring translated fields when available."""
+    """Convert topic to response dict. Main fields are raw English; _zh fields exposed for frontend locale selection."""
     return {
         "id": topic.id,
         "topic_key": topic.topic_key,
