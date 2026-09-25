@@ -33,6 +33,33 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/learning", tags=["learning"])
 
 
+def _topic_to_response(topic: LearningTopic) -> dict:
+    """Convert topic to response dict, preferring translated fields when available."""
+    return {
+        "id": topic.id,
+        "topic_key": topic.topic_key,
+        "topic_type": topic.topic_type,
+        "subject": topic.subject,
+        "domain": topic.domain,
+        "name": topic.name_zh or topic.name,
+        "description": topic.description_zh or topic.description,
+        "age_range_start": topic.age_range_start,
+        "age_range_end": topic.age_range_end,
+        "age_group": topic.age_group,
+        "centrality": topic.centrality,
+        "evidence": topic.evidence_zh or topic.evidence or [],
+        "assessment_prompt": topic.assessment_prompt_zh or topic.assessment_prompt,
+        "standards": topic.standards or [],
+        "ability_dimensions": topic.ability_dimensions,
+        "deprecated": topic.deprecated,
+        # Expose raw fields so frontend can detect translation status
+        "name_zh": topic.name_zh,
+        "description_zh": topic.description_zh,
+        "evidence_zh": topic.evidence_zh,
+        "assessment_prompt_zh": topic.assessment_prompt_zh,
+    }
+
+
 @router.get("/topics/batch", response_model=list[TopicResponse])
 def get_topics_batch(
     ids: str = Query(..., description="Comma-separated topic IDs"),
@@ -45,7 +72,8 @@ def get_topics_batch(
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND) from None
     if not topic_ids:
         return []
-    return topic_service.list_topics_by_ids(db, topic_ids)
+    topics = topic_service.list_topics_by_ids(db, topic_ids)
+    return [_topic_to_response(t) for t in topics]
 
 
 @router.get("/topics", response_model=list[TopicResponse])
@@ -57,10 +85,11 @@ def list_topics(
     limit: int = 20,
     db: Session = Depends(get_db),
 ):
-    return topic_service.list_topics(
+    topics = topic_service.list_topics(
         db, subject=subject, domain=domain, age_group=age_group,
         search=search, limit=limit,
     )
+    return [_topic_to_response(t) for t in topics]
 
 
 @router.get("/topics/{topic_id}", response_model=TopicResponse)
@@ -68,7 +97,7 @@ def get_topic(topic_id: int, db: Session = Depends(get_db)):
     topic = topic_service.get_topic_by_id(db, topic_id)
     if not topic:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
-    return topic
+    return _topic_to_response(topic)
 
 
 @router.get("/topics/{topic_id}/graph", response_model=TopicGraphResponse)

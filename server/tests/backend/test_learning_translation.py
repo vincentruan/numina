@@ -204,3 +204,26 @@ def test_translate_endpoint_no_api_key(client, db: Session, english_topic, auth_
     with patch("apps.backend.app.services.learning.translation._get_api_key", return_value=None):
         resp = client.post(f"/api/v1/learning/topics/{english_topic.id}/translate", headers=auth_headers)
     assert resp.status_code == 503
+
+
+# --- Fallback tests (OQ-2 Task 3) ---
+
+
+def test_topic_response_prefers_translated_fields(client, db: Session, english_topic):
+    """When _zh fields are populated, topic GET returns them."""
+    english_topic.name_zh = "分数基础"
+    english_topic.description_zh = "分数介绍。"
+    db.flush()
+
+    resp = client.get(f"/api/v1/learning/topics/{english_topic.id}")
+    data = resp.json()["data"]
+    assert data["name"] == "分数基础"
+    assert data["description"] == "分数介绍。"
+
+
+def test_topic_response_falls_back_to_english(client, db: Session, english_topic):
+    """When _zh fields are None, topic GET returns English originals."""
+    resp = client.get(f"/api/v1/learning/topics/{english_topic.id}")
+    data = resp.json()["data"]
+    assert data["name"] == "Fraction Basics"
+    assert data["description"] == "Introduction to fractions."
