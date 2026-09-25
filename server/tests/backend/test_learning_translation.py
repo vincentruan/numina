@@ -210,15 +210,19 @@ def test_translate_endpoint_no_api_key(client, db: Session, english_topic, auth_
 
 
 def test_topic_response_prefers_translated_fields(client, db: Session, english_topic):
-    """When _zh fields are populated, topic GET returns them."""
+    """When _zh fields are populated, topic GET returns English in main fields and _zh in translated fields."""
     english_topic.name_zh = "分数基础"
     english_topic.description_zh = "分数介绍。"
     db.flush()
 
     resp = client.get(f"/api/v1/learning/topics/{english_topic.id}")
     data = resp.json()["data"]
-    assert data["name"] == "分数基础"
-    assert data["description"] == "分数介绍。"
+    # Main fields always return English
+    assert data["name"] == "Fraction Basics"
+    assert data["description"] == "Introduction to fractions."
+    # _zh fields carry the translated values
+    assert data["name_zh"] == "分数基础"
+    assert data["description_zh"] == "分数介绍。"
 
 
 def test_topic_response_falls_back_to_english(client, db: Session, english_topic):
