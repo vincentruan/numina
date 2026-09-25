@@ -58,11 +58,11 @@ async def test_status_returns_idle_when_no_task():
     ) as mock_session_svc:
         mock_session_svc.get_session.return_value = fake_session
 
-        # AITask query returns empty list (no task)
+        # AITask query returns None via .first() (no task)
         query_mock = MagicMock()
         filter_mock = MagicMock()
         order_mock = MagicMock()
-        order_mock.all.return_value = []
+        order_mock.first.return_value = None
         filter_mock.order_by.return_value = order_mock
         query_mock.filter.return_value = filter_mock
         db.query.return_value = query_mock
@@ -102,7 +102,7 @@ async def test_status_returns_running_when_task_active():
         query_mock = MagicMock()
         filter_mock = MagicMock()
         order_mock = MagicMock()
-        order_mock.all.return_value = [fake_task]
+        order_mock.first.return_value = fake_task
         filter_mock.order_by.return_value = order_mock
         query_mock.filter.return_value = filter_mock
         db.query.return_value = query_mock
@@ -140,7 +140,7 @@ async def test_status_returns_completed():
         query_mock = MagicMock()
         filter_mock = MagicMock()
         order_mock = MagicMock()
-        order_mock.all.return_value = [fake_task]
+        order_mock.first.return_value = fake_task
         filter_mock.order_by.return_value = order_mock
         query_mock.filter.return_value = filter_mock
         db.query.return_value = query_mock
@@ -173,7 +173,7 @@ async def test_status_returns_failed():
         query_mock = MagicMock()
         filter_mock = MagicMock()
         order_mock = MagicMock()
-        order_mock.all.return_value = [fake_task]
+        order_mock.first.return_value = fake_task
         filter_mock.order_by.return_value = order_mock
         query_mock.filter.return_value = filter_mock
         db.query.return_value = query_mock
@@ -210,7 +210,7 @@ async def test_status_returns_interrupted_when_lease_expired():
         query_mock = MagicMock()
         filter_mock = MagicMock()
         order_mock = MagicMock()
-        order_mock.all.return_value = [fake_task]
+        order_mock.first.return_value = fake_task
         filter_mock.order_by.return_value = order_mock
         query_mock.filter.return_value = filter_mock
         db.query.return_value = query_mock
