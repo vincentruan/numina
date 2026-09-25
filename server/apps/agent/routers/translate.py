@@ -54,4 +54,4 @@ async def translate_topic_endpoint(
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception:
         logger.exception("Translation LLM call failed")
-        raise HTTPException(status_code=503, detail="Translation service unavailable")
+        raise HTTPException(status_code=503, detail="Translation service unavailable") from None
