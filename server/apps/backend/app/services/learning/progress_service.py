@@ -307,6 +307,63 @@ def aggregate_study_minutes(db: Session, child_id: int) -> dict[str, int]:
     }
 
 
+STREAK_THRESHOLD = 3
+
+
+def check_consecutive_failures(db: Session, child_id: int, topic_id: int) -> int:
+    """Count consecutive failed assessments for a child on a specific topic.
+
+    Walks backward from the most recent attempt. Stops at the first pass
+    or beginning of attempts.
+
+    Returns:
+        Number of consecutive failures (0 if last attempt passed or no attempts).
+    """
+    attempts = (
+        db.query(LearningAssessmentAttempt)
+        .filter_by(child_id=child_id, topic_id=topic_id)
+        .order_by(LearningAssessmentAttempt.created_at.desc())
+        .all()
+    )
+    streak = 0
+    for attempt in attempts:
+        if not attempt.passed:
+            streak += 1
+        else:
+            break
+    return streak
+
+
+def record_failed_assessment(
+    db: Session,
+    child_id: int,
+    topic_id: int,
+    session_id: int | None,
+    score: float | None,
+) -> int:
+    """Record a failed assessment attempt and check for streak notification.
+
+    Creates a LearningAssessmentAttempt with passed=False, then checks
+    if the consecutive failure count has reached the threshold.
+
+    Returns:
+        Current consecutive failure count. Caller should dispatch notification
+        if return value == STREAK_THRESHOLD (exactly 3, not > 3 to avoid duplicates).
+    """
+    attempt = LearningAssessmentAttempt(
+        child_id=child_id,
+        topic_id=topic_id,
+        session_id=session_id,
+        assessment_type="ai",
+        score=score,
+        passed=False,
+    )
+    db.add(attempt)
+    db.flush()
+
+    return check_consecutive_failures(db, child_id, topic_id)
+
+
 def find_recommended_topic(
     db: Session, child_id: int
 ) -> LearningTopic | None:
