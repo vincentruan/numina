@@ -23,6 +23,7 @@ See root [`CLAUDE.md`](../../../CLAUDE.md) for behavioral guidelines and cross-c
 | `session.py` | `Base`, `SessionLocal`, `get_db()` | The single ORM `DeclarativeBase` and session factory |
 | `engine.py` | `_DatabaseBackend`, `_SQLiteBackend`, `_PostgresBackend` | SQLAlchemy engine factory; chooses pool config and `connect_args` per dialect |
 | `models/` | `User`, `Family`, `Asset`, `Liability`, `Currency`, `ExchangeRate`, `DeviceSession`, `RevokedToken`, `Reminder`, `ReminderNotification`, `NotificationChannel`, `NotificationConfig`, `NotificationSubscription`, `AssetSnapshot`, `CachedFile`, `FileRemoteLocation`, `StorageBackend`, `SecurityAuditLog`, `AiTask` | Cross-app ORM entities. App-specific models live in their own apps |
+| `models/learning/` | `LearningTopic`, `LearningDependency`, `LearningCluster`, `LearningSession`, `LearningProgress`, `LearningAssignment` | Learning OS knowledge graph + mastery state (cross-app, seeded from os-taxonomy) |
 
 Alembic migrations (under `apps/backend/alembic/`) reference `Base.metadata` from this package — adding a model here makes it visible to `--autogenerate`.
 

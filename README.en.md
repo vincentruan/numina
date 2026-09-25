@@ -34,11 +34,19 @@ Numina is a fully self-hosted family asset visualization and management system. 
 - **Wish Advice** — Smart wish evaluation and suggestions
 - **Dashboard Narrative** — AI-driven financial summaries and insights
 - **PDF / Image Import** — AI-powered document scanning with batch asset import
+- **AI Learning Tutor** — Knowledge graph-powered AI tutoring with Chinese dialogue, interactive teaching, and adaptive assessment
 
 **Family & Children**
 - **Multi-User Family** — Individual records with family-level aggregation and complete data isolation
 - **Child Incentive System** — Chores for star coins, wish redemption, blind box draws, three-tier currency
 - **Financial Literacy** — Learning scenarios, badge system, AI weekly reports
+- **AI Learning OS** — Children's learning system built on the os-taxonomy knowledge graph, covering 1,590 topics across 8 subjects (math, science, English, etc.)
+  - **Knowledge Map** — Subject and domain-organized knowledge graph with prerequisite/dependent relationships
+  - **AI Tutoring** — DeerFlow-powered streaming AI tutor with Chinese-first dialogue and interactive assessment
+  - **Mastery Tracking** — 7-level state machine (locked → available → learning → assessing → mastered → review) with spaced repetition
+  - **Bilingual Support** — English originals + on-demand LLM Chinese translation with technical terms preserved
+  - **Parent Dashboard** — Children's learning overview, task assignment, review queue, study duration tracking
+  - **Failure Streak Alerts** — Auto-notifies parents after 3 consecutive failed assessments on the same topic
 - **Family Manifesto** — Signable family financial goals and commitments
 
 **Security & Experience**
@@ -54,6 +62,7 @@ Numina is a fully self-hosted family asset visualization and management system. 
 | Frontend | Vue 3 + TypeScript + Vite + Vant 4 + ECharts + Pinia |
 | Backend | Python 3.12+ · FastAPI · SQLAlchemy 2.0 · Alembic |
 | AI Agent | Python 3.12+ · DeerFlow · LangChain · Multi-provider (OpenAI / Anthropic / Ollama) |
+| Streaming | Redis Streams (cross-process event dispatch, Last-Event-ID reconnection) |
 | Database | SQLite (default) · PostgreSQL · MySQL |
 | Deploy | Docker Compose · Nginx · GHCR images |
 
@@ -134,7 +143,9 @@ numina/
 │   │   ├── db/                 # SQLAlchemy models & database sessions
 │   │   ├── domain/             # Domain logic & computations
 │   │   ├── security/           # Auth, encryption, JWT
-│   │   └── storage/            # File storage & encryption
+│   │   ├── storage/            # File storage & encryption
+│   │   └── stream_bridge/      # DeerFlow cross-process event dispatch (Redis Streams)
+│   ├── scripts/                # Data seed scripts (knowledge graph import, badge definitions)
 │   ├── tests/                  # Unified test suite
 │   └── pyproject.toml
 ├── frontend/                   # Vue 3 frontend monorepo (pnpm workspace)
@@ -143,7 +154,8 @@ numina/
 │   │   └── child/              # Child-facing H5 app (:5174)
 │   └── packages/
 │       ├── auth/               # @numina/auth — shared auth package
-│       └── math/               # @numina/math — business logic functions
+│       ├── math/               # @numina/math — business logic functions
+│       └── shared/             # @numina/shared — SSE parsing and shared utilities
 ├── tests/                      # E2E / visual regression tests
 ├── docs/                       # Project documentation
 ├── docker-compose.yml          # Development / default deployment

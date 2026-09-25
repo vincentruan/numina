@@ -40,6 +40,7 @@ src/
 ### Gotchas
 
 - **Route cache**: ChildHome, ChildTasks, ChildLedger, ChildWishes, ChildTreasures
+- **Learning OS**: Knowledge map, AI tutor sessions, mastery tracking — pages under `/learning/*`
 - **Canvas warm cream**: `#fffaf0` (light), `#0a1a1a` (dark) — NOT pure white/black
 
 ## Dark Mode (Clay Warm-Throughout)

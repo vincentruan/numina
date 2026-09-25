@@ -11,7 +11,8 @@ frontend/
 │   └── child/     # Child H5 app (localhost:5174)
 ├── packages/
 │   ├── auth/      # @numina/auth — auth stores, components, axios wiring
-│   └── math/      # @numina/math — pure business-logic functions
+│   ├── math/      # @numina/math — pure business-logic functions
+│   └── shared/    # @numina/shared — SSE parsing and shared utilities
 └── pnpm-workspace.yaml
 ```
 

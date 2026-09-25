@@ -1,6 +1,6 @@
 # server/CLAUDE.md
 
-Server workspace guidance. All Python apps (`backend`, `agent`, `scheduler_worker`) and shared packages (`core`, `db`, `domain`, `security`, `storage`) live here in a single `uv` workspace.
+Server workspace guidance. All Python apps (`backend`, `agent`, `scheduler_worker`) and shared packages (`core`, `db`, `domain`, `security`, `storage`, `stream_bridge`) live here in a single `uv` workspace.
 
 ## Quality Commands
 
@@ -51,7 +51,7 @@ Dependencies flow one-way: `apps/` → `packages/`.
 
 - `apps/` modules **must not** import sibling apps (`from apps.backend import ...` inside agent code is forbidden). Use `packages/` for shared logic, or HTTP via `core/backend_client.py` for agent→backend.
 - `packages/` modules **must not** import `apps/`.
-- `packages/` subpackages (`core`, `db`, `domain`, `security`, `storage`) must not import each other (except `domain` → `db` for ORM models).
+- `packages/` subpackages (`core`, `db`, `domain`, `security`, `storage`, `stream_bridge`) must not import each other (except `domain` → `db` for ORM models).
 
 ## Patterns
 

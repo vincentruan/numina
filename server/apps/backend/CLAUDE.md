@@ -95,6 +95,7 @@ app/
 ├── schemas/           # Pydantic request/response models (all extend SnowflakeBase when returning IDs)
 ├── models/            # SQLAlchemy ORM models (joined to packages.db.session.Base)
 ├── services/          # Business logic above ORM, below routers
+│   ├── bridge_consumer.py  # trigger_and_stream() — shared SSE lifecycle helper for AI routers
 ├── middleware/        # request_id, rate_limit, family_context
 ├── seed/              # System-category and seed-data loaders (run on startup)
 ├── constants/         # Static lookups (categories, currencies, etc.)
@@ -137,6 +138,9 @@ All routers live in `app/routers/` and are mounted with `prefix="/api/v1"` in `a
 | `blind_box` | `/api/v1/blind-box` | Adult-side blind-box config |
 | `child_blind_box` | `/api/v1/child/blind-box` | Child-side blind-box draw |
 | `challenge_grants` | `/api/v1/challenges` + `/api/v1/child/challenges` | Two routers from one file: parent-issue + child-claim |
+| `learning` | `/api/v1/learning` | Knowledge graph topics, clusters, search (os-taxonomy) |
+| `learning_family` | `/api/v1/learning` | Family learning config, child profiles, parent dashboard, translate proxy |
+| `learning_child` | `/api/v1/learning/child` | Child-facing: sessions, assessments, mastery, streak, task SSE |
 
 ### Files, import, export, utilities
 
@@ -172,10 +176,11 @@ Backend AI routers are the frontend's entry point. Multi-step capabilities proxy
 | `ai_context` | `/api/v1/ai/context` | GET family AI context (4-source bundle) | direct |
 | `ai_report` | `/api/v1/ai/report` | Family report generation (SSE 3-step) | `AgentClient.stream` → `asset-report` app |
 | `ai_finance_coach` | `/api/v1/ai/finance-coach` | Finance coach advice (cached) | `AgentClient.stream` → `finance-coach` app |
+| `ai_literacy_report` | `/api/v1/ai/literacy-report` | Literacy weekly report (SSE) | `AgentClient.stream` → `literacy-weekly-report` app |
 | `ai_wish_advice` | `/api/v1/ai/wish-advice` | Wish savings advice (cached) | `AgentClient.stream` → `wish-advice` app |
 | `ai_suggest` | `/api/v1/ai/suggest` | Asset field suggestions | lightweight LLM |
 | `ai_input_polish` | `/api` | D3 DeerFlow-synced draft polish (cookie auth) | lightweight LLM |
-| `ai_skills` | `/api/v1/ai/skills` | Per-family skill overrides (`RESERVED_NAMES = ["chat","asset-report","import-parse","finance-coach"]`) | — |
+| `ai_skills` | `/api/v1/ai/skills` | Per-family skill overrides (see `RESERVED_NAMES` in the file — includes system + DeerFlow public skills) | — |
 | `ai_mcp` | `/api/v1/ai/mcp` | MCP tool catalogue | — |
 | `ai_agents` | `/api/v1/ai/agents` | Agent catalogue (frontend) | — |
 | `ai_tasks` | `/api/v1/ai/tasks` | Long-running AI task tracking | — |

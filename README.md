@@ -34,11 +34,19 @@ Numina 是一个完全自托管的家庭资产可视化管理系统，帮助家�
 - **心愿建议** — 智能心愿评估与建议
 - **仪表盘叙事** — AI 驱动的财务摘要与洞察
 - **PDF / 图片导入** — 扫描文档 AI 识别，批量导入资产
+- **AI 学习导师** — 基于知识图谱的 AI 辅导，支持中文对话、互动教学和自适应评估
 
 **家庭与儿童**
 - **多用户家庭** — 成员各自记录，家庭级汇总视图，数据完全隔离
 - **儿童激励系统** — 家务赚星星币、心愿兑现、盲盒抽奖、三级货币体系
 - **财商素养** — 学习场景、徽章系统、AI 周报
+- **AI 学习操作系统 (Learning OS)** — 基于 os-taxonomy 知识图谱的儿童学习系统，覆盖数学、科学、英语等 8 大学科 1,590 个知识点
+  - **知识地图** — 按学科和领域可视化的知识图谱，展示前置/后续知识关系
+  - **AI 辅导对话** — DeerFlow 驱动的流式 AI 导师，中文对话优先，互动教学 + 评估
+  - **掌握度追踪** — 7 级状态机（locked → available → learning → assessing → mastered → review），间隔重复算法
+  - **双语支持** — 英文原文 + LLM 按需中文翻译，学科术语保留英文
+  - **家长看板** — 孩子学习概览、任务派发、审核队列、学习时长统计
+  - **连续失败提醒** — 同一知识点连续 3 次未通过自动通知家长
 - **家庭宣言** — 可签署的家庭财务目标与承诺
 
 **安全与体验**
@@ -54,6 +62,7 @@ Numina 是一个完全自托管的家庭资产可视化管理系统，帮助家�
 | 前端 | Vue 3 + TypeScript + Vite + Vant 4 + ECharts + Pinia |
 | 后端 | Python 3.12+ · FastAPI · SQLAlchemy 2.0 · Alembic |
 | AI Agent | Python 3.12+ · DeerFlow · LangChain · 多 Provider (OpenAI / Anthropic / Ollama) |
+| 流式通信 | Redis Streams (跨进程事件分发，Last-Event-ID 重连) |
 | 数据库 | SQLite (默认) · PostgreSQL · MySQL |
 | 部署 | Docker Compose · Nginx · GHCR 镜像 |
 
@@ -134,7 +143,9 @@ numina/
 │   │   ├── db/                 # SQLAlchemy 模型与数据库会话
 │   │   ├── domain/             # 领域逻辑与计算
 │   │   ├── security/           # 认证、加密、JWT
-│   │   └── storage/            # 文件存储与加密
+│   │   ├── storage/            # 文件存储与加密
+│   │   └── stream_bridge/      # DeerFlow 跨进程事件分发 (Redis Streams)
+│   ├── scripts/                # 数据种子脚本 (知识图谱导入、徽章定义)
 │   ├── tests/                  # 统一测试集
 │   └── pyproject.toml
 ├── frontend/                   # Vue 3 前端 monorepo (pnpm workspace)
@@ -143,7 +154,8 @@ numina/
 │   │   └── child/              # 儿童端 H5 (:5174)
 │   └── packages/
 │       ├── auth/               # @numina/auth — 认证共享包
-│       └── math/               # @numina/math — 业务计算函数
+│       ├── math/               # @numina/math — 业务计算函数
+│       └── shared/             # @numina/shared — SSE 解析等共享工具
 ├── tests/                      # E2E / 视觉回归测试
 ├── docs/                       # 项目文档
 ├── docker-compose.yml          # 开发 / 默认部署

@@ -11,6 +11,7 @@ Code changes here affect both `apps/main` and `apps/child`.
 | `@numina/auth` | Auth components, stores, axios wiring | Yes |
 | `@numina/math` | Pure math/business-logic functions | No — framework-free |
 | `@numina/assets` | Shared icons, images, empty-state illustrations | No — URL/raw exports |
+| `@numina/shared` | SSE parsing utilities and shared helpers | No — framework-free |
 
 ## `@numina/auth` Exports
 
@@ -76,6 +77,21 @@ import { noTasksSvg } from '@numina/assets/empty-states'
 - **Tree-shaken** — only referenced assets enter the build; unreferenced ones cost zero
 - **Git LFS** — all binary assets tracked via existing `.gitattributes` rules
 - **No build step** — like auth/math, exports raw TS + Vite `?url`/`?raw` suffixes
+
+## `@numina/shared` Exports
+
+Import from `@numina/shared`:
+
+| Export | Kind | Purpose |
+|--------|------|---------|
+| `readSSEStream` | Function | SSE stream reader (used by AI task pages) |
+| `SSEStreamHandlers` | Type | SSE handler callbacks interface |
+| `hasChineseChars` | Function | Detect Chinese characters in text (used for translation button visibility) |
+
+### Shared Key Invariants
+
+- **Pure functions only** — no Vue/Pinia/axios/localStorage
+- **No framework imports** — `package.json` has no `peerDependencies`
 
 ## Links
 

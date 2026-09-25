@@ -68,7 +68,7 @@ Central dispatch lives in `services/runtime/`. Flow:
 routers/runs_stream.py:stream_run
   → services/runtime/sse_gateway.py:start_run   (R1 allowlist + RunManager.create_or_reject)
   → services/runtime/worker.py:run_agent        (sets sandbox ContextVar, reads metadata["app"])
-  → _run_<app>_agent                            (5 branches, see table below)
+  → _run_simple_app / _run_<app>_agent          (config-driven or custom, see table below)
   → DeerFlowAdapter.typed_stream_dispatch       (services/deerflow_adapter/adapter.py)
   → DeerFlowClient.stream                        (inside ThreadPoolExecutor w/ copy_context)
   → bridge.publish → sse_consumer → format_sse  (LangGraph Platform SSE wire format)
@@ -78,6 +78,8 @@ routers/runs_stream.py:stream_run
 
 The dispatch app is carried in `body.metadata["app"]` (defaults to `"numina"`). `worker.run_agent` branches on it:
 
+**Custom runners** (complex post-processing or multi-step pipelines):
+
 | App | Runner | Skill | Purpose |
 |-----|--------|-------|---------|
 | `numina` (default) | `_run_numina_agent` | `chat` / `chat-search` | `/ai/chat` live conversation |
@@ -85,15 +87,24 @@ The dispatch app is carried in `body.metadata["app"]` (defaults to `"numina"`). 
 | `import-parse` | `_run_import_parse_agent` | `import-parse` | PDF/statement parse (single run) |
 | `finance-coach` | `_run_finance_coach_agent` | `finance-coach` | finance advice (single run) |
 | `wish-advice` | `_run_wish_advice_agent` | `wish-advice` | wish savings advice (single run) |
-| `learning-tutor` | `_run_learning_tutor_agent` | `learning-tutor` | AI tutoring session (DeerFlow SSE via Redis bridge) |
 
-Each non-numina runner sets a fixed `skill_name`, injects a synthetic slash-trigger message, runs `adapter.typed_stream_dispatch`, forwards frames, synthesizes `tool_call`/`tool_result` custom events, and emits one result custom event (`report.step2_json` / `import-parse.result` / `finance_coach.result` / `wish_advice.result`) before the `end` frame.
+**Config-driven runners** (via `_run_simple_app()` + `_SimpleAppConfig` dataclass):
+
+| App | Skill | Key config | Purpose |
+|-----|-------|-----------|---------|
+| `dashboard-narrative` | `dashboard-narrative` | `mcp_servers=[]`, thinking, 60s timeout | AI financial narrative |
+| `literacy-weekly-report` | `literacy-weekly-report` | thinking, 120s timeout | AI literacy weekly report |
+| `learning-tutor` | `learning-tutor` | `memory=False`, no thinking | AI tutoring session |
+
+Simple apps share ~90% code via `_run_simple_app()` in `run_pipeline.py`. Each config entry specifies `skill_name`, `enable_thinking`, `timeout_seconds`, `mcp_servers`, `result_event_type`, and an optional `result_builder` callback. Adding a new simple app requires only a `_SimpleAppConfig` entry in `_SIMPLE_APPS`.
+
+Each non-numina runner sets a fixed `skill_name`, injects a synthetic slash-trigger message, runs via `RunPipeline` (which calls `adapter.typed_stream_dispatch`), forwards frames, synthesizes `tool_call`/`tool_result` custom events, and optionally emits a result custom event before the `end` frame.
 
 ### R1 allowlist (frontend direct dispatch gate)
 
-`sse_gateway.start_run` rejects frontend direct dispatch of `asset-report`/`import-parse`/`finance-coach`/`wish-advice`/`learning-tutor` with **409** ("must be triggered via backend endpoint" — actual message: `"须经由后端触发端点"`). Only `numina` is allowed direct from the frontend. The internal run-trigger endpoints in `app/routers/gateway.py` (`/internal/gateway/runs/{app}/{thread_id}`) set `internal=True` to bypass the 409 gate — the backend has already enforced owner / `require_ai_enabled` / concurrency by that point. Unknown app values → 400.
+`sse_gateway.start_run` rejects frontend direct dispatch of `asset-report`/`import-parse`/`finance-coach`/`wish-advice`/`learning-tutor`/`dashboard-narrative`/`literacy-weekly-report` with **409** ("must be triggered via backend endpoint" — actual message: `"须经由后端触发端点"`). Only `numina` is allowed direct from the frontend. The internal run-trigger endpoints in `app/routers/gateway.py` (`/internal/gateway/runs/{app}/{thread_id}`) set `internal=True` to bypass the 409 gate — the backend has already enforced owner / `require_ai_enabled` / concurrency by that point. Unknown app values → 400.
 
-> **Backend `RESERVED_NAMES`** (`apps/backend/app/routers/ai_skills.py`) is `["chat", "asset-report", "import-parse", "finance-coach", "wish-advice", "learning-tutor", "dashboard-narrative", "literacy-weekly-report"]` — it protects system skill IDs from custom-skill collision.
+> **Backend `RESERVED_NAMES`** (`apps/backend/app/routers/ai_skills.py`) includes `chat`, `asset-report`, `import-parse`, `finance-coach`, `wish-advice`, `dashboard-narrative`, `literacy-weekly-report`, `learning-tutor`, plus DeerFlow public skills (`deep-research`, `chart-visualization`, `data-analysis`, `bootstrap`, `finance-digest`, `financial-deep-analysis`, `surprise-me`) — it protects system skill IDs from custom-skill collision.
 
 ### Sandbox
 
@@ -130,10 +141,11 @@ agent/
 │   │   └── jwt_verify.py      # VerifiedFamily + verify_family_token (JWT cookie auth for external routers)
 │   └── routers/               # Internal/token-auth routers (NO __init__.py)
 │       ├── cache.py           # POST /internal/cache/invalidate/{family_id}
-│       └── gateway.py         # /internal/gateway/* — mgmt proxies + run triggers (asset-report/finance-coach/wish-advice)
+│       └── gateway.py         # /internal/gateway/* — mgmt proxies + run triggers (asset-report/finance-coach/wish-advice/learning-tutor)
 ├── routers/                   # External routers (JWT cookie auth via verify_family_token unless noted)
 │   ├── runs_stream.py         # POST /api/threads/{id}/runs/stream (stream_run) + /runs/{run_id}/cancel
 │   ├── threads.py             # Thread CRUD + checkpointer state/history/token-usage/branches + goal + compact
+│   ├── translate.py           # POST /translate/topic — on-demand learning topic translation (X-Agent-Token)
 │   ├── import_parse.py        # POST /import/parse — sync JSON parse (X-Agent-Token)
 │   ├── input_polish.py        # POST /input-polish — D3 DeerFlow-synced draft polish (cookie auth)
 │   ├── model_test.py          # POST /test/model — stateless model capability test (X-Agent-Token)
@@ -147,7 +159,8 @@ agent/
 │   ├── capability.py | context.py | model_test.py | policy.py | response.py
 ├── services/
 │   ├── runtime/               # v2 dispatch runtime
-│   │   ├── worker.py          # run_agent + 5 per-app runners (_run_numina/_asset_report/_import_parse/_finance_coach/_wish_advice)
+│   │   ├── worker.py          # run_agent + 5 custom runners + _run_simple_app() generic runner
+│   │   ├── run_pipeline.py    # RunPipeline — shared scaffolding for stream_run runners (config fetch, PII, audit, streaming)
 │   │   ├── sse_gateway.py     # start_run (R1 allowlist) + sse_consumer + format_sse (LangGraph Platform SSE)
 │   │   ├── run_extras.py      # generate_suggestions + sync_title_from_checkpoint
 │   │   ├── sandbox_provider.py# NuminaLocalSandboxProvider + sandbox_family_id ContextVar
@@ -183,6 +196,7 @@ agent/
 │   ├── import_parse_service.py
 │   ├── model_tester.py
 │   ├── message_classifier.py
+│   ├── topic_translate.py     # On-demand LLM topic translation (learning OS)
 │   └── (health_report.py, vision_test_image.py, agent_temp_cache.py, chat.py, chat_adapter.py)
 ├── skills/
 │   └── builtin/public/        # DeerFlow-native LocalSkillStorage scanner layout
@@ -192,6 +206,9 @@ agent/
 │       ├── import-parse/SKILL.md
 │       ├── finance-coach/SKILL.md
 │       ├── wish-advice/SKILL.md
+│       ├── dashboard-narrative/SKILL.md
+│       ├── literacy-weekly-report/SKILL.md
+│       ├── learning-tutor/SKILL.md
 │       ├── skill-creator/SKILL.md    # internal-only (_INTERNAL_ONLY_SKILLS)
 │       └── skill-installer/SKILL.md  # internal-only (_INTERNAL_ONLY_SKILLS)
 ├── deerflow_config/
