@@ -8,11 +8,16 @@ family-scoped progress live behind ``require_adult`` / ``get_current_child_user`
 in ``learning_family.py`` and ``learning_child.py`` respectively.
 """
 
+import json
+import logging
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.models.user import User
 from apps.backend.app.schemas.learning import (
     ClusterResponse,
     SubjectSummary,
@@ -20,6 +25,10 @@ from apps.backend.app.schemas.learning import (
     TopicResponse,
 )
 from apps.backend.app.services.learning import topic_service
+from apps.backend.app.services.learning.translation import translate_topic
+from packages.db.models.learning.topic import LearningTopic
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/learning", tags=["learning"])
 
@@ -78,3 +87,45 @@ def list_clusters(subject: str | None = None, db: Session = Depends(get_db)):
 @router.get("/subjects", response_model=list[SubjectSummary])
 def list_subjects(db: Session = Depends(get_db)):
     return topic_service.list_subjects(db)
+
+
+@router.post("/topics/{topic_id}/translate")
+def translate_topic_endpoint(
+    topic_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_adult),
+):
+    """Translate a topic's English content to Chinese on demand."""
+    topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
+    if not topic:
+        raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
+
+    topic_dict = {
+        "name": topic.name or "",
+        "description": topic.description or "",
+        "evidence": topic.evidence or [],
+        "assessment_prompt": topic.assessment_prompt or "",
+    }
+
+    try:
+        translated = translate_topic(topic_dict)
+    except ValueError:
+        raise AppError(ErrorCode.LEARNING_TRANSLATION_UNAVAILABLE) from None
+    except Exception:
+        logger.exception("Translation LLM call failed for topic %s", topic_id)
+        raise AppError(ErrorCode.LEARNING_TRANSLATION_UNAVAILABLE) from None
+
+    # Persist translated fields
+    topic.name_zh = translated.get("name_zh")
+    topic.description_zh = translated.get("description_zh")
+    if translated.get("evidence_zh") is not None:
+        topic.evidence_zh_json = json.dumps(translated["evidence_zh"], ensure_ascii=False)
+    topic.assessment_prompt_zh = translated.get("assessment_prompt_zh")
+    db.flush()
+
+    return {
+        "name_zh": topic.name_zh,
+        "description_zh": topic.description_zh,
+        "evidence_zh": topic.evidence_zh,
+        "assessment_prompt_zh": topic.assessment_prompt_zh,
+    }

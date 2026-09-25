@@ -141,5 +141,6 @@
   "LEARNING_PREREQUISITE_NOT_MET": "Prerequisite topic not yet mastered",
   "LEARNING_ASSESSMENT_NOT_AVAILABLE": "Assessment is not available",
   "LEARNING_INVALID_STATE_TRANSITION": "Invalid state transition",
-  "LEARNING_SESSION_ALREADY_ENDED": "Learning session has already ended"
+  "LEARNING_SESSION_ALREADY_ENDED": "Learning session has already ended",
+  "LEARNING_TRANSLATION_UNAVAILABLE": "Translation service unavailable, please try again later"
 }
