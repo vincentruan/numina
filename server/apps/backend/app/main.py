@@ -237,7 +237,8 @@ async def lifespan(app: FastAPI):
     logger.info("统一日志配置已初始化")
 
     # Initialize unified cache layer
-    from packages.core.cache import _check_redis_connection, init_cache
+    from packages.core.cache import init_cache
+    from packages.core.cache.factory import _check_redis_connection
 
     cache = init_cache(
         backend=settings.CACHE_BACKEND,

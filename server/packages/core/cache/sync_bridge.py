@@ -30,10 +30,13 @@ class SyncCacheBridge:
         self._cache = cache
         self._loop: asyncio.AbstractEventLoop | None = None
         self._loop_thread: threading.Thread | None = None
+        self._is_memory = False
 
         from packages.core.cache.memory import MemoryCache
 
-        if not isinstance(cache, MemoryCache):
+        if isinstance(cache, MemoryCache):
+            self._is_memory = True
+        else:
             self._loop = asyncio.new_event_loop()
             self._loop_thread = threading.Thread(
                 target=self._run_forever, daemon=True, name="sync-cache-bridge"
@@ -48,15 +51,17 @@ class SyncCacheBridge:
 
     def _submit(self, coro: Any) -> Any:
         """Run an async coroutine and return the result synchronously."""
-        if self._loop is not None:
-            future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-            return future.result()
-        # MemoryCache fallback: temporary loop (no I/O, fast teardown)
-        loop = asyncio.new_event_loop()
-        try:
-            return loop.run_until_complete(coro)
-        finally:
-            loop.close()
+        if self._is_memory:
+            # MemoryCache: run coroutine directly in a short-lived loop.
+            # This is safe because MemoryCache has no real I/O.
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(coro)
+            finally:
+                loop.close()
+        assert self._loop is not None
+        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return future.result()
 
     def get(self, key: str) -> Any | None:
         return self._submit(self._cache.get(key))

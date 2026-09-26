@@ -205,29 +205,12 @@ async def get_family_setting_cached(family_id: int, key: str) -> Any:
 async def _invalidate_family_cache(family_id: int) -> None:
     """Clear cached entries for a specific family.
 
-    Uses ``Cache.clear()`` in memory mode (all entries are family-scoped and
-    will be repopulated on next access). In Redis mode, uses SCAN+DEL with
-    the family prefix pattern.
+    Uses ``Cache.delete_prefix()`` to remove all keys matching the
+    family-scoped prefix.
     """
     from packages.core.cache import get_cache
     from packages.core.cache.keys import FAM_SETTING
 
     cache = get_cache()
     prefix = f"{FAM_SETTING}:{family_id}:"
-    # Memory mode: iterate internal store for matching keys
-    if hasattr(cache, "_store"):
-        keys_to_remove = [k for k in cache._store if k.startswith(prefix)]  # type: ignore[attr-defined]
-        for k in keys_to_remove:
-            await cache.delete(k)
-    else:
-        # Redis mode: SCAN + DEL
-        client = cache._client  # type: ignore[attr-defined]
-        cache_prefix = getattr(cache, "_prefix", "")
-        pattern = f"{cache_prefix}{prefix}*"
-        cursor = 0
-        while True:
-            cursor, batch = await client.scan(cursor, match=pattern, count=100)
-            if batch:
-                await client.delete(*batch)
-            if cursor == 0:
-                break
+    await cache.delete_prefix(prefix)

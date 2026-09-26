@@ -145,6 +145,17 @@ class MemoryCache(Cache):
         else:
             self._lists[key] = lst[start : stop + 1]
 
+    # --- Key Management ---
+
+    async def delete_prefix(self, prefix: str) -> int:
+        count = 0
+        for store in (self._store, self._sets, self._lists):
+            keys_to_remove = [k for k in store if k.startswith(prefix)]
+            for k in keys_to_remove:
+                self._remove_key(k)
+                count += 1
+        return count
+
     # --- Lifecycle ---
 
     async def clear(self) -> None:

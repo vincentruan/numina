@@ -2,7 +2,6 @@
 
 from packages.core.cache.base import Cache
 from packages.core.cache.factory import (
-    _check_redis_connection,
     get_cache,
     init_cache,
     reset_cache,
@@ -19,5 +18,4 @@ __all__ = [
     "init_cache",
     "get_cache",
     "reset_cache",
-    "_check_redis_connection",
 ]

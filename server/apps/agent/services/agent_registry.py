@@ -13,13 +13,15 @@ In memory mode, each process has its own cache.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from apps.agent.core.backend_client import BackendClient
 from packages.core.cache import get_cache
 from packages.core.cache.keys import AGENT_REG
 
 logger = logging.getLogger(__name__)
+
+# Sentinel stored in cache to distinguish "agent not found" from "key not cached".
+_NOT_FOUND_SENTINEL = "__AGENT_NOT_FOUND__"
 
 # How long a negative cache entry lives before re-fetching (seconds).
 _NEGATIVE_CACHE_TTL_SECONDS = 60
@@ -44,6 +46,8 @@ class AgentRegistry:
 
         cached = await cache.get(key)
         if cached is not None:
+            if cached == _NOT_FOUND_SENTINEL:
+                return None
             return cached
 
         # Cache miss — fetch from backend
@@ -60,7 +64,7 @@ class AgentRegistry:
             return None
         except Exception as exc:
             # Negative cache: short TTL to avoid pinning stale fallback
-            await cache.set(key, None, ttl=_NEGATIVE_CACHE_TTL_SECONDS)
+            await cache.set(key, _NOT_FOUND_SENTINEL, ttl=_NEGATIVE_CACHE_TTL_SECONDS)
             logger.warning(
                 "[AgentRegistry] lookup failed agent=%s family=%s: %s — "
                 "falling back to defaults (memory_enabled=True, TTL=%ss)",
@@ -79,31 +83,8 @@ class AgentRegistry:
         """
         cache = get_cache()
         if family_id is None and agent_name is None:
-            # Clear all agent registry entries by scanning for the prefix
             prefix = f"{AGENT_REG}:"
-            if hasattr(cache, "_store"):
-                # MemoryCache: iterate internal store
-                keys_to_remove = [k for k in cache._store if k.startswith(prefix)]  # type: ignore[attr-defined]
-                for k in keys_to_remove:
-                    await cache.delete(k)
-                keys_to_remove = [k for k in cache._sets if k.startswith(prefix)]  # type: ignore[attr-defined]
-                for k in keys_to_remove:
-                    await cache.delete(k)
-                keys_to_remove = [k for k in cache._lists if k.startswith(prefix)]  # type: ignore[attr-defined]
-                for k in keys_to_remove:
-                    await cache.delete(k)
-            else:
-                # RedisCache: SCAN + DEL with prefix
-                client = cache._client  # type: ignore[attr-defined]
-                cache_prefix = getattr(cache, "_prefix", "")
-                pattern = f"{cache_prefix}{prefix}*"
-                cursor = 0
-                while True:
-                    cursor, batch = await client.scan(cursor, match=pattern, count=100)
-                    if batch:
-                        await client.delete(*batch)
-                    if cursor == 0:
-                        break
+            await cache.delete_prefix(prefix)
             return
         if family_id is not None and agent_name is not None:
             key = f"{AGENT_REG}:{family_id}:{agent_name}"

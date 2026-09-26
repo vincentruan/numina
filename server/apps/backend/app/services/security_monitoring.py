@@ -2,14 +2,15 @@
 安全监控服务 - 使用统一 Cache 层替代进程内存存储
 """
 
-import logging
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger("security")
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ThreatLevel(Enum):
@@ -196,15 +197,46 @@ class SecurityMonitor:
         self, start_time: datetime | None = None, end_time: datetime | None = None
     ) -> dict:
         """获取安全统计信息"""
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import SEC_COUNTER, SEC_EVENT, SEC_SUSPECT
+
+        cache = get_cache()
         start_time = start_time or datetime.now(UTC) - timedelta(hours=24)
         end_time = end_time or datetime.now(UTC)
+
+        # Aggregate event counts by threat type
+        events_by_type: dict[str, int] = {}
+        for threat in ThreatType:
+            key = f"{SEC_EVENT}:{threat.value}"
+            items = await cache.lrange(key, 0, -1)
+            if items:
+                events_by_type[threat.value] = len(items)
+
+        # Suspicious IP count
+        suspect_ips = await cache.smembers(f"{SEC_SUSPECT}:global")
+        suspicious_ip_count = len(suspect_ips)
+
+        # Active counter keys (scan for counter prefix)
+        # Rate violation counters are per-IP, we report aggregate
+        counter_summary: dict[str, int] = {}
+        # Scan recent events for IPs with violations
+        rate_key = f"{SEC_EVENT}:{ThreatType.RATE_LIMIT_EXCEEDED.value}"
+        rate_events = await cache.lrange(rate_key, 0, 99)
+        unique_violation_ips = {e.get("ip", "") for e in rate_events if isinstance(e, dict)}
+        for ip in unique_violation_ips:
+            cnt_key = f"{SEC_COUNTER}:rate_violations:{ip}"
+            val = await cache.get(cnt_key)
+            if val is not None:
+                counter_summary[f"rate_violations:{ip}"] = int(val)
 
         return {
             "time_range": {
                 "start": start_time.isoformat(),
                 "end": end_time.isoformat(),
             },
-            "note": "Detailed stats available via cache layer (SEC_EVENT/SEC_COUNTER/SEC_SUSPECT keys)",
+            "events_by_type": events_by_type,
+            "suspicious_ip_count": suspicious_ip_count,
+            "active_counters": counter_summary,
         }
 
 

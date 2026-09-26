@@ -496,3 +496,77 @@ class TestKeys:
         assert keys.SEC_EVENT == "secevent"
         assert keys.SEC_SUSPECT == "secsuspect"
         assert keys.SEC_COUNTER == "seccounter"
+
+
+# =============================================================================
+# delete_prefix — MemoryCache
+# =============================================================================
+
+
+class TestMemoryCacheDeletePrefix:
+    async def test_delete_prefix_removes_matching_values(self):
+        cache = MemoryCache()
+        await cache.set("famsetting:1:theme", "dark")
+        await cache.set("famsetting:1:locale", "en")
+        await cache.set("famsetting:2:theme", "light")
+        await cache.set("ratelimit:ip:1.2.3.4", 5)
+
+        count = await cache.delete_prefix("famsetting:1:")
+        assert count == 2
+        assert await cache.get("famsetting:1:theme") is None
+        assert await cache.get("famsetting:1:locale") is None
+        assert await cache.get("famsetting:2:theme") == "light"
+        assert await cache.get("ratelimit:ip:1.2.3.4") == 5
+
+    async def test_delete_prefix_removes_sets_and_lists(self):
+        cache = MemoryCache()
+        await cache.sadd("secsuspect:global", "1.1.1.1", "2.2.2.2")
+        await cache.lpush("secevent:brute_force", {"ip": "1.1.1.1"})
+
+        count = await cache.delete_prefix("secsuspect:")
+        assert count >= 1
+        assert await cache.smembers("secsuspect:global") == set()
+
+    async def test_delete_prefix_no_match(self):
+        cache = MemoryCache()
+        await cache.set("foo", "bar")
+        count = await cache.delete_prefix("nonexistent:")
+        assert count == 0
+
+
+# =============================================================================
+# delete_prefix — RedisCache (fakeredis)
+# =============================================================================
+
+
+class TestRedisCacheDeletePrefix:
+    async def test_delete_prefix_removes_matching(self):
+        fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
+        cache = RedisCache(fake, prefix="")
+
+        await cache.set("famsetting:1:theme", "dark")
+        await cache.set("famsetting:1:locale", "en")
+        await cache.set("ratelimit:ip:1.2.3.4", 5)
+
+        count = await cache.delete_prefix("famsetting:1:")
+        assert count == 2
+        assert await cache.get("famsetting:1:theme") is None
+        assert await cache.get("ratelimit:ip:1.2.3.4") == 5
+
+    async def test_delete_prefix_with_namespace(self):
+        fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
+        cache = RedisCache(fake, prefix="backend:")
+
+        await cache.set("famsetting:1:theme", "dark")
+        await cache.set("famsetting:2:theme", "light")
+
+        count = await cache.delete_prefix("famsetting:1:")
+        assert count == 1
+        assert await cache.get("famsetting:1:theme") is None
+        assert await cache.get("famsetting:2:theme") == "light"
+
+    async def test_delete_prefix_no_match(self):
+        fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
+        cache = RedisCache(fake, prefix="")
+        count = await cache.delete_prefix("nonexistent:")
+        assert count == 0

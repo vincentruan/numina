@@ -376,9 +376,7 @@ async def _check_device_check_rate_limit(ip: str) -> None:
         count = await cache.get(key)
         if count is not None and int(count) >= _DEVICE_CHECK_RATE_LIMIT_PER_MINUTE:
             raise AppError(ErrorCode.RATE_LIMITED)
-        new_count = await cache.increment(key)
-        if new_count == 1:
-            await cache.set(key, 1, ttl=60)
+        await cache.increment(key, ttl=60)
     except AppError:
         raise
     except Exception:

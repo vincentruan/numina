@@ -100,6 +100,17 @@ class Cache(ABC):
         """Trim list to the specified range."""
         ...
 
+    # --- Key Management ---
+
+    @abstractmethod
+    async def delete_prefix(self, prefix: str) -> int:
+        """Delete all keys matching *prefix*. Returns count of deleted keys.
+
+        Memory mode: scans ``_store``, ``_sets``, and ``_lists``.
+        Redis mode: uses SCAN + DEL scoped to the cache's own namespace.
+        """
+        ...
+
     # --- Lifecycle ---
 
     @abstractmethod

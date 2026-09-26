@@ -83,6 +83,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize unified cache layer
     from packages.core.cache import init_cache
+    from packages.core.cache.factory import _check_redis_connection
     from packages.core.settings import settings as core_settings
 
     cache = init_cache(
@@ -91,6 +92,8 @@ async def lifespan(app: FastAPI):
         prefix="agent:",
     )
     app.state.cache = cache
+    if core_settings.CACHE_BACKEND == "redis":
+        await _check_redis_connection(core_settings.REDIS_URL)
 
     from apps.agent.app.scheduler import scheduler, setup_schedules
     from apps.agent.core.backend_client import close_shared_client

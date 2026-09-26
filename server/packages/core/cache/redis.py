@@ -106,6 +106,21 @@ class RedisCache(Cache):
     async def ltrim(self, key: str, start: int, stop: int) -> None:
         await self._client.ltrim(self._key(key), start, stop)
 
+    # --- Key Management ---
+
+    async def delete_prefix(self, prefix: str) -> int:
+        pattern = f"{self._prefix}{prefix}*"
+        count = 0
+        cursor = 0
+        while True:
+            cursor, batch = await self._client.scan(cursor, match=pattern, count=100)
+            if batch:
+                await self._client.delete(*batch)
+                count += len(batch)
+            if cursor == 0:
+                break
+        return count
+
     # --- Lifecycle ---
 
     async def clear(self) -> None:
