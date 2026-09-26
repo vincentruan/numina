@@ -1220,23 +1220,24 @@ Assertions (start day — Oct 1):
 - [ ] Duration badge styled: 11px, primary color text, semi-transparent primary background, 4px border-radius
 - [ ] Card shows type icon + name + location + cost as usual
 
-Assertions (continuation days — Oct 2, Oct 3):
+Assertions (continuation days — Oct 2, Oct 3, Oct 4):
 - [ ] Oct 2 day section shows a **ContinuationHint** (NOT the full card): "第2天"
 - [ ] Oct 3 day section shows a ContinuationHint: "第3天"
+- [ ] Oct 4 day section shows a ContinuationHint: "第4天" (end_date inclusive — last night still a continuation)
 - [ ] ContinuationHint shows type-specific icon (hotel-o for accommodation)
 - [ ] ContinuationHint styled: flex row, 12px text, `--text-secondary` color, `--bg-secondary` background, 8px border-radius, 0.7 opacity
 - [ ] ContinuationHint has `role="button"` and `aria-label` for accessibility
 
-Assertions (end day — Oct 4):
-- [ ] Oct 4 day section does NOT show the item (item ends on Oct 4 but the card is only on the start day)
-- [ ] If Oct 4 has no other items, it shows the empty-day placeholder
+Assertions (end day — Oct 4, inclusive):
+- [ ] Oct 4 day section shows a ContinuationHint: "第4天" (end_date is **inclusive** — the last night of a hotel stay still counts as a continuation day; checkout day shows the hint, not the empty placeholder)
+- [ ] If end_date + 1 (Oct 5) has no other items, it shows the empty-day placeholder — the item does NOT extend beyond end_date
 
 Assertions (scroll-to-start behavior):
 - [ ] Tapping a ContinuationHint → smooth scrolls to the start-day card (Oct 1)
 - [ ] Scroll uses `scrollIntoView({ behavior: 'smooth', block: 'center' })`
 
 Assertions (empty day filtering):
-- [ ] Days where the item only appears as a continuation (Oct 2, Oct 3) do NOT show the "add" (+) button — the item IS present that day, just as a continuation
+- [ ] Days where the item appears as a continuation (Oct 2, Oct 3, Oct 4) do NOT show the "add" (+) button — the item IS present those days as continuations (end_date inclusive)
 - [ ] `[console]` zero errors
 
 ---
@@ -1274,7 +1275,7 @@ bsk wait-ms 2s
 Assertions (end_date changed):
 - [ ] Submit PATCHes to `/api/v1/trips/:id/itinerary/:item_id`
 - [ ] Response shows `end_date="2026-10-03"` (updated)
-- [ ] Timeline refreshes: ContinuationHint now shows only "第2天" (Oct 2), Oct 3 no longer has continuation
+- [ ] Timeline refreshes: ContinuationHint now shows "第2天" (Oct 2) and "第3天" (Oct 3, end_date inclusive), Oct 4 no longer has continuation
 - [ ] Duration badge updated: "10/1-10/3 · 3天"
 - [ ] `[console]` zero errors
 
