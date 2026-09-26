@@ -4267,6 +4267,11 @@ export default {
         confirmNoMessage: '确定要删除该行程项吗？',
       },
       linkedExpense: '已同步至账本',
+      crossDay: '跨天',
+      endDate: '结束日期',
+      purchaseDate: '购买日期',
+      durationBadge: '{start}-{end} · {days}天',
+      continuationDay: '第{day}天',
     },
   },
 }

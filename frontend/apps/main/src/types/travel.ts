@@ -148,6 +148,7 @@ export interface ItineraryItem {
   trip_id: string
   family_id: string
   date: string
+  end_date: string | null
   type: ItineraryItemType
   sort_order: number
   start_time: string | null
@@ -156,6 +157,7 @@ export interface ItineraryItem {
   description: string | null
   cost_amount: string | null
   cost_currency: string | null
+  purchase_date: string | null
   custom_type_id: string | null
   type_metadata: Record<string, unknown> | null
   created_at: string
@@ -164,6 +166,7 @@ export interface ItineraryItem {
 
 export interface ItineraryItemCreate {
   date: string
+  end_date?: string | null
   type: ItineraryItemType
   sort_order?: number
   start_time?: string | null
@@ -172,12 +175,14 @@ export interface ItineraryItemCreate {
   description?: string | null
   cost_amount?: string | null
   cost_currency?: string | null
+  purchase_date?: string | null
   custom_type_id?: string | null
   type_metadata?: Record<string, unknown> | null
 }
 
 export interface ItineraryItemUpdate {
   date?: string
+  end_date?: string | null
   type?: ItineraryItemType
   sort_order?: number
   start_time?: string | null
@@ -186,6 +191,7 @@ export interface ItineraryItemUpdate {
   description?: string | null
   cost_amount?: string | null
   cost_currency?: string | null
+  purchase_date?: string | null
   custom_type_id?: string | null
   type_metadata?: Record<string, unknown> | null
 }
