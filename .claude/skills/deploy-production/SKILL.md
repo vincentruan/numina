@@ -21,6 +21,52 @@ Deploy Numina to the production Docker server. Three modes:
 | **B: Source build** | Custom changes not yet on main | Yes | Server |
 | **C: Local build** | CI quota exhausted / server can't compile | No | Local machine |
 
+## Deploy Mode Selection
+
+每次部署时按以下决策树选择模式。**不要假设 Mode A 一定可用** — 先验证再执行。
+
+```
+用户触发部署
+  │
+  ├─ 用户明确指定模式 → 直接用指定模式
+  │
+  └─ 未指定 → 尝试 Mode A (GHCR)
+       │
+       ├─ Step 1: 检查 CI 状态
+       │    └─ gh run list → 最近一次 push to main 的 build-images job
+       │         ├─ conclusion = success → 继续 Mode A
+       │         ├─ conclusion = failure → 降级 Mode C（通知用户）
+       │         └─ status = in_progress → 等待完成（最多 15 分钟），超时 → 降级 Mode C
+       │
+       ├─ Step 4: 拉取镜像
+       │    └─ docker compose pull
+       │         ├─ 全部成功 → 继续 Mode A
+       │         └─ 任一失败（401/404/timeout/空镜像）→ 降级 Mode C（通知用户）
+       │
+       └─ Mode A 完成 → Done
+```
+
+### 降级到 Mode C 的触发条件
+
+以下任一条件满足时，**自动降级到 Mode C**（无需等用户确认，但必须通知）：
+
+| 条件 | 检测方式 | 说明 |
+|------|---------|------|
+| CI build-images 失败 | `gh run list` 显示 `failure` | LFS 问题、编译错误、GHCR 推送失败 |
+| CI 未完成且等待超时 | 轮询 15 分钟仍未 `completed` | GitHub Actions 队列拥堵 |
+| GHCR pull 失败 | `docker compose pull` 返回非 0 | 网络问题、GHCR 限流、镜像不存在 |
+| 拉到的镜像为空/损坏 | `docker inspect` 无 `Architecture` 字段 | 极少见，通常是推送中断 |
+| 用户明确说"CI 额度不够" / "本地编译" | 用户输入 | 直接走 Mode C |
+
+### 降级执行流程
+
+```
+1. 通知用户: "GHCR 不可用（原因），降级到本地编译部署"
+2. 进入 Mode C: Local Build & Deploy
+3. 执行 make deploy-local (= build-local + package-images + deploy-remote)
+4. 继续 Mode C Step 4 (migration) + Step 5 (health check)
+```
+
 ## Prerequisites
 
 SSH config in `.claude/skills/deploy-production/deploy.env` (gitignored). If missing, ask the user and create it:
@@ -250,21 +296,28 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 
 > **First-time setup:** If `numina-postgres-prod` has never been started, ensure `docker-compose.production-pg.yml` and `scripts/init-prod-databases.sql` are synced to the server first (Step 1b). The init script creates `numina_prod` and `numina_prod_deerflow` databases on first boot.
 
-### Step 1: Verify CI Completed
+### Step 1: Verify CI Completed (Build-Images)
 
 ```bash
+# 检查最近一次 push to main 的 CI run 状态
 gh run list --limit 1 --workflow=ci.yml --json conclusion,status,headBranch --jq '.[0] | "\(.headBranch) \(.status) \(.conclusion)"'
 ```
 
 Must show `main completed success`. If `in_progress`, poll:
 
 ```bash
-bash -c 'while true; do
+bash -c 'for i in $(seq 1 30); do
   result=$(gh run list --limit 1 --workflow=ci.yml --json conclusion,status --jq ".[0] | \"\(.status)|\(.conclusion)\"")
-  [ "$(echo $result | cut -d"|" -f1)" = "completed" ] && echo "✓ CI done" && break
-  echo "[$(date +%H:%M:%S)] waiting for CI..."; sleep 30
-done'
+  status=$(echo $result | cut -d"|" -f1)
+  conclusion=$(echo $result | cut -d"|" -f2)
+  [ "$status" = "completed" ] && [ "$conclusion" = "success" ] && echo "✓ CI success" && exit 0
+  [ "$status" = "completed" ] && [ "$conclusion" != "success" ] && echo "✗ CI failed ($conclusion) → 降级 Mode C" && exit 1
+  echo "[$(date +%H:%M:%S)] waiting for CI... ($status)"; sleep 30
+done
+echo "✗ CI 等待超时 (15min) → 降级 Mode C" && exit 1'
 ```
+
+> **降级判断：** 如果上述命令 exit 1（CI failure 或超时），**立即降级到 Mode C**（见上方"降级执行流程"）。不要继续 Mode A 后续步骤。
 
 ### Step 2: Sync Config Files
 
@@ -308,12 +361,17 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
 
 Pull new images first — migration must run with the new image that contains updated alembic files.
 
+> **降级判断：** 如果 pull 失败（401/404/timeout/镜像不存在），**立即降级到 Mode C**。通知用户原因后执行 `make deploy-local`。
+
 ```bash
 set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
   cd ${DEPLOY_REMOTE_DIR} &&
   echo '=== Pull GHCR images ===' &&
-  sudo docker compose -f docker-compose.production.yml pull backend agent scheduler_worker frontend-main frontend-child
+  sudo docker compose -f docker-compose.production.yml pull backend agent scheduler_worker frontend-main frontend-child || {
+    echo '✗ GHCR pull 失败 → 降级 Mode C'
+    exit 2
+  }
 "
 ```
 
@@ -474,10 +532,37 @@ Same as Mode A Step 7.
 
 ## Mode C: Local Build & Deploy
 
-Use when CI quota is exhausted or the production server lacks resources to compile.
+Use when CI quota is exhausted, GHCR 不可用, 或 the production server lacks resources to compile.
 Build images on the local machine, transfer, and deploy. Verification happens on the
 production server (health check after recreate) — local only builds, does NOT verify
 (production has domain-specific config: SSL certs, Supabase PG, short URL, etc.).
+
+### 快速部署（推荐）
+
+当 GHCR 降级或明确需要本地编译时，一键完成：
+
+```bash
+# 完整流程: build → package → transfer → load → recreate → health check
+make deploy-local
+```
+
+> `deploy-local` 不执行 migration。如果有新 migration，完成后继续 Step 4。
+
+### LFS Icon 验证（首次 Mode C 或怀疑 icon 缺失时）
+
+本地 build 也需要 LFS 文件才能正确生成 icon 缩略图。确认本地 LFS 已拉取：
+
+```bash
+# 检查 icon 文件是否是真实 PNG（而非 LFS pointer）
+file frontend/packages/assets/src/icons/3d-things/animals/$(ls frontend/packages/assets/src/icons/3d-things/animals/ | head -1)
+# 应输出: PNG image data, ...
+# 如果输出: ASCII text → LFS 未拉取，先执行: git lfs pull
+```
+
+如果 icon 缺失或为 pointer 文件：
+```bash
+git lfs pull --include="frontend/packages/assets/src/icons/3d-things/**"
+```
 
 ### Prerequisites
 
@@ -785,5 +870,7 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | PG `can no longer get changes from replication slot` | 复制槽损坏（通常因磁盘满 crash）。修复流程见 [references/ipv6-disk-recovery.md](references/ipv6-disk-recovery.md) §Replication Slot Corruption |
 | PG `the database system is not yet accepting connections` | PG 处于 recovery 模式，通常因磁盘满 crash 后重启。先清理磁盘空间，PG 自动恢复。如持续报错，检查 `pg_logical/replorigin_checkpoint.tmp` 写入权限 |
 | `captcha_enabled: false` in health check | 见上方 "Production Config vs Local" §Health Check 验证清单。确认 `.env` 含 `CAPTCHA_ENABLED=true`，然后 `restart backend` |
+| GHCR pull 失败 / CI build-images failure | 自动降级 Mode C：`make deploy-local`。常见原因：LFS 未拉取（CI 无 `lfs: true`）、GHCR 限流、GitHub Actions 额度耗尽 |
+| 前端 icon 缩略图 404 / 空白 | 镜像内 icon 文件缺失。验证：`docker exec numina-frontend-main ls /usr/share/nginx/html/icons/3d-thumbs/`。根因：CI checkout 未拉取 LFS → sharp 生成缩略图失败。修复：确认 ci.yml `build-images` job 有 `lfs: true` |
 | Supabase 备库 `relation "xxx" does not exist` | DDL 未同步到备库。逻辑复制不复制 DDL，需手动执行。完整流程见 [references/supabase-ddl-sync.md](references/supabase-ddl-sync.md) |
 | 容器内 `failed to resolve host ...supabase.co` | Supabase 只有 IPv6 AAAA 记录，Docker 容器无法解析。必须在主机用 Python 直连：`pip3 install psycopg[binary]`，然后 `python3 script.py`。详见 [references/supabase-ddl-sync.md](references/supabase-ddl-sync.md) §Network Constraint |
