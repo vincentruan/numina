@@ -90,3 +90,41 @@ class TestSyncBridgeFactory:
     def test_from_cache_raises_if_not_initialized(self):
         with pytest.raises(RuntimeError, match="not initialized"):
             SyncCacheBridge.from_cache()
+
+
+class TestCrossProcessSharing:
+    """Simulate scheduler writing, backend reading from shared Redis."""
+
+    def test_scheduler_write_backend_read(self):
+        """Scheduler writes fxrate:USD to Redis, backend reads it."""
+        from datetime import UTC, datetime
+
+        import fakeredis.aioredis
+        from packages.core.cache import RedisCache
+
+        fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
+        cache = RedisCache(fake, prefix="")
+        bridge = SyncCacheBridge(cache)
+
+        now = datetime.now(UTC)
+        bridge.set(
+            "fxrate:USD",
+            {"rate": 7.2, "fetched_at": now.isoformat()},
+            ttl=14400,
+        )
+
+        data = bridge.get("fxrate:USD")
+        assert data is not None
+        assert data["rate"] == 7.2
+
+        bridge.close()
+
+    def test_memory_mode_is_per_process(self):
+        """Memory mode: two bridges have independent caches (no sharing)."""
+        from packages.core.cache import MemoryCache
+
+        bridge_a = SyncCacheBridge(MemoryCache())
+        bridge_b = SyncCacheBridge(MemoryCache())
+
+        bridge_a.set("fxrate:USD", {"rate": 7.2, "fetched_at": "2026-01-01T00:00:00+00:00"})
+        assert bridge_b.get("fxrate:USD") is None  # independent caches
