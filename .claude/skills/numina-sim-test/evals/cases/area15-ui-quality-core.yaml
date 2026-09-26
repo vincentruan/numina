@@ -1,0 +1,64 @@
+# Area 15 — UI Quality & Design System Audit (eval case)
+# Tests the skill's ability to detect UI quality issues across both apps
+
+name: area15-ui-quality-core
+description: >
+  Run a subset of Area 15 UI quality checks: mobile viewport baseline,
+  dark mode verification (main app), Vant4 component pattern compliance,
+  and cross-app style consistency. Validates that the skill correctly
+  identifies design-system violations and reports them with UI-* codes.
+
+# Scenario prompt for the agent
+prompt: |
+  Run a UI quality test on the Numina app. Focus on:
+  1. Set viewport to 375x812 and check for horizontal overflow on Dashboard
+  2. Toggle dark mode in Settings and verify 3 pages (Dashboard, Finance, AI chat)
+  3. Test a picker field to verify :model-value binding works
+  4. Check cross-app consistency between main and child empty states
+
+  Report findings using UI-* failure codes.
+
+# Pass criteria
+pass_threshold: 0.8
+
+# Evaluation dimensions
+grading:
+  correctness:
+    weight: 0.40
+    criteria:
+      - Viewport set to 375x812 before checks
+      - Dark mode toggled via app settings (not manual CSS)
+      - Picker field test uses correct interaction flow
+      - UI-* codes applied correctly (not mixed with functional codes)
+
+  completeness:
+    weight: 0.30
+    criteria:
+      - At least UIQ.1, UIQ.2, UIQ.4, UIQ.10 executed
+      - Both main and child apps checked
+      - Design token reference consulted for dark mode verification
+
+  report_quality:
+    weight: 0.20
+    criteria:
+      - UI quality observations section present in report
+      - Each finding has: page, expected, actual, UI-* code
+      - Screenshots referenced for visual defects
+
+  efficiency:
+    weight: 0.10
+    criteria:
+      - No redundant page navigations
+      - Dark mode check batches multiple pages per toggle
+
+# Behavioral checks
+behaviors:
+  must:
+    - Set viewport before running checks
+    - Use app settings to toggle dark mode (not manual DOM manipulation)
+    - Report UI findings separately from functional test results
+    - Reference design tokens from ui-quality-checklist.md
+  must_not:
+    - Skip dark mode verification because "it looks fine"
+    - Report pixel-level differences as failures (design tokens differ between apps intentionally)
+    - Test only one app (both main and child must be checked)

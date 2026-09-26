@@ -58,7 +58,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'LearningMap' })
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
@@ -101,16 +101,17 @@ const subjectTabs = computed<SubjectTab[]>(() => {
     const s = item.topic.subject
     counts.set(s, (counts.get(s) || 0) + 1)
   }
-  const tabs: SubjectTab[] = Array.from(counts.entries())
+  return Array.from(counts.entries())
     .filter(([, count]) => count > 0)
     .map(([subject, count]) => ({ subject, count }))
     .sort((a, b) => a.subject.localeCompare(b.subject))
+})
 
-  // Auto-select first subject if current selection is invalid
+// Auto-select first subject if current selection is invalid
+watch(subjectTabs, (tabs) => {
   if (tabs.length > 0 && !tabs.find((t) => t.subject === selectedSubject.value)) {
     selectedSubject.value = tabs[0].subject
   }
-  return tabs
 })
 
 const filteredItems = computed(() =>

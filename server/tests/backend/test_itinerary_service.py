@@ -1,6 +1,6 @@
 """Tests for itinerary service and API routes (U2)."""
 
-from datetime import date, time
+from datetime import date, time, timedelta
 from decimal import Decimal
 
 import pytest
@@ -267,6 +267,246 @@ class TestExpenseLedgerIntegration:
 
         db.refresh(trip)
         assert trip.actual_spend == initial_spend + Decimal("200.00")
+
+
+class TestCrossDayAndPurchaseDate:
+    """Cross-day items (end_date) and purchase_date for expense date."""
+
+    def test_create_cross_day_item(self, db, trip, test_user):
+        """Create item with end_date > date, verify response includes end_date."""
+        data = ItineraryItemCreate(
+            date=date(2026, 10, 1),
+            end_date=date(2026, 10, 4),
+            type="accommodation",
+            cost_amount=Decimal("1500.00"),
+            cost_currency="CNY",
+        )
+        item = itinerary_service.create_item(db, trip, test_user.id, data)
+
+        assert item.end_date == date(2026, 10, 4)
+        assert item.date == date(2026, 10, 1)
+
+    def test_end_date_before_date_rejected(self):
+        """end_date < date → 422 validation error."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="end_date"):
+            ItineraryItemCreate(
+                date=date(2026, 10, 5),
+                end_date=date(2026, 10, 3),
+                type="accommodation",
+            )
+
+    def test_cross_day_with_purchase_date_expense_on_purchase(self, db, trip, test_user):
+        """Cross-day item with purchase_date → expense created on purchase_date."""
+        data = ItineraryItemCreate(
+            date=date(2026, 10, 5),
+            end_date=date(2026, 10, 8),
+            type="accommodation",
+            cost_amount=Decimal("1500.00"),
+            cost_currency="CNY",
+            purchase_date=date(2026, 9, 20),
+        )
+        item = itinerary_service.create_item(db, trip, test_user.id, data)
+
+        entries = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.itinerary_item_id == item.id,
+                ExpenseEntry.leg_type == "debit",
+            )
+            .all()
+        )
+        assert len(entries) == 1
+        assert entries[0].expense_date == date(2026, 9, 20)
+
+    def test_cross_day_without_purchase_date_expense_on_start(self, db, trip, test_user):
+        """Cross-day item without purchase_date → expense on start date (backward compat)."""
+        data = ItineraryItemCreate(
+            date=date(2026, 10, 1),
+            end_date=date(2026, 10, 4),
+            type="accommodation",
+            cost_amount=Decimal("1200.00"),
+            cost_currency="CNY",
+        )
+        item = itinerary_service.create_item(db, trip, test_user.id, data)
+
+        entries = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.itinerary_item_id == item.id,
+                ExpenseEntry.leg_type == "debit",
+            )
+            .all()
+        )
+        assert len(entries) == 1
+        assert entries[0].expense_date == date(2026, 10, 1)
+
+    def test_update_purchase_date_recreates_expense(self, db, trip, test_user):
+        """Update purchase_date → expense recreated with new date."""
+        data = ItineraryItemCreate(
+            date=date(2026, 10, 5),
+            type="accommodation",
+            cost_amount=Decimal("800.00"),
+            cost_currency="CNY",
+        )
+        item = itinerary_service.create_item(db, trip, test_user.id, data)
+
+        # Verify initial expense on start date
+        entries_before = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.itinerary_item_id == item.id,
+                ExpenseEntry.leg_type == "debit",
+            )
+            .all()
+        )
+        assert entries_before[0].expense_date == date(2026, 10, 5)
+
+        # Update purchase_date
+        update = ItineraryItemUpdate(purchase_date=date(2026, 9, 15))
+        updated = itinerary_service.update_item(db, item, test_user.id, update)
+        assert updated.purchase_date == date(2026, 9, 15)
+
+        # New expense should be on purchase_date
+        entries_after = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.itinerary_item_id == item.id,
+                ExpenseEntry.leg_type == "debit",
+            )
+            .all()
+        )
+        amounts = sorted([e.expense_date for e in entries_after])
+        assert date(2026, 9, 15) in amounts
+        # Verify new expense date is present (original date may still appear in reversal entries)
+        assert any(e.expense_date == date(2026, 9, 15) for e in entries_after)
+
+
+    def test_end_date_equals_date_accepted(self):
+        """end_date == date is valid (treated as single-day)."""
+        d = date(2026, 10, 3)
+        item = ItineraryItemCreate(date=d, end_date=d, type="activity")
+        assert item.end_date == d
+
+    def test_update_partial_end_date_validates_against_db_date(self, db, trip, test_user):
+        """Partial update with only end_date < existing date → ValueError."""
+        data = ItineraryItemCreate(
+            date=date(2026, 10, 5),
+            type="accommodation",
+        )
+        item = itinerary_service.create_item(db, trip, test_user.id, data)
+
+        # Send only end_date (no date in payload) — earlier than existing date
+        update = ItineraryItemUpdate(end_date=date(2026, 10, 1))
+        with pytest.raises(ValueError, match="end_date must be >= date"):
+            itinerary_service.update_item(db, item, test_user.id, update)
+
+
+class TestGetLiabilityDetail:
+    """Tests for get_liability_detail dashboard service function."""
+
+    def test_basic_response_structure(self, db, trip, test_user, test_family):
+        """Returns correct structure with zero liabilities/rent/travel."""
+        from apps.backend.app.services.dashboard import get_liability_detail
+        result = get_liability_detail(db, test_user)
+
+        assert result.total_liabilities == 0
+        assert result.categories == []
+        assert result.rent_monthly_expense is None
+        assert result.travel_last_month == 0
+        assert result.travel_this_month == 0
+
+    def test_travel_expenses_with_purchase_date(self, db, trip, test_user):
+        """Travel expenses bucketed by purchase_date."""
+        from apps.backend.app.services.dashboard import get_liability_detail
+
+        today = date.today()
+        # Create item with purchase_date this month
+        data = ItineraryItemCreate(
+            date=today,
+            type="accommodation",
+            cost_amount=Decimal("500.00"),
+            cost_currency="CNY",
+            purchase_date=today,
+        )
+        itinerary_service.create_item(db, trip, test_user.id, data)
+
+        result = get_liability_detail(db, test_user)
+        assert result.travel_this_month == 500.0
+
+    def test_travel_expenses_coalesce_fallback(self, db, trip, test_user):
+        """Items without purchase_date fall back to date field (coalesce)."""
+        from apps.backend.app.services.dashboard import get_liability_detail
+
+        today = date.today()
+        # Create item WITHOUT purchase_date — should use date for bucketing
+        data = ItineraryItemCreate(
+            date=today,
+            type="dining",
+            cost_amount=Decimal("200.00"),
+            cost_currency="CNY",
+            # no purchase_date — coalesce(purchase_date, date) should use date
+        )
+        itinerary_service.create_item(db, trip, test_user.id, data)
+
+        result = get_liability_detail(db, test_user)
+        assert result.travel_this_month == 200.0
+
+    def test_travel_expenses_exclude_inactive_trips(self, db, test_user, test_family):
+        """Travel expenses only count items from active trips."""
+        from apps.backend.app.services.dashboard import get_liability_detail
+
+        today = date.today()
+        # Create an inactive trip
+        inactive_trip = Trip(
+            family_id=test_family.id,
+            user_id=test_user.id,
+            name="Old Trip",
+            destination="Paris",
+            departure_date=today - timedelta(days=30),
+            return_date=today - timedelta(days=20),
+            currency="CNY",
+            is_active=False,
+        )
+        db.add(inactive_trip)
+        db.commit()
+        db.refresh(inactive_trip)
+
+        item = ItineraryItem(
+            trip_id=inactive_trip.id,
+            family_id=test_family.id,
+            date=today,
+            type="dining",
+            cost_amount=Decimal("300.00"),
+            cost_currency="CNY",
+        )
+        db.add(item)
+        db.commit()
+
+        result = get_liability_detail(db, test_user)
+        # Inactive trip items should NOT be counted
+        assert result.travel_this_month == 0
+
+    def test_rent_expense_from_tenant_contracts(self, db, test_user, test_family):
+        """Rent expense aggregated from active tenant rental contracts."""
+        from apps.backend.app.services.dashboard import get_liability_detail
+        from packages.db.models.rental_contract import RentalContract
+
+        contract = RentalContract(
+            user_id=test_user.id,
+            family_id=test_family.id,
+            role="tenant",
+            monthly_rent=Decimal("5000.00"),
+            deposit=Decimal("10000.00"),
+            start_date=date(2026, 1, 1),
+            currency="CNY",
+            is_active=True,
+        )
+        db.add(contract)
+        db.commit()
+
+        result = get_liability_detail(db, test_user)
+        assert result.rent_monthly_expense == 5000.0
 
 
 class TestDeleteModes:

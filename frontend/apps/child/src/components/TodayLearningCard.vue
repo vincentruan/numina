@@ -44,6 +44,7 @@ const icon = computed(() => {
     case 'current': return '📖'
     case 'recommended': return '🌟'
     case 'explore': return '📚'
+    default: return ''
   }
 })
 
@@ -55,6 +56,7 @@ const topicName = computed(() => {
     case 'current': return props.data.current_topic ? topicDisplayName(props.data.current_topic) : ''
     case 'recommended': return props.data.recommended_topic ? topicDisplayName(props.data.recommended_topic) : ''
     case 'explore': return t('learning.todayCard.exploreSub')
+    default: return ''
   }
 })
 

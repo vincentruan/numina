@@ -44,9 +44,23 @@
         </div>
       </router-link>
 
-      <!-- 总负债 → liabilities -->
+      <!-- 总负债 → liabilities (with info icon for detail popup) -->
       <router-link :to="{ path: '/finance', query: { tab: 'liabilities' } }" class="osc-item" data-test="stat-liabilities" :aria-label="t('dashboard.totalLiabilitiesDrilldown')">
-        <div class="osc-item-label">{{ t('dashboard.totalLiabilities') }}</div>
+        <div class="osc-item-label">
+          {{ t('dashboard.totalLiabilities') }}
+          <button
+            class="osc-info-btn"
+            data-test="liability-info-btn"
+            :aria-label="t('dashboard.liabilityDetailTitle')"
+            @click.prevent.stop="openLiabilityDetail"
+          >
+            <svg viewBox="0 0 16 16" fill="none" width="14" height="14" aria-hidden="true">
+              <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M8 7v4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="8" cy="4.5" r="0.8" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
         <div class="osc-item-value">
           <MoneyDisplay :amount="overview?.total_liabilities ?? 0" />
         </div>
@@ -86,6 +100,69 @@
         </div>
       </router-link>
     </div>
+
+    <!-- Liability detail popup -->
+    <van-popup
+      v-model:show="showLiabilityDetail"
+      position="bottom"
+      round
+      closeable
+      safe-area-inset-bottom
+      class="liability-detail-popup"
+      @closed="liabilityDetail = null"
+    >
+      <div class="ldp-content">
+        <div class="ldp-title">{{ t('dashboard.liabilityDetailTitle') }}</div>
+
+        <!-- 1. Original total + category breakdown -->
+        <div class="ldp-section">
+          <div class="ldp-section-header">
+            <span class="ldp-section-label">{{ t('dashboard.liabilityCategoryTotal') }}</span>
+            <MoneyDisplay :amount="liabilityDetail?.total_liabilities ?? 0" />
+          </div>
+          <div v-if="liabilityDetail?.categories?.length" class="ldp-category-list">
+            <div
+              v-for="cat in liabilityDetail.categories"
+              :key="cat.category_name"
+              class="ldp-category-row"
+            >
+              <span class="ldp-cat-dot" :style="{ background: cat.color }" />
+              <span class="ldp-cat-name">{{ categoryLabel(cat.category_name) }}</span>
+              <span class="ldp-cat-pct">{{ cat.percentage.toFixed(1) }}%</span>
+              <MoneyDisplay :amount="cat.amount" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Rent expense -->
+        <div v-if="liabilityDetail?.rent_monthly_expense != null" class="ldp-section">
+          <div class="ldp-section-header">
+            <span class="ldp-section-label">{{ t('dashboard.rentExpense') }}</span>
+            <MoneyDisplay :amount="liabilityDetail.rent_monthly_expense" />
+          </div>
+        </div>
+
+        <!-- 3. Travel expenses (two months) -->
+        <div
+          v-if="(liabilityDetail?.travel_last_month ?? 0) > 0 || (liabilityDetail?.travel_this_month ?? 0) > 0"
+          class="ldp-section"
+        >
+          <div class="ldp-section-label ldp-section-label--mb">{{ t('dashboard.travelExpense') }}</div>
+          <div v-if="(liabilityDetail?.travel_last_month ?? 0) > 0" class="ldp-section-header">
+            <span class="ldp-section-label">{{ travelLastMonthLabel }}</span>
+            <MoneyDisplay :amount="liabilityDetail!.travel_last_month" />
+          </div>
+          <div v-if="(liabilityDetail?.travel_this_month ?? 0) > 0" class="ldp-section-header">
+            <span class="ldp-section-label">{{ travelThisMonthLabel }}</span>
+            <MoneyDisplay :amount="liabilityDetail!.travel_this_month" />
+          </div>
+        </div>
+
+        <div v-if="liabilityDetailLoading" class="ldp-loading">
+          <van-loading size="20px" />
+        </div>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -94,6 +171,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
+import { getLiabilityDetail } from '@/api/dashboard'
+import type { LiabilityDetailResponse } from '@/types'
 import { useCurrency } from '@/composables/useCurrency'
 import { useMonthlyPaymentTotal } from '@/composables/useMonthlyPaymentTotal'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -117,6 +196,49 @@ const liabilityLoading = ref(false)
 const wishLoading = ref(false)
 const liabilityError = ref(false)
 const wishError = ref(false)
+
+// --- Liability detail popup ---
+const showLiabilityDetail = ref(false)
+const liabilityDetail = ref<LiabilityDetailResponse | null>(null)
+const liabilityDetailLoading = ref(false)
+
+const { locale } = useI18n()
+
+const categoryLabelMap: Record<string, string> = {
+  mortgage: 'liability.mortgage',
+  car_loan: 'liability.carLoan',
+  credit_card: 'liability.creditCard',
+  consumer_loan: 'liability.consumerLoan',
+  personal_loan: 'liability.personalLoan',
+  other: 'liability.other',
+}
+function categoryLabel(key: string): string {
+  return t(categoryLabelMap[key] || 'liability.other')
+}
+
+const travelLastMonthLabel = computed(() => {
+  const d = new Date()
+  d.setMonth(d.getMonth() - 1)
+  return d.toLocaleDateString(locale.value, { year: 'numeric', month: 'long' })
+})
+const travelThisMonthLabel = computed(() => {
+  const d = new Date()
+  return d.toLocaleDateString(locale.value, { year: 'numeric', month: 'long' })
+})
+
+async function openLiabilityDetail() {
+  showLiabilityDetail.value = true
+  if (liabilityDetail.value || liabilityDetailLoading.value) return
+  liabilityDetailLoading.value = true
+  try {
+    const res = await getLiabilityDetail()
+    liabilityDetail.value = res.data
+  } catch {
+    // silent — popup stays open with empty state
+  } finally {
+    liabilityDetailLoading.value = false
+  }
+}
 
 // --- Net worth change badge (mirrors NetWorthCard) ---
 const changeClass = computed(() => ((overview.value?.month_over_month_change || 0) >= 0 ? 'positive' : 'negative'))
@@ -472,5 +594,97 @@ onMounted(() => {
   font-size: 12px;
   color: var(--text-secondary, #969799);
   white-space: nowrap;
+}
+
+/* Info button next to 总负债 label */
+.osc-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin-left: 2px;
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+.osc-info-btn:active {
+  background: var(--bg-secondary);
+  color: var(--color-primary);
+}
+
+/* Liability detail popup */
+.liability-detail-popup :deep(.van-popup__content) {
+  max-height: 70vh;
+}
+.ldp-content {
+  padding: 16px 16px 24px;
+}
+.ldp-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+  margin-bottom: 16px;
+}
+.ldp-section {
+  margin-bottom: 16px;
+}
+.ldp-section:last-child {
+  margin-bottom: 0;
+}
+.ldp-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+.ldp-section-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.ldp-section-label--mb {
+  margin-bottom: 4px;
+}
+.ldp-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ldp-category-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+  border-top: 1px solid var(--separator, rgba(0, 0, 0, 0.06));
+}
+.ldp-cat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ldp-cat-name {
+  flex: 1;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.ldp-cat-pct {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  min-width: 40px;
+  text-align: right;
+}
+.ldp-loading {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0;
 }
 </style>

@@ -22,6 +22,7 @@ from apps.backend.app.schemas.dashboard import (
     InsightsResponse,
     InvestmentReturnItem,
     LiabilityAllocationResponse,
+    LiabilityDetailResponse,
     LowUsageItem,
     NewAssetsResponse,
     OverviewResponse,
@@ -69,6 +70,15 @@ def get_liability_allocation(
     user: User = Depends(require_adult),
 ):
     return dashboard_service.get_liability_allocation(db, user)
+
+
+@router.get("/liability-detail", response_model=LiabilityDetailResponse)
+def get_liability_detail(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Extended liability breakdown: categories + rent + travel spending."""
+    return dashboard_service.get_liability_detail(db, user)
 
 
 @router.get("/trend", response_model=TrendResponse)

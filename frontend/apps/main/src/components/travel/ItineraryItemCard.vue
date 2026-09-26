@@ -8,6 +8,7 @@
         <div class="card-content">
           <div class="card-header">
             <span class="card-type">{{ typeName }}</span>
+            <span v-if="durationBadge" class="card-duration">{{ durationBadge }}</span>
             <span v-if="item.start_time" class="card-time">{{ item.start_time }}</span>
             <span v-if="item.end_time" class="card-time-sep">–</span>
             <span v-if="item.end_time" class="card-time">{{ item.end_time }}</span>
@@ -70,6 +71,20 @@ defineEmits<{
 
 const { t } = useI18n()
 const { formatIn } = useCurrency()
+
+const isCrossDay = computed(() => {
+  return !!props.item.end_date && props.item.end_date !== props.item.date
+})
+
+const durationBadge = computed(() => {
+  if (!isCrossDay.value) return ''
+  const start = props.item.date.slice(5).replace('-', '/')
+  const end = props.item.end_date!.slice(5).replace('-', '/')
+  const startDate = new Date(props.item.date + 'T00:00:00')
+  const endDate = new Date(props.item.end_date! + 'T00:00:00')
+  const days = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+  return t('travel.itinerary.durationBadge', { start, end, days })
+})
 
 const ICON_MAP: Record<string, string> = {
   accommodation: 'hotel-o',
@@ -210,6 +225,14 @@ const typeMetaSummary = computed(() => {
   font-weight: 600;
   font-size: 14px;
   color: var(--text-primary);
+}
+
+.card-duration {
+  font-size: 11px;
+  color: var(--van-primary-color);
+  background: rgba(var(--van-primary-color-rgb, 79, 70, 229), 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 
 .card-time {

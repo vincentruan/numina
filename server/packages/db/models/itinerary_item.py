@@ -40,6 +40,7 @@ class ItineraryItem(Base):
     trip_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("trips.id"), nullable=False)
     family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     type: Mapped[str] = mapped_column(String(20), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     start_time: Mapped[time | None] = mapped_column(Time, nullable=True)
@@ -48,6 +49,7 @@ class ItineraryItem(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     cost_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     cost_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    purchase_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     custom_type_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("itinerary_item_types.id"), nullable=True
     )

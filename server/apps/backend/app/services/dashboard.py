@@ -27,6 +27,7 @@ from apps.backend.app.schemas.dashboard import (
     InvestmentReturnSummary,
     LiabilityAllocationItem,
     LiabilityAllocationResponse,
+    LiabilityDetailResponse,
     LongestHeldStat,
     LowUsageItem,
     NewAssetItem,
@@ -52,6 +53,7 @@ from apps.backend.app.services.asset import (
 )
 from apps.backend.app.services.exchange_rate import ExchangeRateService
 from packages.db.models.expense_entry import ExpenseEntry
+from packages.db.models.itinerary_item import ItineraryItem
 from packages.db.models.split_group import SplitSettlement
 from packages.db.models.trip import Trip
 
@@ -347,6 +349,82 @@ def get_liability_allocation(db: Session, user: User) -> LiabilityAllocationResp
     ]
 
     return LiabilityAllocationResponse(items=items, total=round(total, 2))
+
+
+def get_liability_detail(db: Session, user: User) -> LiabilityDetailResponse:
+    """Extended liability breakdown for the overview card detail popup.
+
+    Returns liability category totals (same as get_liability_allocation),
+    plus current month tenant rent expense and recent travel spending
+    (last month + this month, by purchase_date).
+    """
+    family_id = user.family_id
+    default_currency = user.default_currency or "CNY"
+    today = date.today()
+
+    # --- Liability categories (reuse allocation logic) ---
+    alloc = get_liability_allocation(db, user)
+
+    # --- Tenant rent expense (current month) ---
+    rent_expense: float | None = None
+    tenant_contracts = (
+        db.query(RentalContract)
+        .filter(
+            RentalContract.family_id == family_id,
+            RentalContract.role == "tenant",
+            RentalContract.is_active.is_(True),
+        )
+        .all()
+    )
+    if tenant_contracts:
+        rent_total = 0.0
+        for c in tenant_contracts:
+            rent_total += ExchangeRateService.convert(
+                float(c.monthly_rent), c.currency or "CNY", default_currency, db
+            )
+        rent_expense = round(rent_total, 2)
+
+    # --- Travel expenses by purchase_date (last month + this month) ---
+    this_month_start = today.replace(day=1)
+    last_month_start = (this_month_start - timedelta(days=1)).replace(day=1)
+
+    def _sum_travel(start: date, end: date) -> float:
+        # coalesce(purchase_date, date): fallback for items created before
+        # purchase_date was added; ensures old itinerary items still count.
+        purchase_date_col = func.coalesce(ItineraryItem.purchase_date, ItineraryItem.date)
+        items = (
+            db.query(ItineraryItem.cost_amount, ItineraryItem.cost_currency)
+            .join(Trip)
+            .filter(
+                ItineraryItem.family_id == family_id,
+                Trip.is_active == True,  # noqa: E712
+                purchase_date_col >= start,
+                purchase_date_col < end,
+                ItineraryItem.cost_amount.isnot(None),
+                ItineraryItem.cost_amount > 0,
+            )
+            .all()
+        )
+        total = 0.0
+        for item in items:
+            total += ExchangeRateService.convert(
+                float(item.cost_amount),
+                item.cost_currency or default_currency,
+                default_currency,
+                db,
+            )
+        return round(total, 2)
+
+    travel_last_month = _sum_travel(last_month_start, this_month_start)
+    travel_this_month = _sum_travel(this_month_start, today + timedelta(days=1))
+
+    return LiabilityDetailResponse(
+        total_liabilities=alloc.total,
+        categories=alloc.items,
+        rent_monthly_expense=rent_expense,
+        travel_last_month=travel_last_month,
+        travel_this_month=travel_this_month,
+    )
 
 
 def get_trend(db: Session, user: User, period: str = "month") -> TrendResponse:

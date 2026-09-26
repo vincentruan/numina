@@ -1,21 +1,27 @@
 ---
 name: numina-sim-test
 description: >
-  Use when the user wants to run UI simulation tests, audit the interface,
-  capture screenshots, or verify deployed UI flows for the Numina project.
-  Triggers on: "run sim test", "ui audit", "截图测试", "仿真测试",
-  "ui检查", "界面审查", "check the UI", "test the app visually",
-  "儿童测试", "child frontend test", "test AI chat/report/PDF import",
-  or any request to verify the deployed Docker app's three feature areas
-  (child app, financial management, AI capabilities).
+  Use when the user wants to run full-stack functional verification tests,
+  audit the interface, capture screenshots, or verify deployed UI flows for
+  the Numina project. Covers 15 areas: child app, financial management, AI
+  capabilities, currency, regression, expanded features, security/notification,
+  AI report, adversarial security, task resilience, AI config, travel, and UI
+  quality/design system. Triggers on: "run sim test", "ui audit", "截图测试",
+  "仿真测试", "全栈验收", "功能验收", "ui检查", "界面审查", "check the UI",
+  "test the app visually", "儿童测试", "child frontend test",
+  "test AI chat/report/PDF import", "ui quality", "设计审查", "UI 质量检查",
+  "dark mode test", "深色模式测试", "mobile test", "移动端测试",
+  "accessibility test", "无障碍测试", "security test", "安全测试",
+  or any request to verify the deployed app's features.
 ---
 
-# Numina Simulation Test Pipeline
+# Numina Full-Stack Functional Verification Pipeline
 
-End-to-end pipeline for browser-based UI simulation testing. The pipeline
-detects the best available browser driver at startup (priority: **browser-use**
-→ **bsk** → **Chrome DevTools MCP**) and drives the user's real browser through
-authenticated UI flows, screenshot capture, and test report generation.
+End-to-end pipeline for browser-based full-stack functional verification. The pipeline
+covers 15 test areas (UI flows, AI capabilities, security adversarial, design system
+quality, and more). It detects the best available browser driver at startup (priority:
+**browser-use** → **bsk** → **Chrome DevTools MCP**) and drives the user's real browser
+through authenticated flows, screenshot capture, and test report generation.
 
 > **Browser driver:** All browser interaction commands are abstracted in this
 > skill. For the concrete command syntax of the active driver, read
@@ -27,7 +33,7 @@ authenticated UI flows, screenshot capture, and test report generation.
 > environment must already contain the test accounts below (see
 > "Prerequisites").
 
-Covers **fourteen** feature areas (detailed cases split by area under
+Covers **fifteen** feature areas (detailed cases split by area under
 [`test-cases/`](./test-cases/), shared conventions in
 [`test-cases/_common.md`](./test-cases/_common.md), role matrix in
 [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md)):
@@ -38,13 +44,14 @@ Covers **fourteen** feature areas (detailed cases split by area under
 5. **Child app navigation coverage** (`$CHILD_BASE`) — 每个页签 + 子页面 ([`test-cases/groups/g3-child/area5-child-navigation.md`](./test-cases/groups/g3-child/area5-child-navigation.md))
 6. **AI chat DeerFlow-fidelity parity** — 输入/输出/系统集成 + 设计出入 ([`test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md`](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md))
 7. **Regression sweep** — 历史缺陷回归 (R1–R9) ([`test-cases/groups/g1-adult-stable/area7-regression.md`](./test-cases/groups/g1-adult-stable/area7-regression.md))
-8. **Expanded feature coverage** — Manifesto / 盲盒 / Baby / Settings / Guest / 权限边界 (F.1–F.10) ([`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md))
+8. **Expanded feature coverage** — Manifesto / 盲盒 / Baby / Settings / Guest / 权限边界 (F.1–F.8, F.11, F.12) ([`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md))
 9. **Account security + notification** — WebAuthn / 2FA / 设备管理 / 通知规则 (C9.1–C9.7) ([`test-cases/groups/g1-adult-stable/area9-security-notification.md`](./test-cases/groups/g1-adult-stable/area9-security-notification.md))
 10. **Guest 端到端注册 + 加入家庭** — 注册 / 邀请码 / 已登录守卫 (C10.1–C10.4) ([`test-cases/groups/g1-adult-stable/area10-guest-join-flow.md`](./test-cases/groups/g1-adult-stable/area10-guest-join-flow.md))
 11. **AI/agent adversarial security** — 提示词注入 / 跨租户隔离 / 工具越权 / 自定义智能体隔离 / 输入边界 (C11.1–C11.20) ([`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md))
 12. **AI task resilience** — 前端不稳定处理：离开/刷新恢复、失败/中断重试、用户取消 (C12.1–C12.9) ([`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md))
 13. **AI 资产报告深度验证** — Hub 弹窗内容/z-index、报告重入步骤去重/SSE 重连/取消按钮、narrative 缓存推导 (C13.1–C13.5) ([`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md))
-14. **Travel module (家庭旅行管理)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float / 行程规划时间线 (C14.1–C14.33) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md))
+14. **Travel module (家庭旅行管理)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float / 行程规划时间线 / 跨天行程 + 购买日期 (C14.1–C14.40) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md))
+15. **UI quality & design system audit** — 移动端 H5/PWA 适配 / 深色模式 / Vant4 组件规范 / 无障碍 / 安全区域 / 跨应用风格一致性 (UIQ.1–UIQ.10) ([`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching
@@ -55,7 +62,7 @@ Covers **fourteen** feature areas (detailed cases split by area under
 > D4 user-selectable reasoning_effort, D5 TodoList bar, D6 Scheduled Tasks,
 > D7 Thread Channel Source).
 
-## Parallel Run Structure (3-4 agents, dev mode)
+## Parallel Run Structure (3 agents, dev mode)
 
 The eight area files are organized into **4 groups by state-isolation boundary**
 under [`test-cases/groups/`](./test-cases/groups/) so 2-3 agents can run them in
@@ -73,18 +80,22 @@ schedule + verified browser concurrency evidence.
 | Group | Dir | Areas | Session | State domain | Parallel with |
 |-------|-----|-------|---------|--------------|---------------|
 | **G0** preconditions | [`g0-preconditions/`](./test-cases/groups/g0-preconditions/) | Phase 0/1/1.5/2 | serial | establishes login | none — first |
-| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 11, 12, 14 | `$SID` (adult) | reads global; per-entity writes | **G3** |
+| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 9, 12, 13, 14, 15 | `$SID` (adult) | reads global; per-entity writes | **G3** |
 | **G2** adult-currency | [`g2-adult-currency/`](./test-cases/groups/g2-adult-currency/) | 4 | adult (own) | **mutates `default_currency`** | **G3** |
 | **G3** child | [`g3-child/`](./test-cases/groups/g3-child/) | 1, 5, 10 | `$SID_CHILD` | child origin (isolated dev) | **G1 or G2** |
 
 **Schedule:** `G0 (serial) → G1 ‖ G3 (parallel) → G2 (after G1)`. Three agents
 cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
-> **G1 internal order:** area2 → area14 → area8 → area3 → area6 → area7 → area11. Area 7
+> **G1 internal order:** area2 → area14 → area8 → area3 → area6 → area13 → area12 → area15 → area9 → area7 → area11. Area 7
 > (regression) runs just before Area 11, with R6 (auth expiry) destroying the
 > session **last** so earlier areas have a live session. Area 14 (travel) runs
-> after area2 since both create financial entities. Area 11 uses adult
-> session read-only probes and should run before R6 clears the session.
+> after area2 since both create financial entities. Area 13 (AI report deep)
+> runs after area6 (AI chat parity) since both exercise AI surfaces. Area 15
+> (UI quality) runs before regression since it needs a stable session for
+> dark-mode toggling and viewport tests. Area 9 (security/notification) runs
+> after area15 since it exercises WebAuthn/2FA flows. Area 11 uses adult
+> session read-only probes.
 
 > **Docker mode caveat:** nginx serves adult + child under **one origin** (:80)
 > → G3 is NOT parallel-safe with G1/G2 (shared cookie + localStorage). The
@@ -103,6 +114,12 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 > (2) prefix failures in the report with the group (`G1-C2.3`, `G3-C1.10`);
 > (3) never split a single group across two agents — they share that group's
 > session and would race.
+>
+> **Chrome DevTools MCP caveat:** When MCP is the active driver, parallel
+> agents share one MCP server — `select_page`/`navigate_page` calls from one
+> agent affect the other's tabs. Each agent MUST open its own page via
+> `new_page()` and call `select_page` before every interaction. If coordination
+> issues arise, fall back to serial execution.
 
 > `$BASE` / `$CHILD_BASE` / `$API_BASE` are set per deployment mode — see
 > "Deployment Mode" below. Routes (`/login`, `/child/`, `/ai/chat`, …) are the
@@ -114,21 +131,24 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
 | Mode | 触发词 | 覆盖范围 | 预计耗时 |
 |------|--------|----------|----------|
-| **full** | "run sim test", "全量测试" | Area 1–14 (所有用例) | ~90-120 min |
+| **full** | "run sim test", "全量测试" | Area 1–15 (所有用例) | ~180-220 min |
 | **smoke** | "smoke test", "快速检查" | C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2, C9.4 | ~18-25 min |
 | **child** | "child test", "儿童测试" | Area 1 + Area 5 (G3 only) | ~20-30 min |
 | **finance** | "finance test", "财务测试" | Area 2 only (G1 subset, C2.1–C2.25) | ~20-25 min |
 | **ai** | "ai test", "AI测试" | Area 3 + Area 6 + Area 12 + Area 13 (G1 subset, AI 必须启用) | ~35-45 min |
 | **regression** | "regression test", "回归测试" | Area 7 only (R1–R9) | ~10-15 min |
 | **security** | "security test", "安全测试" | Area 9 (C9.1–C9.7) + Area 11 (C11.1–C11.20) + R6 | ~25-35 min |
-| **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.33) | ~35-45 min |
+| **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.40) | ~45-55 min |
+| **ui-quality** | "ui quality", "设计审查", "UI 质量检查" | Area 15 only (UIQ.1–UIQ.10) | ~25-35 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
 
 **选择逻辑:**
 1. 用户未指定模式 → 默认 `full`
 2. 用户说"快速检查" / "smoke" → `smoke` (仅跑关键路径的 10 个用例)
 3. 用户明确指定某个 area 或功能域 → 跑对应的 area
-4. `smoke` 模式跳过 Area 1/5/7/8/9/10/11/12/14, 仅验证核心 adult 功能 + 币种回归 + 通知触发
+4. `smoke` 模式跳过 Area 1/5/7/8/9/10/11/12/14/15, 仅验证核心 adult 功能 + 币种回归 + 通知触发
+5. `ui-quality` 模式需要 adult + child 两个 session; 先跑 G0 前置, 再跑 Area 15
+6. 域别名（`child`/`finance`/`ai`/`regression`/`security`/`travel`/`ui-quality`）等同于对应的 Area 组合，执行路径与 `area-N` 相同——别名仅用于触发词匹配，不引入额外执行逻辑
 
 ---
 
@@ -258,12 +278,11 @@ elif command -v bsk &>/dev/null; then
   BROWSER_DRIVER="bsk"
   bsk doctor 2>/dev/null && echo "bsk: OK" || echo "bsk: extension issue"
 
-# 3. Chrome DevTools MCP — check if MCP tools are in the available tool list
-# (mcp__chrome-devtools__navigate_page etc.)
-elif command -v echo &>/dev/null; then
-  # MCP availability is determined by tool listing, not CLI
-  # If chrome-devtools MCP tools are available in this session, use them
-  BROWSER_DRIVER="chrome-devtools"  # only if MCP tools confirmed available
+# 3. Chrome DevTools MCP — agent must self-check tool list BEFORE running this script.
+# If mcp__chrome-devtools__navigate_page is in the session's available tools,
+# set MCP_CHROME_DEVTOOLS=1 before invoking this detection script.
+elif [ "${MCP_CHROME_DEVTOOLS:-0}" = "1" ]; then
+  BROWSER_DRIVER="chrome-devtools"
   echo "chrome-devtools MCP: OK"
 
 else
@@ -445,11 +464,36 @@ if [ "$STEP1_CODE" != "200" ]; then
   echo "    body: $STEP1_BODY"
 else
   echo "  (child auth step1 OK for user=$CHILD_USERNAME)"
+
+  # --- 8b) Child auth step2 (emoji PIN) pre-check ---
+  # Verify step2 endpoint accepts the temp_token from step1. If step2 fails
+  # (e.g. backend PIN config changed), Area 1/5 cases would silently fail at
+  # session injection time. Check now so the gate catches it early.
+  TEMP_TOKEN=$(echo "$STEP1_BODY" | jq -r '.data.temp_token // empty')
+  if [ -n "$TEMP_TOKEN" ]; then
+    STEP2=$(curl -s -w "\n%{http_code}" -X POST "$API/auth/login/step2" \
+      -H 'Content-Type: application/json' \
+      -d "{\"username\":\"$CHILD_USERNAME\",\"temp_token\":\"$TEMP_TOKEN\",\"pin\":\"0000\"}")
+    STEP2_CODE=$(echo "$STEP2" | tail -1)
+    if [ "$STEP2_CODE" != "200" ] && [ "$STEP2_CODE" != "401" ]; then
+      # 401 = wrong PIN (expected, we sent dummy "0000") — endpoint works
+      echo "  (WARNING: child auth step2 returned HTTP $STEP2_CODE — emoji PIN endpoint may be misconfigured)"
+    else
+      echo "  (child auth step2 endpoint OK — emoji PIN flow functional)"
+    fi
+    unset STEP2 STEP2_CODE TEMP_TOKEN
+  fi
 fi
 
 # Export CHILD_NAMES for downstream phases/report (single source of truth).
 echo "export SIM_CHILD_NAMES=\"$CHILD_NAMES\""
 echo "GATE OK: demouser family present with $CHILD_COUNT child(ren) [$CHILD_NAMES] and $ASSET_COUNT assets."
+
+# --- 9) Token cleanup — do not leave auth material in shell environment ---
+unset LOGIN BODY ME ME_USER ME_ROLE ME_FAM MEMBERS CHILD_COUNT OV ASSET_COUNT TOTAL_LIAB
+unset AI_CONFIGS AI_ACTIVE WISHES WISH_SAVINGS LIABILITIES HIGH_RATE
+unset STEP1 STEP1_CODE STEP1_BODY FIRST_CHILD_NAME FIRST_CHILD_USER CHILD_USERNAME CHILD_PASSWORD
+# Keep TOKEN and AUTH for subsequent phases; unset after Phase 5 cleanup.
 ```
 
 ### Gate failure → block
@@ -534,6 +578,25 @@ guard's fast-path (`cachedUser?.role === 'child'`) admits without a fetch.
 See `test-cases/_common.md` "Child session injection (dev mode — password-manager
 fallback)" for the full step1/step2 fetch chain and the domcontentloaded-race
 trick.
+
+---
+
+## AI Pre-check (MANDATORY before Area 3/6/12/13)
+
+Area 3 (AI capabilities), Area 6 (AI chat parity), Area 12 (AI task resilience),
+and Area 13 (AI report deep) require AI to be enabled. Before running these
+areas, verify:
+
+```bash
+# Check AI status via API (correct endpoint: /ai/config for per-family configs)
+curl -s -H "Authorization: Bearer $TOKEN" "${API_BASE}/ai/config" | jq '[.data.configs[]? | select(.is_active == true)] | length'
+```
+
+Or via browser: navigate to `${BASE}ai`, take a snapshot, look for "AI 已启用" or provider config present.
+
+- If AI is **not enabled** → skip Area 3 + Area 6 + Area 12 + Area 13 cases, mark as `SKIP-AI` in
+  the report, and continue with other areas.
+- If AI provider has no model configured → same skip, note "provider 无模型" in report.
 
 ---
 
@@ -636,6 +699,32 @@ call.
 Close/stop the browser session(s) when done (including any child session).
 Run this in a `finally`-style path so the session closes even if a case errored mid-flow.
 
+**Server-side cleanup:** After closing browser tabs, revoke the auth token to
+invalidate the server-side session:
+
+```bash
+# Invalidate auth token + clear shell environment
+curl -sf -X POST "${API_BASE}/auth/logout" -H "$AUTH" 2>/dev/null || true
+unset TOKEN AUTH SIM_CHILD_NAMES
+```
+
+> If the backend has no logout endpoint, the httpOnly cookie persists in the
+> shared browser profile. In that case, clear cookies via the browser driver
+> before ending the session.
+
+### Driver crash recovery
+
+If the browser process crashes or the driver daemon dies mid-run:
+
+1. **Verify driver is alive** — re-run `--doctor` (or equivalent health check)
+2. **If dead, mark remaining cases as `SKIP-INFRA`** — do NOT mark as FAIL
+3. **Preserve completed results** — write partial report with results so far
+4. **Attempt recovery** — restart driver + re-establish session via Phase 2 fallback
+5. **Resume** from the last completed case; note the restart in the report
+
+> Add `SKIP-INFRA` to the failure taxonomy when infrastructure fails:
+> `SKIP-INFRA | 基础设施故障 | 浏览器驱动崩溃、driver daemon 断开、MCP 服务器不可用`
+
 ---
 
 ## Phase 5.5 — Navigation coverage + AI chat parity suites
@@ -643,21 +732,8 @@ Run this in a `finally`-style path so the session closes even if a case errored 
 After the feature areas (Phase 3/4/5), run the navigation-coverage and parity
 suites. These reuse the same sessions (`$SID` adult; `$SID_CHILD` child).
 
-### AI Pre-check (before Area 3/6)
-
-Area 3 (AI capabilities) and Area 6 (AI chat parity) require AI to be enabled.
-Before running these areas, verify:
-
-```bash
-# Check AI status via API (correct endpoint: /ai/config for per-family configs)
-curl -s -H "Authorization: Bearer $TOKEN" "${API_BASE}/ai/config" | jq '[.data.configs[]? | select(.is_active == true)] | length'
-```
-
-Or via browser: navigate to `${BASE}ai`, take a snapshot, look for "AI 已启用" or provider config present.
-
-- If AI is **not enabled** → skip Area 3 + Area 6 + Area 12 cases, mark as `SKIP-AI` in
-  the report, and continue with other areas.
-- If AI provider has no model configured → same skip, note "provider 无模型" in report.
+> **AI Pre-check** has already been executed before Phase 4 (see above).
+> If AI was not enabled, skip Area 6 cases below and continue with Area 4/5/7.
 
 ### Area 4 — Main app navigation coverage (`$SID`)
 
@@ -736,6 +812,67 @@ Coverage for previously untested feature modules:
 - **F.6** Child extended features (scenario / badges / calendar / manifesto sign)
 - **F.7** AI settings deep (MCP / web-search / ASR / skills / agents)
 - **F.8** Owner vs member permission boundary (**deferred** — requires member account)
+- **F.11** FamilyPage member management
+- **F.12** ChildResetPage child password/PIN reset
+
+### Cross-cutting: Mobile Viewport Rules (all areas)
+
+All functional test cases (Areas 1–14) should be run at **375×812** viewport
+when possible. If the browser driver forces a desktop viewport, note it in the
+report and be aware that mobile-specific issues (overflow, touch targets, safe
+areas) may not surface.
+
+**Red flags to watch for during ANY functional test:**
+- Horizontal scrollbar at 375px → report as `UI-OVERFLOW`
+- Text unreadable after dark mode toggle → report as `UI-DARK`
+- Popup clipped inside swipeable tabs → report as `UI-VANT`
+- Button/field unclickable (touch target too small) → report as `UI-TOUCH`
+- Content behind notch/home indicator → report as `UI-SAFE`
+
+> These are NOT blockers for the functional test — continue the functional
+> assertion and note the UI issue separately. Area 15 covers these in depth.
+
+---
+
+## Phase 5.6 — Area 15: UI Quality & Design System Audit
+
+After functional areas complete, run the UI quality audit. This is a
+cross-cutting suite that checks design-system compliance, mobile H5/PWA
+adaptation, dark mode correctness, and Vant4 component patterns.
+
+Run [`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md):
+
+**Viewport setup:** Set browser to **375×812** (iPhone 13/14 baseline).
+Also test at **320×568** (iPhone SE 1st gen — smallest supported) and
+**768×1024** (tablet breakpoint) for UIQ.1. Record which width surfaced each issue.
+
+- **UIQ.1** Mobile viewport baseline — no horizontal scroll at 320px/375px/768px, tab bars visible
+- **UIQ.2** Dark mode (main app) — `van-config-provider` theme toggle, no inline-style leaks;
+  verify WCAG AA contrast (≥4.5:1 normal text, ≥3:1 large text) on 5+ text elements per page
+  (primary, secondary, amount, placeholder, disabled) via `getComputedStyle`
+- **UIQ.3** Dark mode (child app) — CSS `[data-theme="dark"]` overrides, Clay palette check;
+  same contrast verification as UIQ.2; also check transition flash (screenshot within 200ms of toggle)
+- **UIQ.4** Vant4 component patterns — `:model-value` vs `:value`, popup teleport, three-state
+  rendering (skeleton/empty/error/content); for error state: trigger validation on a required-field
+  form (e.g., asset create), verify error messages appear adjacent to fields, readable in both modes,
+  and use design tokens not inline colors
+- **UIQ.5** Touch target sizing — ≥ 44×44px for all interactive elements
+- **UIQ.6** Safe area compliance — `env(safe-area-inset-bottom)` for tab bars and fixed bottoms
+- **UIQ.7** PWA offline behavior — offline banner, SW registration, install prompt
+- **UIQ.8** Accessibility — enumerate **all** icon-only buttons per app (not spot-check 5);
+  verify aria-labels on each; measure WCAG AA contrast ratios on key text/background pairs;
+  test modal focus trap (open van-popup/showConfirmDialog, tab through, verify focus stays inside);
+  verify `prefers-reduced-motion` emulation suppresses child celebration animations
+- **UIQ.9** NProgress behavior — no flicker, no stuck spinner, visible when scrolled
+- **UIQ.10** Cross-app style consistency — empty states, skeleton, toast, pull-refresh match between apps;
+  use quantitative thresholds: skeleton within 300ms, EmptyState vertical center ±20px
+
+> **Prerequisites:** Both adult (`$SID`) and child (`$SID_CHILD`) sessions active.
+> Area 15 uses the adult session for UIQ.1–UIQ.9 and switches to child session
+> for UIQ.3 + UIQ.10 child-side checks.
+>
+> **Design system reference:** [`references/ui-quality-checklist.md`](./references/ui-quality-checklist.md)
+> contains full design token tables, dark mode methodology, and Vant4 patterns.
 
 ---
 
@@ -744,6 +881,11 @@ Coverage for previously untested feature modules:
 After all Area cases (Phase 3/4/5) are run, produce a single test report.
 Read the screenshots you captured (Read tool supports images) to confirm each
 case's outcome, then write the report.
+
+> **Parallel run merging:** When running in parallel mode (G1 ‖ G3 → G2), each
+> agent's output is available in the parent context via the Agent tool. Collect
+> pass/fail/skip results from all group agents, merge failures by case ID
+> (preserving group prefixes like `G1-C2.3`), and produce a unified report.
 
 > **MANDATORY: The report content MUST appear inline in your final response.**
 > Do NOT just say "报告已生成: path". The response itself must contain the
@@ -754,11 +896,21 @@ case's outcome, then write the report.
 >
 > Also write the report to a file if the environment allows, but the inline
 > content is the primary deliverable.
+>
+> **Evidence priority:** Use snapshot/AX-tree data captured during test execution
+> as the primary assertion evidence (element refs, expected text presence).
+> Screenshots are supplementary visual confirmation. For each case, review
+> snapshot text before screenshot when determining pass/fail.
 
-> **Report scope:** success summary + failure details only. Do NOT include
-> P0–P3 severity grading, effort estimates, fix plans, or UI/UX visual-audit
-> dimensions (color/spacing/contrast). This skill records test results —
-> fixing is out of scope and handled separately if the user requests it.
+> **Report scope:** success summary + failure details + UI quality observations.
+> Do NOT include P0–P3 severity grading, effort estimates, or fix plans.
+> This skill records test results. If the user wants follow-up fix commits,
+> see Phase 7 (OPTIONAL — triggered by "修复" / "fix" / "按分类提交").
+>
+> **UI quality observations:** When Area 15 (UI quality) is run, include a
+> fourth section "UI 质量观察" summarizing design-system findings (dark mode
+> defects, touch target violations, viewport overflow, accessibility gaps).
+> Use the `UI-*` failure codes from the taxonomy below.
 >
 > **Case-UI consistency check:** before writing "expected vs actual", verify the
 > case's asserted route/label still matches the current source tree. If a case
@@ -791,12 +943,12 @@ the skill log.
 - Base URL: {BASE}  /  Child URL: {CHILD_BASE}  /  API: {API_BASE}
 - Browser driver (Phase 0): {driver_name} ✓ clean
 - 服务健康 (Phase 1): adult UP / child UP / api UP  (docker 模式附 docker ps 摘要)
-- 前置门禁 (Phase 1.5): ✓ 通过 — demouser (owner, family_id={id}) / children {discovered_names} / {N} assets / 负债 {amount}
+- 前置门禁 (Phase 1.5): ✓ 通过 — demouser (owner) / children {discovered_names} / {N} assets / 负债 {amount}
 - 测试时间: {YYYY-MM-DD}
 - 截图目录: dogfood-output/
 
 ## 成功摘要
-- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.10, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.33)
+- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.8/F.11/F.12, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.40, Area15: UIQ.1–UIQ.10)
 - 通过: X
 - 失败: Y
 - 跳过: Z (注明原因, 如 AI 未启用、数据不足)
@@ -823,16 +975,23 @@ the skill log.
 
 ## 跳过用例 (如有)
 - C3.x — 原因: AI 未启用 (family aiEnabled=false), 建议在 /settings/ai 配置 provider 后补测
+
+## UI 质量观察 (Area 15 — 仅当运行 ui-quality 模式或全量测试时)
+- 深色模式: {N} 项缺陷 (列出 UI-DARK 用例)
+- 触摸目标: {N} 项违规 (列出 UI-TOUCH 用例)
+- 视口溢出: {N} 项 (列出 UI-OVERFLOW 用例)
+- 无障碍: {N} 项 (列出 UI-A11Y 用例)
+- 跨应用一致性: {通过/不通过} (UIQ.10 结论)
 ```
 
 ### Writing rules
 
-- **测试环境段必须填实**（合并前文）：driver detection 结果、三服务健康、gate 的 demouser/family_id/资产数/孩子名都从 Phase 0/1/1.5 的实际输出抄入，不要留 `{id}`/`{N}` 占位符。这保证报告可独立追溯。
+- **测试环境段必须填实**（合并前文）：driver detection 结果、三服务健康、gate 的 demouser/资产数/孩子名都从 Phase 0/1/1.5 的实际输出抄入，不要留 `{id}`/`{N}` 占位符。不要包含 family_id 等内部 snowflake ID。这保证报告可独立追溯。
 - **成功用例只进摘要清单**(case id 罗列), 不展开详情 —— 避免报告冗长。
 - **每个失败用例必须有三段**: 预期表现 / 当前错误表现 / 初步判断。缺少任一段视为记录不完整。
 - **初步判断**是基于截图 + 控制台错误 + 路由行为的推断, 不要求定位到根因; 写明"建议查 X"即可, 不展开修复方案。
 - **截图路径**用相对仓库根的路径, 便于用户点击查看。
-- 失败用例按 Area 顺序 (Area1 → Area2 → … → Area8) 再按 case id 排列。
+- 失败用例按 Area 顺序 (Area1 → Area2 → … → Area15) 再按 case id 排列。
 
 ### Failure taxonomy (失败分类)
 
@@ -849,6 +1008,17 @@ the skill log.
 | `INTERACT` | 交互错误 | 按钮无响应、表单验证失效、dialog 不弹出 |
 | `PERF` | 性能问题 | 页面加载超时、动画卡顿 |
 | `REGRESS` | 回归 (已知 bug 重现) | Area 7 用例失败自动标此分类 |
+| `SKIP-INFRA` | 基础设施故障 | 浏览器驱动崩溃、driver daemon 断开、MCP 服务器不可用 |
+| `UI-OVERFLOW` | 视口溢出 | 375px 宽度出现水平滚动条 |
+| `UI-DARK` | 深色模式缺陷 | inline style 未翻转, 文字不可读 |
+| `UI-CONTRAST` | 对比度不足 | 文字在任一模式下不满足 WCAG AA (4.5:1) |
+| `UI-TOUCH` | 触摸目标过小 | 交互元素 < 44×44px |
+| `UI-SAFE` | 安全区域违规 | Tab bar 被 home indicator 遮挡 |
+| `UI-PWA` | PWA 缺陷 | 无离线提示, SW 未注册 |
+| `UI-A11Y` | 无障碍缺陷 | 缺少 aria-label, 无焦点环 |
+| `UI-VANT` | Vant4 规范违反 | `:value` 替代 `:model-value`, popup 缺少 teleport |
+| `UI-CONSIST` | 跨应用不一致 | 两个 app 的空态/骨架屏/Toast 风格不同 |
+| `UI-PROGRESS` | NProgress 回归 | 闪烁 / 卡住 / 滚动后不可见 |
 
 ### After writing
 
@@ -1035,19 +1205,21 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | 5 — Child app nav coverage (页签+子页面) | G3 | C5.1–C5.10 | [`test-cases/groups/g3-child/area5-child-navigation.md`](./test-cases/groups/g3-child/area5-child-navigation.md) |
 | 6 — AI chat DeerFlow parity (输入/输出/集成+设计出入) | G1 | C6.1–C6.27 (D1–D7) | [`test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md`](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md) |
 | **7 — Regression sweep (历史缺陷回归)** | **G1** | **R1–R9** | [`test-cases/groups/g1-adult-stable/area7-regression.md`](./test-cases/groups/g1-adult-stable/area7-regression.md) |
-| **8 — Expanded coverage (Manifesto/盲盒/Baby/Settings/Gift)** | **G1** | **F.1–F.10** | [`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md) |
+| **8 — Expanded coverage (Manifesto/盲盒/Baby/Settings/Gift)** | **G1** | **F.1–F.8, F.11, F.12** | [`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md) |
 | **9 — Security + notification (WebAuthn/2FA/通知)** | **G1** | **C9.1–C9.7** | [`test-cases/groups/g1-adult-stable/area9-security-notification.md`](./test-cases/groups/g1-adult-stable/area9-security-notification.md) |
 | **10 — Guest 端到端 (注册/邀请码/加入家庭)** | **G1** | **C10.1–C10.4** | [`test-cases/groups/g1-adult-stable/area10-guest-join-flow.md`](./test-cases/groups/g1-adult-stable/area10-guest-join-flow.md) |
 | **11 — AI/agent adversarial security (提示词注入/租户隔离/越权)** | **G1** | **C11.1–C11.20** | [`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md) |
 | **12 — AI task resilience (前端不稳定处理)** | **G1** | **C12.1–C12.9** | [`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md) |
 | **13 — AI 资产报告深度验证 (Hub 弹窗/重入去重/SSE 重连)** | **G1** | **C13.1–C13.5** | [`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md) |
-| **14 — Travel module (旅行管理: 行程/费用/分摊/转化/行程规划)** | **G1** | **C14.1–C14.33** | [`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md) |
+| **14 — Travel module (旅行管理: 行程/费用/分摊/转化/行程规划/跨天+购买日期)** | **G1** | **C14.1–C14.40** | [`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md) |
+| **15 — UI quality & design system (H5/PWA/深色模式/无障碍/一致性)** | **G1** | **UIQ.1–UIQ.10** | [`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md) |
 
 ### Supporting References
 
 | File | Purpose |
 |------|---------|
 | [`references/browser-drivers.md`](./references/browser-drivers.md) | Browser driver detection + command reference (browser-use / bsk / Chrome DevTools MCP) |
+| [`references/ui-quality-checklist.md`](./references/ui-quality-checklist.md) | UI quality reference: design tokens, dark mode methodology, Vant4 patterns, accessibility checklist, cross-app consistency matrix |
 | [`test-cases/_common.md`](./test-cases/_common.md) | Shared conventions (session, refs, console capture, child injection) |
 | [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md) | Role capability matrix (owner/member/child 权限边界 + 页面清单) |
 | [`test-cases/groups/README.md`](./test-cases/groups/README.md) | Parallel run structure + state-isolation boundaries |
@@ -1059,6 +1231,8 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 3. **No skip cleanup** — always close tabs / stop sessions when done; never assume idle timeout cleans up.
 4. **Snapshot first** — observe via accessibility tree / snapshot before escalating to screenshot or raw HTML.
 5. **JS evaluation is risky** — use only when snapshot + click/fill cannot suffice; never on credential surfaces.
+6. **No credential logging** — never echo passwords, tokens, or API keys in command output. Use environment variables for credentials and redact sensitive values in error messages.
+7. **No sensitive data in reports** — test reports must not contain tokens, internal IDs (family_id, user_id snowflake IDs), or credential values. Reports are for test result tracking, not identity documentation.
 
 ## Common Mistakes
 
@@ -1081,6 +1255,11 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | Manifesto wizard state lost between pages | `useManifestoWizard` persists via `sessionStorage` — do not clear storage mid-flow; the wizard state resets only on explicit cancel |
 | Smoke mode accidentally running full suite | Smoke mode runs only 10 cases (C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2, C9.4). Verify the mode before starting |
 | Guest pages tested with authenticated session → redirected past welcome | Use a **fresh browser session** without cookies for F.5.x guest page tests |
+| Area 15 dark mode test: toggling via CSS instead of app setting | Must toggle via the app's Settings → Appearance (or `van-config-provider` theme prop), not by manually setting `data-theme` — the app's JS controls `van-config-provider` which cascades Vant component themes |
+| Area 15 touch target check: measuring visual size instead of tap area | `getBoundingClientRect()` on the element returns the visual box; the tap area may be larger due to padding on parent. Check `pointer-events` area, not just icon size |
+| Area 15 viewport test at desktop width → misses all mobile issues | Set viewport to 375×812 BEFORE running UIQ cases. If driver doesn't support resize, note in report and skip viewport-dependent checks |
+| Area 15 cross-app consistency: comparing main vs child screenshots at different widths | Both apps must be at the same viewport (375×812) for valid comparison. Child app has different design tokens (Clay vs Together AI) — compare pattern consistency, not pixel identity |
+| Phase 0 chrome-devtools detection sets driver without verifying MCP availability | The agent must self-check its tool list for `mcp__chrome-devtools__*` tools and set `MCP_CHROME_DEVTOOLS=1` BEFORE running the detection script. The bash fallback `command -v echo` always succeeds and would set the driver unconditionally |
 
 ### bsk-specific Mistakes (only when bsk is the active driver)
 

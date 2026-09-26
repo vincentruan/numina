@@ -16,6 +16,7 @@ All three files reuse one adult session (`$SID` from G0).
 | [`area8-expanded-features.md`](./area8-expanded-features.md) | 8 — Expanded coverage (Manifesto/盲盒/Baby/Settings) | F.1–F.12 |
 | [`area12-ai-task-resilience.md`](./area12-ai-task-resilience.md) | 12 — AI task resilience (前端不稳定处理) | C12.1–C12.9 |
 | [`area14-travel.md`](./area14-travel.md) | 14 — Travel module (家庭旅行管理 + 行程规划) | C14.1–C14.33 |
+| [`area15-ui-quality.md`](./area15-ui-quality.md) | 15 — UI quality & design system (H5/PWA/深色模式/无障碍) | UIQ.1–UIQ.10 |
 
 ## State domain
 
@@ -48,8 +49,10 @@ chat threads — a second adult agent would race on those.
 
 > **Recommended run order within G1:** area2 (finance) → area14 (travel) →
 > area8 (expanded features) → area3 (AI) → area6 (AI chat parity) →
-> area12 (task resilience) → area7 (regression sweep).
+> area12 (task resilience) → area15 (UI quality) → area7 (regression sweep).
 > Area 7 runs last because R6 (auth expiry) destroys the session — run it at the very end.
+> Area 15 (UI quality) runs before regression since it needs a stable session for
+> dark-mode toggling and viewport tests.
 
 ## Run command sketch
 
