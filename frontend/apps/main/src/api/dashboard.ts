@@ -1,6 +1,6 @@
 import http, { refreshTokenIfNeeded } from './index'
 import { readSSEStream } from '@numina/shared'
-import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, HomeAssetsPageResponse, NewAssetsResponse, EducationRewardSummary, LiabilityAllocationResponse } from '@/types'
+import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, HomeAssetsPageResponse, NewAssetsResponse, EducationRewardSummary, LiabilityAllocationResponse, LiabilityDetailResponse } from '@/types'
 
 export interface ExpiringSoonItem {
   id: string
@@ -151,6 +151,10 @@ export function getEducationRewardSummary() {
 
 export function getLiabilityAllocation() {
   return http.get<LiabilityAllocationResponse>('/dashboard/liability-allocation')
+}
+
+export function getLiabilityDetail() {
+  return http.get<LiabilityDetailResponse>('/dashboard/liability-detail')
 }
 
 export function getRecentActivities(limit = 20) {

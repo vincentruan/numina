@@ -50,6 +50,20 @@ class LiabilityAllocationResponse(BaseModel):
     total: float
 
 
+class LiabilityDetailResponse(BaseModel):
+    """Extended liability breakdown for the detail popup on overview card.
+
+    Combines liability category totals with current monthly obligations:
+    tenant rent expense and recent travel spending (by purchase_date).
+    """
+
+    total_liabilities: float
+    categories: list[LiabilityAllocationItem]
+    rent_monthly_expense: float | None = None
+    travel_last_month: float = 0
+    travel_this_month: float = 0
+
+
 class TrendPoint(BaseModel):
     date: str
     total_assets: float

@@ -276,6 +276,14 @@ export interface LiabilityAllocationResponse {
   total: number
 }
 
+export interface LiabilityDetailResponse {
+  total_liabilities: number
+  categories: LiabilityAllocationItem[]
+  rent_monthly_expense: number | null
+  travel_last_month: number
+  travel_this_month: number
+}
+
 export interface TrendResponse {
   points: TrendPoint[]
 }
