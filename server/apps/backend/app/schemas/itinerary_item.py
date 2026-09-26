@@ -22,6 +22,7 @@ ALL_TYPES = CORE_TYPES | {"custom"}
 
 class ItineraryItemCreate(BaseModel):
     date: _date_type
+    end_date: _date_type | None = None
     type: str
     sort_order: int = 0
     start_time: time | None = None
@@ -30,6 +31,7 @@ class ItineraryItemCreate(BaseModel):
     description: str | None = None
     cost_amount: Decimal | None = None
     cost_currency: str | None = None
+    purchase_date: _date_type | None = None
     custom_type_id: int | None = None
     type_metadata: dict[str, Any] | None = None
 
@@ -38,6 +40,15 @@ class ItineraryItemCreate(BaseModel):
     def _validate_type(cls, v: str) -> str:
         if v not in ALL_TYPES:
             raise ValueError(f"type must be one of {sorted(ALL_TYPES)}")
+        return v
+
+    @field_validator("end_date")
+    @classmethod
+    def _validate_end_date(cls, v: _date_type | None, info) -> _date_type | None:
+        if v is not None:
+            start = info.data.get("date")
+            if start is not None and v < start:
+                raise ValueError("end_date must be >= date")
         return v
 
     @field_validator("cost_amount", mode="before")
@@ -62,6 +73,7 @@ class ItineraryItemCreate(BaseModel):
 
 class ItineraryItemUpdate(BaseModel):
     date: _date_type | None = None
+    end_date: _date_type | None = None
     type: str | None = None
     sort_order: int | None = None
     start_time: time | None = None
@@ -70,6 +82,7 @@ class ItineraryItemUpdate(BaseModel):
     description: str | None = None
     cost_amount: Decimal | None = None
     cost_currency: str | None = None
+    purchase_date: _date_type | None = None
     custom_type_id: int | None = None
     type_metadata: dict[str, Any] | None = None
 
@@ -85,12 +98,22 @@ class ItineraryItemUpdate(BaseModel):
     def _coerce_cost(cls, v):
         return coerce_to_decimal(v)
 
+    @field_validator("end_date")
+    @classmethod
+    def _validate_end_date(cls, v: _date_type | None, info) -> _date_type | None:
+        if v is not None:
+            start = info.data.get("date")
+            if start is not None and v < start:
+                raise ValueError("end_date must be >= date")
+        return v
+
 
 class ItineraryItemResponse(SnowflakeBase):
     id: int
     trip_id: int
     family_id: int
     date: _date_type
+    end_date: _date_type | None = None
     type: str
     sort_order: int
     start_time: time | None = None
@@ -99,6 +122,7 @@ class ItineraryItemResponse(SnowflakeBase):
     description: str | None = None
     cost_amount: str | None = None
     cost_currency: str | None = None
+    purchase_date: _date_type | None = None
     custom_type_id: int | None = None
     type_metadata: dict[str, Any] | None = None
     created_at: datetime | None = None

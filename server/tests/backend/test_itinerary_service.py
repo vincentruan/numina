@@ -269,6 +269,117 @@ class TestExpenseLedgerIntegration:
         assert trip.actual_spend == initial_spend + Decimal("200.00")
 
 
+class TestCrossDayAndPurchaseDate:
+    """Cross-day items (end_date) and purchase_date for expense date."""
+
+    def test_create_cross_day_item(self, db, trip, test_user):
+        """Create item with end_date > date, verify response includes end_date."""
+        data = ItineraryItemCreate(
+            date=date(2026, 10, 1),
+            end_date=date(2026, 10, 4),
+            type="accommodation",
+            cost_amount=Decimal("1500.00"),
+            cost_currency="CNY",
+        )
+        item = itinerary_service.create_item(db, trip, test_user.id, data)
+
+        assert item.end_date == date(2026, 10, 4)
+        assert item.date == date(2026, 10, 1)
+
+    def test_end_date_before_date_rejected(self):
+        """end_date < date → 422 validation error."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="end_date"):
+            ItineraryItemCreate(
+                date=date(2026, 10, 5),
+                end_date=date(2026, 10, 3),
+                type="accommodation",
+            )
+
+    def test_cross_day_with_purchase_date_expense_on_purchase(self, db, trip, test_user):
+        """Cross-day item with purchase_date → expense created on purchase_date."""
+        data = ItineraryItemCreate(
+            date=date(2026, 10, 5),
+            end_date=date(2026, 10, 8),
+            type="accommodation",
+            cost_amount=Decimal("1500.00"),
+            cost_currency="CNY",
+            purchase_date=date(2026, 9, 20),
+        )
+        item = itinerary_service.create_item(db, trip, test_user.id, data)
+
+        entries = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.itinerary_item_id == item.id,
+                ExpenseEntry.leg_type == "debit",
+            )
+            .all()
+        )
+        assert len(entries) == 1
+        assert entries[0].expense_date == date(2026, 9, 20)
+
+    def test_cross_day_without_purchase_date_expense_on_start(self, db, trip, test_user):
+        """Cross-day item without purchase_date → expense on start date (backward compat)."""
+        data = ItineraryItemCreate(
+            date=date(2026, 10, 1),
+            end_date=date(2026, 10, 4),
+            type="accommodation",
+            cost_amount=Decimal("1200.00"),
+            cost_currency="CNY",
+        )
+        item = itinerary_service.create_item(db, trip, test_user.id, data)
+
+        entries = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.itinerary_item_id == item.id,
+                ExpenseEntry.leg_type == "debit",
+            )
+            .all()
+        )
+        assert len(entries) == 1
+        assert entries[0].expense_date == date(2026, 10, 1)
+
+    def test_update_purchase_date_recreates_expense(self, db, trip, test_user):
+        """Update purchase_date → expense recreated with new date."""
+        data = ItineraryItemCreate(
+            date=date(2026, 10, 5),
+            type="accommodation",
+            cost_amount=Decimal("800.00"),
+            cost_currency="CNY",
+        )
+        item = itinerary_service.create_item(db, trip, test_user.id, data)
+
+        # Verify initial expense on start date
+        entries_before = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.itinerary_item_id == item.id,
+                ExpenseEntry.leg_type == "debit",
+            )
+            .all()
+        )
+        assert entries_before[0].expense_date == date(2026, 10, 5)
+
+        # Update purchase_date
+        update = ItineraryItemUpdate(purchase_date=date(2026, 9, 15))
+        updated = itinerary_service.update_item(db, item, test_user.id, update)
+        assert updated.purchase_date == date(2026, 9, 15)
+
+        # New expense should be on purchase_date
+        entries_after = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.itinerary_item_id == item.id,
+                ExpenseEntry.leg_type == "debit",
+            )
+            .all()
+        )
+        amounts = sorted([e.expense_date for e in entries_after])
+        assert date(2026, 9, 15) in amounts
+
+
 class TestDeleteModes:
     """AE3: Delete with cascade/unlink."""
 

@@ -60,6 +60,7 @@ def create_item(
         trip_id=trip.id,
         family_id=trip.family_id,
         date=data.date,
+        end_date=data.end_date,
         type=data.type,
         sort_order=data.sort_order,
         start_time=data.start_time,
@@ -68,6 +69,7 @@ def create_item(
         description=data.description,
         cost_amount=data.cost_amount,
         cost_currency=data.cost_currency,
+        purchase_date=data.purchase_date,
         custom_type_id=data.custom_type_id,
         type_metadata=data.type_metadata,
     )
@@ -99,22 +101,26 @@ def update_item(
     new_custom_type_id = update_fields.get("custom_type_id", item.custom_type_id)
     _validate_type_and_custom_type(db, new_type, new_custom_type_id, item.family_id)
 
-    # Check if cost or currency changed
+    # Check if cost, currency, or purchase_date changed
     old_cost = item.cost_amount
     new_cost = update_fields.get("cost_amount", old_cost)
     old_currency = item.cost_currency
     new_currency = update_fields.get("cost_currency", old_currency)
+    old_purchase_date = item.purchase_date
+    new_purchase_date = update_fields.get("purchase_date", old_purchase_date)
     cost_changed = new_cost != old_cost or new_currency != old_currency
+    purchase_date_changed = new_purchase_date != old_purchase_date
+    expense_needs_recreate = cost_changed or purchase_date_changed
 
     # Handle cost removal (set to None or 0)
-    if cost_changed and old_cost and old_cost > 0:
+    if expense_needs_recreate and old_cost and old_cost > 0:
         if not new_cost or new_cost <= 0:
             # Cost removed — reverse old expense (defer commit to outer scope)
             _delete_linked_expense(db, item, user_id, no_commit=True)
             update_fields["cost_amount"] = None
             update_fields["cost_currency"] = None
         else:
-            # Cost changed — reverse old (defer commit to outer scope)
+            # Cost or purchase_date changed — reverse old (defer commit to outer scope)
             _delete_linked_expense(db, item, user_id, no_commit=True)
 
     # Update item fields
@@ -123,8 +129,8 @@ def update_item(
 
     db.flush()
 
-    # Create new expense if cost changed and new cost is positive (defer commit)
-    if cost_changed and new_cost and new_cost > 0:
+    # Create new expense if cost/purchase_date changed and cost is positive (defer commit)
+    if expense_needs_recreate and new_cost and new_cost > 0:
         if trip is None:
             trip = db.query(Trip).filter(Trip.id == item.trip_id, Trip.family_id == item.family_id).first()
         _create_linked_expense(db, trip, user_id, item, no_commit=True)
@@ -198,7 +204,7 @@ def _create_linked_expense(
     req = ExpenseEntryCreate(
         amount=item.cost_amount,
         currency=item.cost_currency or trip.currency,
-        expense_date=item.date,
+        expense_date=item.purchase_date or item.date,
         ref_id=trip.id,
         ref_type="trip",
         description=item.description or item.location or f"{item.type} expense",
