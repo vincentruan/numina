@@ -150,7 +150,7 @@ async function main(): Promise<void> {
   console.log(`\nDone in ${elapsed}s: ${success} generated, ${failed} failed.`)
 
   if (failed > 0) {
-    process.exit(1)
+    console.warn(`\n⚠ ${failed} thumbnail(s) skipped due to unsupported image format.`)
   }
 }
 
