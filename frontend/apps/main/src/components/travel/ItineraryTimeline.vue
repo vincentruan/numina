@@ -27,7 +27,7 @@
           <span class="day-date">{{ formatDate(day.date) }}</span>
           <span class="day-weekday">{{ formatWeekday(day.date) }}</span>
           <van-button
-            v-if="day.items.length === 0"
+            v-if="day.items.filter(d => d.isStartDay).length === 0"
             size="mini"
             round
             plain
@@ -38,14 +38,22 @@
         </div>
 
         <!-- Items for this day -->
-        <ItineraryItemCard
-          v-for="item in day.items"
-          :key="item.id"
-          :item="item"
-          :custom-types="store.itineraryTypes"
-          @edit="$emit('edit', $event)"
-          @delete="$emit('delete', $event)"
-        />
+        <template v-for="bucketItem in day.items" :key="`${bucketItem.item.id}-${bucketItem.isStartDay ? 'start' : day.date}`">
+          <ItineraryItemCard
+            v-if="bucketItem.isStartDay"
+            :ref="el => setCardRef(bucketItem.item.id, el)"
+            :item="bucketItem.item"
+            :custom-types="store.itineraryTypes"
+            @edit="$emit('edit', $event)"
+            @delete="$emit('delete', $event)"
+          />
+          <ContinuationHint
+            v-else
+            :type="bucketItem.item.type"
+            :day-number="bucketItem.dayNumber"
+            @scroll-to-start="scrollToItem(bucketItem.item.id)"
+          />
+        </template>
 
         <!-- Standalone expenses for this day -->
         <ExpenseTimelineEntry
@@ -55,7 +63,7 @@
         />
 
         <!-- Empty day state (when there are items on other days) -->
-        <div v-if="day.items.length === 0 && day.expenses.length === 0 && totalItems > 0" class="day-empty">
+        <div v-if="day.items.filter(d => d.isStartDay).length === 0 && day.expenses.length === 0 && totalItems > 0" class="day-empty">
           <span class="day-empty-text">{{ t('travel.itinerary.emptyDay') }}</span>
           <van-button
             size="mini"
@@ -71,10 +79,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTravelStore } from '@/stores/travel'
 import ItineraryItemCard from './ItineraryItemCard.vue'
+import ContinuationHint from './ContinuationHint.vue'
 import ExpenseTimelineEntry from './ExpenseTimelineEntry.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import type { ItineraryItem, ExpenseEntry } from '@/types/travel'
@@ -105,9 +114,15 @@ const standaloneExpenses = computed(() => {
   )
 })
 
+interface DayBucketItem {
+  item: ItineraryItem
+  isStartDay: boolean
+  dayNumber: number
+}
+
 interface DayBucket {
   date: string
-  items: ItineraryItem[]
+  items: DayBucketItem[]
   expenses: ExpenseEntry[]
 }
 
@@ -128,17 +143,34 @@ const days = computed<DayBucket[]>(() => {
 
   while (current <= endDate) {
     const dateStr = current.toISOString().split('T')[0]
-    const items = store.itineraryItems
-      .filter(i => i.date === dateStr)
-      .sort((a, b) => {
-        if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
-        if (a.start_time && b.start_time) return a.start_time.localeCompare(b.start_time)
-        return (a.created_at || '').localeCompare(b.created_at || '')
-      })
+    const bucketItems: DayBucketItem[] = []
+
+    for (const i of store.itineraryItems) {
+      const effectiveEndDate = i.end_date && i.end_date !== i.date ? i.end_date : i.date
+      if (i.date <= dateStr && dateStr <= effectiveEndDate) {
+        const startDate = new Date(i.date + 'T00:00:00')
+        const currentDate = new Date(dateStr + 'T00:00:00')
+        const dayNumber = Math.round((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+        bucketItems.push({
+          item: i,
+          isStartDay: dateStr === i.date,
+          dayNumber,
+        })
+      }
+    }
+
+    bucketItems.sort((a, b) => {
+      const ai = a.item, bi = b.item
+      if (ai.sort_order !== bi.sort_order) return ai.sort_order - bi.sort_order
+      if (a.isStartDay && !b.isStartDay) return -1
+      if (!a.isStartDay && b.isStartDay) return 1
+      if (ai.start_time && bi.start_time) return ai.start_time.localeCompare(bi.start_time)
+      return (ai.created_at || '').localeCompare(bi.created_at || '')
+    })
 
     const expenses = standaloneExpenses.value.filter(e => e.expense_date === dateStr)
 
-    result.push({ date: dateStr, items, expenses })
+    result.push({ date: dateStr, items: bucketItems, expenses })
     current.setDate(current.getDate() + 1)
   }
 
@@ -153,6 +185,26 @@ function formatDate(dateStr: string): string {
 function formatWeekday(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00')
   return date.toLocaleDateString(locale.value, { weekday: 'short' })
+}
+
+// Card ref map for scroll-to-start behavior
+const cardRefs = ref<Record<string, unknown>>({})
+
+function setCardRef(id: string, el: unknown) {
+  if (el) {
+    cardRefs.value[id] = el
+  } else {
+    delete cardRefs.value[id]
+  }
+}
+
+function scrollToItem(itemId: string) {
+  const cardEl = cardRefs.value[itemId] as { $el?: HTMLElement } | undefined
+  if (cardEl?.$el) {
+    nextTick(() => {
+      cardEl.$el!.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }
 }
 </script>
 
