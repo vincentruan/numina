@@ -127,6 +127,11 @@ def update_item(
     for field, value in update_fields.items():
         setattr(item, field, value)
 
+    # Service-level cross-field validation: schema validator cannot check
+    # end_date >= date on partial PATCH (date may not be in payload).
+    if item.end_date and item.date and item.end_date < item.date:
+        raise ValueError("end_date must be >= date")
+
     db.flush()
 
     # Create new expense if cost/purchase_date changed and cost is positive (defer commit)

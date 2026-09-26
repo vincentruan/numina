@@ -20,6 +20,15 @@ CORE_TYPES = {"accommodation", "dining", "transport", "activity"}
 ALL_TYPES = CORE_TYPES | {"custom"}
 
 
+def _validate_end_date_range(v: _date_type | None, info) -> _date_type | None:
+    """Shared validator: end_date must be >= date when both set."""
+    if v is not None:
+        start = info.data.get("date")
+        if start is not None and v < start:
+            raise ValueError("end_date must be >= date")
+    return v
+
+
 class ItineraryItemCreate(BaseModel):
     date: _date_type
     end_date: _date_type | None = None
@@ -45,11 +54,7 @@ class ItineraryItemCreate(BaseModel):
     @field_validator("end_date")
     @classmethod
     def _validate_end_date(cls, v: _date_type | None, info) -> _date_type | None:
-        if v is not None:
-            start = info.data.get("date")
-            if start is not None and v < start:
-                raise ValueError("end_date must be >= date")
-        return v
+        return _validate_end_date_range(v, info)
 
     @field_validator("cost_amount", mode="before")
     @classmethod
@@ -101,11 +106,7 @@ class ItineraryItemUpdate(BaseModel):
     @field_validator("end_date")
     @classmethod
     def _validate_end_date(cls, v: _date_type | None, info) -> _date_type | None:
-        if v is not None:
-            start = info.data.get("date")
-            if start is not None and v < start:
-                raise ValueError("end_date must be >= date")
-        return v
+        return _validate_end_date_range(v, info)
 
 
 class ItineraryItemResponse(SnowflakeBase):

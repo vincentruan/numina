@@ -34,16 +34,20 @@ Deploy Numina to the production Docker server. Three modes:
        │
        ├─ Step 1: 检查 CI 状态
        │    └─ gh run list → 最近一次 push to main 的 build-images job
-       │         ├─ conclusion = success → 继续 Mode A
+       │         ├─ conclusion = success → 继续 Step 2
        │         ├─ conclusion = failure → 降级 Mode C（通知用户）
        │         └─ status = in_progress → 等待完成（最多 15 分钟），超时 → 降级 Mode C
        │
+       ├─ Step 2: 同步配置文件（如有变更）
+       │
+       ├─ Step 3: 检查磁盘空间
+       │
        ├─ Step 4: 拉取镜像
        │    └─ docker compose pull
-       │         ├─ 全部成功 → 继续 Mode A
+       │         ├─ 全部成功 → 继续 Step 5
        │         └─ 任一失败（401/404/timeout/空镜像）→ 降级 Mode C（通知用户）
        │
-       └─ Mode A 完成 → Done
+       └─ Step 5-7: 迁移 + 重建 + 健康检查 → Done
 ```
 
 ### 降级到 Mode C 的触发条件
@@ -228,17 +232,29 @@ AGENT_DB_POOL_SIZE=15
 
 ### Health Check 验证清单
 
-每次部署后验证以下项目：
+每次部署后验证以下项目（详见 Step 7 完整流程）：
 ```bash
-# 1. 验证码
-curl -sk https://localhost/api/v1/captcha/config   # → captcha_enabled: true
-# 2. 健康
+# 1. 容器状态
+sudo docker ps --format "table {{.Names}}\t{{.Status}}" | grep numina
+# 期望: 7 (app) + 1 (postgres-prod) = 8 个容器，backend/agent/scheduler (healthy)
+
+# 2. 各服务健康
 curl -sk https://localhost/api/health              # → {"status":"ok"}
-# 3. 前端
+# Agent + Scheduler 通过 docker exec 检查（见 Step 7a）
+
+# 3. 验证码
+curl -sk https://localhost/api/v1/captcha/config   # → captcha_enabled: true
+
+# 4. 前端
 curl -sk -o /dev/null -w "%{http_code}" https://localhost/        # → 200
 curl -sk -o /dev/null -w "%{http_code}" https://localhost/child/  # → 200
-# 4. 容器数
-sudo docker ps --format '{{.Names}}' | grep -c numina  # → 7 (app) + 1 (postgres-prod) = 8
+
+# 5. 启动日志（缓存预热 + bootstrap 完成确认）
+sudo docker compose -f docker-compose.production.yml logs --tail 100 backend | \
+  grep -E '初始化|bootstrap|reconcile|汇率|MCP|ERROR' | tail -10
+
+# 6. Nginx 已 reload（upstream DNS 刷新）
+sudo docker exec numina-nginx nginx -s reload
 ```
 
 ## Server Directory Layout
@@ -411,23 +427,58 @@ If it fails with DuplicateColumn/DuplicateTable → follow [references/db-migrat
 
 **检查流程：**
 1. 确认主库 migration 完成（`alembic current` = `alembic heads`）
-2. 确认 Supabase 备库 subscription 状态正常（`subenabled = t`）
-3. 如果 Supabase 连接不可达（如 IPv6 问题），**暂停发布**，手动在 Supabase 端执行等效 DDL
+2. 确认**两个** subscription 状态正常（`numina_sub` + `deerflow_sub`）
+3. 确认复制延迟在可接受范围（`last_msg_send_time` 不超过 5 分钟）
+4. 如果 Supabase 连接不可达（如 IPv6 问题），**暂停发布**，手动在 Supabase 端执行等效 DDL
 
 ```bash
-# 检查 subscription 状态
+# 检查 subscription 状态 + 复制延迟
 set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
-  sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c \
-    'SELECT subname, subenabled FROM pg_subscription;'
+  sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c '
+    SELECT s.subname, s.subenabled,
+           stat.last_msg_send_time,
+           EXTRACT(EPOCH FROM (now() - stat.last_msg_send_time))::int AS lag_seconds
+    FROM pg_subscription s
+    LEFT JOIN pg_stat_subscription stat ON stat.subname = s.subname;
+  '
 "
 ```
 
-- 如果 `subenabled = t` 且无连接错误 → DDL 通过 Supabase Dashboard 或手动 SQL 同步
-- 如果 `subenabled = f` 或连接失败 → 需要先在 Supabase 端手动执行 DDL，再恢复 subscription
-- 如果 subscriptions 已废弃（不再需要 Supabase 备份）→ 可跳过此步骤
+**判定标准：**
 
-**如何对齐 Supabase DDL：** 在 Supabase Dashboard → SQL Editor 中执行与 alembic migration 等效的 DDL 语句。每个 migration 文件的 `upgrade()` 函数内容即为需要执行的 SQL。
+| 状态 | 判定 | 操作 |
+|------|------|------|
+| `subenabled=t` + `lag_seconds < 300` | ✅ 正常 | 继续部署 |
+| `subenabled=t` + `lag_seconds ≥ 300` | ⚠️ 延迟过大 | 检查 Supabase 端负载/连接，等待追赶 |
+| `subenabled=f` | ❌ 已禁用 | 在 Supabase 端手动执行 DDL，恢复 subscription |
+| `last_msg_send_time` 为 NULL | ❌ 从未连接 | 检查 IPv6 连通性 + subscription 配置 |
+| subscription 已废弃 | — | 如果不再需要 Supabase 备份，可跳过此步骤 |
+
+**表数量对比（可选但推荐）：**
+
+如果执行了 migration，快速对比主库和备库表数量确认一致：
+
+```bash
+# 主库表数量
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -t -c \
+    \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';\"
+"
+
+# Supabase 表数量（需主机 Python — 容器无法解析 IPv6）
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "python3 -c '
+import psycopg
+conn = psycopg.connect(host=\"db.vywwletyvrzyoozhsfqu.supabase.co\", port=5432,
+    user=\"postgres\", password=\"<SUPABASE_PASSWORD>\",
+    dbname=\"postgres\", sslmode=\"require\")
+print(conn.execute(\"SELECT count(*) FROM pg_tables WHERE schemaname=\\\"public\\\"\").fetchone()[0])
+conn.close()
+'"
+# 差异 ≤ 1 为正常（_cdc_test 是 Supabase 内部表，不计入）
+```
+
+**如何对齐 Supabase DDL：** 在 Supabase Dashboard → SQL Editor 中执行与 alembic migration 等效的 DDL 语句。每个 migration 文件的 `upgrade()` 函数内容即为需要执行的 SQL。完整流程见 [references/supabase-ddl-sync.md](references/supabase-ddl-sync.md)。
 
 ### Step 6: Recreate Services
 
@@ -437,6 +488,8 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
   cd ${DEPLOY_REMOTE_DIR} &&
   echo '=== Recreate services ===' &&
   sudo docker compose -f docker-compose.production.yml up -d &&
+  echo '=== Reload nginx (refresh upstream DNS) ===' &&
+  sudo docker exec numina-nginx nginx -s reload 2>/dev/null &&
   echo '=== Wait for backend healthy ===' &&
   for i in \$(seq 1 30); do
     if sudo docker compose -f docker-compose.production.yml ps backend 2>/dev/null | grep -q 'healthy'; then
@@ -450,7 +503,13 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 
 > **⚠️ 不要加 `--remove-orphans`！** 该参数会删除 `numina-postgres-prod`（它不在 app compose 中但属于同一 project）。PG 容器由 `docker-compose.production-pg.yml` 独立管理。
 
-### Step 7: Health Check
+> **⚠️ 必须 reload nginx！** `docker compose up -d` 会重建 backend/agent/scheduler_worker 容器，容器 IP 可能变化。Nginx 缓存了 upstream DNS 解析结果，不 reload 会导致 502 Bad Gateway（直到缓存过期）。这是已知陷阱，参见 `docs/solutions/integration-issues/nginx-stale-dns-upstream-cache.md`。使用 `nginx -s reload` 而非 `docker compose restart nginx`，因为前者是 graceful reload 无停机。
+
+### Step 7: Health Check + Smoke Test
+
+每次部署后**按顺序**验证以下 4 个层级。任一层级失败需立即排查，不要跳到下一层。
+
+#### 7a. 容器状态 + 各服务独立健康
 
 ```bash
 set -a && source .claude/skills/deploy-production/deploy.env && set +a
@@ -458,18 +517,112 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   echo "=== CONTAINERS ===" &&
   sudo docker ps --format "table {{.Names}}\t{{.Status}}" | grep numina &&
   echo "" &&
-  echo "=== HTTPS HEALTH ===" &&
+  echo "=== BACKEND HEALTH ===" &&
   curl -sk https://localhost/api/health && echo "" &&
+  echo "" &&
+  echo "=== AGENT HEALTH ===" &&
+  curl -sk https://localhost/api/health-agent 2>/dev/null || \
+    sudo docker exec numina-agent python -c "import urllib.request,json; print(json.loads(urllib.request.urlopen(\"http://localhost:8001/health\").read()))" &&
+  echo "" &&
+  echo "=== SCHEDULER HEALTH ===" &&
+  sudo docker exec numina-scheduler-worker python -c "import urllib.request,json; r=json.loads(urllib.request.urlopen(\"http://localhost:8002/health\").read()); print(f\"status={r[\"status\"]} jobs={r[\"job_count\"]}\")" &&
   echo "" &&
   echo "=== CAPTCHA ===" &&
   curl -sk https://localhost/api/v1/captcha/config && echo "" &&
   echo "" &&
   echo "=== FRONTEND ===" &&
-  curl -sk -o /dev/null -w "HTTP %{http_code}" https://localhost/ && echo ""
+  curl -sk -o /dev/null -w "main: HTTP %{http_code}\n" https://localhost/ &&
+  curl -sk -o /dev/null -w "child: HTTP %{http_code}\n" https://localhost/child/
 '
 ```
 
-**Success:** 7 containers running (6 in `docker-compose.production.yml` — backend, agent, scheduler_worker, frontend-main, frontend-child, nginx — + `numina-postgres-prod`), backend `(healthy)`, `/api/health` returns `{"status":"ok"}`, `captcha_enabled: true`.
+**Success criteria:**
+
+| 检查项 | 期望值 | 失败时排查 |
+|--------|--------|-----------|
+| 容器数 | 7 (app) + 1 (postgres-prod) = 8 | `docker ps` 查看哪些未启动 |
+| Backend `(healthy)` | Docker status 显示 `(healthy)` | `docker compose logs --tail 50 backend` |
+| Agent `(healthy)` | Docker status 显示 `(healthy)` | `docker compose logs --tail 50 agent` |
+| `/api/health` | `{"status":"ok"}` | 检查 DB 连接、bootstrap 错误 |
+| Agent `/health` | `{"status":"ok","service":"numina-agent"}` | 检查 DeerFlow init、DB 连接 |
+| Scheduler `/health` | `status=ok jobs=7` | 检查 scheduler 日志 |
+| `captcha_enabled` | `true` | 检查 `.env` 中 `CAPTCHA_ENABLED=true` |
+| Frontend main | HTTP 200 | 检查 nginx 日志 |
+| Frontend child | HTTP 200 | 检查 nginx 日志 |
+
+#### 7b. 启动日志验证（缓存预热 + Bootstrap）
+
+容器重启后内存缓存为空。后端 lifespan 会自动执行以下初始化，需确认日志中无错误：
+
+```bash
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  echo '=== Backend startup init ===' &&
+  sudo docker compose -f docker-compose.production.yml logs --tail 100 backend 2>/dev/null | grep -E '初始化|bootstrap|reconcile|汇率|MCP|orphan|event.persistence|schema|迁移|启动|ERROR|WARNING' | tail -20 &&
+  echo '' &&
+  echo '=== Agent startup init ===' &&
+  sudo docker compose -f docker-compose.production.yml logs --tail 50 agent 2>/dev/null | grep -E 'init|startup|DeerFlow|checkpointer|MCP|cache|ERROR|WARNING' | tail -10
+"
+```
+
+**需要确认的关键初始化项：**
+
+| 初始化项 | 日志关键词 | 说明 |
+|----------|-----------|------|
+| DB schema 对齐 | `数据库结构已完整` 或 `新增表/字段/索引` | `run_schema_migration()` 自动检查 |
+| Bootstrap 数据 | `系统初始化数据检查完成` | categories, currencies, agents, skills, invitation codes |
+| Reconcile 状态 | 无 `系统状态协调失败` 错误 | `DesiredStateRunner` 验证期望状态 |
+| 汇率数据 | `首次启动，立即获取汇率数据` 或无此日志 | 仅在 DB 无汇率时触发；后续由 scheduler_worker 定期刷新 |
+| MCP registry | `MCP tool registry validated` | 工具注册表完整性验证 |
+| Orphan detector | `Orphan task detector started` | 后台孤儿任务检测循环 |
+| Event persistence | 无 `Event persistence init failed` | DeerFlow 事件持久化（非致命，失败则降级） |
+
+**如果看到 `系统状态协调失败`：** reconcile 检测到关键资源未就绪，服务会拒绝启动。查看日志中的 `report.summary_text()` 获取具体缺失项。
+
+#### 7c. 功能冒烟测试（可选但推荐）
+
+在关键版本升级后，建议执行快速冒烟测试验证核心流程：
+
+```bash
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  echo "=== 1. HTTPS + CORS ===" &&
+  curl -sk -o /dev/null -w "HTTPS: %{http_code}\n" https://localhost/api/health &&
+  curl -sk -o /dev/null -w "CORS preflight: %{http_code}\n" -X OPTIONS \
+    -H "Origin: https://numina.xiaoshutiao.space" \
+    -H "Access-Control-Request-Method: GET" \
+    https://localhost/api/health &&
+  echo "" &&
+  echo "=== 2. Captcha challenge ===" &&
+  curl -sk https://localhost/api/v1/captcha/config | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"captcha_enabled: {d.get(\"captcha_enabled\")}\")" &&
+  echo "" &&
+  echo "=== 3. Login endpoint reachable ===" &&
+  curl -sk -o /dev/null -w "POST /auth/login: HTTP %{http_code}\n" \
+    -X POST https://localhost/api/v1/auth/login \
+    -H "Content-Type: application/json" \
+    -d "{\"username\":\"_probe_\",\"password\":\"_probe_\"}" &&
+  echo "(401=reachable, 429=rate-limited, 502=broken)" &&
+  echo "" &&
+  echo "=== 4. Scheduler jobs ===" &&
+  sudo docker exec numina-scheduler-worker python -c "
+import urllib.request, json
+r = json.loads(urllib.request.urlopen(\"http://localhost:8002/health\").read())
+print(f\"scheduler: {r[\"status\"]}, jobs: {r[\"job_count\"]}\")
+for j in r.get(\"jobs\", []):
+    print(f\"  {j[\"id\"]}: next={j[\"next_run\"]}\")
+"
+'
+```
+
+**冒烟测试判定：**
+
+| 测试 | 期望 | 含义 |
+|------|------|------|
+| HTTPS health | 200 | SSL + nginx + backend 通路正常 |
+| CORS preflight | 200/204 | CORS 配置正确，前端可跨域请求 |
+| Captcha config | `captcha_enabled: true` | 生产安全配置生效 |
+| Login endpoint | 401 (非 502/500) | Auth 路由可达，DB 连接正常 |
+| Scheduler jobs | `jobs: 7`，所有 job 有 next_run | 定时任务已注册 |
 
 ---
 
@@ -506,7 +659,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 
 If upgrade fails → follow [references/db-migration.md](references/db-migration.md) §Handle Failures.
 
-> **DDL 对齐：** 如果执行了 migration，参见 Mode A Step 5b — 确认 Supabase 备库 DDL 已对齐后再发布。
+> **DDL 对齐：** 如果执行了 migration，参见 Mode A Step 5b — 确认 Supabase 备库 DDL 已对齐（含复制延迟检查）后再发布。
 
 ### Step 3: Build & Deploy
 
@@ -518,15 +671,17 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   sudo docker compose -f docker-compose.production.yml build &&
   echo "=== Recreate services ===" &&
   sudo docker compose -f docker-compose.production.yml up -d &&
+  echo "=== Reload nginx (refresh upstream DNS) ===" &&
+  sudo docker exec numina-nginx nginx -s reload 2>/dev/null &&
   echo "=== Wait for backend ===" &&
   sleep 15 &&
   sudo docker compose -f docker-compose.production.yml ps --format "table {{.Name}}\t{{.Status}}"
 '
 ```
 
-### Step 4: Health Check
+### Step 4: Health Check + Smoke Test
 
-Same as Mode A Step 7.
+Same as Mode A Step 7 (7a 容器状态 + 7b 启动日志 + 7c 功能冒烟测试).
 
 ---
 
@@ -659,7 +814,8 @@ This single target handles:
 2. **Transfer images** — rsync `dist/images.tar.gz` to server
 3. **Remote load** — `docker load -i images.tar.gz` on server
 4. **Recreate services** — `docker compose up -d` with existing `.env`
-5. **Health check** — wait for backend `(healthy)`
+5. **Restart nginx** — refresh upstream DNS cache (避免 502)
+6. **Health check** — wait for backend `(healthy)`
 
 > **Note:** `deploy-remote` loads images and recreates in one shot. Backend may crash-loop if new columns are missing — Step 4 fixes this.
 
@@ -693,11 +849,11 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 
 If upgrade fails → follow [references/db-migration.md](references/db-migration.md) §Handle Failures.
 
-> **DDL 对齐：** 如果执行了 migration，参见 Mode A Step 5b — 确认 Supabase 备库 DDL 已对齐后再发布。
+> **DDL 对齐：** 如果执行了 migration，参见 Mode A Step 5b — 确认 Supabase 备库 DDL 已对齐（含复制延迟检查）后再发布。
 
-### Step 5: Health Check
+### Step 5: Health Check + Smoke Test
 
-Same as Mode A Step 7.
+Same as Mode A Step 7 (7a 容器状态 + 7b 启动日志 + 7c 功能冒烟测试).
 
 ### Step 6: Verify Frontend Content (Post-Deploy)
 
@@ -834,9 +990,11 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | DB migration only | Steps 4-5b | Step 2 | Step 4 |
 | DDL alignment check | Step 5b | Step 2 (+ 5b gate) | Step 4 (+ 5b gate) |
 | Build images | (CI does this) | (server does this) | `make build-local` |
-| Health check | Step 7 | Step 4 | (automatic in `deploy-remote`) |
+| Health check + smoke | Step 7 (7a+7b+7c) | Step 4 | (automatic in `deploy-remote`) |
+| Startup log verify | Step 7b | Step 4 (+ 7b) | Step 5 (+ 7b) |
 | View logs | `sudo docker compose -f docker-compose.production.yml logs --tail 100 -f <service>` |
 | Restart service | `sudo docker compose -f docker-compose.production.yml restart <service>` |
+| Restart nginx (DNS) | `sudo docker exec numina-nginx nginx -s reload` |
 
 ## Troubleshooting
 
@@ -870,6 +1028,9 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | PG `can no longer get changes from replication slot` | 复制槽损坏（通常因磁盘满 crash）。修复流程见 [references/ipv6-disk-recovery.md](references/ipv6-disk-recovery.md) §Replication Slot Corruption |
 | PG `the database system is not yet accepting connections` | PG 处于 recovery 模式，通常因磁盘满 crash 后重启。先清理磁盘空间，PG 自动恢复。如持续报错，检查 `pg_logical/replorigin_checkpoint.tmp` 写入权限 |
 | `captcha_enabled: false` in health check | 见上方 "Production Config vs Local" §Health Check 验证清单。确认 `.env` 含 `CAPTCHA_ENABLED=true`，然后 `restart backend` |
+| 部署后 502 Bad Gateway | Nginx upstream DNS 缓存了旧容器 IP。修复：`sudo docker exec numina-nginx nginx -s reload`。根因：容器重建后 IP 变化，nginx 不自动刷新 DNS。参见 `docs/solutions/integration-issues/nginx-stale-dns-upstream-cache.md` |
+| 部署后 `/api/health` 返回 `{"status":"ok"}` 但功能异常 | 检查启动日志：`docker compose logs --tail 100 backend`。可能原因：(1) reconcile 失败但服务降级运行；(2) 汇率数据为空（首次启动外部 API 超时）；(3) MCP registry 验证失败。详见 Step 7b |
+| Scheduler `jobs=0` | Scheduler 未注册任务。检查 scheduler_worker 日志，确认 `setup_all_jobs()` 执行成功。重启：`sudo docker compose -f docker-compose.production.yml restart scheduler_worker` |
 | GHCR pull 失败 / CI build-images failure | 自动降级 Mode C：`make deploy-local`。常见原因：LFS 未拉取（CI 无 `lfs: true`）、GHCR 限流、GitHub Actions 额度耗尽 |
 | 前端 icon 缩略图 404 / 空白 | 镜像内 icon 文件缺失。验证：`docker exec numina-frontend-main ls /usr/share/nginx/html/icons/3d-thumbs/`。根因：CI checkout 未拉取 LFS → sharp 生成缩略图失败。修复：确认 ci.yml `build-images` job 有 `lfs: true` |
 | Supabase 备库 `relation "xxx" does not exist` | DDL 未同步到备库。逻辑复制不复制 DDL，需手动执行。完整流程见 [references/supabase-ddl-sync.md](references/supabase-ddl-sync.md) |

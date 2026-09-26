@@ -228,7 +228,7 @@ const travelThisMonthLabel = computed(() => {
 
 async function openLiabilityDetail() {
   showLiabilityDetail.value = true
-  if (liabilityDetail.value) return
+  if (liabilityDetail.value || liabilityDetailLoading.value) return
   liabilityDetailLoading.value = true
   try {
     const res = await getLiabilityDetail()

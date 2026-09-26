@@ -199,12 +199,20 @@ function setCardRef(id: string, el: unknown) {
 }
 
 function scrollToItem(itemId: string) {
-  const cardEl = cardRefs.value[itemId] as { $el?: HTMLElement } | undefined
-  if (cardEl?.$el) {
-    nextTick(() => {
-      cardEl.$el!.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    })
+  const tryScroll = () => {
+    const cardEl = cardRefs.value[itemId] as { $el?: HTMLElement } | undefined
+    const el = cardEl?.$el
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    } else {
+      // Ref not yet mounted (e.g. during initial render) — retry once
+      setTimeout(() => {
+        const retryEl = (cardRefs.value[itemId] as { $el?: HTMLElement } | undefined)?.$el
+        retryEl?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+    }
   }
+  nextTick(tryScroll)
 }
 </script>
 

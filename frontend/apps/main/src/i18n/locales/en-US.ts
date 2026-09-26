@@ -114,7 +114,6 @@ export default {
     travelExpense: 'Travel Expenses',
     travelLastMonth: 'Last Month',
     travelThisMonth: 'This Month',
-    noData: 'None',
     emptyState: {
       startRecording: 'Start recording your first asset',
       addAssetBtn: 'Add Asset',
@@ -4205,6 +4204,7 @@ Keep the tone warm, like a chat between family members.`,
       purchaseDate: 'Purchase date',
       durationBadge: '{start}-{end} · {days}d',
       continuationDay: 'Day {day}',
+      accommodationDateHint: 'Check-in is on the start date, check-out is on the end date',
     },
   },
 }

@@ -87,6 +87,9 @@
             clearable
             placeholder="--:--"
           />
+          <div v-if="showCrossDay" class="accommodation-date-hint">
+            {{ t('travel.itinerary.accommodationDateHint') }}
+          </div>
         </van-cell-group>
 
         <van-cell-group v-if="form.type === 'dining'" inset>
@@ -580,6 +583,12 @@ function handleClose() {
   gap: 8px;
   padding: 8px 16px;
   justify-content: flex-end;
+}
+
+.accommodation-date-hint {
+  font-size: 12px;
+  color: var(--text-tertiary, #c8c9cc);
+  padding: 4px 16px 8px;
 }
 
 .form-footer {

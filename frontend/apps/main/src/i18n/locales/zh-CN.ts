@@ -180,7 +180,6 @@ export default {
     travelExpense: '旅游支出',
     travelLastMonth: '上月旅游',
     travelThisMonth: '本月旅游',
-    noData: '暂无',
     allocation: '资产分配',
     trend: '净值趋势',
     topAssets: '高价值资产',
@@ -4279,6 +4278,7 @@ export default {
       purchaseDate: '购买日期',
       durationBadge: '{start}-{end} · {days}天',
       continuationDay: '第{day}天',
+      accommodationDateHint: '入住时间为起始日，退房时间为结束日',
     },
   },
 }

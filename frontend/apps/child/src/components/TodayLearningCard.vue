@@ -39,29 +39,25 @@ const displayMode = computed<DisplayMode>(() => {
 })
 
 const icon = computed(() => {
-  const result = (() => {
-    switch (displayMode.value) {
-      case 'assignment': return '📝'
-      case 'current': return '📖'
-      case 'recommended': return '🌟'
-      case 'explore': return '📚'
-    }
-  })()
-  return result ?? ''
+  switch (displayMode.value) {
+    case 'assignment': return '📝'
+    case 'current': return '📖'
+    case 'recommended': return '🌟'
+    case 'explore': return '📚'
+    default: return ''
+  }
 })
 
 const label = computed(() => t(`learning.todayCard.${displayMode.value}`))
 
 const topicName = computed(() => {
-  const result = (() => {
-    switch (displayMode.value) {
-      case 'assignment': return props.data.pending_assignment?.topic ? topicDisplayName(props.data.pending_assignment.topic) : ''
-      case 'current': return props.data.current_topic ? topicDisplayName(props.data.current_topic) : ''
-      case 'recommended': return props.data.recommended_topic ? topicDisplayName(props.data.recommended_topic) : ''
-      case 'explore': return t('learning.todayCard.exploreSub')
-    }
-  })()
-  return result ?? ''
+  switch (displayMode.value) {
+    case 'assignment': return props.data.pending_assignment?.topic ? topicDisplayName(props.data.pending_assignment.topic) : ''
+    case 'current': return props.data.current_topic ? topicDisplayName(props.data.current_topic) : ''
+    case 'recommended': return props.data.recommended_topic ? topicDisplayName(props.data.recommended_topic) : ''
+    case 'explore': return t('learning.todayCard.exploreSub')
+    default: return ''
+  }
 })
 
 const targetTopicId = computed(() => {
