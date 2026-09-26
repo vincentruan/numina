@@ -5,13 +5,26 @@
 - convert: 同币种直通；经 CNY 中间换算；JPY 取整；其他保留 2 位小数
 - fetch_and_store_rates (deprecated wrapper): 调用 adapter，触发 DeprecationWarning
 
-注意: ExchangeRateService._cache 已移除；缓存逻辑迁移到 ExchangeRateAdapter。
+注意: 缓存逻辑已迁移到统一 Cache 层 (SyncCacheBridge)，不再使用 adapter._cache。
 """
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
+from packages.core.cache import init_cache, reset_cache
+from packages.core.cache.sync_bridge import SyncCacheBridge
 from packages.db.exchange_rate_adapter import ExchangeRateAdapter
 from packages.db.models.exchange_rate import ExchangeRate
 from packages.domain.exchange_rate.service import ExchangeRateService
+
+
+@pytest.fixture(autouse=True)
+def _init_unified_cache():
+    """Ensure unified Cache is initialized for each test."""
+    reset_cache()
+    init_cache(backend="memory")
+    yield
+    reset_cache()
 
 
 def _add_rate(db, target: str, rate: float, fetched_at: datetime | None = None) -> ExchangeRate:
@@ -57,11 +70,12 @@ def test_get_rate_returns_latest_fetched_at_row(packages_db):
 def test_get_rate_adapter_cache_hit_within_ttl_skips_db(packages_db):
     """adapter 缓存命中（4h TTL 内）→ 直接返回缓存值，不查库。
 
-    预填缓存后删除 DB 行，仍能返回 → 证明走了缓存路径。
+    预填统一缓存后删除 DB 行，仍能返回 → 证明走了缓存路径。
     """
     now = datetime.now(UTC)
     adapter = ExchangeRateAdapter()
-    adapter._cache["EUR"] = (9.1, now, now)
+    # Pre-populate unified cache (replaces old adapter._cache["EUR"] = ...)
+    adapter.populate_cache("EUR", 9.1, now)
 
     # Delete the DB row so a DB query would fail to find it
     packages_db.query(ExchangeRate).delete()
@@ -73,10 +87,16 @@ def test_get_rate_adapter_cache_hit_within_ttl_skips_db(packages_db):
 
 
 def test_get_rate_adapter_stale_cache_falls_through_to_db(packages_db):
-    """adapter 缓存过期（cached_at 超过 4h）→ 回退查库并刷新缓存。"""
-    stale_cached_at = datetime.now(UTC) - timedelta(hours=5)
+    """adapter 缓存过期（TTL 超过 4h）→ 回退查库并刷新缓存。"""
     adapter = ExchangeRateAdapter()
-    adapter._cache["GBP"] = (8.0, datetime.now(UTC), stale_cached_at)
+    # Populate cache with a very short TTL, then wait for expiry
+    adapter.populate_cache("GBP", 8.0, datetime.now(UTC))
+
+    # Manually expire the cache entry by setting a 1s TTL and waiting
+    from packages.core.cache import get_cache
+    bridge = SyncCacheBridge(get_cache())
+    bridge.set("fxrate:GBP", {"rate": 8.0, "fetched_at": datetime.now(UTC).isoformat()}, ttl=1)
+    import time; time.sleep(1.1)
 
     _add_rate(packages_db, "GBP", 8.8)
     rate, _ = ExchangeRateService.get_rate("GBP", packages_db, adapter=adapter)

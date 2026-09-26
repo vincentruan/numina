@@ -187,7 +187,7 @@ def get_task_status(
 
 
 @router.get("/{skill_id}/session")
-def get_task_session(
+async def get_task_session(
     skill_id: str,
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
@@ -204,7 +204,7 @@ def get_task_session(
 
 
 @router.post("/{skill_id}/cancel")
-def cancel_task(
+async def cancel_task(
     skill_id: str,
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
@@ -308,7 +308,7 @@ _MAX_SSE_CONNECTIONS_PER_FAMILY = 3
 _active_sse_connections: dict[int, int] = {}
 
 
-def _load_scenario_result(task, db: Session) -> dict:
+async def _load_scenario_result(task, db: Session) -> dict:
     """Load cached scenario result for a terminal task.
 
     Maps ``task.skill_id`` (scenario identifier) to the corresponding result
@@ -320,7 +320,7 @@ def _load_scenario_result(task, db: Session) -> dict:
         from apps.backend.app.services.finance_coach_cache import latest_by_skill
 
         skill_key = "dashboard-narrative" if scenario == "dashboard-narrative" else "finance-coach"
-        cached = latest_by_skill(db, task.family_id, skill_key)
+        cached = await latest_by_skill(db, task.family_id, skill_key)
         if not cached:
             return {"error": "结果未找到"}
         if scenario == "dashboard-narrative":
@@ -362,7 +362,7 @@ def _load_scenario_result(task, db: Session) -> dict:
     elif scenario == "asset-report":
         from apps.backend.app.services.finance_coach_cache import latest_by_skill
 
-        cached = latest_by_skill(db, task.family_id, "asset-report")
+        cached = await latest_by_skill(db, task.family_id, "asset-report")
         if not cached:
             return {"error": "报告未找到"}
         return {"report": cached.report_json}
@@ -374,7 +374,7 @@ def _load_scenario_result(task, db: Session) -> dict:
 async def _emit_scenario_result(task, db: Session) -> AsyncIterator[str]:
     """Emit cached scenario result for terminal tasks, then close."""
     if task.status == "completed":
-        result = _load_scenario_result(task, db)
+        result = await _load_scenario_result(task, db)
         yield f"event: result\ndata: {json.dumps(result, default=str)}\n\n"
     elif task.status in ("failed", "cancelled", "timeout", "interrupted"):
         yield f"event: error\ndata: {json.dumps({'error': task.error_message or '任务异常终止'})}\n\n"

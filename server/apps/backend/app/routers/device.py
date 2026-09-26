@@ -362,22 +362,21 @@ def revoke_all_devices(
 _DEVICE_CHECK_RATE_LIMIT_PER_MINUTE = 30
 
 
-def _check_device_check_rate_limit(ip: str) -> None:
+async def _check_device_check_rate_limit(ip: str) -> None:
     """Limit /device/check to 30 requests per minute per IP."""
     from packages.core.logging import get_logger
 
     logger = get_logger(__name__)
     try:
-        from apps.backend.app.services.cache.factory import get_rate_limit_cache
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import RATE_LIMIT
 
-        cache = get_rate_limit_cache()
-        key = f"device_check:{ip}"
-        count = cache.get(key)
+        cache = get_cache()
+        key = f"{RATE_LIMIT}:device_check:{ip}"
+        count = await cache.get(key)
         if count is not None and int(count) >= _DEVICE_CHECK_RATE_LIMIT_PER_MINUTE:
             raise AppError(ErrorCode.RATE_LIMITED)
-        new_count = cache.increment(key)
-        if new_count == 1:
-            cache.set(key, 1, ttl_seconds=60)
+        await cache.increment(key, ttl=60)
     except AppError:
         raise
     except Exception:
@@ -386,7 +385,7 @@ def _check_device_check_rate_limit(ip: str) -> None:
 
 
 @router.post("/device/check", response_model=DeviceCheckResponse)
-def check_device(
+async def check_device(
     req: DeviceCheckRequest,
     request: Request,
     db: Session = Depends(get_db),
@@ -396,7 +395,7 @@ def check_device(
     No auth required — used before login. Rate-limited by IP (20/min).
     """
     client_ip = _get_real_client_ip(request)
-    _check_device_check_rate_limit(client_ip)
+    await _check_device_check_rate_limit(client_ip)
 
     from datetime import UTC, datetime
 
@@ -474,7 +473,7 @@ def check_device(
 
 
 @router.post("/device/select", response_model=DeviceSelectResponse)
-def select_device(
+async def select_device(
     req: DeviceSelectRequest,
     request: Request,
     response: Response,
@@ -486,7 +485,7 @@ def select_device(
     If no second factor: sets auth cookies and returns directly.
     """
     client_ip = _get_real_client_ip(request)
-    _check_device_check_rate_limit(client_ip)
+    await _check_device_check_rate_limit(client_ip)
 
     from datetime import UTC, datetime, timedelta
 
@@ -555,7 +554,7 @@ def select_device(
 @router.post(
     "/device/webauthn/auth-options", response_model=DeviceWebAuthnAuthOptionsResponse
 )
-def device_webauthn_auth_options(
+async def device_webauthn_auth_options(
     req: DeviceWebAuthnAuthOptionsRequest,
     request: Request,
     db: Session = Depends(get_db),
@@ -571,7 +570,7 @@ def device_webauthn_auth_options(
     from apps.backend.app.models.user import User
 
     client_ip = _get_real_client_ip(request)
-    _check_device_check_rate_limit(client_ip)
+    await _check_device_check_rate_limit(client_ip)
 
     now = datetime.now(UTC)
     user_id = int(req.user_id)
@@ -604,7 +603,7 @@ def device_webauthn_auth_options(
 
 
 @router.post("/device/webauthn/verify", response_model=DeviceWebAuthnVerifyResponse)
-def device_webauthn_verify(
+async def device_webauthn_verify(
     req: DeviceWebAuthnVerifyRequest,
     request: Request,
     response: Response,
@@ -629,7 +628,7 @@ def device_webauthn_verify(
     from apps.backend.app.models.user import User
 
     client_ip = _get_real_client_ip(request)
-    _check_device_check_rate_limit(client_ip)
+    await _check_device_check_rate_limit(client_ip)
 
     now = datetime.now(UTC)
     user_id = int(req.user_id)

@@ -26,6 +26,18 @@ async def lifespan(app: FastAPI):
     )
     logger.info("scheduler_worker starting up")
 
+    # Initialize unified cache layer
+    from packages.core.cache import init_cache
+    from packages.core.cache.factory import _check_redis_connection
+
+    cache = init_cache(
+        backend=settings.CACHE_BACKEND,
+        redis_url=settings.REDIS_URL,
+    )
+    app.state.cache = cache
+    if settings.CACHE_BACKEND == "redis":
+        await _check_redis_connection(settings.REDIS_URL)
+
     from apps.scheduler_worker.scheduler import scheduler, setup_all_jobs
 
     setup_all_jobs()

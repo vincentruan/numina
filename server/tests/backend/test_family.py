@@ -106,7 +106,7 @@ def test_get_member_summary_with_liability_and_asset(client, auth_headers):
     assert data["net_worth"] == 600000
 
 
-def test_regenerate_invite_code(client, auth_headers):
+async def test_regenerate_invite_code(client, auth_headers):
     """POST /family/invite-code regenerates the invite code (owner only)."""
     # Get original invite code
     original = client.get("/api/v1/family", headers=auth_headers).json()["data"]["invite_code"]
@@ -118,7 +118,7 @@ def test_regenerate_invite_code(client, auth_headers):
     assert len(new_code) > 0
 
 
-def test_regenerate_invite_code_non_owner_forbidden(client, auth_headers):
+async def test_regenerate_invite_code_non_owner_forbidden(client, auth_headers):
     """Non-owner member cannot regenerate invite code."""
     # Get invite code and join as a member (non-owner)
     invite_code = client.get("/api/v1/family", headers=auth_headers).json()["data"]["invite_code"]
@@ -136,42 +136,44 @@ def test_regenerate_invite_code_non_owner_forbidden(client, auth_headers):
     assert response.status_code == 403
 
 
-def test_regenerate_invite_code_rate_limit(client, auth_headers):
+async def test_regenerate_invite_code_rate_limit(client, auth_headers):
     """POST /family/invite-code returns 429 after 5 attempts per hour."""
     import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings
     from apps.backend.app.services import auth as auth_service
-    from apps.backend.app.services.cache.factory import get_rate_limit_cache
+    from packages.core.cache import get_cache
+    from packages.core.cache.keys import RATE_LIMIT
 
     token = auth_headers["Authorization"].split(" ")[1]
     user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
 
-    cache = get_rate_limit_cache()
-    key = f"invite_code_attempts:{user_id}"
-    cache.set(key, auth_service._INVITE_CODE_RATE_LIMIT_PER_HOUR, ttl_seconds=3600)
+    cache = get_cache()
+    key = f"{RATE_LIMIT}:invite_code:{user_id}"
+    await cache.set(key, auth_service._INVITE_CODE_RATE_LIMIT_PER_HOUR, ttl=3600)
 
     response = client.post("/api/v1/family/invite-code", headers=auth_headers)
     assert response.status_code == 429
 
 
-def test_regenerate_invite_code_rate_limit_includes_retry_after(client, auth_headers):
+async def test_regenerate_invite_code_rate_limit_includes_retry_after(client, auth_headers):
     """Invite-code rate-limited response includes Retry-After header."""
     import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings
     from apps.backend.app.services import auth as auth_service
-    from apps.backend.app.services.cache.factory import get_rate_limit_cache
+    from packages.core.cache import get_cache
+    from packages.core.cache.keys import RATE_LIMIT
 
     token = auth_headers["Authorization"].split(" ")[1]
     user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
 
     # Exhaust the invite code rate limit
-    cache = get_rate_limit_cache()
-    key = f"invite_code_attempts:{user_id}"
-    cache.set(key, auth_service._INVITE_CODE_RATE_LIMIT_PER_HOUR, ttl_seconds=3600)
+    cache = get_cache()
+    key = f"{RATE_LIMIT}:invite_code:{user_id}"
+    await cache.set(key, auth_service._INVITE_CODE_RATE_LIMIT_PER_HOUR, ttl=3600)
 
     response = client.post("/api/v1/family/invite-code", headers=auth_headers)
     assert response.status_code == 429
@@ -216,7 +218,7 @@ def test_cross_family_isolation_aggregate(client, auth_headers, second_user_head
     assert agg_b["asset_count"] == 0
 
 
-def test_family_info_returns_correct_creator_code(client, db):
+async def test_family_info_returns_correct_creator_code(client, db):
     """GET /family returns the correct creator_code that was used during registration."""
     import random
     import string
@@ -237,7 +239,7 @@ def test_family_info_returns_correct_creator_code(client, db):
         family_name="Creator Family",
         family_invitation_code=code_str,
     )
-    tokens = register(db, req, client_ip="127.0.0.1")
+    tokens = await register(db, req, client_ip="127.0.0.1")
     headers = {"Authorization": f"Bearer {tokens.access_token}"}
 
     response = client.get("/api/v1/family", headers=headers)

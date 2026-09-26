@@ -17,21 +17,21 @@ USER_ID = 67890
 
 
 class TestFamilySettings:
-    def test_get_returns_defaults_when_empty(self, db):
+    async def test_get_returns_defaults_when_empty(self, db):
         result = get_all_family_settings(db, FAMILY_ID)
         assert result["ai_cache_ttl_report"] == 60
         assert result["ai_cache_ttl_finance_coach"] == 480
         assert result["dashboard_min_asset_count"] == 5
         assert result["scheduled_monthly_report_day"] == 1
 
-    def test_update_and_read_back(self, db):
-        update_family_settings(db, FAMILY_ID, {"ai_cache_ttl_report": 120})
+    async def test_update_and_read_back(self, db):
+        await update_family_settings(db, FAMILY_ID, {"ai_cache_ttl_report": 120})
         assert get_family_setting(db, FAMILY_ID, "ai_cache_ttl_report") == 120
         # Other keys still return defaults
         assert get_family_setting(db, FAMILY_ID, "ai_cache_ttl_finance_coach") == 480
 
-    def test_update_multiple_keys(self, db):
-        update_family_settings(
+    async def test_update_multiple_keys(self, db):
+        await update_family_settings(
             db, FAMILY_ID,
             {"ai_cache_ttl_report": 120, "dashboard_min_asset_count": 10},
         )
@@ -39,17 +39,17 @@ class TestFamilySettings:
         assert result["ai_cache_ttl_report"] == 120
         assert result["dashboard_min_asset_count"] == 10
 
-    def test_update_unknown_key_raises(self, db):
+    async def test_update_unknown_key_raises(self, db):
         with pytest.raises(AppError):
-            update_family_settings(db, FAMILY_ID, {"bogus_key": 42})
+            await update_family_settings(db, FAMILY_ID, {"bogus_key": 42})
 
-    def test_update_out_of_range_raises(self, db):
+    async def test_update_out_of_range_raises(self, db):
         with pytest.raises(AppError):
-            update_family_settings(db, FAMILY_ID, {"ai_cache_ttl_report": 99999})
+            await update_family_settings(db, FAMILY_ID, {"ai_cache_ttl_report": 99999})
 
-    def test_update_overwrites_existing(self, db):
-        update_family_settings(db, FAMILY_ID, {"ai_cache_ttl_report": 120})
-        update_family_settings(db, FAMILY_ID, {"ai_cache_ttl_report": 240})
+    async def test_update_overwrites_existing(self, db):
+        await update_family_settings(db, FAMILY_ID, {"ai_cache_ttl_report": 120})
+        await update_family_settings(db, FAMILY_ID, {"ai_cache_ttl_report": 240})
         assert get_family_setting(db, FAMILY_ID, "ai_cache_ttl_report") == 240
         # Verify only one row exists (upsert, not duplicate)
         rows = (

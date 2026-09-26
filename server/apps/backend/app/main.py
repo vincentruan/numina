@@ -236,6 +236,18 @@ async def lifespan(app: FastAPI):
     )
     logger.info("统一日志配置已初始化")
 
+    # Initialize unified cache layer
+    from packages.core.cache import init_cache
+    from packages.core.cache.factory import _check_redis_connection
+
+    cache = init_cache(
+        backend=settings.CACHE_BACKEND,
+        redis_url=settings.REDIS_URL,
+    )
+    app.state.cache = cache
+    if settings.CACHE_BACKEND == "redis":
+        await _check_redis_connection(settings.REDIS_URL)
+
     # SQLite-only fail-fast: partial unique indexes (e.g. device_sessions
     # active-row uniqueness, users.username NOT NULL) require SQLite ≥ 3.8.0.
     # Skipped on other backends (Postgres, MySQL) since they don't have the

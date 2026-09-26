@@ -46,9 +46,9 @@ async def generate_wish_advice(
         # skill_id='wish-advice' row and compare fingerprints in the payload
         # (pragmatic adaptation — keeps the skill_id column's cardinality
         # bounded; see commit message for the spec §4.4 key-shape rationale).
-        cached = latest_by_skill(db, current_user.family_id, "wish-advice")
+        cached = await latest_by_skill(db, current_user.family_id, "wish-advice")
         if (
-            is_cache_fresh(cached, "wish-advice")
+            await is_cache_fresh(cached, "wish-advice")
             and cached
             and cached.report_json.get("fingerprint") == fingerprint
         ):

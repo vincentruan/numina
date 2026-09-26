@@ -40,7 +40,7 @@ def get_config(
 
 
 @router.patch("", response_model=FamilyConfigResponse)
-def update_config(
+async def update_config(
     req: FamilyConfigUpdate,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -48,7 +48,7 @@ def update_config(
     """Update family settings. Owner only."""
     if user.role != UserRole.OWNER:
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
-    return update_family_settings(db, user.family_id, req.settings)
+    return await update_family_settings(db, user.family_id, req.settings)
 
 
 @router.get("/definitions", response_model=dict[str, SettingDefinitionResponse])

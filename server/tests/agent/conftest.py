@@ -20,7 +20,17 @@ os.environ.setdefault("NUMINA_PROJECT_ROOT", str(_REPO_ROOT))
 
 import pytest
 
+from packages.core.cache import init_cache, reset_cache
 from tests.agent.golden.fixtures import REDACTED_CONTEXT
+
+
+@pytest.fixture(autouse=True)
+def _init_test_cache():
+    """Ensure the unified Cache is initialized for every agent test."""
+    reset_cache()
+    init_cache(backend="memory")
+    yield
+    reset_cache()
 
 # ── Canned backend data ────────────────────────────────────────────────────────
 

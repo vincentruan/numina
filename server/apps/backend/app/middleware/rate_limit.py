@@ -1,8 +1,9 @@
 """Global API rate limiting middleware.
 
 Rate Limiting Strategy:
-- Uses in-memory storage (class-level dict) for rate limit counters
-- Limits: 100 requests per minute per client (configurable via GLOBAL_RATE_LIMIT_PER_MINUTE)
+- Uses unified Cache layer (memory or redis) for rate limit counters
+- Fixed-window algorithm via Cache.increment() + TTL
+- Limits: configured via GLOBAL_RATE_LIMIT_PER_MINUTE
 - Client identification: Authenticated users by decoded user_id, unauthenticated by real IP
 
 Trusted Proxy Validation:
@@ -11,13 +12,8 @@ Trusted Proxy Validation:
 - Falls back to socket address if untrusted or invalid
 
 Trade-offs:
-- Single-worker deployment: Works as expected
-- Multi-worker deployment: Each worker maintains independent rate limit state.
-  This means the effective limit = workers × configured limit.
-  For distributed rate limiting, implement RedisCacheBackend and modify
-  _check_rate_limit() to use the cache layer.
-
-See design.md for detailed trade-off analysis.
+- Memory mode: single-worker deployment, each worker independent
+- Redis mode: distributed rate limiting across all workers
 """
 
 import ipaddress
@@ -174,8 +170,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     # Paths that don't count towards rate limit
     STATIC_PREFIXES = ("/uploads/", "/static/")
 
-    _rate_store: dict[str, tuple[int, float]] = {}
-
     async def dispatch(self, request: Request, call_next):
         # Skip rate limiting entirely in development/CI
         # Production environments still need protection
@@ -193,9 +187,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Get client identifier
         client_id = self._get_client_id(request)
 
-        # Check rate limit using in-memory storage
-        # Note: For distributed deployments, replace with cache layer
-        if not self._check_rate_limit(client_id):
+        # Check rate limit using unified cache layer
+        if not await self._check_rate_limit(client_id):
             _log_security_event(SecurityEventType.GLOBAL_RATE_LIMITED, client_id=client_id, path=request.url.path)
             # BaseHTTPMiddleware exceptions bypass FastAPI's exception handlers,
             # so call app_error_handler directly to return a proper 429 response.
@@ -224,40 +217,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_ip = _get_real_client_ip(request)
         return f"ip:{client_ip}"
 
-    def _check_rate_limit(self, client_id: str) -> bool:
-        """Check if client is within rate limit.
+    async def _check_rate_limit(self, client_id: str) -> bool:
+        """Check if client is within rate limit using unified Cache.
 
-        Uses in-memory dict for rate limiting.
-        For distributed deployments, use cache layer instead.
+        Uses fixed-window algorithm via ``Cache.increment()`` + TTL.
         """
-        import time
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import RATE_LIMIT
 
-        # Use module-level storage for rate limiting
-        store = RateLimitMiddleware._rate_store
-        current_time = time.time()
-        window_start = current_time - 60  # 1 minute window
+        cache = get_cache()
+        key = f"{RATE_LIMIT}:global:{client_id}"
+        count = await cache.increment(key, ttl=60)
 
-        # Clean up expired entries
-        expired_keys = [
-            k for k, (_, timestamp) in store.items()
-            if timestamp < window_start
-        ]
-        for k in expired_keys:
-            del store[k]
-
-        # Get current count
-        count, timestamp = store.get(client_id, (0, current_time))
-
-        # Reset if outside window
-        if timestamp < window_start:
-            count = 0
-            timestamp = current_time
-
-        # Check limit
         limit = settings.GLOBAL_RATE_LIMIT_PER_MINUTE
-        if count >= limit:
-            return False
-
-        # Increment count
-        store[client_id] = (count + 1, timestamp)
-        return True
+        return count <= limit

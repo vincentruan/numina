@@ -80,6 +80,20 @@ except Exception as e:
 async def lifespan(app: FastAPI):
     # Startup
     settings.validate_required()
+
+    # Initialize unified cache layer
+    from packages.core.cache import init_cache
+    from packages.core.cache.factory import _check_redis_connection
+    from packages.core.settings import settings as core_settings
+
+    cache = init_cache(
+        backend=core_settings.CACHE_BACKEND,
+        redis_url=core_settings.REDIS_URL,
+    )
+    app.state.cache = cache
+    if core_settings.CACHE_BACKEND == "redis":
+        await _check_redis_connection(core_settings.REDIS_URL)
+
     from apps.agent.app.scheduler import scheduler, setup_schedules
     from apps.agent.core.backend_client import close_shared_client
     from apps.agent.services.audit_logger import setup_audit_logger

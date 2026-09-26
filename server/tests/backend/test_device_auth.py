@@ -362,8 +362,9 @@ def test_check_device_inactive_user(client, auth_headers, db):
 
 def test_check_device_rate_limited_by_ip(client, auth_headers):
     """POST /auth/device/check is rate-limited to 30/min per IP."""
-    from apps.backend.app.services.cache import reset_rate_limit_cache
-    reset_rate_limit_cache()
+    from packages.core.cache import reset_cache, init_cache
+    reset_cache()
+    init_cache(backend='memory')
 
     # 30 requests should succeed
     for i in range(30):

@@ -135,7 +135,7 @@ def test_revoke_jti_atomic_first_call_wins(db):
     assert record.jti == jti
 
 
-def test_revoke_jti_atomic_second_call_loses(db):
+async def test_revoke_jti_atomic_second_call_loses(db):
     """revoke_jti_atomic() returns False when the JTI is already revoked."""
     jti = "atomic-jti-dup"
     ttl = 3600
@@ -151,7 +151,7 @@ def test_revoke_jti_atomic_second_call_loses(db):
     assert second is False
 
 
-def test_refresh_token_replay_rejected_service_layer(db):
+async def test_refresh_token_replay_rejected_service_layer(db):
     """Service-layer test: refresh_token() rejects a replayed token via revoke_jti_atomic.
 
     Uses the db fixture directly (bypassing the SAVEPOINT-restart limitation of
@@ -202,13 +202,13 @@ def test_refresh_token_replay_rejected_service_layer(db):
 
     # First call: should succeed — revoke_jti_atomic wins the race
     with patch.object(revoke_module, "SessionLocal", return_value=no_close_db):
-        result1 = svc_refresh_token(db, tok)
+        result1 = await svc_refresh_token(db, tok)
     assert result1.refresh_token != tok  # new token issued
 
     # Second call with the original token: revoke_jti_atomic should return False
     with patch.object(revoke_module, "SessionLocal", return_value=no_close_db):
         try:
-            svc_refresh_token(db, tok)
+            await svc_refresh_token(db, tok)
             raise AssertionError("Expected AUTH_REFRESH_FAILED but no error was raised")
         except AppError as exc:
             assert exc.code == ErrorCode.AUTH_REFRESH_FAILED

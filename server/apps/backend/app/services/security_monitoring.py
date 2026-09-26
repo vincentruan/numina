@@ -1,19 +1,16 @@
 """
-安全监控服务 - 实时检测和告警异常行为
-使用进程内存存储，无需Redis依赖（单机部署优化）
+安全监控服务 - 使用统一 Cache 层替代进程内存存储
 """
 
-import logging
-import threading
-import time
-from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger("security")
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ThreatLevel(Enum):
@@ -51,124 +48,17 @@ class SecurityEvent:
     user_id: str | None = None
 
 
-class InMemorySecurityStore:
-    """
-    进程内存安全存储
-    替代Redis的轻量级单机实现
-    """
-
-    _instance = None
-    _lock = threading.Lock()
-
-    def __new__(cls):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._init_storage()
-        return cls._instance
-
-    def _init_storage(self):
-        """初始化存储结构"""
-        # 事件存储: {event_type: [(timestamp, event_data), ...]}
-        self._events: dict[str, list[tuple]] = defaultdict(list)
-        # IP计数器: {counter_key: (count, expiry_timestamp)}
-        self._counters: dict[str, tuple] = {}
-        # 可疑IP集合
-        self._suspicious_ips: set[str] = set()
-        # 锁保护
-        self._store_lock = threading.RLock()
-        # 最后清理时间
-        self._last_cleanup = time.time()
-
-    def _cleanup_expired(self):
-        """清理过期数据"""
-        now = time.time()
-        # 每5分钟清理一次
-        if now - self._last_cleanup < 300:
-            return
-
-        with self._store_lock:
-            # 清理过期计数器
-            expired_keys = [
-                k for k, (_, expiry) in self._counters.items() if expiry < now
-            ]
-            for k in expired_keys:
-                del self._counters[k]
-
-            # 清理过期事件（24小时前）
-            cutoff = now - 86400
-            for event_type in list(self._events.keys()):
-                self._events[event_type] = [
-                    (ts, data) for ts, data in self._events[event_type] if ts > cutoff
-                ]
-                if not self._events[event_type]:
-                    del self._events[event_type]
-
-            self._last_cleanup = now
-
-    def add_event(self, event_type: str, event_data: dict, timestamp: float):
-        """添加事件"""
-        self._cleanup_expired()
-        with self._store_lock:
-            self._events[event_type].append((timestamp, event_data))
-
-    def get_event_count(
-        self, event_type: str, start_time: float, end_time: float
-    ) -> int:
-        """获取事件数量"""
-        with self._store_lock:
-            events = self._events.get(event_type, [])
-            return sum(1 for ts, _ in events if start_time <= ts <= end_time)
-
-    def increment_counter(self, key: str, expiry: int) -> int:
-        """增加计数器并返回新值"""
-        now = time.time()
-        with self._store_lock:
-            if key in self._counters:
-                count, _ = self._counters[key]
-                count += 1
-            else:
-                count = 1
-            self._counters[key] = (count, now + expiry)
-            return int(count)
-
-    def add_suspicious_ip(self, ip: str):
-        """添加可疑IP"""
-        with self._store_lock:
-            self._suspicious_ips.add(ip)
-
-    def is_suspicious_ip(self, ip: str) -> bool:
-        """检查IP是否可疑"""
-        with self._store_lock:
-            return ip in self._suspicious_ips
-
-    def get_stats(self, start_time: float, end_time: float) -> dict:
-        """获取统计信息"""
-        with self._store_lock:
-            stats: dict[str, Any] = {
-                "events_by_type": {},
-                "suspicious_ip_count": len(self._suspicious_ips),
-                "active_counters": len(self._counters),
-            }
-            events_by_type: dict[str, int] = {}
-            for event_type, events in self._events.items():
-                count = sum(1 for ts, _ in events if start_time <= ts <= end_time)
-                if count > 0:
-                    events_by_type[event_type] = count
-            stats["events_by_type"] = events_by_type
-            return stats
-
-
 class SecurityMonitor:
     """
-    安全监控器 - 纯内存版（无需Redis）
+    安全监控器 — 使用统一 Cache 层
 
     功能:
     - 实时事件收集
     - 威胁检测规则引擎
     - 自动告警触发
     - 统计数据生成
+
+    Redis 模式下，可疑 IP、安全计数器等跨 worker 共享。
     """
 
     # 威胁检测阈值配置
@@ -192,7 +82,6 @@ class SecurityMonitor:
     }
 
     def __init__(self):
-        self._store = InMemorySecurityStore()
         self.event_buffer: list[SecurityEvent] = []
         self.alert_handlers: list[Callable[[dict], Any]] = []
 
@@ -211,14 +100,18 @@ class SecurityMonitor:
             f"[{event.threat_level.value}] from {event.client_ip}"
         )
 
-        # 存储到内存
+        # 存储到 Cache
         await self._store_event(event)
 
         # 实时威胁检测
         await self._check_threat(event)
 
     async def _store_event(self, event: SecurityEvent):
-        """存储事件到内存"""
+        """存储事件到 Cache"""
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import SEC_EVENT
+
+        cache = get_cache()
         event_data = {
             "timestamp": event.timestamp.isoformat(),
             "level": event.threat_level.value,
@@ -227,14 +120,18 @@ class SecurityMonitor:
             "details": event.details,
         }
 
-        self._store.add_event(
-            event.threat_type.value, event_data, event.timestamp.timestamp()
-        )
+        key = f"{SEC_EVENT}:{event.threat_type.value}"
+        await cache.lpush(key, event_data, ttl=86400)  # 24h TTL
 
     async def _check_threat(self, event: SecurityEvent):
         """检查并触发威胁告警"""
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import SEC_SUSPECT
+
+        cache = get_cache()
+
         # 检查IP是否已被标记
-        if self._store.is_suspicious_ip(event.client_ip):
+        if await cache.sismember(f"{SEC_SUSPECT}:global", event.client_ip):
             if event.threat_level in [ThreatLevel.HIGH, ThreatLevel.CRITICAL]:
                 await self._trigger_alert(event)
             return
@@ -243,23 +140,28 @@ class SecurityMonitor:
         threat_detected = await self._analyze_pattern(event)
 
         if threat_detected:
-            self._store.add_suspicious_ip(event.client_ip)
+            await cache.sadd(f"{SEC_SUSPECT}:global", event.client_ip)
             await self._trigger_alert(event)
 
     async def _analyze_pattern(self, event: SecurityEvent) -> bool:
         """分析事件模式，检测威胁"""
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import SEC_COUNTER
+
+        cache = get_cache()
+
         # 检查速率限制违规次数
         if event.threat_type == ThreatType.RATE_LIMIT_EXCEEDED:
-            key = f"rate_violations:{event.client_ip}"
-            count = self._store.increment_counter(key, 300)
+            key = f"{SEC_COUNTER}:rate_violations:{event.client_ip}"
+            count = await cache.increment(key, ttl=300)
 
             threshold = self.THRESHOLDS["rate_limit_violations"]
             if count >= threshold["count"]:
                 return True
 
         # 检查可疑请求频率
-        key = f"suspicious_count:{event.client_ip}"
-        count = self._store.increment_counter(key, 300)
+        key = f"{SEC_COUNTER}:suspicious_count:{event.client_ip}"
+        count = await cache.increment(key, ttl=300)
 
         return bool(count >= self.THRESHOLDS["suspicious_requests"]["count"])
 
@@ -295,17 +197,46 @@ class SecurityMonitor:
         self, start_time: datetime | None = None, end_time: datetime | None = None
     ) -> dict:
         """获取安全统计信息"""
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import SEC_COUNTER, SEC_EVENT, SEC_SUSPECT
+
+        cache = get_cache()
         start_time = start_time or datetime.now(UTC) - timedelta(hours=24)
         end_time = end_time or datetime.now(UTC)
 
-        stats = self._store.get_stats(start_time.timestamp(), end_time.timestamp())
+        # Aggregate event counts by threat type
+        events_by_type: dict[str, int] = {}
+        for threat in ThreatType:
+            key = f"{SEC_EVENT}:{threat.value}"
+            items = await cache.lrange(key, 0, -1)
+            if items:
+                events_by_type[threat.value] = len(items)
+
+        # Suspicious IP count
+        suspect_ips = await cache.smembers(f"{SEC_SUSPECT}:global")
+        suspicious_ip_count = len(suspect_ips)
+
+        # Active counter keys (scan for counter prefix)
+        # Rate violation counters are per-IP, we report aggregate
+        counter_summary: dict[str, int] = {}
+        # Scan recent events for IPs with violations
+        rate_key = f"{SEC_EVENT}:{ThreatType.RATE_LIMIT_EXCEEDED.value}"
+        rate_events = await cache.lrange(rate_key, 0, 99)
+        unique_violation_ips = {e.get("ip", "") for e in rate_events if isinstance(e, dict)}
+        for ip in unique_violation_ips:
+            cnt_key = f"{SEC_COUNTER}:rate_violations:{ip}"
+            val = await cache.get(cnt_key)
+            if val is not None:
+                counter_summary[f"rate_violations:{ip}"] = int(val)
 
         return {
             "time_range": {
                 "start": start_time.isoformat(),
                 "end": end_time.isoformat(),
             },
-            **stats,
+            "events_by_type": events_by_type,
+            "suspicious_ip_count": suspicious_ip_count,
+            "active_counters": counter_summary,
         }
 
 

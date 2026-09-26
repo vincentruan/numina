@@ -507,7 +507,7 @@ class TestChildPinAuth:
 class TestTimingAttackProtection:
     """Tests for timing attack protection in login."""
 
-    def test_login_response_time_consistency(self, client):
+    async def test_login_response_time_consistency(self, client):
         """Test that login response times are consistent regardless of user existence."""
         # Register a known user
         client.post("/api/v1/auth/register", json={
@@ -558,7 +558,7 @@ class TestTimingAttackProtection:
 class TestBcryptRoundsConfiguration:
     """Tests for bcrypt rounds configuration."""
 
-    def test_hash_password_uses_configured_rounds(self):
+    async def test_hash_password_uses_configured_rounds(self):
         """Test that hash_password uses configured rounds."""
         password = "test_password_123"
         hashed = hash_password(password)
@@ -572,7 +572,7 @@ class TestBcryptRoundsConfiguration:
         # Should be at least 12 (default)
         assert rounds >= 12
 
-    def test_hash_password_produces_different_salts(self):
+    async def test_hash_password_produces_different_salts(self):
         """Test that hash_password produces different salts."""
         password = "test_password_123"
         hash1 = hash_password(password)
@@ -585,7 +585,7 @@ class TestBcryptRoundsConfiguration:
 class TestLoginErrorMessage:
     """Tests for login error message consistency."""
 
-    def test_same_error_message_for_wrong_password_and_nonexistent_user(self, client):
+    async def test_same_error_message_for_wrong_password_and_nonexistent_user(self, client):
         """Test that wrong password and nonexistent user return same error message."""
         # Register a user
         client.post("/api/v1/auth/register", json={
@@ -618,7 +618,7 @@ class TestLoginErrorMessage:
 # Rate limiting
 # ---------------------------------------------------------------------------
 
-def test_refresh_rate_limit(client, auth_headers):
+async def test_refresh_rate_limit(client, auth_headers):
     """Exceeding 10 refresh calls per minute per user triggers 429."""
     import jwt
 
@@ -630,10 +630,11 @@ def test_refresh_rate_limit(client, auth_headers):
     user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
 
     # Exhaust the rate limit directly via the service function
-    from apps.backend.app.services.cache.factory import get_rate_limit_cache
-    cache = get_rate_limit_cache()
-    key = f"refresh_attempts:{user_id}"
-    cache.set(key, auth_service._REFRESH_RATE_LIMIT_PER_MINUTE, ttl_seconds=60)
+    from packages.core.cache import get_cache
+    from packages.core.cache.keys import RATE_LIMIT
+    cache = get_cache()
+    key = f"{RATE_LIMIT}:refresh:{user_id}"
+    await cache.set(key, auth_service._REFRESH_RATE_LIMIT_PER_MINUTE, ttl=60)
 
     resp = client.post("/api/v1/auth/refresh", json={
         "refresh_token": auth_headers["_refresh_token"]
@@ -641,7 +642,7 @@ def test_refresh_rate_limit(client, auth_headers):
     assert resp.status_code == 429
 
 
-def test_password_change_rate_limit(client, auth_headers):
+async def test_password_change_rate_limit(client, auth_headers):
     """Exceeding 3 password change attempts per hour triggers 429."""
     import jwt
 
@@ -652,10 +653,11 @@ def test_password_change_rate_limit(client, auth_headers):
     token = auth_headers["Authorization"].split(" ")[1]
     user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
 
-    from apps.backend.app.services.cache.factory import get_rate_limit_cache
-    cache = get_rate_limit_cache()
-    key = f"password_change_attempts:{user_id}"
-    cache.set(key, auth_service._PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR, ttl_seconds=3600)
+    from packages.core.cache import get_cache
+    from packages.core.cache.keys import RATE_LIMIT
+    cache = get_cache()
+    key = f"{RATE_LIMIT}:password_change:{user_id}"
+    await cache.set(key, auth_service._PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR, ttl=3600)
 
     resp = client.post(
         "/api/v1/auth/me/password",
@@ -665,22 +667,23 @@ def test_password_change_rate_limit(client, auth_headers):
     assert resp.status_code == 429
 
 
-def test_password_change_rate_limit_includes_retry_after(client, auth_headers):
+async def test_password_change_rate_limit_includes_retry_after(client, auth_headers):
     """Password-change rate-limited response includes Retry-After header."""
     import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings
     from apps.backend.app.services import auth as auth_service
-    from apps.backend.app.services.cache.factory import get_rate_limit_cache
+    from packages.core.cache import get_cache
+    from packages.core.cache.keys import RATE_LIMIT
 
     token = auth_headers["Authorization"].split(" ")[1]
     user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
 
     # Exhaust the password change rate limit
-    cache = get_rate_limit_cache()
-    key = f"password_change_attempts:{user_id}"
-    cache.set(key, auth_service._PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR, ttl_seconds=3600)
+    cache = get_cache()
+    key = f"{RATE_LIMIT}:password_change:{user_id}"
+    await cache.set(key, auth_service._PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR, ttl=3600)
 
     resp = client.post(
         "/api/v1/auth/me/password",
@@ -692,22 +695,23 @@ def test_password_change_rate_limit_includes_retry_after(client, auth_headers):
     assert int(resp.headers["retry-after"]) > 0
 
 
-def test_rate_limit_retry_after_header(client, auth_headers):
+async def test_rate_limit_retry_after_header(client, auth_headers):
     """Rate-limited responses include a Retry-After header with a positive value."""
     import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings
     from apps.backend.app.services import auth as auth_service
-    from apps.backend.app.services.cache.factory import get_rate_limit_cache
+    from packages.core.cache import get_cache
+    from packages.core.cache.keys import RATE_LIMIT
 
     token = auth_headers["Authorization"].split(" ")[1]
     user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
 
     # Exhaust the refresh rate limit
-    cache = get_rate_limit_cache()
-    key = f"refresh_attempts:{user_id}"
-    cache.set(key, auth_service._REFRESH_RATE_LIMIT_PER_MINUTE, ttl_seconds=60)
+    cache = get_cache()
+    key = f"{RATE_LIMIT}:refresh:{user_id}"
+    await cache.set(key, auth_service._REFRESH_RATE_LIMIT_PER_MINUTE, ttl=60)
 
     resp = client.post("/api/v1/auth/refresh", json={
         "refresh_token": auth_headers["_refresh_token"]

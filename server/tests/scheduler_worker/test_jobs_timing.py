@@ -15,6 +15,16 @@ def mock_session_local():
         yield mock_session
 
 
+@pytest.fixture(autouse=True)
+def _init_unified_cache():
+    """Ensure unified Cache is initialized for adapter construction."""
+    from packages.core.cache import init_cache, reset_cache
+    reset_cache()
+    init_cache(backend="memory")
+    yield
+    reset_cache()
+
+
 class TestExchangeRateJob:
     """Test exchange rate job invocation."""
 

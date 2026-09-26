@@ -49,7 +49,7 @@ def _seed_cache(db_session, family_id) -> None:
     db_session.commit()
 
 
-def test_wish_create_invalidates_finance_coach_cache(db_session):
+async def test_wish_create_invalidates_finance_coach_cache(db_session):
     user = _make_user(db_session)
     _seed_cache(db_session, str(user.family_id))
     req = WishCreate(name="MacBook", expected_price=15000, priority="high")
@@ -65,7 +65,7 @@ def test_wish_create_invalidates_finance_coach_cache(db_session):
         assert str(call.args[1]) == str(user.family_id)
 
 
-def test_wish_update_invalidates_finance_coach_cache(db_session):
+async def test_wish_update_invalidates_finance_coach_cache(db_session):
     user = _make_user(db_session)
     _seed_cache(db_session, str(user.family_id))
     wish = wish_service.create_wish(
@@ -83,7 +83,7 @@ def test_wish_update_invalidates_finance_coach_cache(db_session):
         assert str(call.args[1]) == str(user.family_id)
 
 
-def test_wish_delete_invalidates_finance_coach_cache(db_session):
+async def test_wish_delete_invalidates_finance_coach_cache(db_session):
     user = _make_user(db_session)
     _seed_cache(db_session, str(user.family_id))
     wish = wish_service.create_wish(
@@ -100,7 +100,7 @@ def test_wish_delete_invalidates_finance_coach_cache(db_session):
         assert str(call.args[1]) == str(user.family_id)
 
 
-def test_liability_write_invalidates_finance_coach_cache(db_session):
+async def test_liability_write_invalidates_finance_coach_cache(db_session):
     user = _make_user(db_session)
     _seed_cache(db_session, str(user.family_id))
     req = LiabilityCreate(
@@ -121,7 +121,7 @@ def test_liability_write_invalidates_finance_coach_cache(db_session):
         assert str(call.args[1]) == str(user.family_id)
 
 
-def test_asset_write_invalidates_finance_coach_cache(db_session):
+async def test_asset_write_invalidates_finance_coach_cache(db_session):
     user = _make_user(db_session)
     _seed_cache(db_session, str(user.family_id))
     # Need a valid category_id (conftest seeds categories).

@@ -46,7 +46,7 @@ def revoked_invitation_code(db):
     return code
 
 
-def test_register_with_valid_invitation_code(db, valid_invitation_code):
+async def test_register_with_valid_invitation_code(db, valid_invitation_code):
     """Registration succeeds with valid unused invitation code."""
     req = RegisterRequest(
         username="newuser",
@@ -56,7 +56,7 @@ def test_register_with_valid_invitation_code(db, valid_invitation_code):
         family_invitation_code="TVLID",
     )
 
-    result = register(db, req, client_ip="test-ip")
+    result = await register(db, req, client_ip="test-ip")
 
     assert result.access_token is not None
     assert result.refresh_token is not None
@@ -69,7 +69,7 @@ def test_register_with_valid_invitation_code(db, valid_invitation_code):
     assert valid_invitation_code.used_by_username == "newuser"
 
 
-def test_register_with_invalid_invitation_code(db):
+async def test_register_with_invalid_invitation_code(db):
     """Fails with non-existent invitation code."""
     req = RegisterRequest(
         username="newuser",
@@ -80,12 +80,12 @@ def test_register_with_invalid_invitation_code(db):
     )
 
     with pytest.raises(AppError) as exc_info:
-        register(db, req, client_ip="test-ip")
+        await register(db, req, client_ip="test-ip")
 
     assert exc_info.value.code == ErrorCode.FAMILY_INVITATION_CODE_NOT_FOUND
 
 
-def test_register_with_already_used_code(db, used_invitation_code):
+async def test_register_with_already_used_code(db, used_invitation_code):
     """Fails with already-used invitation code."""
     req = RegisterRequest(
         username="anotheruser",
@@ -96,12 +96,12 @@ def test_register_with_already_used_code(db, used_invitation_code):
     )
 
     with pytest.raises(AppError) as exc_info:
-        register(db, req, client_ip="test-ip")
+        await register(db, req, client_ip="test-ip")
 
     assert exc_info.value.code == ErrorCode.FAMILY_INVITATION_CODE_ALREADY_USED
 
 
-def test_register_with_revoked_code(db, revoked_invitation_code):
+async def test_register_with_revoked_code(db, revoked_invitation_code):
     """Fails with revoked invitation code."""
     req = RegisterRequest(
         username="newuser",
@@ -112,12 +112,12 @@ def test_register_with_revoked_code(db, revoked_invitation_code):
     )
 
     with pytest.raises(AppError) as exc_info:
-        register(db, req, client_ip="test-ip")
+        await register(db, req, client_ip="test-ip")
 
     assert exc_info.value.code == ErrorCode.FAMILY_INVITATION_CODE_REVOKED
 
 
-def test_invitation_code_normalized_to_uppercase(db):
+async def test_invitation_code_normalized_to_uppercase(db):
     """Lowercase input matches uppercase code."""
     # Create code in uppercase
     code = FamilyInvitationCode(code="TLWLR")
@@ -133,7 +133,7 @@ def test_invitation_code_normalized_to_uppercase(db):
         family_invitation_code="tlwlr",  # lowercase input → normalized to "TLWLR"
     )
 
-    result = register(db, req, client_ip="test-ip")
+    result = await register(db, req, client_ip="test-ip")
 
     assert result.access_token is not None
     assert result.refresh_token is not None

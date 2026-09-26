@@ -9,7 +9,8 @@ from apps.backend.app.config import settings
 from apps.backend.app.core.logging_config import get_logger
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
-from apps.backend.app.services.cache import get_captcha_payload_cache
+from packages.core.cache import get_cache
+from packages.core.cache.keys import CAPTCHA
 from apps.backend.app.services.security_log import (
     SecurityEventType,
     _log_security_event,
@@ -87,19 +88,19 @@ async def verify_captcha(
 
     # R23: Replay attack prevention
     # Compute SHA-256 hash of payload and check if already used
-    cache = get_captcha_payload_cache()
+    cache = get_cache()
     payload_hash = hashlib.sha256(altcha.encode()).hexdigest()
-    cache_key = f"altcha:used:{payload_hash}"
+    cache_key = f"{CAPTCHA}:used:{payload_hash}"
 
     try:
-        if cache.get(cache_key):
+        if await cache.get(cache_key):
             _log_security_event(
                 SecurityEventType.CAPTCHA_REPLAY_ATTACK,
                 client_id=request.client.host if request.client else "unknown",
             )
             raise AppError(ErrorCode.CAPTCHA_REPLAY)
         # Store hash with 1 hour TTL (matches challenge expiry)
-        cache.set(cache_key, "1", ttl_seconds=3600)
+        await cache.set(cache_key, "1", ttl=3600)
     except AppError:
         raise
     except Exception as e:
