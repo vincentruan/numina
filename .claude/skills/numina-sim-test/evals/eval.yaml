@@ -26,6 +26,7 @@ cases:
     - evals/cases/area2-finance-core.yaml
     - evals/cases/area11-security-core.yaml
     - evals/cases/area7-regression.yaml
+    - evals/cases/area15-ui-quality-core.yaml
 
   # Default constraints inherited by every case
   defaults:

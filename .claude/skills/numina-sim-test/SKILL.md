@@ -6,6 +6,8 @@ description: >
   Triggers on: "run sim test", "ui audit", "截图测试", "仿真测试",
   "ui检查", "界面审查", "check the UI", "test the app visually",
   "儿童测试", "child frontend test", "test AI chat/report/PDF import",
+  "ui quality", "设计审查", "UI 质量检查", "dark mode test", "深色模式测试",
+  "mobile test", "移动端测试", "accessibility test", "无障碍测试",
   or any request to verify the deployed Docker app's three feature areas
   (child app, financial management, AI capabilities).
 ---
@@ -27,7 +29,7 @@ authenticated UI flows, screenshot capture, and test report generation.
 > environment must already contain the test accounts below (see
 > "Prerequisites").
 
-Covers **fourteen** feature areas (detailed cases split by area under
+Covers **fifteen** feature areas (detailed cases split by area under
 [`test-cases/`](./test-cases/), shared conventions in
 [`test-cases/_common.md`](./test-cases/_common.md), role matrix in
 [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md)):
@@ -45,6 +47,7 @@ Covers **fourteen** feature areas (detailed cases split by area under
 12. **AI task resilience** — 前端不稳定处理：离开/刷新恢复、失败/中断重试、用户取消 (C12.1–C12.9) ([`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md))
 13. **AI 资产报告深度验证** — Hub 弹窗内容/z-index、报告重入步骤去重/SSE 重连/取消按钮、narrative 缓存推导 (C13.1–C13.5) ([`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md))
 14. **Travel module (家庭旅行管理)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float / 行程规划时间线 / 跨天行程 + 购买日期 (C14.1–C14.40) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md))
+15. **UI quality & design system audit** — 移动端 H5/PWA 适配 / 深色模式 / Vant4 组件规范 / 无障碍 / 安全区域 / 跨应用风格一致性 (UIQ.1–UIQ.10) ([`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching
@@ -73,18 +76,19 @@ schedule + verified browser concurrency evidence.
 | Group | Dir | Areas | Session | State domain | Parallel with |
 |-------|-----|-------|---------|--------------|---------------|
 | **G0** preconditions | [`g0-preconditions/`](./test-cases/groups/g0-preconditions/) | Phase 0/1/1.5/2 | serial | establishes login | none — first |
-| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 11, 12, 14 | `$SID` (adult) | reads global; per-entity writes | **G3** |
+| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 11, 12, 14, 15 | `$SID` (adult) | reads global; per-entity writes | **G3** |
 | **G2** adult-currency | [`g2-adult-currency/`](./test-cases/groups/g2-adult-currency/) | 4 | adult (own) | **mutates `default_currency`** | **G3** |
 | **G3** child | [`g3-child/`](./test-cases/groups/g3-child/) | 1, 5, 10 | `$SID_CHILD` | child origin (isolated dev) | **G1 or G2** |
 
 **Schedule:** `G0 (serial) → G1 ‖ G3 (parallel) → G2 (after G1)`. Three agents
 cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
-> **G1 internal order:** area2 → area14 → area8 → area3 → area6 → area7 → area11. Area 7
+> **G1 internal order:** area2 → area14 → area8 → area3 → area6 → area12 → area15 → area7 → area11. Area 7
 > (regression) runs just before Area 11, with R6 (auth expiry) destroying the
 > session **last** so earlier areas have a live session. Area 14 (travel) runs
-> after area2 since both create financial entities. Area 11 uses adult
-> session read-only probes and should run before R6 clears the session.
+> after area2 since both create financial entities. Area 15 (UI quality) runs
+> before regression since it needs a stable session for dark-mode toggling and
+> viewport tests. Area 11 uses adult session read-only probes.
 
 > **Docker mode caveat:** nginx serves adult + child under **one origin** (:80)
 > → G3 is NOT parallel-safe with G1/G2 (shared cookie + localStorage). The
@@ -114,7 +118,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
 | Mode | 触发词 | 覆盖范围 | 预计耗时 |
 |------|--------|----------|----------|
-| **full** | "run sim test", "全量测试" | Area 1–14 (所有用例) | ~90-120 min |
+| **full** | "run sim test", "全量测试" | Area 1–15 (所有用例) | ~120-150 min |
 | **smoke** | "smoke test", "快速检查" | C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2, C9.4 | ~18-25 min |
 | **child** | "child test", "儿童测试" | Area 1 + Area 5 (G3 only) | ~20-30 min |
 | **finance** | "finance test", "财务测试" | Area 2 only (G1 subset, C2.1–C2.25) | ~20-25 min |
@@ -122,13 +126,15 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 | **regression** | "regression test", "回归测试" | Area 7 only (R1–R9) | ~10-15 min |
 | **security** | "security test", "安全测试" | Area 9 (C9.1–C9.7) + Area 11 (C11.1–C11.20) + R6 | ~25-35 min |
 | **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.40) | ~45-55 min |
+| **ui-quality** | "ui quality", "设计审查", "UI 质量检查" | Area 15 only (UIQ.1–UIQ.10) | ~25-35 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
 
 **选择逻辑:**
 1. 用户未指定模式 → 默认 `full`
 2. 用户说"快速检查" / "smoke" → `smoke` (仅跑关键路径的 10 个用例)
 3. 用户明确指定某个 area 或功能域 → 跑对应的 area
-4. `smoke` 模式跳过 Area 1/5/7/8/9/10/11/12/14, 仅验证核心 adult 功能 + 币种回归 + 通知触发
+4. `smoke` 模式跳过 Area 1/5/7/8/9/10/11/12/14/15, 仅验证核心 adult 功能 + 币种回归 + 通知触发
+5. `ui-quality` 模式需要 adult + child 两个 session; 先跑 G0 前置, 再跑 Area 15
 
 ---
 
@@ -737,6 +743,53 @@ Coverage for previously untested feature modules:
 - **F.7** AI settings deep (MCP / web-search / ASR / skills / agents)
 - **F.8** Owner vs member permission boundary (**deferred** — requires member account)
 
+### Cross-cutting: Mobile Viewport Rules (all areas)
+
+All functional test cases (Areas 1–14) should be run at **375×812** viewport
+when possible. If the browser driver forces a desktop viewport, note it in the
+report and be aware that mobile-specific issues (overflow, touch targets, safe
+areas) may not surface.
+
+**Red flags to watch for during ANY functional test:**
+- Horizontal scrollbar at 375px → report as `UI-OVERFLOW`
+- Text unreadable after dark mode toggle → report as `UI-DARK`
+- Popup clipped inside swipeable tabs → report as `UI-VANT`
+- Button/field unclickable (touch target too small) → report as `UI-TOUCH`
+- Content behind notch/home indicator → report as `UI-SAFE`
+
+> These are NOT blockers for the functional test — continue the functional
+> assertion and note the UI issue separately. Area 15 covers these in depth.
+
+---
+
+## Phase 5.6 — Area 15: UI Quality & Design System Audit
+
+After functional areas complete, run the UI quality audit. This is a
+cross-cutting suite that checks design-system compliance, mobile H5/PWA
+adaptation, dark mode correctness, and Vant4 component patterns.
+
+Run [`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md):
+
+**Viewport setup:** Set browser to **375×812** (iPhone 13/14 baseline).
+
+- **UIQ.1** Mobile viewport baseline — no horizontal scroll at 375px, tab bars visible
+- **UIQ.2** Dark mode (main app) — `van-config-provider` theme toggle, no inline-style leaks
+- **UIQ.3** Dark mode (child app) — CSS `[data-theme="dark"]` overrides, Clay palette check
+- **UIQ.4** Vant4 component patterns — `:model-value` vs `:value`, popup teleport, three-state rendering
+- **UIQ.5** Touch target sizing — ≥ 44×44px for all interactive elements
+- **UIQ.6** Safe area compliance — `env(safe-area-inset-bottom)` for tab bars and fixed bottoms
+- **UIQ.7** PWA offline behavior — offline banner, SW registration, install prompt
+- **UIQ.8** Accessibility basics — aria-labels, focus rings, color-not-only-indicator
+- **UIQ.9** NProgress behavior — no flicker, no stuck spinner, visible when scrolled
+- **UIQ.10** Cross-app style consistency — empty states, skeleton, toast, pull-refresh match between apps
+
+> **Prerequisites:** Both adult (`$SID`) and child (`$SID_CHILD`) sessions active.
+> Area 15 uses the adult session for UIQ.1–UIQ.9 and switches to child session
+> for UIQ.3 + UIQ.10 child-side checks.
+>
+> **Design system reference:** [`references/ui-quality-checklist.md`](./references/ui-quality-checklist.md)
+> contains full design token tables, dark mode methodology, and Vant4 patterns.
+
 ---
 
 ## Phase 6 — Generate Test Report
@@ -755,10 +808,15 @@ case's outcome, then write the report.
 > Also write the report to a file if the environment allows, but the inline
 > content is the primary deliverable.
 
-> **Report scope:** success summary + failure details only. Do NOT include
-> P0–P3 severity grading, effort estimates, fix plans, or UI/UX visual-audit
-> dimensions (color/spacing/contrast). This skill records test results —
-> fixing is out of scope and handled separately if the user requests it.
+> **Report scope:** success summary + failure details + UI quality observations.
+> Do NOT include P0–P3 severity grading, effort estimates, or fix plans.
+> This skill records test results — fixing is out of scope and handled
+> separately if the user requests it.
+>
+> **UI quality observations:** When Area 15 (UI quality) is run, include a
+> fourth section "UI 质量观察" summarizing design-system findings (dark mode
+> defects, touch target violations, viewport overflow, accessibility gaps).
+> Use the `UI-*` failure codes from the taxonomy below.
 >
 > **Case-UI consistency check:** before writing "expected vs actual", verify the
 > case's asserted route/label still matches the current source tree. If a case
@@ -796,7 +854,7 @@ the skill log.
 - 截图目录: dogfood-output/
 
 ## 成功摘要
-- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.10, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.40)
+- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.10, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.40, Area15: UIQ.1–UIQ.10)
 - 通过: X
 - 失败: Y
 - 跳过: Z (注明原因, 如 AI 未启用、数据不足)
@@ -823,6 +881,13 @@ the skill log.
 
 ## 跳过用例 (如有)
 - C3.x — 原因: AI 未启用 (family aiEnabled=false), 建议在 /settings/ai 配置 provider 后补测
+
+## UI 质量观察 (Area 15 — 仅当运行 ui-quality 模式或全量测试时)
+- 深色模式: {N} 项缺陷 (列出 UI-DARK 用例)
+- 触摸目标: {N} 项违规 (列出 UI-TOUCH 用例)
+- 视口溢出: {N} 项 (列出 UI-OVERFLOW 用例)
+- 无障碍: {N} 项 (列出 UI-A11Y 用例)
+- 跨应用一致性: {通过/不通过} (UIQ.10 结论)
 ```
 
 ### Writing rules
@@ -849,6 +914,16 @@ the skill log.
 | `INTERACT` | 交互错误 | 按钮无响应、表单验证失效、dialog 不弹出 |
 | `PERF` | 性能问题 | 页面加载超时、动画卡顿 |
 | `REGRESS` | 回归 (已知 bug 重现) | Area 7 用例失败自动标此分类 |
+| `UI-OVERFLOW` | 视口溢出 | 375px 宽度出现水平滚动条 |
+| `UI-DARK` | 深色模式缺陷 | inline style 未翻转, 文字不可读 |
+| `UI-CONTRAST` | 对比度不足 | 文字在任一模式下不满足 WCAG AA (4.5:1) |
+| `UI-TOUCH` | 触摸目标过小 | 交互元素 < 44×44px |
+| `UI-SAFE` | 安全区域违规 | Tab bar 被 home indicator 遮挡 |
+| `UI-PWA` | PWA 缺陷 | 无离线提示, SW 未注册 |
+| `UI-A11Y` | 无障碍缺陷 | 缺少 aria-label, 无焦点环 |
+| `UI-VANT` | Vant4 规范违反 | `:value` 替代 `:model-value`, popup 缺少 teleport |
+| `UI-CONSIST` | 跨应用不一致 | 两个 app 的空态/骨架屏/Toast 风格不同 |
+| `UI-PROGRESS` | NProgress 回归 | 闪烁 / 卡住 / 滚动后不可见 |
 
 ### After writing
 
@@ -1042,12 +1117,14 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | **12 — AI task resilience (前端不稳定处理)** | **G1** | **C12.1–C12.9** | [`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md) |
 | **13 — AI 资产报告深度验证 (Hub 弹窗/重入去重/SSE 重连)** | **G1** | **C13.1–C13.5** | [`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md) |
 | **14 — Travel module (旅行管理: 行程/费用/分摊/转化/行程规划/跨天+购买日期)** | **G1** | **C14.1–C14.40** | [`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md) |
+| **15 — UI quality & design system (H5/PWA/深色模式/无障碍/一致性)** | **G1** | **UIQ.1–UIQ.10** | [`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md) |
 
 ### Supporting References
 
 | File | Purpose |
 |------|---------|
 | [`references/browser-drivers.md`](./references/browser-drivers.md) | Browser driver detection + command reference (browser-use / bsk / Chrome DevTools MCP) |
+| [`references/ui-quality-checklist.md`](./references/ui-quality-checklist.md) | UI quality reference: design tokens, dark mode methodology, Vant4 patterns, accessibility checklist, cross-app consistency matrix |
 | [`test-cases/_common.md`](./test-cases/_common.md) | Shared conventions (session, refs, console capture, child injection) |
 | [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md) | Role capability matrix (owner/member/child 权限边界 + 页面清单) |
 | [`test-cases/groups/README.md`](./test-cases/groups/README.md) | Parallel run structure + state-isolation boundaries |
@@ -1081,6 +1158,10 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | Manifesto wizard state lost between pages | `useManifestoWizard` persists via `sessionStorage` — do not clear storage mid-flow; the wizard state resets only on explicit cancel |
 | Smoke mode accidentally running full suite | Smoke mode runs only 10 cases (C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2, C9.4). Verify the mode before starting |
 | Guest pages tested with authenticated session → redirected past welcome | Use a **fresh browser session** without cookies for F.5.x guest page tests |
+| Area 15 dark mode test: toggling via CSS instead of app setting | Must toggle via the app's Settings → Appearance (or `van-config-provider` theme prop), not by manually setting `data-theme` — the app's JS controls `van-config-provider` which cascades Vant component themes |
+| Area 15 touch target check: measuring visual size instead of tap area | `getBoundingClientRect()` on the element returns the visual box; the tap area may be larger due to padding on parent. Check `pointer-events` area, not just icon size |
+| Area 15 viewport test at desktop width → misses all mobile issues | Set viewport to 375×812 BEFORE running UIQ cases. If driver doesn't support resize, note in report and skip viewport-dependent checks |
+| Area 15 cross-app consistency: comparing main vs child screenshots at different widths | Both apps must be at the same viewport (375×812) for valid comparison. Child app has different design tokens (Clay vs Together AI) — compare pattern consistency, not pixel identity |
 
 ### bsk-specific Mistakes (only when bsk is the active driver)
 
