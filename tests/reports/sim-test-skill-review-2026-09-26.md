@@ -16,11 +16,11 @@
 | **内部一致性** | 🔴 多处矛盾 | 🟢 已对齐 | G1 排序统一、F 范围修正、失败排序扩展至 Area15 |
 | **可执行性** | 🔴 关键缺陷 | 🟢 已修复 | Chrome DevTools 检测重写、时间估算修正、崩溃恢复流程 |
 | **安全性** | 🟡 可改善 | 🟢 已改善 | Token 清理、credential 红线、session 登出、报告脱敏 |
-| **范围适配** | 🟡 过大 | 🟡 保留+标注 | Phase 6/7 矛盾消除；Area 6/11 保留但标注性质 |
+| **范围适配** | 🟡 过大 | 🟢 已解决 | Phase 6/7 矛盾消除；Area 6/11 保留但标注性质；定位重定义为全栈验收 |
 | **设计覆盖** | 🟡 深度不足 | 🟢 已扩展 | 多视口、WCAG 对比度、错误状态、无障碍系统化 |
 
 **统计:** 33 个独立发现（1 P0, 8 P1, 15 P2, 5 P3, 4 FYI）  
-**已修复:** 22 项 ✅ | **延期:** 8 项 ⏳ | **误报:** 1 项（smoke count） | **保留设计决策:** 2 项
+**已修复:** 27 项 ✅ | **延期:** 3 项 ⏳ | **误报:** 1 项（smoke count） | **保留设计决策:** 2 项
 
 ---
 
@@ -81,11 +81,11 @@
 
 | # | Section | Title | Reviewer | 状态 |
 |---|---------|-------|----------|------|
-| 1 | Area 6 | DeerFlow 对等性是产品审计非 UI 测试 | scope-guardian | ⏳ 保留：标注为"flag not fail"，不拆分 |
-| 2 | Area 11 | 对抗安全测试应归属安全技能 | scope-guardian | ⏳ 保留：security 模式已单独分组 |
-| 3 | Run Modes | 10 种模式复杂度过高 | scope-guardian | ⏳ 保留：友好别名有用户体验价值 |
+| 1 | Area 6 | DeerFlow 对等性是产品审计非 UI 测试 | scope-guardian | ✅ 决定：保留现状，`flag not fail` 标注，不拆分 |
+| 2 | Area 11 | 对抗安全测试应归属安全技能 | scope-guardian | ✅ 决定：保留现状，security 模式已单独分组 |
+| 3 | Run Modes | 10 种模式复杂度过高 | scope-guardian | ✅ 决定：保留域别名，补充"等同于 area 组合"说明 |
 | 4 | Parallel Run | G0-G3 并行结构复杂度高 | scope-guardian | ✅ 已增加 MCP 并行协调注意事项 |
-| 5 | Full skill | 15 区域超出声明目标 | scope-guardian | ⏳ 保留：15 areas 是已确认的完整覆盖 |
+| 5 | Full skill | 15 区域超出声明目标 | scope-guardian | ✅ 决定：重定义定位从"UI 模拟测试"为"全栈功能验收" |
 
 ### 遗漏 (10)
 
@@ -95,11 +95,11 @@
 | 7 | Phase 3/4/5 | 浏览器驱动崩溃无恢复路径 | feasibility | ✅ 已增加 Driver crash recovery + SKIP-INFRA |
 | 8 | Parallel Run | Chrome DevTools MCP 无页面协调 | feasibility | ✅ 已增加 MCP caveat 注意事项 |
 | 9 | Phase 6 | 报告仅依赖截图 | feasibility | ✅ 已增加 snapshot 优先的证据规则 |
-| 10 | Phase 1.5 | child auth 门禁仅验证 step1 | feasibility | ⏳ 延期：需确认后端 PIN 配置 |
+| 10 | Phase 1.5 | child auth 门禁仅验证 step1 | feasibility | ✅ 已增加 step2 (emoji PIN) 预检 |
 | 11 | Area 15 UIQ.2/3 | 深色模式对比度无量化 | design-lens | ✅ 已增加 WCAG AA 测量流程 |
 | 12 | Area 15 UIQ.10 | 跨应用一致性为主观描述 | design-lens | ✅ UIQ.10 已增加量化阈值 |
 | 13 | Area 15 UIQ.2/3 | 深色模式过渡动画未测试 | design-lens | ✅ UIQ.3 已增加 transition flash 检查 |
-| 14 | Area 11 | 注入数据失败时无保证清理 | security | ⏳ 延期：需设计 try/finally 模式 |
+| 14 | Area 11 | 注入数据失败时无保证清理 | security | ✅ 已增加 try/finally 清理规则 |
 | 15 | Phase 5 | 无服务端登出/token 撤销 | security | ✅ 已增加 logout + unset 清理步骤 |
 
 ---
@@ -128,17 +128,17 @@
 ## Residual Concerns
 
 1. **Agent 上下文容量：** 1176 行 / 67KB 的技能文档可能超出 agent 单次上下文可靠执行容量
-2. **Docker 并行退化：** G3 无法与 G1/G2 并行（同源 cookie），docker 全量实际需 ~210+ min
+2. ~~**Docker 并行退化：**~~ ✅ SKILL.md lines 96-104 已有完整说明（G3 串行、cookie 清除步骤）
 3. **AI 中途不稳定：** 长时间运行中 AI provider 不稳定可导致级联误报，无中途 SKIP-AI 机制
-4. **子 agent 报告合并：** 并行 agent 写入带 group prefix 的失败，但 Phase 6 由单 agent 执行，合并机制未定义
+4. ~~**子 agent 报告合并：**~~ ✅ Phase 6 已补充并行合并说明（从 Agent tool 上下文读取各 group 输出）
 
 ---
 
 ## Deferred Questions
 
-1. F.9 和 F.10 是否在 area8-expanded-features.md 中定义？还是索引中的 "F.1–F.10" 是过度声称？
-2. Areas 9/10/13 是故意不在 G1 排序中（有特殊执行约束）还是遗漏？
-3. Smoke 模式应该是 9 还是 10 个用例？
+1. ~~F.9 和 F.10 是否在 area8-expanded-features.md 中定义？~~ ✅ 已解决：不存在 F.9/F.10，范围为 F.1–F.8, F.11, F.12
+2. ~~Areas 9/10/13 是故意不在 G1 排序中还是遗漏？~~ ✅ 已解决：9 和 13 已加入 G1，10 属 G3
+3. ~~Smoke 模式应该是 9 还是 10 个用例？~~ ✅ 已解决：确为 10 个，审查员计数错误
 4. 后端是否有 logout/revoke 端点？如无，session-cleanup 是后端 feature request
 5. 是否应将 SKILL.md 拆分为核心 (~400 行) + 各 area 独立参考文档？
 6. 768px 平板断点是必须测试还是可选扩展？

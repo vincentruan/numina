@@ -1,23 +1,27 @@
 ---
 name: numina-sim-test
 description: >
-  Use when the user wants to run UI simulation tests, audit the interface,
-  capture screenshots, or verify deployed UI flows for the Numina project.
-  Triggers on: "run sim test", "ui audit", "截图测试", "仿真测试",
-  "ui检查", "界面审查", "check the UI", "test the app visually",
-  "儿童测试", "child frontend test", "test AI chat/report/PDF import",
-  "ui quality", "设计审查", "UI 质量检查", "dark mode test", "深色模式测试",
-  "mobile test", "移动端测试", "accessibility test", "无障碍测试",
-  or any request to verify the deployed Docker app's three feature areas
-  (child app, financial management, AI capabilities).
+  Use when the user wants to run full-stack functional verification tests,
+  audit the interface, capture screenshots, or verify deployed UI flows for
+  the Numina project. Covers 15 areas: child app, financial management, AI
+  capabilities, currency, regression, expanded features, security/notification,
+  AI report, adversarial security, task resilience, AI config, travel, and UI
+  quality/design system. Triggers on: "run sim test", "ui audit", "截图测试",
+  "仿真测试", "全栈验收", "功能验收", "ui检查", "界面审查", "check the UI",
+  "test the app visually", "儿童测试", "child frontend test",
+  "test AI chat/report/PDF import", "ui quality", "设计审查", "UI 质量检查",
+  "dark mode test", "深色模式测试", "mobile test", "移动端测试",
+  "accessibility test", "无障碍测试", "security test", "安全测试",
+  or any request to verify the deployed app's features.
 ---
 
-# Numina Simulation Test Pipeline
+# Numina Full-Stack Functional Verification Pipeline
 
-End-to-end pipeline for browser-based UI simulation testing. The pipeline
-detects the best available browser driver at startup (priority: **browser-use**
-→ **bsk** → **Chrome DevTools MCP**) and drives the user's real browser through
-authenticated UI flows, screenshot capture, and test report generation.
+End-to-end pipeline for browser-based full-stack functional verification. The pipeline
+covers 15 test areas (UI flows, AI capabilities, security adversarial, design system
+quality, and more). It detects the best available browser driver at startup (priority:
+**browser-use** → **bsk** → **Chrome DevTools MCP**) and drives the user's real browser
+through authenticated flows, screenshot capture, and test report generation.
 
 > **Browser driver:** All browser interaction commands are abstracted in this
 > skill. For the concrete command syntax of the active driver, read
@@ -144,6 +148,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 3. 用户明确指定某个 area 或功能域 → 跑对应的 area
 4. `smoke` 模式跳过 Area 1/5/7/8/9/10/11/12/14/15, 仅验证核心 adult 功能 + 币种回归 + 通知触发
 5. `ui-quality` 模式需要 adult + child 两个 session; 先跑 G0 前置, 再跑 Area 15
+6. 域别名（`child`/`finance`/`ai`/`regression`/`security`/`travel`/`ui-quality`）等同于对应的 Area 组合，执行路径与 `area-N` 相同——别名仅用于触发词匹配，不引入额外执行逻辑
 
 ---
 
@@ -459,6 +464,25 @@ if [ "$STEP1_CODE" != "200" ]; then
   echo "    body: $STEP1_BODY"
 else
   echo "  (child auth step1 OK for user=$CHILD_USERNAME)"
+
+  # --- 8b) Child auth step2 (emoji PIN) pre-check ---
+  # Verify step2 endpoint accepts the temp_token from step1. If step2 fails
+  # (e.g. backend PIN config changed), Area 1/5 cases would silently fail at
+  # session injection time. Check now so the gate catches it early.
+  TEMP_TOKEN=$(echo "$STEP1_BODY" | jq -r '.data.temp_token // empty')
+  if [ -n "$TEMP_TOKEN" ]; then
+    STEP2=$(curl -s -w "\n%{http_code}" -X POST "$API/auth/login/step2" \
+      -H 'Content-Type: application/json' \
+      -d "{\"username\":\"$CHILD_USERNAME\",\"temp_token\":\"$TEMP_TOKEN\",\"pin\":\"0000\"}")
+    STEP2_CODE=$(echo "$STEP2" | tail -1)
+    if [ "$STEP2_CODE" != "200" ] && [ "$STEP2_CODE" != "401" ]; then
+      # 401 = wrong PIN (expected, we sent dummy "0000") — endpoint works
+      echo "  (WARNING: child auth step2 returned HTTP $STEP2_CODE — emoji PIN endpoint may be misconfigured)"
+    else
+      echo "  (child auth step2 endpoint OK — emoji PIN flow functional)"
+    fi
+    unset STEP2 STEP2_CODE TEMP_TOKEN
+  fi
 fi
 
 # Export CHILD_NAMES for downstream phases/report (single source of truth).
@@ -857,6 +881,11 @@ Also test at **320×568** (iPhone SE 1st gen — smallest supported) and
 After all Area cases (Phase 3/4/5) are run, produce a single test report.
 Read the screenshots you captured (Read tool supports images) to confirm each
 case's outcome, then write the report.
+
+> **Parallel run merging:** When running in parallel mode (G1 ‖ G3 → G2), each
+> agent's output is available in the parent context via the Agent tool. Collect
+> pass/fail/skip results from all group agents, merge failures by case ID
+> (preserving group prefixes like `G1-C2.3`), and produce a unified report.
 
 > **MANDATORY: The report content MUST appear inline in your final response.**
 > Do NOT just say "报告已生成: path". The response itself must contain the

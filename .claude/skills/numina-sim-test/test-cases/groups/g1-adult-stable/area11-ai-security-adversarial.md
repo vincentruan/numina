@@ -24,6 +24,7 @@ Shared conventions in [`_common.md`](../../_common.md).
 - **No data injection success**: Injected URLs/commands in asset names must NOT be relayed
 - **No cross-tenant leakage**: MCP tools must NOT return data from other families
 - **Cleanup verified**: All injected test data deleted after each case
+- **Try/finally cleanup**: Cases that create persistent data (C11.5 asset, C11.6 wish) MUST execute cleanup even if assertions fail — delete injected entities before moving to the next case. Agent must track created entity IDs and clean up regardless of test outcome.
 - **Safety maintained**: Read-only probes only, no data destruction attempted
 
 ---
