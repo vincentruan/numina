@@ -36,6 +36,23 @@
           />
         </van-cell-group>
 
+        <!-- Cross-day toggle -->
+        <van-cell-group inset>
+          <van-cell :title="t('travel.itinerary.crossDay')" center>
+            <template #right-icon>
+              <van-switch v-model="showCrossDay" size="20" @change="onCrossDayChange" />
+            </template>
+          </van-cell>
+          <van-field
+            v-if="showCrossDay"
+            :model-value="form.end_date || ''"
+            :label="t('travel.itinerary.endDate')"
+            readonly
+            is-link
+            @click="showEndDatePicker = true"
+          />
+        </van-cell-group>
+
         <!-- Time fields -->
         <van-cell-group inset>
           <van-field
@@ -139,6 +156,14 @@
             clearable
             placeholder="CNY"
           />
+          <van-field
+            v-if="form.cost_amount"
+            :model-value="form.purchase_date || form.date"
+            :label="t('travel.itinerary.purchaseDate')"
+            readonly
+            is-link
+            @click="showPurchaseDatePicker = true"
+          />
         </van-cell-group>
 
         <!-- Custom type creation -->
@@ -195,6 +220,28 @@
         @cancel="showDatePicker = false"
       />
     </van-popup>
+
+    <!-- End date picker popup -->
+    <van-popup v-model:show="showEndDatePicker" position="bottom" round teleport="body">
+      <van-date-picker
+        v-model="endDatePickerDate"
+        :min-date="startDateAsDate"
+        :max-date="maxDate"
+        @confirm="onEndDateConfirm"
+        @cancel="showEndDatePicker = false"
+      />
+    </van-popup>
+
+    <!-- Purchase date picker popup -->
+    <van-popup v-model:show="showPurchaseDatePicker" position="bottom" round teleport="body">
+      <van-date-picker
+        v-model="purchaseDatePickerDate"
+        :min-date="minDate"
+        :max-date="maxDate"
+        @confirm="onPurchaseDateConfirm"
+        @cancel="showPurchaseDatePicker = false"
+      />
+    </van-popup>
   </van-popup>
 </template>
 
@@ -230,6 +277,7 @@ const isEdit = computed(() => !!props.editItem)
 
 const form = ref({
   date: '',
+  end_date: '' as string | null,
   type: 'activity' as ItineraryItemType,
   start_time: '' as string,
   end_time: '' as string,
@@ -237,6 +285,7 @@ const form = ref({
   description: '',
   cost_amount: '',
   cost_currency: 'CNY',
+  purchase_date: '' as string | null,
   custom_type_id: null as string | null,
 })
 
@@ -244,6 +293,9 @@ const typeMeta = ref<Record<string, string>>({})
 
 const showTypePicker = ref(false)
 const showDatePicker = ref(false)
+const showEndDatePicker = ref(false)
+const showPurchaseDatePicker = ref(false)
+const showCrossDay = ref(false)
 const showCustomTypeForm = ref(false)
 const newCustomTypeName = ref('')
 const creatingType = ref(false)
@@ -255,8 +307,16 @@ const pickerDate = ref([
   String(today.getMonth() + 1).padStart(2, '0'),
   String(today.getDate()).padStart(2, '0'),
 ])
+const endDatePickerDate = ref([...pickerDate.value])
+const purchaseDatePickerDate = ref([...pickerDate.value])
 const minDate = new Date(2020, 0, 1)
 const maxDate = new Date(2030, 11, 31)
+
+const startDateAsDate = computed(() => {
+  if (!form.value.date) return minDate
+  const parts = form.value.date.split('-')
+  return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
+})
 
 const CORE_TYPES: ItineraryItemType[] = ['accommodation', 'dining', 'transport', 'activity']
 
@@ -299,6 +359,7 @@ watch(() => props.editItem, (item) => {
   if (item) {
     form.value = {
       date: item.date,
+      end_date: item.end_date || null,
       type: item.type,
       start_time: item.start_time || '',
       end_time: item.end_time || '',
@@ -306,10 +367,16 @@ watch(() => props.editItem, (item) => {
       description: item.description || '',
       cost_amount: item.cost_amount || '',
       cost_currency: item.cost_currency || 'CNY',
+      purchase_date: item.purchase_date || null,
       custom_type_id: item.custom_type_id,
     }
     // Sync date picker with edit item's date
     if (item.date) pickerDate.value = parseDateParts(item.date)
+    // Hydrate cross-day toggle
+    showCrossDay.value = !!(item.end_date && item.end_date !== item.date)
+    if (item.end_date) endDatePickerDate.value = parseDateParts(item.end_date)
+    if (item.purchase_date) purchaseDatePickerDate.value = parseDateParts(item.purchase_date)
+    else if (item.date) purchaseDatePickerDate.value = parseDateParts(item.date)
     // Restore type_metadata from the item
     const meta = item.type_metadata as Record<string, unknown> | null
     typeMeta.value = meta
@@ -338,6 +405,7 @@ watch(showDatePicker, (open) => {
 function resetForm() {
   form.value = {
     date: props.initialDate || '',
+    end_date: null,
     type: 'activity',
     start_time: '',
     end_time: '',
@@ -345,9 +413,11 @@ function resetForm() {
     description: '',
     cost_amount: '',
     cost_currency: 'CNY',
+    purchase_date: null,
     custom_type_id: null,
   }
   typeMeta.value = {}
+  showCrossDay.value = false
 }
 
 function onTypeConfirm({ selectedOptions }: { selectedOptions: Array<{ value?: string | number }> }) {
@@ -375,6 +445,27 @@ function onTypeConfirm({ selectedOptions }: { selectedOptions: Array<{ value?: s
 function onDateConfirm({ selectedValues }: { selectedValues: string[] }) {
   form.value.date = selectedValues.join('-')
   showDatePicker.value = false
+  // Sync end date picker min-date and purchase date picker
+  endDatePickerDate.value = parseDateParts(form.value.date)
+  if (!form.value.purchase_date) {
+    purchaseDatePickerDate.value = parseDateParts(form.value.date)
+  }
+}
+
+function onEndDateConfirm({ selectedValues }: { selectedValues: string[] }) {
+  form.value.end_date = selectedValues.join('-')
+  showEndDatePicker.value = false
+}
+
+function onPurchaseDateConfirm({ selectedValues }: { selectedValues: string[] }) {
+  form.value.purchase_date = selectedValues.join('-')
+  showPurchaseDatePicker.value = false
+}
+
+function onCrossDayChange(checked: boolean) {
+  if (!checked) {
+    form.value.end_date = null
+  }
 }
 
 async function createCustomType() {
@@ -406,6 +497,7 @@ async function handleSubmit() {
 
     const data: ItineraryItemCreate = {
       date: form.value.date,
+      end_date: showCrossDay.value ? form.value.end_date : null,
       type: form.value.type,
       start_time: form.value.start_time || null,
       end_time: form.value.end_time || null,
@@ -413,6 +505,7 @@ async function handleSubmit() {
       description: form.value.description || null,
       cost_amount: form.value.cost_amount || null,
       cost_currency: form.value.cost_amount ? (form.value.cost_currency || 'CNY') : null,
+      purchase_date: form.value.cost_amount ? (form.value.purchase_date || form.value.date) : null,
       custom_type_id: form.value.custom_type_id,
       type_metadata: hasMeta ? meta : null,
     }
