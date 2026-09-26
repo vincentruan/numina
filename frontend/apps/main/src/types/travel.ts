@@ -15,7 +15,6 @@ export interface Trip {
   actual_spend: string
   currency: string
   wish_id: string | null
-  timezone: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -28,7 +27,6 @@ export interface TripCreate {
   return_date?: string | null
   planned_budget?: string | null
   currency?: string
-  timezone?: string | null
   wish_id?: string | null
   description?: string | null
 }
@@ -42,7 +40,6 @@ export interface TripUpdate {
   status?: string
   planned_budget?: string | null
   currency?: string
-  timezone?: string | null
 }
 
 export interface ExpenseEntry {

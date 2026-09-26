@@ -33,7 +33,6 @@ function makeTrip(overrides: Partial<Trip> = {}): Trip {
     actual_spend: '5000.00',
     currency: 'CNY',
     wish_id: null,
-    timezone: null,
     is_active: true,
     created_at: '2026-09-01T00:00:00',
     updated_at: '2026-09-01T00:00:00',

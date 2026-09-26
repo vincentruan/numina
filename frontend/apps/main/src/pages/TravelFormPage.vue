@@ -62,11 +62,6 @@
             <CurrencyButton v-model="formData.currency" />
           </template>
         </van-field>
-        <van-field
-          v-model="formData.timezone"
-          :label="t('travel.timezone')"
-          :placeholder="t('travel.timezonePlaceholder')"
-        />
       </van-cell-group>
 
       <div class="form-actions">
@@ -129,7 +124,6 @@ const formData = reactive({
   return_date: '',
   planned_budget: '',
   currency: 'CNY',
-  timezone: '',
 })
 
 const formRules = {
@@ -198,7 +192,6 @@ async function onSubmit() {
       return_date: formData.return_date || undefined,
       planned_budget: formData.planned_budget || undefined,
       currency: formData.currency || 'CNY',
-      timezone: formData.timezone || undefined,
     }
 
     if (isEdit.value && tripId.value) {
@@ -210,7 +203,6 @@ async function onSubmit() {
         return_date: data.return_date,
         planned_budget: data.planned_budget,
         currency: data.currency,
-        timezone: data.timezone,
       }
       // Use API directly for update
       const { updateTrip } = await import('@/api/travel')
@@ -247,7 +239,6 @@ onMounted(async () => {
         formData.return_date = trip.return_date || ''
         formData.planned_budget = trip.planned_budget || ''
         formData.currency = trip.currency
-        formData.timezone = trip.timezone || ''
         departureDateValue.value = parseDateStr(trip.departure_date)
         if (trip.return_date) {
           returnDateValue.value = parseDateStr(trip.return_date)

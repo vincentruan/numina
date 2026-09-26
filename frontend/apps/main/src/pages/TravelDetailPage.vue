@@ -12,14 +12,18 @@
       <!-- Status-adaptive layout -->
       <div class="status-section">
         <div v-if="trip.status === 'planning'" class="planning-layout">
+          <div class="trip-icon-header">
+            <van-icon name="map-marked" size="20" color="var(--van-primary-color)" />
+            <span class="trip-icon-name">{{ trip.name }}</span>
+          </div>
           <div class="budget-breakdown">
             <div class="breakdown-item">
               <span class="label">{{ t('travel.plannedBudget') }}</span>
               <span class="value">{{ formatAmount(trip.planned_budget) }}</span>
             </div>
             <div class="breakdown-item">
-              <span class="label">{{ t('travel.initialFunding') }}</span>
-              <span class="value">{{ formatAmount(trip.initial_funding) }}</span>
+              <span class="label">{{ t('travel.spentFromBudget') }}</span>
+              <span class="value">{{ formatAmount(trip.actual_spend) }}</span>
             </div>
           </div>
         </div>
@@ -371,6 +375,17 @@ onActivated(async () => {
 [data-theme='dark'] .planning-layout,
 [data-theme='dark'] .active-layout {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+.trip-icon-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.trip-icon-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 .budget-breakdown {
   display: flex;

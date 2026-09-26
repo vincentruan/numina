@@ -58,11 +58,6 @@
           @click="showDatePicker = true"
         />
 
-        <!-- Timezone hint for date (R3) -->
-        <div v-if="trip?.timezone" class="timezone-hint">
-          {{ t('travel.dateHint', { tz: trip.timezone }) }}
-        </div>
-
         <!-- Manual exchange rate (R3) -->
         <van-field
           v-if="showManualRate"
@@ -258,11 +253,6 @@ onMounted(async () => {
 }
 .submit-button {
   padding: 16px 12px;
-}
-.timezone-hint {
-  padding: 0 16px 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
 }
 .manual-rate-badge {
   padding: 0 16px 8px;
