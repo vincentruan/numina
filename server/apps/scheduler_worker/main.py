@@ -33,7 +33,6 @@ async def lifespan(app: FastAPI):
     cache = init_cache(
         backend=settings.CACHE_BACKEND,
         redis_url=settings.REDIS_URL,
-        prefix="scheduler:",
     )
     app.state.cache = cache
     if settings.CACHE_BACKEND == "redis":
