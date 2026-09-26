@@ -5,8 +5,8 @@ Shared conventions in [`_common.md`](../../_common.md).
 ## Success Criteria (成功标准)
 
 ### Pass Threshold
-- **Overall pass rate**: ≥ 95% (31/33 cases must pass, 2 optional SKIP allowed)
-- **Critical cases** (MUST pass): C14.1, C14.2, C14.6, C14.12, C14.23, C14.24
+- **Overall pass rate**: ≥ 95% (38/40 cases must pass, 2 optional SKIP allowed)
+- **Critical cases** (MUST pass): C14.1, C14.2, C14.6, C14.12, C14.23, C14.24, C14.34, C14.35
 - **Optional cases** (can SKIP with reason): C14.11 (receipt scan requires AI + vision pipeline), C14.22 (AI context requires AI enabled)
 
 ### Performance Benchmarks
@@ -42,6 +42,8 @@ provides. If these are absent, the affected cases will SKIP (not fail):
 - **C14.13–C14.14**: ≥1 trip with an active split group + ≥2 shared expenses from different participants
 - **C14.16**: ≥1 trip linked to a graduated wish (with `wish_id` set)
 - **C14.23**: ≥1 trip with ≥3 itinerary items spanning ≥2 days (demo seed "三亚年假" has 10 items across 6 days)
+- **C14.35**: C14.34 will create a cross-day item during the run (no pre-existing data needed)
+- **C14.39**: ≥1 liability (any category) for the dashboard liability detail popup; tenant rental contract for rent section; itinerary items with cost for travel spending section
 
 If no travel data exists, C14.3 (create trip) and C14.12 (create split group)
 will establish the required data during the run — later cases that depend on
@@ -63,6 +65,12 @@ gap fixes from `docs/plans/2026-09-21-001-fix-travel-module-review-gaps-plan.md`
 - **Itinerary planning**: day-by-day vertical card timeline, 4 core item types
   (accommodation/dining/transport/activity) + custom types, optional cost linked
   to expense ledger (auto-sync), delete with cascade/unlink choice
+- **Cross-day itinerary items**: `end_date` for multi-day items (e.g. 3-night
+  hotel stay), `purchase_date` for expense date control, timeline bucketing
+  across days with ContinuationHint ("Day N") on continuation days, duration
+  badge on cards (e.g. "10/1-10/3 · 3天")
+- **Dashboard liability detail popup**: extended breakdown on overview card
+  (category totals + monthly rent + travel spending by purchase_date)
 
 ## Quick Reference
 
@@ -101,6 +109,13 @@ gap fixes from `docs/plans/2026-09-21-001-fix-travel-module-review-gaps-plan.md`
 | C14.31 | Timeline dark mode + accessibility | `/travel/:id` | C14.23 |
 | C14.32 | Itinerary item form UX | `/travel/:id` | C14.24 |
 | C14.33 | Trip detail page — itinerary as primary | `/travel/:id` | C14.23 |
+| C14.34 | Create cross-day itinerary item | `/travel/:id` | C14.3 (or seed trip) |
+| C14.35 | Cross-day timeline: ContinuationHint + duration badge | `/travel/:id` | C14.34 |
+| C14.36 | Edit cross-day item (change/remove end_date) | `/travel/:id` | C14.34 |
+| C14.37 | Purchase date on itinerary item form | `/travel/:id` | C14.24 |
+| C14.38 | Purchase date → expense date sync (API) | API `/trips/:id/itinerary` | C14.34 |
+| C14.39 | Dashboard liability detail popup | `/` (DashboardPage) | seed data (liabilities/rent/travel) |
+| C14.40 | Cross-day + purchase_date combined scenario | `/travel/:id` + API | C14.34 |
 
 ---
 
@@ -1127,6 +1142,340 @@ Assertions (page layout — U5):
 - [ ] Page header, status section, and info card unchanged from C14.4
 - [ ] Navigation: tab → trip detail → back → tab works without blank screen (Transition/KeepAlive interaction)
 - [ ] `onMounted` / `onActivated` loads itinerary data: `fetchItinerary(tripId)` + `fetchItineraryTypes()` in `Promise.all`
+- [ ] `[console]` zero errors
+
+---
+
+## C14.34 — Create cross-day itinerary item (end_date + cross-day toggle)
+
+Reverse-engineered from `feat/travel-crossday-itinerary` branch (cross-day toggle,
+end_date field, ContinuationHint).
+**Critical case:** MUST pass
+
+```
+# On a trip detail page
+bsk navigate ${BASE}travel/<trip_id> --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+# Tap the "+" add button on a day section
+# ItineraryItemForm popup opens
+bsk screenshot --session <id> --out dogfood-output/c14.34-crossday-form-toggle.png
+```
+
+Assertions (form — cross-day toggle):
+- [ ] ItineraryItemForm shows a "跨天" (Multi-day) toggle cell (`van-switch`)
+- [ ] Toggle is OFF by default — no end_date picker visible
+- [ ] Toggle ON → "结束日期" (End date) picker field appears below the toggle
+- [ ] End date picker opens as `van-popup position="bottom"` with `van-date-picker`
+- [ ] End date picker min-date = form's start date (cannot pick before start)
+- [ ] Select end date (e.g. start=Oct 1, end=Oct 4) → confirm picker
+
+Assertions (accommodation hint — when cross-day ON + type=accommodation):
+- [ ] When type is "住宿" and cross-day toggle is ON, a hint text appears: "入住时间为起始日，退房时间为结束日"
+- [ ] Hint uses `--text-tertiary` color, 12px font size
+
+```
+# Fill form: type "住宿", location, cost ¥1500 CNY, cross-day Oct 1–Oct 4
+bsk screenshot --session <id> --out dogfood-output/c14.34-crossday-form-filled.png
+# Submit
+bsk evaluate --session <id> "(function() {
+  const btns = document.querySelectorAll('[role=dialog] button');
+  for (let b of btns) { if (b.textContent.trim() === '确认') { b.click(); return 'ok'; } }
+  return 'not found';
+})()"
+bsk wait-ms 2s
+```
+
+Assertions (API response):
+- [ ] Submit POSTs to `/api/v1/trips/:id/itinerary`, returns 201
+- [ ] Response includes `date="2026-10-01"`, `end_date="2026-10-04"`, `type="accommodation"`
+- [ ] `cost_amount="1500.00"` (string — Snowflake convention)
+- [ ] Success toast shown, popup closes
+- [ ] `[console]` zero errors
+
+Assertions (validation — end_date < date):
+- [ ] Attempt to set end_date before start_date via API → 422 validation error with message "end_date must be >= date"
+- [ ] end_date == date is accepted (treated as single-day, no error)
+- [ ] `[console]` zero errors
+
+---
+
+## C14.35 — Cross-day timeline: ContinuationHint + duration badge
+
+Reverse-engineered from `feat/travel-crossday-itinerary` (ContinuationHint component,
+duration badge on ItineraryItemCard, timeline bucketing logic).
+**Critical case:** MUST pass
+
+**Prerequisite:** C14.34 created a cross-day item (Oct 1–Oct 4).
+
+```
+# Navigate to trip detail — timeline shows the cross-day item
+bsk navigate ${BASE}travel/<trip_id> --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c14.35-crossday-timeline.png
+```
+
+Assertions (start day — Oct 1):
+- [ ] ItineraryItemCard renders on Oct 1 (the start date) with full card content
+- [ ] Card shows a **duration badge** next to the type name: "10/1-10/4 · 4天" (format: `{start}-{end} · {days}天`)
+- [ ] Duration badge styled: 11px, primary color text, semi-transparent primary background, 4px border-radius
+- [ ] Card shows type icon + name + location + cost as usual
+
+Assertions (continuation days — Oct 2, Oct 3):
+- [ ] Oct 2 day section shows a **ContinuationHint** (NOT the full card): "第2天"
+- [ ] Oct 3 day section shows a ContinuationHint: "第3天"
+- [ ] ContinuationHint shows type-specific icon (hotel-o for accommodation)
+- [ ] ContinuationHint styled: flex row, 12px text, `--text-secondary` color, `--bg-secondary` background, 8px border-radius, 0.7 opacity
+- [ ] ContinuationHint has `role="button"` and `aria-label` for accessibility
+
+Assertions (end day — Oct 4):
+- [ ] Oct 4 day section does NOT show the item (item ends on Oct 4 but the card is only on the start day)
+- [ ] If Oct 4 has no other items, it shows the empty-day placeholder
+
+Assertions (scroll-to-start behavior):
+- [ ] Tapping a ContinuationHint → smooth scrolls to the start-day card (Oct 1)
+- [ ] Scroll uses `scrollIntoView({ behavior: 'smooth', block: 'center' })`
+
+Assertions (empty day filtering):
+- [ ] Days where the item only appears as a continuation (Oct 2, Oct 3) do NOT show the "add" (+) button — the item IS present that day, just as a continuation
+- [ ] `[console]` zero errors
+
+---
+
+## C14.36 — Edit cross-day item (change/remove end_date)
+
+Reverse-engineered from `feat/travel-crossday-itinerary` (edit mode hydration of
+cross-day toggle + end_date).
+
+```
+# On the trip detail, tap the cross-day item card body to open edit form
+bsk navigate ${BASE}travel/<trip_id> --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+# Tap the card body (description text area) to open edit form
+bsk screenshot --session <id> --out dogfood-output/c14.36-crossday-edit.png
+```
+
+Assertions (edit form hydration):
+- [ ] ItineraryItemForm opens with title "编辑行程项"
+- [ ] Cross-day toggle is ON (hydrated from existing end_date)
+- [ ] End date field shows the current end_date value (e.g. "2026-10-04")
+- [ ] All other fields pre-filled: date, type, location, cost
+
+```
+# Change end_date from Oct 4 to Oct 3 via the picker
+# Then submit
+bsk evaluate --session <id> "(function() {
+  const btns = document.querySelectorAll('[role=dialog] button');
+  for (let b of btns) { if (b.textContent.trim() === '保存') { b.click(); return 'ok'; } }
+  return 'not found';
+})()"
+bsk wait-ms 2s
+```
+
+Assertions (end_date changed):
+- [ ] Submit PATCHes to `/api/v1/trips/:id/itinerary/:item_id`
+- [ ] Response shows `end_date="2026-10-03"` (updated)
+- [ ] Timeline refreshes: ContinuationHint now shows only "第2天" (Oct 2), Oct 3 no longer has continuation
+- [ ] Duration badge updated: "10/1-10/3 · 3天"
+- [ ] `[console]` zero errors
+
+Assertions (remove cross-day — toggle OFF):
+- [ ] Open edit form again, toggle cross-day OFF
+- [ ] End date field disappears
+- [ ] Submit → response shows `end_date=null`
+- [ ] Timeline: item appears only on Oct 1, no continuation hints on other days
+- [ ] Duration badge disappears from card
+- [ ] `[console]` zero errors
+
+---
+
+## C14.37 — Purchase date on itinerary item form
+
+Reverse-engineered from `feat/travel-crossday-itinerary` (purchase_date field,
+purchase date picker, accommodation date hint).
+
+```
+# Open create form on a trip detail
+bsk navigate ${BASE}travel/<trip_id> --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+# Fill cost amount (e.g. ¥500) — purchase date field appears conditionally
+bsk screenshot --session <id> --out dogfood-output/c14.37-purchase-date-form.png
+```
+
+Assertions (purchase date field — conditional visibility):
+- [ ] When cost_amount is empty/zero → no purchase date field visible
+- [ ] When cost_amount > 0 → "购买日期" (Purchase date) field appears below the cost section
+- [ ] Purchase date field is readonly with `is-link` → clicking opens `van-date-picker` popup
+- [ ] Purchase date defaults to the item's start date (form.date)
+- [ ] Purchase date picker min-date = trip start, max-date = trip end (or 2030-12-31)
+
+```
+# Set purchase date to a date before the trip (e.g. Sep 20 for a Oct trip)
+# Submit the form
+bsk evaluate --session <id> "(function() {
+  const btns = document.querySelectorAll('[role=dialog] button');
+  for (let b of btns) { if (b.textContent.trim() === '确认') { b.click(); return 'ok'; } }
+  return 'not found';
+})()"
+bsk wait-ms 2s
+```
+
+Assertions (API response):
+- [ ] Response includes `purchase_date="2026-09-20"` (the selected date)
+- [ ] If purchase_date not explicitly set → `purchase_date` defaults to `date` (start date) in the submission payload
+- [ ] If cost_amount is null → `purchase_date` is null in the submission
+- [ ] `[console]` zero errors
+
+Assertions (edit mode hydration):
+- [ ] Edit an item with purchase_date set → purchase date field shows the stored value
+- [ ] Edit an item without purchase_date → defaults to item's start date
+- [ ] `[console]` zero errors
+
+---
+
+## C14.38 — Purchase date → expense date sync (API-level)
+
+Reverse-engineered from `feat/travel-crossday-itinerary` (expense_date uses
+`purchase_date || date` fallback in `_create_linked_expense`).
+
+```
+# Create item with cost + purchase_date via API
+ITEM=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  "${API_BASE}/trips/<trip_id>/itinerary" \
+  -d '{"date":"2026-10-10","type":"dining","cost_amount":"280.00","cost_currency":"CNY","purchase_date":"2026-09-25","location":"测试餐厅"}')
+ITEM_ID=$(echo "$ITEM" | jq -r '.data.id')
+
+# Verify expense entry created on purchase_date
+curl -s -H "Authorization: Bearer $TOKEN" "${API_BASE}/trips/<trip_id>/expenses" | jq ".data[] | select(.itinerary_item_id == \"$ITEM_ID\")"
+```
+
+Assertions (create with purchase_date):
+- [ ] Linked expense entry `expense_date` = `2026-09-25` (the purchase_date, NOT the trip date Oct 10)
+- [ ] Debit+credit pair created with `itinerary_item_id` set
+
+```
+# Create item WITHOUT purchase_date — should fallback to date
+ITEM2=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  "${API_BASE}/trips/<trip_id>/itinerary" \
+  -d '{"date":"2026-10-15","type":"dining","cost_amount":"150.00","cost_currency":"CNY","location":"无购买日期"}')
+ITEM2_ID=$(echo "$ITEM2" | jq -r '.data.id')
+
+curl -s -H "Authorization: Bearer $TOKEN" "${API_BASE}/trips/<trip_id>/expenses" | jq ".data[] | select(.itinerary_item_id == \"$ITEM2_ID\")"
+```
+
+Assertions (create without purchase_date — backward compat):
+- [ ] Linked expense entry `expense_date` = `2026-10-15` (the item's date — fallback)
+
+```
+# Update purchase_date — expense should be recreated with new date
+curl -s -X PATCH -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  "${API_BASE}/trips/<trip_id>/itinerary/$ITEM_ID" \
+  -d '{"purchase_date":"2026-10-01"}' | jq .
+
+curl -s -H "Authorization: Bearer $TOKEN" "${API_BASE}/trips/<trip_id>/expenses" | jq ".data[] | select(.itinerary_item_id == \"$ITEM_ID\")"
+```
+
+Assertions (update purchase_date — expense recreated):
+- [ ] Old expense reversed (offsetting entries)
+- [ ] New expense created with `expense_date` = `2026-10-01` (the new purchase_date)
+- [ ] Trip's `actual_spend` unchanged (same amount, just different date)
+- [ ] `[console]` zero errors
+
+---
+
+## C14.39 — Dashboard liability detail popup
+
+Reverse-engineered from `feat/travel-crossday-itinerary` (GET /dashboard/liability-detail,
+OverviewStatCard info button + popup).
+
+```
+# Navigate to Dashboard
+bsk navigate ${BASE} --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+# Find the "总负债" section — info button (ⓘ icon) next to the label
+bsk screenshot --session <id> --out dogfood-output/c14.39-dashboard-liability-info-btn.png
+# Click the info button
+bsk evaluate --session <id> "(function() {
+  const btn = document.querySelector('[data-test=liability-info-btn]');
+  if (btn) { btn.click(); return 'clicked'; }
+  return 'not found';
+})()"
+bsk wait-ms 1s
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c14.39-liability-detail-popup.png
+```
+
+Assertions (info button):
+- [ ] Info button (ⓘ SVG icon) visible next to "总负债" label
+- [ ] Button has `data-test="liability-info-btn"` attribute
+- [ ] Button has `aria-label="负债明细"` for accessibility
+- [ ] Clicking does NOT navigate to liabilities tab (click prevented with `.prevent.stop`)
+
+Assertions (popup content):
+- [ ] `van-popup position="bottom"` opens with title "负债明细"
+- [ ] Popup is closeable (X button or backdrop tap)
+- [ ] **Section 1 — Category breakdown**: "负债剩余总额" label + total amount (MoneyDisplay)
+  - Each category shows: color dot, category name, percentage, amount
+  - If no liabilities: category list empty, total shows ¥0
+- [ ] **Section 2 — Rent** (conditional): visible only if family has active tenant contracts
+  - Shows "每月房租" label + monthly rent amount (CNY-converted if needed)
+  - If no tenant contracts: section hidden
+- [ ] **Section 3 — Travel** (conditional): visible only if travel expenses > 0
+  - Shows "旅游支出" section label
+  - "上月旅游" row: travel items with `purchase_date` (or `date` fallback) in last month
+  - "本月旅游" row: travel items with `purchase_date` (or `date` fallback) in this month
+  - If both are 0: section hidden
+- [ ] Loading state: `van-loading` shown while API call in flight
+- [ ] `[console]` zero errors
+
+Assertions (API verification):
+- [ ] `GET /dashboard/liability-detail` returns: `total_liabilities`, `categories[]`, `rent_monthly_expense`, `travel_last_month`, `travel_this_month`
+- [ ] `travel_last_month` and `travel_this_month` use `coalesce(purchase_date, date)` for bucketing
+- [ ] Travel expenses exclude cancelled/inactive trips (`Trip.is_active == True`)
+- [ ] All amounts are floats (not strings — this is a dashboard metric, not a Snowflake ID)
+- [ ] `[console]` zero errors
+
+---
+
+## C14.40 — Cross-day + purchase_date combined scenario
+
+Reverse-engineered from `feat/travel-crossday-itinerary` (interaction between
+end_date and purchase_date for a multi-day hotel booking purchased in advance).
+
+```
+# Create a cross-day accommodation item with purchase_date before the trip
+# via API (most reliable for this combined scenario)
+ITEM=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  "${API_BASE}/trips/<trip_id>/itinerary" \
+  -d '{"date":"2026-10-10","end_date":"2026-10-13","type":"accommodation","cost_amount":"2400.00","cost_currency":"CNY","purchase_date":"2026-09-15","location":"测试酒店","description":"3晚住宿"}')
+echo "$ITEM" | jq .
+```
+
+Assertions (combined scenario — API):
+- [ ] Response: `date="2026-10-10"`, `end_date="2026-10-13"`, `purchase_date="2026-09-15"`
+- [ ] Linked expense entry `expense_date` = `2026-09-15` (purchase_date, NOT Oct 10)
+- [ ] Trip's `actual_spend` increased by ¥2400
+
+```
+# Verify timeline display
+bsk navigate ${BASE}travel/<trip_id> --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c14.40-crossday-purchase-combined.png
+```
+
+Assertions (combined scenario — UI):
+- [ ] Oct 10 day section: full ItineraryItemCard with duration badge "10/10-10/13 · 4天"
+- [ ] Oct 11, Oct 12 day sections: ContinuationHint ("第2天", "第3天")
+- [ ] Oct 13: NOT shown (item ends on this day but card only on start day)
+- [ ] Card shows cost ¥2,400.00 with chain-link indicator (🔗)
+
+```
+# Dashboard check — travel expense should appear in September (purchase_date bucket)
+curl -s -H "Authorization: Bearer $TOKEN" "${API_BASE}/dashboard/liability-detail" | jq .
+```
+
+Assertions (dashboard bucketing):
+- [ ] `travel_this_month` or `travel_last_month` includes ¥2,400 in the month matching `purchase_date` (September), NOT October (the trip date)
+- [ ] This verifies the `coalesce(purchase_date, date)` logic in `get_liability_detail`
 - [ ] `[console]` zero errors
 
 ---

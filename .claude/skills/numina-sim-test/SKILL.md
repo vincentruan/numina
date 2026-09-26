@@ -44,7 +44,7 @@ Covers **fourteen** feature areas (detailed cases split by area under
 11. **AI/agent adversarial security** — 提示词注入 / 跨租户隔离 / 工具越权 / 自定义智能体隔离 / 输入边界 (C11.1–C11.20) ([`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md))
 12. **AI task resilience** — 前端不稳定处理：离开/刷新恢复、失败/中断重试、用户取消 (C12.1–C12.9) ([`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md))
 13. **AI 资产报告深度验证** — Hub 弹窗内容/z-index、报告重入步骤去重/SSE 重连/取消按钮、narrative 缓存推导 (C13.1–C13.5) ([`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md))
-14. **Travel module (家庭旅行管理)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float / 行程规划时间线 (C14.1–C14.33) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md))
+14. **Travel module (家庭旅行管理)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float / 行程规划时间线 / 跨天行程 + 购买日期 (C14.1–C14.40) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching
@@ -121,7 +121,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 | **ai** | "ai test", "AI测试" | Area 3 + Area 6 + Area 12 + Area 13 (G1 subset, AI 必须启用) | ~35-45 min |
 | **regression** | "regression test", "回归测试" | Area 7 only (R1–R9) | ~10-15 min |
 | **security** | "security test", "安全测试" | Area 9 (C9.1–C9.7) + Area 11 (C11.1–C11.20) + R6 | ~25-35 min |
-| **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.33) | ~35-45 min |
+| **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.40) | ~45-55 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
 
 **选择逻辑:**
@@ -796,7 +796,7 @@ the skill log.
 - 截图目录: dogfood-output/
 
 ## 成功摘要
-- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.10, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.33)
+- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.10, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.40)
 - 通过: X
 - 失败: Y
 - 跳过: Z (注明原因, 如 AI 未启用、数据不足)
@@ -1041,7 +1041,7 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | **11 — AI/agent adversarial security (提示词注入/租户隔离/越权)** | **G1** | **C11.1–C11.20** | [`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md) |
 | **12 — AI task resilience (前端不稳定处理)** | **G1** | **C12.1–C12.9** | [`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md) |
 | **13 — AI 资产报告深度验证 (Hub 弹窗/重入去重/SSE 重连)** | **G1** | **C13.1–C13.5** | [`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md) |
-| **14 — Travel module (旅行管理: 行程/费用/分摊/转化/行程规划)** | **G1** | **C14.1–C14.33** | [`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md) |
+| **14 — Travel module (旅行管理: 行程/费用/分摊/转化/行程规划/跨天+购买日期)** | **G1** | **C14.1–C14.40** | [`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md) |
 
 ### Supporting References
 
