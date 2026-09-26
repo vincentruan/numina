@@ -5,6 +5,7 @@ WORKDIR /app
 COPY frontend/packages/auth ./frontend/packages/auth
 COPY frontend/packages/math ./frontend/packages/math
 COPY frontend/packages/assets ./frontend/packages/assets
+COPY frontend/packages/shared ./frontend/packages/shared
 # Install packages devDependencies so vue-tsc can type-check them
 # Cache mount persists npm cache across builds for faster installs
 WORKDIR /app/frontend/packages/auth
@@ -13,12 +14,15 @@ WORKDIR /app/frontend/packages/math
 RUN --mount=type=cache,target=/root/.npm npm install
 WORKDIR /app/frontend/packages/assets
 RUN --mount=type=cache,target=/root/.npm npm install
+WORKDIR /app/frontend/packages/shared
+RUN --mount=type=cache,target=/root/.npm npm install
 # Copy and install frontend-child app
 COPY frontend/apps/child/package*.json /app/frontend/apps/child/
 WORKDIR /app/frontend/apps/child
 RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../packages/math"|g' package.json && \
     sed -i 's|"@numina/auth": "workspace:\*"|"@numina/auth": "file:../../packages/auth"|g' package.json && \
     sed -i 's|"@numina/assets": "workspace:\*"|"@numina/assets": "file:../../packages/assets"|g' package.json && \
+    sed -i 's|"@numina/shared": "workspace:\*"|"@numina/shared": "file:../../packages/shared"|g' package.json && \
     npm install --cache /root/.npm
 COPY frontend/apps/child/ .
 ARG VITE_MAIN_APP_URL=""
