@@ -74,12 +74,36 @@ class AgentRegistry:
     ) -> None:
         """Drop cached entries. Called when an agent's attributes change.
 
-        With no args, clears everything. With family_id, clears that family's
-        entries. With both, clears one entry.
+        With no args, clears all agent-registry entries (prefixed with AGENT_REG).
+        With family_id, clears that family's entries. With both, clears one entry.
         """
         cache = get_cache()
         if family_id is None and agent_name is None:
-            await cache.clear()
+            # Clear all agent registry entries by scanning for the prefix
+            prefix = f"{AGENT_REG}:"
+            if hasattr(cache, "_store"):
+                # MemoryCache: iterate internal store
+                keys_to_remove = [k for k in cache._store if k.startswith(prefix)]  # type: ignore[attr-defined]
+                for k in keys_to_remove:
+                    await cache.delete(k)
+                keys_to_remove = [k for k in cache._sets if k.startswith(prefix)]  # type: ignore[attr-defined]
+                for k in keys_to_remove:
+                    await cache.delete(k)
+                keys_to_remove = [k for k in cache._lists if k.startswith(prefix)]  # type: ignore[attr-defined]
+                for k in keys_to_remove:
+                    await cache.delete(k)
+            else:
+                # RedisCache: SCAN + DEL with prefix
+                client = cache._client  # type: ignore[attr-defined]
+                cache_prefix = getattr(cache, "_prefix", "")
+                pattern = f"{cache_prefix}{prefix}*"
+                cursor = 0
+                while True:
+                    cursor, batch = await client.scan(cursor, match=pattern, count=100)
+                    if batch:
+                        await client.delete(*batch)
+                    if cursor == 0:
+                        break
             return
         if family_id is not None and agent_name is not None:
             key = f"{AGENT_REG}:{family_id}:{agent_name}"

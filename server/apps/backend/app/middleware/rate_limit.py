@@ -227,10 +227,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         cache = get_cache()
         key = f"{RATE_LIMIT}:global:{client_id}"
-        count = await cache.increment(key)
-        if count == 1:
-            # First request in window — set 60s TTL
-            await cache.set(key, count, ttl=60)
+        count = await cache.increment(key, ttl=60)
 
         limit = settings.GLOBAL_RATE_LIMIT_PER_MINUTE
         return count <= limit

@@ -45,8 +45,13 @@ class Cache(ABC):
     # --- Counter ---
 
     @abstractmethod
-    async def increment(self, key: str, amount: int = 1) -> int:
-        """Atomically increment counter. Creates key at 0 if not exists. Returns new value."""
+    async def increment(self, key: str, amount: int = 1, *, ttl: int | None = None) -> int:
+        """Atomically increment counter. Creates key at 0 if not exists. Returns new value.
+
+        When *ttl* is provided and the key is newly created, the key's expiry
+        is set atomically — no separate ``set()`` call is needed. On subsequent
+        calls (key already exists), the TTL is NOT reset.
+        """
         ...
 
     # --- Set ---

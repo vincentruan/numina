@@ -216,7 +216,7 @@ async def _invalidate_family_cache(family_id: int) -> None:
     prefix = f"{FAM_SETTING}:{family_id}:"
     # Memory mode: iterate internal store for matching keys
     if hasattr(cache, "_store"):
-        keys_to_remove = [k for k in cache._store if k.startswith(prefix)]
+        keys_to_remove = [k for k in cache._store if k.startswith(prefix)]  # type: ignore[attr-defined]
         for k in keys_to_remove:
             await cache.delete(k)
     else:

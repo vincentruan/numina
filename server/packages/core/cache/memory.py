@@ -65,11 +65,13 @@ class MemoryCache(Cache):
 
     # --- Counter ---
 
-    async def increment(self, key: str, amount: int = 1) -> int:
-        current = 0 if self._is_expired(key) else self._store.get(key, 0)
+    async def increment(self, key: str, amount: int = 1, *, ttl: int | None = None) -> int:
+        is_new = self._is_expired(key) or key not in self._store
+        current = 0 if is_new else self._store.get(key, 0)
         new_value = current + amount
         self._store[key] = new_value
-        # Preserve existing TTL (don't touch _expire_at)
+        if ttl is not None and is_new:
+            self._expire_at[key] = time.time() + ttl
         return new_value
 
     # --- Set ---

@@ -54,8 +54,14 @@ class RedisCache(Cache):
 
     # --- Counter ---
 
-    async def increment(self, key: str, amount: int = 1) -> int:
-        return await self._client.incrby(self._key(key), amount)
+    async def increment(self, key: str, amount: int = 1, *, ttl: int | None = None) -> int:
+        rk = self._key(key)
+        if ttl is not None:
+            # SET NX initializes the counter to 0 with TTL only on first creation.
+            # INCRBY then atomically increments. If the key already exists, SET NX
+            # is a no-op and the existing TTL is preserved (not reset).
+            await self._client.set(rk, 0, ex=ttl, nx=True)
+        return await self._client.incrby(rk, amount)
 
     # --- Set ---
 

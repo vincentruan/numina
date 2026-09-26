@@ -120,9 +120,7 @@ async def _check_refresh_rate_limit(user_id: str) -> None:
                 reason="rate_limited",
             )
             raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=60)
-        new_count = await cache.increment(key)
-        if new_count == 1:
-            await cache.set(key, 1, ttl=60)
+        await cache.increment(key, ttl=60)
     except AppError:
         raise
     except Exception:
@@ -145,9 +143,7 @@ async def _check_password_change_rate_limit(user_id: int | str) -> None:
                 reason="rate_limited",
             )
             raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=3600)
-        new_count = await cache.increment(key)
-        if new_count == 1:
-            await cache.set(key, 1, ttl=3600)
+        await cache.increment(key, ttl=3600)
     except AppError:
         raise
     except Exception:
@@ -165,9 +161,7 @@ async def _check_invite_code_rate_limit(user_id: str) -> None:
         count = await cache.get(key)
         if count is not None and int(count) >= _INVITE_CODE_RATE_LIMIT_PER_HOUR:
             raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=3600)
-        new_count = await cache.increment(key)
-        if new_count == 1:
-            await cache.set(key, 1, ttl=3600)
+        await cache.increment(key, ttl=3600)
     except AppError:
         raise
     except Exception:
@@ -256,10 +250,7 @@ async def _record_register_attempt(client_ip: str) -> None:
 
         cache = get_cache()
         key = f"{RATE_LIMIT}:register:{client_ip}"
-        count = await cache.increment(key)
-        # Set TTL on first attempt (1 hour = 3600 seconds)
-        if count == 1:
-            await cache.set(key, 1, ttl=3600)
+        await cache.increment(key, ttl=3600)
     except Exception:
         # If cache not available, skip tracking
         pass
@@ -306,11 +297,8 @@ async def _record_failed_login(username: str) -> None:
 
         cache = get_cache()
         key = f"{RATE_LIMIT}:login:{username}"
-        await cache.increment(key)
-        # Set TTL on first attempt
         _, lockout_seconds = _get_rate_limit_settings()
-        if await cache.get(key) == 1:
-            await cache.set(key, 1, ttl=lockout_seconds)
+        await cache.increment(key, ttl=lockout_seconds)
     except Exception:
         # Fallback to in-memory
         if username in _login_attempts:

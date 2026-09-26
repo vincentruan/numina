@@ -152,9 +152,7 @@ class SecurityMonitor:
         # 检查速率限制违规次数
         if event.threat_type == ThreatType.RATE_LIMIT_EXCEEDED:
             key = f"{SEC_COUNTER}:rate_violations:{event.client_ip}"
-            count = await cache.increment(key)
-            if count == 1:
-                await cache.set(key, count, ttl=300)
+            count = await cache.increment(key, ttl=300)
 
             threshold = self.THRESHOLDS["rate_limit_violations"]
             if count >= threshold["count"]:
@@ -162,9 +160,7 @@ class SecurityMonitor:
 
         # 检查可疑请求频率
         key = f"{SEC_COUNTER}:suspicious_count:{event.client_ip}"
-        count = await cache.increment(key)
-        if count == 1:
-            await cache.set(key, count, ttl=300)
+        count = await cache.increment(key, ttl=300)
 
         return bool(count >= self.THRESHOLDS["suspicious_requests"]["count"])
 

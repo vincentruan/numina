@@ -101,6 +101,29 @@ class TestMemoryCacheCounter:
         assert ttl is not None
         assert 0 < ttl <= 2
 
+    async def test_increment_with_ttl_sets_on_first_call(self):
+        cache = MemoryCache()
+        assert await cache.increment("counter", ttl=60) == 1
+        ttl = await cache.get_ttl("counter")
+        assert ttl is not None
+        assert 58 <= ttl <= 60
+
+    async def test_increment_with_ttl_does_not_reset_on_subsequent(self):
+        cache = MemoryCache()
+        await cache.increment("counter", ttl=60)
+        await cache.increment("counter", ttl=3600)  # should NOT reset TTL
+        ttl = await cache.get_ttl("counter")
+        assert ttl is not None
+        assert ttl <= 60  # still bounded by original 60s, not 3600s
+
+    async def test_increment_with_ttl_expires(self):
+        cache = MemoryCache()
+        await cache.increment("counter", ttl=1)
+        assert await cache.increment("counter") == 2  # still alive
+        time.sleep(1.1)
+        # After expiry, increment starts fresh at 1
+        assert await cache.increment("counter", ttl=1) == 1
+
 
 # =============================================================================
 # MemoryCache — Set operations
@@ -303,6 +326,19 @@ class TestRedisCacheCounter:
     async def test_increment_with_delta(self, redis_cache):
         await redis_cache.set("counter", 5)
         assert await redis_cache.increment("counter", 10) == 15
+
+    async def test_increment_with_ttl_sets_on_first_call(self, redis_cache):
+        assert await redis_cache.increment("counter", ttl=60) == 1
+        ttl = await redis_cache.get_ttl("counter")
+        assert ttl is not None
+        assert 58 <= ttl <= 60
+
+    async def test_increment_with_ttl_does_not_reset_on_subsequent(self, redis_cache):
+        await redis_cache.increment("counter", ttl=60)
+        await redis_cache.increment("counter", ttl=3600)  # should NOT reset TTL
+        ttl = await redis_cache.get_ttl("counter")
+        assert ttl is not None
+        assert ttl <= 60  # still bounded by original 60s
 
 
 # =============================================================================
