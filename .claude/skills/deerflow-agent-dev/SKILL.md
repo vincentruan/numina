@@ -134,8 +134,8 @@ DeerFlowClient(config_path=temp_config, checkpointer=shared_checkpointer)
 - **Web search**: web_search_providers 按 family 配置
 - **Memory 路径**: `{AGENT_DATA_DIR}/{family_id}/agent/memory/` 隔离
 - **Sandbox 路径**: `{DEER_FLOW_HOME}/users/{family_id}/...` 隔离
-- **并发控制**: `DEERFLOW_CONCURRENCY` Semaphore(8) 全局限制
-- **Checkpointer**: 共享 SqliteSaver，按 thread_id 命名空间隔离
+- **并发控制**: `DEERFLOW_CONCURRENCY` Semaphore(8) **全局**限制（非 per-family）。单家庭可占满全部 slot 导致其他家庭被阻塞 — 已知限制，如需公平性需额外实现 per-family 限流
+- **Checkpointer**: 共享 SqliteSaver，按 thread_id 命名空间隔离。thread_id 由前端/后端生成（UUID4, 不可预测），但 checkpointer 读取**不验证** family_id 所有权 — 依赖 thread_id 不可猜测性作为隔离保障
 
 ### AI 助手开关 (PolicyGuard)
 
@@ -143,7 +143,7 @@ DeerFlowClient(config_path=temp_config, checkpointer=shared_checkpointer)
 # schemas/policy.py
 class CapabilityPolicy:
     ai_enabled: bool = True
-    allowed_capabilities: list[str] | None = None  # skill_id 白名单
+    allowed_capabilities: list[str] = []  # empty = all allowed; 非空 = skill_id 白名单
     admin_only_capabilities: list[str] = []
     member_role: str  # "admin" | "member" | "child"
 
@@ -162,10 +162,12 @@ policy_guard.check(policy, skill_id) → PolicyDecision(allowed, reason)
 
 ### MCP 租户管理
 
-- `sync_tool_patch.py` 三个关键 patch：
-  - `_apply_mcp_httpx_factory_patch()`: httpx client factory 注入（跨线程安全）
-  - `_apply_mcp_cache_threading_lock_patch()`: asyncio.Lock → threading.Lock（防死锁）
-  - Runtime tool filter: 按当前 skill 的 `allowed-tools` 过滤
+- `sync_tool_patch.py` 共 5 个 patch（入口 `apply_sync_tool_patches()`）：
+  1. `_patched_get_available_tools`: 同步包装 + active skill 工具过滤
+  2. `_apply_original_user_content_patch`: 原始用户内容 ContextVar 传播
+  3. `_apply_extensions_config_path_patch`: extensions_config 路径 ContextVar 传播
+  4. `_apply_mcp_httpx_factory_patch`: httpx client factory 注入（跨线程安全）
+  5. `_apply_mcp_cache_threading_lock_patch`: asyncio.Lock → threading.Lock（防死锁）
 - MCP tool name 格式: `{server_name}_{tool_name}`（skill allowed-tools 用 prefixed name）
 - `extensions_config.json` 按 family 维度生成，防止跨家庭泄漏
 
@@ -178,7 +180,9 @@ policy_guard.check(policy, skill_id) → PolicyDecision(allowed, reason)
   - `chat` skill: 无 web_search 时
 - 工具进度通过 `tool_progress` SSE 事件前端展示
 
-## 当前 5 个调度 App
+## 当前 8 个调度 App
+
+### Custom Runner Apps (独立 runner 函数)
 
 | App | Runner | Skill | 用途 |
 |-----|--------|-------|------|
@@ -187,6 +191,14 @@ policy_guard.check(policy, skill_id) → PolicyDecision(allowed, reason)
 | `import-parse` | `_run_import_parse_agent` | import-parse | PDF/账单解析 |
 | `finance-coach` | `_run_finance_coach_agent` | finance-coach | 理财建议 |
 | `wish-advice` | `_run_wish_advice_agent` | wish-advice | 愿望储蓄建议 |
+
+### Config-Driven Apps (`_SimpleAppConfig` + `_run_simple_app` 通用 runner)
+
+| App | Skill | 用途 |
+|-----|-------|------|
+| `dashboard-narrative` | dashboard-narrative | 仪表盘 AI 叙事 |
+| `literacy-weekly-report` | literacy-weekly-report | 启蒙周报 |
+| `learning-tutor` | learning-tutor | AI 学习辅导 |
 
 ## 开发指南
 
@@ -234,7 +246,7 @@ subagent_enabled: false      # 启用 subagent 委托
 | `family_adapter_cache.py` | 按家庭 LRU 缓存 + EffectiveConfigBuilder 临时 config |
 | `client_factory.py` | 构建 DeerFlowClient |
 | `numina_deerflow_client.py` | Numina 子类（替代 monkey-patch） |
-| `sync_tool_patch.py` | 同步包装、ContextVar 传播、MCP 代理、工具过滤 |
+| `sync_tool_patch.py` | 5 个运行时 patch — 同步包装、ContextVar 传播、MCP 代理、工具过滤（详见 §MCP 租户管理） |
 | `memory_config_bridge.py` | DeerMem 配置桥接 |
 | `active_skill_context.py` | 当前 skill ContextVar |
 | `original_user_content_context.py` | 原始用户内容 ContextVar |
@@ -275,9 +287,18 @@ DeerFlow `run_in_executor` **不传播** `contextvars`。`_run_in_executor_with_
 3. 新 AI 路径须更新安全规则 + sim-test Area 11 对抗用例
 4. 自定义 agent `allowed-tools` 强制声明
 5. 系统 prompt 须有不可覆盖的安全前缀
-6. 认证：内部端点用 `X-Agent-Token`；外部端点用 JWT cookie (`verify_family_token`)
-7. Credential: Fernet 加密 (`AI_ENCRYPTION_KEY`)，encrypt-at-rest / decrypt-on-demand
-8. R1 allowlist 是安全边界：锁步对（worker + gateway 同步注册）
+6. **认证 & 信任模型**: 三层信任边界 —
+   - **外部端点**: JWT cookie (`verify_family_token`) — 认证 + family 级别授权
+   - **内部端点** (backend→agent): `X-Agent-Token` — 仅认证调用方服务身份，**不做 family scope 校验**；family 级授权由调用方 backend 在执行前完成（owner/admin 检查）
+   - **信任链**: agent gateway 信任 backend 已做 family authz，backend 信任 JWT 已做 user auth
+7. **Credential 两层 Fernet 加密**:
+   - `AI_ENCRYPTION_KEY`: 加密 `ai_providers` 表中的 API key（encrypt-at-rest, decrypt-on-demand, 生产环境强制配置）
+   - `STORAGE_ENCRYPTION_KEY`: 加密 per-family DeerFlow 临时 config.yaml / extensions_config.json（`packages/storage/config_crypto.py`），回退到 `SECRET_KEY` SHA256 派生（有 warning）
+   - 新增敏感字段时必须确认使用正确的 key 层级
+8. **R1 allowlist 安全边界**:
+   - **前端直连** (R1 强制校验): worker 分支 + sse_gateway start_run 锁步对同步注册
+   - **内部触发** (`internal=True`, `X-Agent-Token` 认证): **绕过 R1 app 检查** — 前提是后端触发端点已执行 owner/ai_enabled/concurrency 门控
+   - 新增 app 时必须明确选择: (A) 仅 `internal=True` 触发（R1 绕过, 后端门控）, 或 (B) 允许前端直连（R1 强制校验）
 
 ## Code Review 检查清单
 
@@ -286,7 +307,7 @@ Review agent 模块代码时，重点关注：
 **Invariants**:
 - [ ] PII redaction: `pii_redactor.redact()` 在传给 LLM 前调用
 - [ ] Policy guard: `policy_guard.check()` 不被绕过
-- [ ] Audit logging: `audit_logger.log_call()` 在 finally 块中
+- [ ] Audit logging: `audit_logger.log_call()` 在 finally 块中；`output_summary` 写入前须经 `pii_redactor.redact_text()` 处理，防止 LLM 输出回传 PII 到审计日志
 - [ ] DeerFlow-only: 多步骤调用不走 `core/llm.py`
 - [ ] ContextVar 传播: `_run_in_executor_with_context` 正确使用
 - [ ] R1 allowlist: worker 分支 + gateway 锁步对同步
@@ -295,7 +316,7 @@ Review agent 模块代码时，重点关注：
 **DeerFlow 升级兼容**:
 - [ ] `make_lead_agent()` 签名未变
 - [ ] `create_chat_model()` provider 路由正确
-- [ ] `sync_tool_patch.py` 的 5 个 patch 目标函数签名兼容
+- [ ] `sync_tool_patch.py` 的 5 个 patch 目标函数签名兼容（见 §MCP 租户管理 完整列表）
 - [ ] `extensions_config` API 无变更
 - [ ] `RunManager` / `StreamBridge` 接口无破坏性变更
 
