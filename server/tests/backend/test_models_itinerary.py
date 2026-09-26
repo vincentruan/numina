@@ -115,6 +115,81 @@ class TestItineraryItemModel:
         assert len(items) == 4
         assert {i.type for i in items} == {"accommodation", "dining", "transport", "activity"}
 
+    def test_create_with_end_date(self, db, trip, test_family):
+        """Create a cross-day item with end_date set."""
+        item = ItineraryItem(
+            trip_id=trip.id,
+            family_id=test_family.id,
+            date=date(2026, 10, 1),
+            end_date=date(2026, 10, 4),
+            type="accommodation",
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+
+        assert item.end_date == date(2026, 10, 4)
+
+    def test_end_date_null_by_default(self, db, trip, test_family):
+        """Items without end_date have it as None (backward compat)."""
+        item = ItineraryItem(
+            trip_id=trip.id,
+            family_id=test_family.id,
+            date=date(2026, 10, 2),
+            type="dining",
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+
+        assert item.end_date is None
+
+    def test_end_date_equals_date(self, db, trip, test_family):
+        """end_date == date is valid (treated as single-day)."""
+        item = ItineraryItem(
+            trip_id=trip.id,
+            family_id=test_family.id,
+            date=date(2026, 10, 3),
+            end_date=date(2026, 10, 3),
+            type="activity",
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+
+        assert item.end_date == item.date
+
+    def test_create_with_purchase_date(self, db, trip, test_family):
+        """Create an item with purchase_date set."""
+        item = ItineraryItem(
+            trip_id=trip.id,
+            family_id=test_family.id,
+            date=date(2026, 10, 5),
+            type="accommodation",
+            cost_amount=Decimal("1500.00"),
+            cost_currency="CNY",
+            purchase_date=date(2026, 9, 20),
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+
+        assert item.purchase_date == date(2026, 9, 20)
+
+    def test_purchase_date_null_by_default(self, db, trip, test_family):
+        """Items without purchase_date have it as None."""
+        item = ItineraryItem(
+            trip_id=trip.id,
+            family_id=test_family.id,
+            date=date(2026, 10, 1),
+            type="dining",
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+
+        assert item.purchase_date is None
+
     def test_custom_type_stored(self, db, trip, test_family):
         """Verify type='custom' can be stored (custom_type_id validated separately)."""
         item = ItineraryItem(
