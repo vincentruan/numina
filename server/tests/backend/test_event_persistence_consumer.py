@@ -36,6 +36,7 @@ class TestEventPersistenceInit:
     @pytest.mark.asyncio
     async def test_init_succeeds_with_tmp_sqlite(self, monkeypatch, tmp_path):
         """init_event_store succeeds with the correct init_engine signature."""
+        pytest.importorskip("deerflow", reason="deerflow-harness not installed in backend-only CI")
         import asyncio
         db_path = str(tmp_path / "deerflow-events.db")
         monkeypatch.setenv("DEERFLOW_DB_PATH", db_path)
@@ -66,6 +67,7 @@ class TestEventPersistenceInit:
     @pytest.mark.asyncio
     async def test_persist_event_writes_to_db(self, monkeypatch, tmp_path):
         """End-to-end: persist_event writes to run_events table via the store."""
+        pytest.importorskip("deerflow", reason="deerflow-harness not installed in backend-only CI")
         import asyncio
         db_path = str(tmp_path / "deerflow-events.db")
         monkeypatch.setenv("DEERFLOW_DB_PATH", db_path)

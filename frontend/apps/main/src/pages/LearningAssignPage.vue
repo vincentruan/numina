@@ -168,7 +168,7 @@ const selectedChildName = computed(() => {
 
 const childColumns = computed(() =>
   childMembers.value.map(m => ({
-    text: m.display_name || m.username,
+    text: m.display_name || m.username || '',
     value: String(m.id),
   }))
 )
