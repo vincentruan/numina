@@ -795,18 +795,6 @@ onActivated(async () => {
   margin-bottom: 12px;
 }
 
-.child-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: bold;
-  color: #fff;
-}
-
 .child-name {
   font-size: 16px;
   font-weight: 600;

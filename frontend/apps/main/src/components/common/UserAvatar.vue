@@ -40,7 +40,11 @@ const isImage = computed(() => {
 })
 
 const isEmoji = computed(() => {
-  return props.avatarUrl && !props.avatarUrl.startsWith('/')
+  // Only treat as emoji when avatarUrl is a single visual character.
+  // Multi-char non-image strings (e.g. "钓宝") fall through to the
+  // first-character fallback instead of being rendered verbatim.
+  if (!props.avatarUrl || props.avatarUrl.startsWith('/')) return false
+  return [...props.avatarUrl].length === 1
 })
 
 const fallbackChar = computed(() => {

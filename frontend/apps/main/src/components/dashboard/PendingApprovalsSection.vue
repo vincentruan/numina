@@ -197,19 +197,6 @@ async function onReject(id: string, returnToRedo: boolean) {
   gap: 12px;
 }
 
-.child-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-  flex-shrink: 0;
-}
-
 .card-info {
   flex: 1;
   min-width: 0;
