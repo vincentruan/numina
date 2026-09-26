@@ -5,7 +5,18 @@ import pytest
 
 from apps.backend.app.models.exchange_rate import ExchangeRate
 from apps.backend.app.services.exchange_rate import ExchangeRateService
+from packages.core.cache import init_cache, reset_cache
+from packages.core.cache.sync_bridge import SyncCacheBridge
 from packages.db.exchange_rate_adapter import ExchangeRateAdapter
+
+
+@pytest.fixture(autouse=True)
+def _init_unified_cache():
+    """Ensure unified Cache is initialized for each test."""
+    reset_cache()
+    init_cache(backend="memory")
+    yield
+    reset_cache()
 
 
 def test_convert_same_currency(db):
@@ -60,9 +71,10 @@ def test_cache_hit_no_db_query(db):
 
     adapter = ExchangeRateAdapter()
 
-    # First call populates adapter cache
+    # First call populates unified cache
     ExchangeRateService.get_rate("EUR", db, adapter=adapter)
-    assert "EUR" in adapter._cache
+    bridge = SyncCacheBridge.from_cache()
+    assert bridge.get("fxrate:EUR") is not None
 
     # Second call: patch DB query to confirm it is NOT called
     with patch.object(db, "query", wraps=db.query) as mock_query:
@@ -78,9 +90,8 @@ def test_fallback_when_no_rates(db):
 
 
 def test_fetch_and_store_rates_success(db):
-    """Successful API fetch inserts rates and clears adapter cache."""
+    """Successful API fetch inserts rates into DB."""
     adapter = ExchangeRateAdapter()
-    adapter._cache["USD"] = (0.15, datetime(2026, 1, 1, 0, 0, 0))
 
     mock_response = MagicMock()
     mock_response.json.return_value = {
@@ -92,7 +103,6 @@ def test_fetch_and_store_rates_success(db):
         result = adapter.fetch_and_store_rates(db)
 
     assert result is True
-    assert adapter._cache == {}
     rates = db.query(ExchangeRate).order_by(ExchangeRate.target_currency).all()
     assert len(rates) == 3  # USD, EUR, JPY (CNY skipped)
 

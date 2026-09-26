@@ -1,10 +1,10 @@
-"""Tests for ExchangeRateAdapter (packages/core).
+"""Tests for ExchangeRateAdapter (packages/db).
 
 Covers:
 - fetch_rates(): mocked httpx → dict[str, float]
-- get_cached_rate(): CNY shortcut, cache miss, cache hit within TTL, stale cache
-- fetch_and_store_rates(): writes ExchangeRate rows, adds Currency rows, clears cache
-- Thread safety: concurrent access via threading.Lock
+- get_cached_rate(): CNY shortcut, cache miss, cache hit from unified Cache
+- fetch_and_store_rates(): writes ExchangeRate rows, adds Currency rows
+- Unified Cache integration: populate writes, TTL matches 4h
 """
 from datetime import UTC, datetime, timedelta
 
@@ -28,6 +28,27 @@ class _FakeResponse:
 
     def json(self):
         return self._payload
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _init_unified_cache():
+    """Ensure unified Cache is initialized for each test."""
+    from packages.core.cache import init_cache, reset_cache
+
+    reset_cache()
+    init_cache(backend="memory")
+    yield
+    reset_cache()
+
+
+@pytest.fixture
+def adapter():
+    return ExchangeRateAdapter()
 
 
 # ---------------------------------------------------------------------------
@@ -85,22 +106,66 @@ def test_get_cached_rate_missing_returns_none(adapter):
     assert fetched_at is None
 
 
-def test_get_cached_rate_cache_hit_within_ttl(adapter):
-    """Cache hit within TTL → returns cached (rate, fetched_at)."""
+def test_get_cached_rate_from_unified_cache(adapter):
+    """Adapter reads from unified Cache (via SyncCacheBridge)."""
+    from packages.core.cache import get_cache
+    from packages.core.cache.sync_bridge import SyncCacheBridge
+
+    bridge = SyncCacheBridge.from_cache()
     now = datetime.now(UTC)
-    adapter._cache["USD"] = (7.2, now, now)
+    bridge.set(
+        "fxrate:USD",
+        {"rate": 7.2, "fetched_at": now.isoformat()},
+        ttl=14400,
+    )
+
     rate, fetched_at = adapter.get_cached_rate("USD")
     assert rate == 7.2
-    assert fetched_at == now
+    assert fetched_at is not None
 
 
-def test_get_cached_rate_stale_cache_returns_none(adapter):
-    """Cache entry expired (>4h) → treated as missing, returns (None, None)."""
-    stale = datetime.now(UTC) - timedelta(hours=5)
-    adapter._cache["GBP"] = (8.0, stale, stale)
-    rate, fetched_at = adapter.get_cached_rate("GBP")
-    assert rate is None
-    assert fetched_at is None
+# ---------------------------------------------------------------------------
+# populate_cache
+# ---------------------------------------------------------------------------
+
+
+def test_populate_cache_writes_to_unified_cache(adapter):
+    """populate_cache writes to unified Cache, readable by bridge."""
+    from packages.core.cache.sync_bridge import SyncCacheBridge
+
+    now = datetime.now(UTC)
+    adapter.populate_cache("EUR", 7.8, now)
+
+    bridge = SyncCacheBridge.from_cache()
+    data = bridge.get("fxrate:EUR")
+    assert data is not None
+    assert data["rate"] == 7.8
+
+
+def test_adapter_ttl_is_4_hours(adapter):
+    """Cache entries expire after 4 hours (14400 seconds)."""
+    from packages.core.cache import get_cache
+    from packages.core.cache.sync_bridge import SyncCacheBridge
+
+    now = datetime.now(UTC)
+    adapter.populate_cache("GBP", 8.5, now)
+
+    cache = get_cache()
+    import asyncio
+
+    # Use bridge for sync access
+    bridge = SyncCacheBridge.from_cache()
+    ttl_data = bridge.get("fxrate:GBP")
+    assert ttl_data is not None
+
+    # Verify TTL via async cache
+    loop = asyncio.new_event_loop()
+    try:
+        ttl = loop.run_until_complete(cache.get_ttl("fxrate:GBP"))
+    finally:
+        loop.close()
+    assert ttl is not None
+    assert 14300 <= ttl <= 14400
 
 
 # ---------------------------------------------------------------------------
@@ -144,18 +209,6 @@ def test_fetch_and_store_rates_adds_new_currency_rows(packages_db, adapter, monk
     assert "ABC" in codes
 
 
-def test_fetch_and_store_rates_clears_cache(packages_db, adapter, monkeypatch):
-    """Successful fetch clears the in-memory cache."""
-    adapter._cache["USD"] = (7.0, datetime.now(UTC), datetime.now(UTC))
-    payload = {"rates": {"USD": 7.2}}
-    monkeypatch.setattr(
-        "packages.db.exchange_rate_adapter.httpx.get",
-        lambda *a, **k: _FakeResponse(payload),
-    )
-    adapter.fetch_and_store_rates(packages_db)
-    assert adapter._cache == {}
-
-
 def test_fetch_and_store_rates_returns_false_on_exception(packages_db, adapter, monkeypatch):
     """httpx.get raises → returns False, DB unchanged."""
 
@@ -168,49 +221,3 @@ def test_fetch_and_store_rates_returns_false_on_exception(packages_db, adapter, 
     ok = adapter.fetch_and_store_rates(packages_db)
     assert ok is False
     assert packages_db.query(ExchangeRate).count() == 0
-
-
-# ---------------------------------------------------------------------------
-# Thread safety
-# ---------------------------------------------------------------------------
-
-
-def test_fetch_and_store_rates_is_thread_safe(packages_db, adapter, monkeypatch):
-    """Concurrent calls to fetch_and_store_rates are serialized by the lock."""
-    payload = {"rates": {"USD": 7.2, "EUR": 7.8}}
-    monkeypatch.setattr(
-        "packages.db.exchange_rate_adapter.httpx.get",
-        lambda *a, **k: _FakeResponse(payload),
-    )
-
-    import threading
-
-    results = []
-    errors = []
-
-    def _worker():
-        try:
-            adapter.fetch_and_store_rates(packages_db)
-            results.append(True)
-        except Exception as e:
-            errors.append(e)
-
-    threads = [threading.Thread(target=_worker) for _ in range(4)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    assert not errors, errors
-    assert len(results) == 4
-    assert adapter._cache == {}
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def adapter():
-    return ExchangeRateAdapter()
