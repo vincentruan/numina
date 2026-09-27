@@ -249,27 +249,7 @@ def list_my_paths(
     result = []
     for path in paths:
         progress = path_service.get_path_progress(db, path.id, child.family_id)
-        result.append({
-            "id": path.id,
-            "family_id": path.family_id,
-            "child_id": path.child_id,
-            "created_by": path.created_by,
-            "name": path.name,
-            "name_zh": path.name_zh,
-            "description": path.description,
-            "description_zh": path.description_zh,
-            "status": path.status,
-            "per_task_score": path.per_task_score,
-            "bonus_score": path.bonus_score,
-            "milestone_scores": path.milestone_scores or [],
-            "due_date": path.due_date,
-            "created_at": path.created_at,
-            "completed_at": path.completed_at,
-            "items": progress["items"],
-            "completed_count": progress["completed_count"],
-            "total_count": progress["total_count"],
-            "next_milestone": progress["next_milestone"],
-        })
+        result.append(path_service.build_path_response(path, progress))
     return result
 
 
@@ -292,27 +272,7 @@ def get_my_path(
     if not path:
         raise AppError(ErrorCode.LEARNING_PATH_NOT_FOUND)
     progress = path_service.get_path_progress(db, path.id, child.family_id)
-    return {
-        "id": path.id,
-        "family_id": path.family_id,
-        "child_id": path.child_id,
-        "created_by": path.created_by,
-        "name": path.name,
-        "name_zh": path.name_zh,
-        "description": path.description,
-        "description_zh": path.description_zh,
-        "status": path.status,
-        "per_task_score": path.per_task_score,
-        "bonus_score": path.bonus_score,
-        "milestone_scores": path.milestone_scores or [],
-        "due_date": path.due_date,
-        "created_at": path.created_at,
-        "completed_at": path.completed_at,
-        "items": progress["items"],
-        "completed_count": progress["completed_count"],
-        "total_count": progress["total_count"],
-        "next_milestone": progress["next_milestone"],
-    }
+    return path_service.build_path_response(path, progress)
 
 
 @router.post("/sessions/{session_id}/assess/stream")

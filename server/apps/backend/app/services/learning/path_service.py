@@ -416,3 +416,32 @@ def try_advance_path_for_topic(
                 db, path.id, topic_id, child_id, family_id
             )
     return None
+
+
+def build_path_response(path: LearningPath, progress: dict) -> dict:
+    """Build a PathResponse-shaped dict from a path ORM object and progress data.
+
+    Shared by both family and child routers to avoid duplicating the
+    17-key response dict.
+    """
+    return {
+        "id": path.id,
+        "family_id": path.family_id,
+        "child_id": path.child_id,
+        "created_by": path.created_by,
+        "name": path.name,
+        "name_zh": path.name_zh,
+        "description": path.description,
+        "description_zh": path.description_zh,
+        "status": path.status,
+        "per_task_score": path.per_task_score,
+        "bonus_score": path.bonus_score,
+        "milestone_scores": path.milestone_scores or [],
+        "due_date": path.due_date,
+        "created_at": path.created_at,
+        "completed_at": path.completed_at,
+        "items": progress["items"],
+        "completed_count": progress["completed_count"],
+        "total_count": progress["total_count"],
+        "next_milestone": progress["next_milestone"],
+    }

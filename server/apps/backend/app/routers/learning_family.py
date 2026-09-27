@@ -355,30 +355,6 @@ def reject_review(
 # ---------------------------------------------------------------------------
 
 
-def _build_path_response(path: LearningPath, progress: dict) -> dict:
-    """Helper to build PathResponse dict from path + progress data."""
-    return {
-        "id": path.id,
-        "family_id": path.family_id,
-        "child_id": path.child_id,
-        "created_by": path.created_by,
-        "name": path.name,
-        "name_zh": path.name_zh,
-        "description": path.description,
-        "description_zh": path.description_zh,
-        "status": path.status,
-        "per_task_score": path.per_task_score,
-        "bonus_score": path.bonus_score,
-        "milestone_scores": path.milestone_scores or [],
-        "due_date": path.due_date,
-        "created_at": path.created_at,
-        "completed_at": path.completed_at,
-        "items": progress["items"],
-        "completed_count": progress["completed_count"],
-        "total_count": progress["total_count"],
-        "next_milestone": progress["next_milestone"],
-    }
-
 
 @router.post("/paths", response_model=PathResponse, status_code=201)
 def create_path(
@@ -413,7 +389,7 @@ def create_path(
     )
 
     progress = path_service.get_path_progress(db, path.id, user.family_id)
-    return _build_path_response(path, progress)
+    return path_service.build_path_response(path, progress)
 
 
 @router.get("/paths", response_model=list[PathResponse])
@@ -431,7 +407,7 @@ def list_paths(
     result = []
     for path in paths:
         progress = path_service.get_path_progress(db, path.id, user.family_id)
-        result.append(_build_path_response(path, progress))
+        result.append(path_service.build_path_response(path, progress))
     return result
 
 
@@ -443,7 +419,7 @@ def get_path(
 ):
     """Get path detail with items and progress."""
     progress = path_service.get_path_progress(db, path_id, user.family_id)
-    return _build_path_response(progress["path"], progress)
+    return path_service.build_path_response(progress["path"], progress)
 
 
 @router.post("/paths/{path_id}/archive", response_model=PathResponse)
@@ -464,4 +440,4 @@ def archive_path(
     db.commit()
     db.refresh(path)
     progress = path_service.get_path_progress(db, path.id, user.family_id)
-    return _build_path_response(path, progress)
+    return path_service.build_path_response(path, progress)
