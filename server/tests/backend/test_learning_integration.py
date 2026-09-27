@@ -236,7 +236,11 @@ def test_full_learning_flow(
 def test_child_cannot_start_locked_topic(
     client, db, parent_headers, topic
 ):
-    """A child cannot start learning a topic that is still locked."""
+    """A child can now start a locked topic via self-directed learning.
+
+    The topic is auto-unlocked (locked -> available -> learning) and a
+    difficulty_warning is returned indicating prerequisites are unmet.
+    """
     child_data = _create_child(client, parent_headers, username="lockedchild")
     child_id = int(child_data["id"])
 
@@ -278,7 +282,7 @@ def test_child_cannot_start_locked_topic(
     assert progress is not None
     assert progress.mastery_level == "locked"
 
-    # Child tries to create a session for the locked topic — should be rejected
+    # Child starts a session for the locked topic — self-directed bypass allows it
     resp = client.post(
         "/api/v1/child/learning/sessions",
         headers=child_headers,
@@ -287,9 +291,27 @@ def test_child_cannot_start_locked_topic(
             "session_type": "study",
         },
     )
-    assert resp.status_code == 409  # LEARNING_TOPIC_LOCKED
-    error_data = resp.json()
-    assert "LEARNING_TOPIC_LOCKED" in error_data.get("code", "")
+    assert resp.status_code == 201
+    # Progress should now be 'learning' (bypassed locked -> available -> learning)
+    progress = (
+        db.query(LearningProgress)
+        .filter_by(child_id=child_id, topic_id=dependent_topic.id)
+        .first()
+    )
+    assert progress.mastery_level == "learning"
+    # The existing parent_assigned assignment should have been reused
+    from packages.db.models.learning.assignment import LearningAssignment
+
+    assignment = (
+        db.query(LearningAssignment)
+        .filter_by(
+            child_id=child_id,
+            topic_id=dependent_topic.id,
+        )
+        .first()
+    )
+    assert assignment is not None
+    assert assignment.assignment_type == "parent_assigned"
 
 
 def test_parent_cannot_approve_non_pending_review(
