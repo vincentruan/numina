@@ -1,10 +1,9 @@
 """Cache factory — singleton lifecycle management."""
 
-import redis.asyncio as aioredis
+from __future__ import annotations
 
 from packages.core.cache.base import Cache
 from packages.core.cache.memory import MemoryCache
-from packages.core.cache.redis import RedisCache
 from packages.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -36,6 +35,8 @@ def init_cache(
     if backend == "redis":
         if not redis_url:
             raise RuntimeError("CACHE_BACKEND=redis requires REDIS_URL")
+        import redis.asyncio as aioredis
+        from packages.core.cache.redis import RedisCache
         client = aioredis.from_url(redis_url, decode_responses=True, max_connections=10)
         _instance = RedisCache(client, prefix=prefix)
         logger.info("Cache initialized: redis (prefix=%r)", prefix)
@@ -69,6 +70,7 @@ async def _check_redis_connection(redis_url: str) -> None:
     Only called when ``CACHE_BACKEND=redis``. Raises ``RuntimeError``
     so the service fails fast rather than silently degrading.
     """
+    import redis.asyncio as aioredis
     try:
         r = aioredis.from_url(redis_url)
         await r.ping()
