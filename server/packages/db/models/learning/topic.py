@@ -23,7 +23,9 @@ class LearningTopic(Base):
     __tablename__ = "learning_topics"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
-    topic_key: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    topic_key: Mapped[str] = mapped_column(
+        String(50), unique=True, nullable=False, index=True
+    )
     topic_type: Mapped[str] = mapped_column(String(20), nullable=False)
     subject: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     domain: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -43,8 +45,12 @@ class LearningTopic(Base):
     ability_dimensions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     age_group: Mapped[str] = mapped_column(String(10), nullable=False, default="mid")
     deprecated: Mapped[bool] = mapped_column(default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now()
+    )
 
     # JSON accessor properties
     evidence: list = json_text("evidence_json")
@@ -57,7 +63,9 @@ class LearningDependency(Base):
     __tablename__ = "learning_dependencies"
 
     __table_args__ = (
-        UniqueConstraint("topic_id", "prerequisite_id", name="uq_learning_dependency_edge"),
+        UniqueConstraint(
+            "topic_id", "prerequisite_id", name="uq_learning_dependency_edge"
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
@@ -80,3 +88,4 @@ class LearningCluster(Base):
     age_range_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
     age_group: Mapped[str] = mapped_column(String(10), nullable=False, default="mid")
     summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    summary_zh: Mapped[str | None] = mapped_column(Text, nullable=True)

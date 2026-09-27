@@ -16,24 +16,30 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "reminders",
-        sa.Column("child_id", sa.BigInteger(), nullable=True),
-    )
-    op.add_column(
-        "reminders",
-        sa.Column("topic_id", sa.BigInteger(), nullable=True),
-    )
-    op.create_index(op.f("ix_reminders_child_id"), "reminders", ["child_id"])
-    op.create_index(op.f("ix_reminders_topic_id"), "reminders", ["topic_id"])
-    op.create_foreign_key(
-        "fk_reminders_child_id_users",
-        "reminders",
-        "users",
-        ["child_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
+    bind = op.get_bind()
+    cols = {c["name"] for c in bind.dialect.get_columns(bind, "reminders")}
+
+    if "child_id" not in cols:
+        op.add_column(
+            "reminders",
+            sa.Column("child_id", sa.BigInteger(), nullable=True),
+        )
+        op.create_index(op.f("ix_reminders_child_id"), "reminders", ["child_id"])
+        op.create_foreign_key(
+            "fk_reminders_child_id_users",
+            "reminders",
+            "users",
+            ["child_id"],
+            ["id"],
+            ondelete="SET NULL",
+        )
+
+    if "topic_id" not in cols:
+        op.add_column(
+            "reminders",
+            sa.Column("topic_id", sa.BigInteger(), nullable=True),
+        )
+        op.create_index(op.f("ix_reminders_topic_id"), "reminders", ["topic_id"])
 
 
 def downgrade() -> None:
