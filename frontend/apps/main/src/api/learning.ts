@@ -179,3 +179,56 @@ export async function translateTopic(topicId: string): Promise<{
   const res = await http.post(`/learning/topics/${topicId}/translate`)
   return res.data
 }
+
+// --- Learning Path API ---
+
+export interface PathCreateRequest {
+  child_id: string
+  name: string
+  name_zh?: string
+  description?: string
+  topic_ids: string[]
+  per_task_score?: number
+  bonus_score?: number
+  milestone_scores?: { threshold: number; bonus: number }[]
+  due_date?: string
+}
+
+export interface PathResponse {
+  id: string
+  name: string
+  name_zh: string | null
+  status: string
+  completed_count: number
+  total_count: number
+  items: {
+    id: string
+    topic_id: string
+    topic_name: string | null
+    topic_name_zh: string | null
+    status: string
+    sort_order: number
+  }[]
+  created_at: string
+}
+
+export async function createPath(req: PathCreateRequest): Promise<PathResponse> {
+  const res = await http.post('/family/learning/paths', req)
+  return res.data
+}
+
+export async function getPaths(childId?: string): Promise<PathResponse[]> {
+  const params = childId ? { child_id: childId } : {}
+  const res = await http.get('/family/learning/paths', { params })
+  return res.data
+}
+
+export async function getPath(pathId: string): Promise<PathResponse> {
+  const res = await http.get(`/family/learning/paths/${pathId}`)
+  return res.data
+}
+
+export async function archivePath(pathId: string): Promise<PathResponse> {
+  const res = await http.post(`/family/learning/paths/${pathId}/archive`)
+  return res.data
+}
