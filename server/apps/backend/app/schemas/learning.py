@@ -142,6 +142,7 @@ class SessionResponse(SnowflakeBase):
     duration_seconds: int | None
     started_at: datetime
     ended_at: datetime | None
+    difficulty_warning: dict | None = None
 
 
 # --- Assessment Attempt ---
@@ -198,3 +199,82 @@ class ChildProgressOverview(BaseModel):
     parent_review_count: int
     total_study_minutes: int = 0
     today_study_minutes: int = 0
+
+
+# --- Learning Path ---
+
+class PathCreate(BaseModel):
+    child_id: int
+    name: str
+    name_zh: str | None = None
+    description: str = ""
+    description_zh: str | None = None
+    topic_ids: list[int]
+    per_task_score: int = 5
+    bonus_score: int = 10
+    milestone_scores: list[dict] | None = None
+    due_date: date | None = None
+
+    @field_validator("topic_ids")
+    @classmethod
+    def topic_ids_not_empty(cls, v: list[int]) -> list[int]:
+        if not v:
+            raise ValueError("topic_ids must not be empty")
+        return v
+
+    @field_validator("milestone_scores")
+    @classmethod
+    def validate_milestone_scores(cls, v: list[dict] | None, info) -> list[dict] | None:
+        if v is None:
+            return v
+        topic_ids = info.data.get("topic_ids", [])
+        max_threshold = len(topic_ids)
+        seen_thresholds: set[int] = set()
+        for entry in v:
+            if "threshold" not in entry or "bonus" not in entry:
+                raise ValueError("Each milestone must have 'threshold' and 'bonus'")
+            threshold = entry["threshold"]
+            bonus = entry["bonus"]
+            if not isinstance(threshold, int) or threshold < 1 or threshold > max_threshold:
+                raise ValueError(
+                    f"threshold must be integer in [1, {max_threshold}], got {threshold}"
+                )
+            if not isinstance(bonus, int) or bonus < 1:
+                raise ValueError(f"bonus must be positive integer, got {bonus}")
+            if threshold in seen_thresholds:
+                raise ValueError(f"duplicate threshold: {threshold}")
+            seen_thresholds.add(threshold)
+        return v
+
+
+class PathItemResponse(SnowflakeBase):
+    id: int
+    path_id: int
+    topic_id: int
+    sort_order: int
+    status: str
+    topic_name: str | None = None
+    topic_name_zh: str | None = None
+    completed_at: datetime | None = None
+
+
+class PathResponse(SnowflakeBase):
+    id: int
+    family_id: int
+    child_id: int
+    created_by: int
+    name: str
+    name_zh: str | None = None
+    description: str = ""
+    description_zh: str | None = None
+    status: str
+    per_task_score: int
+    bonus_score: int
+    milestone_scores: list[dict] = []
+    due_date: date | None = None
+    created_at: datetime
+    completed_at: datetime | None = None
+    items: list[PathItemResponse] = []
+    completed_count: int = 0
+    total_count: int = 0
+    next_milestone: dict | None = None

@@ -1,5 +1,8 @@
 """Tests for learning path service — error codes and coin ref_type mappings."""
 
+import pytest
+
+from apps.backend.app.schemas.learning import PathCreate
 from packages.db.models.child_economy.coin_transaction import CoinTransaction
 
 
@@ -31,3 +34,56 @@ def test_coin_ref_type_unknown_returns_none():
 
     tx_gift = CoinTransaction(transaction_type="gift_sent", ref_id=50)
     assert tx_gift.ref_type is None
+
+
+# --- PathCreate validation tests (Task 4) ---
+
+
+class TestPathCreateValidation:
+    def test_valid_milestone(self):
+        schema = PathCreate(
+            child_id=1,
+            name="Math Basics",
+            topic_ids=[10, 20, 30, 40, 50],
+            milestone_scores=[{"threshold": 3, "bonus": 10}, {"threshold": 5, "bonus": 20}],
+        )
+        assert len(schema.milestone_scores) == 2
+
+    def test_milestone_threshold_out_of_range(self):
+        with pytest.raises(ValueError, match="threshold"):
+            PathCreate(
+                child_id=1,
+                name="Math Basics",
+                topic_ids=[10, 20, 30],
+                milestone_scores=[{"threshold": 5, "bonus": 10}],  # 5 > len(topic_ids)=3
+            )
+
+    def test_milestone_negative_bonus(self):
+        with pytest.raises(ValueError):
+            PathCreate(
+                child_id=1,
+                name="Math Basics",
+                topic_ids=[10, 20, 30],
+                milestone_scores=[{"threshold": 2, "bonus": -5}],
+            )
+
+    def test_milestone_duplicate_threshold(self):
+        with pytest.raises(ValueError, match="duplicate"):
+            PathCreate(
+                child_id=1,
+                name="Math Basics",
+                topic_ids=[10, 20, 30, 40],
+                milestone_scores=[
+                    {"threshold": 2, "bonus": 10},
+                    {"threshold": 2, "bonus": 15},
+                ],
+            )
+
+    def test_milestone_missing_fields(self):
+        with pytest.raises(ValueError):
+            PathCreate(
+                child_id=1,
+                name="Math Basics",
+                topic_ids=[10, 20, 30],
+                milestone_scores=[{"threshold": 2}],  # missing bonus
+            )
