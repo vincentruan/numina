@@ -428,7 +428,11 @@ def archive_path(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    """Archive a learning path."""
+    """Archive a learning path.
+
+    Any adult in the family can archive — paths are family-level resources
+    (both parents may need to manage a child's learning plan).
+    """
     path = (
         db.query(LearningPath)
         .filter(LearningPath.id == path_id, LearningPath.family_id == user.family_id)

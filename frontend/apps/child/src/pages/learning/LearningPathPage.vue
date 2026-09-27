@@ -82,7 +82,7 @@ const displayName = computed(() => {
 
 const displayDescription = computed(() => {
   if (!path.value) return ''
-  return path.value.description || undefined
+  return path.value.description || ''
 })
 
 const progressPercent = computed(() => {

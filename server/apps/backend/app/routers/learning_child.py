@@ -40,6 +40,21 @@ from packages.db.models.learning.topic import LearningTopic
 router = APIRouter(prefix="/child/learning", tags=["learning-child"])
 
 
+def _json_text_field_equals(
+    json_column, key: str, value: str, engine
+):
+    """Dialect-aware JSON text field equality filter.
+
+    PostgreSQL uses ``column[key].astext``; SQLite uses ``json_extract``.
+    Centralized here so callers don't duplicate the branching.
+    """
+    if engine.dialect.name == "postgresql":
+        return json_column[key].astext == value
+    from sqlalchemy import func as sa_func
+
+    return sa_func.json_extract(json_column, f"$.{key}") == value
+
+
 @router.get("/map", response_model=list[ProgressResponse])
 def my_knowledge_map(
     db: Session = Depends(get_db),
@@ -440,15 +455,9 @@ async def get_session_status(
     # Find the learning-tutor AITask scoped to THIS session via progress JSON.
     # Filter at DB level using dialect-aware JSON path (was O(n) Python scan).
     session_id_str = str(session_id)
-    if engine.dialect.name == "postgresql":
-        json_filter = AITask.progress["learning_session_id"].astext == session_id_str
-    else:
-        from sqlalchemy import func as sa_func
-
-        json_filter = (
-            sa_func.json_extract(AITask.progress, "$.learning_session_id")
-            == session_id_str
-        )
+    json_filter = _json_text_field_equals(
+        AITask.progress, "learning_session_id", session_id_str, engine
+    )
 
     task = (
         db.query(AITask)

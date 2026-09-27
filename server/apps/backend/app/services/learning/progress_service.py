@@ -1,5 +1,6 @@
 """Progress service — state machine + spaced repetition for learning progress."""
 
+import logging
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func as sa_func
@@ -13,6 +14,8 @@ from packages.db.models.learning.session import (
     LearningSession,
 )
 from packages.db.models.learning.topic import LearningDependency, LearningTopic
+
+logger = logging.getLogger(__name__)
 
 # Age group ordering for difficulty comparison
 AGE_GROUP_ORDER = {"low": 0, "mid": 1, "high": 2}
@@ -272,13 +275,17 @@ def approve_parent_review(
     txn.ref_id = attempt.id
 
     # Advance any active learning path that includes this topic
-    import contextlib
-
     from apps.backend.app.services.learning import path_service
 
-    with contextlib.suppress(Exception):
+    try:
         path_service.try_advance_path_for_topic(
             db, progress.child_id, family_id, progress.topic_id
+        )
+    except Exception as e:
+        logger.warning(
+            "Path advancement failed on parent review for topic %s: %s",
+            progress.topic_id,
+            e,
         )
 
     return progress

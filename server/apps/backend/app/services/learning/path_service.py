@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from collections import deque
 from datetime import UTC, date, datetime
@@ -14,6 +15,8 @@ from packages.db.models.learning.assignment import LearningAssignment
 from packages.db.models.learning.path import LearningPath, LearningPathItem
 from packages.db.models.learning.topic import LearningDependency, LearningTopic
 
+logger = logging.getLogger(__name__)
+
 
 def sort_topics_by_prerequisites(
     db: Session, topic_ids: list[int]
@@ -24,14 +27,20 @@ def sort_topics_by_prerequisites(
     intermediate topics are absent from *topic_ids*, ordering constraints they
     impose are preserved.  Only considers dependencies relevant to the given
     topic_ids.
+
+    Cyclic dependencies: if a cycle is detected, the involved topics are
+    appended at the end in their original input order. This is graceful
+    degradation — the path still works, but cycle members may appear in a
+    confusing order. Cycles should be prevented at taxonomy creation time.
     """
     if len(topic_ids) <= 1:
         return list(topic_ids)
 
     topic_set = set(topic_ids)
 
-    # Load all dependency edges — the full graph is small (learning taxonomy)
-    # and we need intermediate nodes outside topic_set for transitive ordering.
+    # Load all dependency edges — the learning taxonomy is expected to stay
+    # small (<500 topics, <2000 edges). For larger taxonomies, scope this
+    # query to only edges involving topic_ids and their transitive prereqs.
     all_deps = db.query(LearningDependency).all()
 
     # Build adjacency: topic -> [its direct prerequisites]
@@ -133,6 +142,22 @@ def create_path(
     due_date: date | None = None,
 ) -> LearningPath:
     """Create a learning path with auto-sorted items and associated assignments."""
+    # Validate all topic_ids exist before creating any items
+    existing_ids = set(
+        db.query(LearningTopic.id)
+        .filter(LearningTopic.id.in_(topic_ids))
+        .scalars()
+    )
+    missing = set(topic_ids) - existing_ids
+    if missing:
+        from apps.backend.app.errors.codes import ErrorCode
+        from apps.backend.app.errors.exceptions import AppError
+
+        raise AppError(
+            ErrorCode.LEARNING_TOPIC_NOT_FOUND,
+            details={"missing_ids": [str(tid) for tid in missing]},
+        )
+
     # 1. Create the path record
     path = LearningPath(
         family_id=family_id,
@@ -220,12 +245,17 @@ def advance_path_item(
 
         raise AppError(ErrorCode.LEARNING_PATH_NOT_FOUND)
 
+    # Lock the item row to prevent concurrent double-advance (P0 race fix).
+    # Two callers (MCP mastery + parent approve_review) can converge on the
+    # same item; SELECT FOR UPDATE serializes them so the second caller sees
+    # status=completed after acquiring the lock and returns via idempotency.
     item = (
         db.query(LearningPathItem)
         .filter(
             LearningPathItem.path_id == path_id,
             LearningPathItem.topic_id == topic_id,
         )
+        .with_for_update()
         .first()
     )
     if not item:
@@ -306,7 +336,10 @@ def advance_path_item(
         path.status = "completed"
         path.completed_at = datetime.now(UTC)
 
-    db.commit()
+    # Flush (not commit) to persist changes within the caller's transaction.
+    # Committing here would commit the caller's entire pending transaction
+    # as a side effect, which is surprising and can mask upstream errors.
+    db.flush()
     return {"item": item, "rewards": rewards, "path": path}
 
 

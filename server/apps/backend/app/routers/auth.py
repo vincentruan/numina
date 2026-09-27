@@ -342,6 +342,9 @@ def child_refresh(
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         httponly=True,
         secure=settings.ENVIRONMENT == "production",
+        # samesite="lax" aligns with set_auth_cookies / set_child_auth_cookies
+        # (which also use "lax"). "strict" breaks cookie delivery when the child
+        # app is opened from a cross-site link (e.g., notification, bookmark).
         samesite="lax",
         path="/",
     )

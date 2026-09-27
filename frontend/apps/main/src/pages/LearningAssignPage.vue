@@ -481,14 +481,23 @@ const perTaskScore = ref('5')
 const bonusScore = ref('10')
 const creatingPath = ref(false)
 
+const PATH_DISPLAY_LIMIT = 100
+
 const filteredPathTopics = computed(() => {
   const q = pathSearch.value.trim().toLowerCase()
-  if (!q) return allTopics.value
-  return allTopics.value.filter((topic) => {
-    const name = topicIndexName(topic).toLowerCase()
-    const domain = (topic.domain || '').toLowerCase()
-    return name.includes(q) || domain.includes(q)
-  })
+  const filtered = q
+    ? allTopics.value.filter((topic) => {
+        const name = topicIndexName(topic).toLowerCase()
+        const domain = (topic.domain || '').toLowerCase()
+        return name.includes(q) || domain.includes(q)
+      })
+    : allTopics.value
+  // Cap displayed items when no search query to avoid rendering hundreds of rows.
+  // When searching, show all matches so the user can find what they need.
+  if (!q && filtered.length > PATH_DISPLAY_LIMIT) {
+    return filtered.slice(0, PATH_DISPLAY_LIMIT)
+  }
+  return filtered
 })
 
 const canCreatePath = computed(

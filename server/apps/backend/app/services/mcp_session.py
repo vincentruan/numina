@@ -874,8 +874,12 @@ class MCPSession:
                                                         int(self._family_id),
                                                         progress.topic_id,
                                                     )
-                                                except Exception:
-                                                    pass  # Best-effort path advancement
+                                                except Exception as e:
+                                                    logger.warning(
+                                                        "Path advancement failed for topic %s: %s",
+                                                        progress.topic_id,
+                                                        e,
+                                                    )
                                         except AppError:
                                             data = {
                                                 "error": "invalid_mastery_transition",
