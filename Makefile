@@ -699,7 +699,7 @@ build-local:
 	            frontend-main:frontend-main frontend-child:frontend-child; do \
 		compose_svc=$${svc%%:*}; \
 		tag_svc=$${svc##*:}; \
-		src="$${proj}_$${compose_svc}"; \
+		src="$${proj}-$${compose_svc}"; \
 		dst="$(LOCAL_IMAGE_PREFIX)/$$tag_svc:$(LOCAL_IMAGE_TAG)"; \
 		echo "  $$src → $$dst"; \
 		docker tag "$$src" "$$dst" || { echo "✗ 标记失败: $$src (运行 docker images 确认镜像名)"; exit 1; }; \

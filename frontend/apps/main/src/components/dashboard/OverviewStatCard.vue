@@ -115,10 +115,10 @@
         <div class="ldp-title">{{ t('dashboard.liabilityDetailTitle') }}</div>
 
         <!-- 1. Original total + category breakdown -->
-        <div class="ldp-section">
-          <div class="ldp-section-header">
-            <span class="ldp-section-label">{{ t('dashboard.liabilityCategoryTotal') }}</span>
-            <MoneyDisplay :amount="liabilityDetail?.total_liabilities ?? 0" />
+        <div class="ldp-section ldp-section--total">
+          <div class="ldp-section-header ldp-section-header--total">
+            <span class="ldp-section-label ldp-section-label--total">{{ t('dashboard.liabilityCategoryTotal') }}</span>
+            <MoneyDisplay :amount="liabilityDetail?.total_liabilities ?? 0" class="ldp-section-value--total" />
           </div>
           <div v-if="liabilityDetail?.categories?.length" class="ldp-category-list">
             <div
@@ -147,10 +147,12 @@
           v-if="(liabilityDetail?.travel_ancient_total ?? 0) > 0 || (liabilityDetail?.travel_monthly?.length ?? 0) > 0"
           class="ldp-section"
         >
-          <div class="ldp-section-label ldp-section-label--mb">{{ t('dashboard.travelExpense') }}</div>
+          <div class="ldp-section-header">
+            <span class="ldp-section-label">{{ t('dashboard.travelExpense') }}</span>
+          </div>
 
           <!-- Ancient total (3+ months ago) -->
-          <div v-if="(liabilityDetail?.travel_ancient_total ?? 0) > 0" class="ldp-section-header">
+          <div v-if="(liabilityDetail?.travel_ancient_total ?? 0) > 0" class="ldp-travel-ancient">
             <span class="ldp-section-label">{{ t('dashboard.travelAncientTotal') }}</span>
             <MoneyDisplay :amount="liabilityDetail!.travel_ancient_total" />
           </div>
@@ -160,9 +162,9 @@
             <div
               v-for="item in liabilityDetail.travel_monthly"
               :key="item.month"
-              class="ldp-section-header"
+              class="ldp-monthly-row"
             >
-              <span class="ldp-section-label">{{ formatTravelMonth(item.month) }}</span>
+              <span class="ldp-monthly-label">{{ formatTravelMonth(item.month) }}</span>
               <MoneyDisplay :amount="item.amount" />
             </div>
           </div>
@@ -639,43 +641,90 @@ onMounted(() => {
   text-align: center;
   margin-bottom: 16px;
 }
+
+/* ---- Section (first-level group) ---- */
 .ldp-section {
-  margin-bottom: 16px;
+  margin-bottom: 4px;
+  padding: 10px 12px;
+  background: var(--card-bg, #f7f8fa);
+  border-radius: 10px;
 }
 .ldp-section:last-child {
   margin-bottom: 0;
 }
+
+/* Total section — extra emphasis */
+.ldp-section--total {
+  background: var(--van-primary-color, #1989fa);
+  color: #fff;
+}
+.ldp-section-header--total {
+  padding: 0;
+}
+.ldp-section-label--total {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+}
+.ldp-section-value--total :deep(span) {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Section header row (rent / travel — first-level items) */
 .ldp-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
+  padding: 0;
 }
 .ldp-section-label {
   font-size: 14px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
 }
-.ldp-section-label--mb {
-  margin-bottom: 4px;
-}
+
+/* Sub-items within a section — indented, slightly muted */
 .ldp-category-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
+  margin-top: 6px;
 }
 .ldp-monthly-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
+  margin-top: 6px;
 }
+
+/* Travel ancient total — inline with section */
+.ldp-travel-ancient {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+.ldp-travel-ancient .ldp-section-label {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+/* Category row (second-level: 房贷, 车贷 …) */
 .ldp-category-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 0;
+  padding: 7px 0;
   font-size: 13px;
   border-top: 1px solid var(--separator, rgba(0, 0, 0, 0.06));
+}
+/* First category row: no top border (already separated by section bg) */
+.ldp-category-row:first-child {
+  border-top: none;
+  padding-top: 8px;
 }
 .ldp-cat-dot {
   width: 8px;
@@ -686,7 +735,7 @@ onMounted(() => {
 .ldp-cat-name {
   flex: 1;
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: 400;
 }
 .ldp-cat-pct {
   color: var(--text-tertiary);
@@ -694,6 +743,25 @@ onMounted(() => {
   min-width: 40px;
   text-align: right;
 }
+
+/* Monthly row (second-level: 2026年9月 …) */
+.ldp-monthly-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 0;
+  font-size: 13px;
+  border-top: 1px solid var(--separator, rgba(0, 0, 0, 0.06));
+}
+.ldp-monthly-row:first-child {
+  border-top: none;
+  padding-top: 8px;
+}
+.ldp-monthly-label {
+  color: var(--text-primary);
+  font-weight: 400;
+}
+
 .ldp-loading {
   display: flex;
   justify-content: center;
