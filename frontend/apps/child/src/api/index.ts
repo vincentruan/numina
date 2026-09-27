@@ -20,8 +20,32 @@ http.interceptors.request.use(
   (error) => Promise.reject(error),
 )
 
+// ── Token refresh state ──
+let isRefreshing = false
+let pendingRequests: Array<{
+  resolve: () => void
+  reject: (error: unknown) => void
+}> = []
+let sessionExpired = false
+
+function onRefreshed() {
+  pendingRequests.forEach(({ resolve }) => resolve())
+  pendingRequests = []
+}
+
+function onRefreshFailed(error: unknown) {
+  pendingRequests.forEach(({ reject }) => reject(error))
+  pendingRequests = []
+}
+
+function redirectToLogin() {
+  clearAuth()
+  const baseUrl = getMainBaseUrl()
+  window.location.replace(`${baseUrl}/login?redirect=/child/`)
+}
+
 // Response interceptor — unwrap {code, data} envelope so callers get res.data directly
-// On 401, clear stale localStorage session and redirect to main login
+// On 401, attempt token refresh before redirecting to main login
 http.interceptors.response.use(
   (response) => {
     if (response.data && typeof response.data === 'object' && 'code' in response.data && 'data' in response.data) {
@@ -29,19 +53,61 @@ http.interceptors.response.use(
     }
     return response
   },
-  (error) => {
-    const originalRequest = error.config as { method?: string; url?: string; data?: unknown; _skipAuthRedirect?: boolean } | undefined
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
+  async (error) => {
+    const originalRequest = error.config as { method?: string; url?: string; data?: unknown; _retry?: boolean; _skipAuthRedirect?: boolean } | undefined
+
+    if (axios.isAxiosError(error) && error.response?.status === 401 && !originalRequest?._retry) {
       const url = originalRequest?.url ?? ''
+
       // Don't redirect for auth endpoints (login should handle its own errors)
       // or when the caller explicitly opts out (non-critical calls that handle errors locally)
-      if (!url.includes('/auth/') && !originalRequest?._skipAuthRedirect) {
-        clearAuth()
-        // Redirect to main login (child app has no auth pages).
-        // Must use getMainBaseUrl() — VITE_MAIN_APP_URL is unset, so fallback ''
-        // would resolve to the child server's /login, tripping Vite's base check.
-        const baseUrl = getMainBaseUrl()
-        window.location.replace(`${baseUrl}/login?redirect=/child/`)
+      if (url.includes('/auth/') || originalRequest?._skipAuthRedirect) {
+        return Promise.reject(error)
+      }
+
+      // Once session is known expired, skip further refresh attempts
+      if (sessionExpired) {
+        redirectToLogin()
+        return Promise.reject(error)
+      }
+
+      // Refresh endpoint failure = session truly expired
+      if (url.includes('/auth/child/refresh')) {
+        sessionExpired = true
+        redirectToLogin()
+        return Promise.reject(error)
+      }
+
+      // Try to refresh the child access token
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          pendingRequests.push({
+            resolve: () => {
+              originalRequest!._retry = true
+              resolve(http(originalRequest!))
+            },
+            reject,
+          })
+        })
+      }
+
+      isRefreshing = true
+      originalRequest!._retry = true
+
+      try {
+        // IMPORTANT: Send null (not {}) to avoid 422 from Pydantic validation
+        await axios.post('/api/v1/auth/child/refresh', null, {
+          withCredentials: true,
+        })
+        onRefreshed()
+        return http(originalRequest!)
+      } catch (refreshError) {
+        onRefreshFailed(refreshError)
+        sessionExpired = true
+        redirectToLogin()
+        return Promise.reject(refreshError)
+      } finally {
+        isRefreshing = false
       }
     }
 
@@ -66,3 +132,26 @@ http.interceptors.response.use(
 )
 
 export default http
+
+// ── Export refresh logic for proactive token keep-alive ──
+
+export async function refreshTokenIfNeeded(): Promise<void> {
+  if (isRefreshing) {
+    return new Promise((resolve, reject) => {
+      pendingRequests.push({ resolve, reject })
+    })
+  }
+
+  isRefreshing = true
+  try {
+    await axios.post('/api/v1/auth/child/refresh', null, {
+      withCredentials: true,
+    })
+    onRefreshed()
+  } catch (refreshError) {
+    onRefreshFailed(refreshError)
+    throw refreshError
+  } finally {
+    isRefreshing = false
+  }
+}

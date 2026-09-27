@@ -342,7 +342,7 @@ def child_refresh(
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         httponly=True,
         secure=settings.ENVIRONMENT == "production",
-        samesite="strict",
+        samesite="lax",
         path="/",
     )
     return {"message": "token refreshed"}
