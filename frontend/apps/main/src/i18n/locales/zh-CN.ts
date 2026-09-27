@@ -1824,6 +1824,21 @@ export default {
     translating: '翻译中...',
     translationFailed: '翻译失败，请稍后重试',
     translationComplete: '翻译完成',
+    // Subject names
+    subjectAll: '全部',
+    subjectMathematics: '数学',
+    subjectScience: '科学',
+    subjectEnglish: '英语',
+    subjectHistory: '历史',
+    subjectPersonal_social: '个人与社会',
+    subjectLife_skills: '生活技能',
+    subjectComputing: '计算机',
+    subjectLearning_to_learn: '学习方法',
+    // Topic picker (index bar)
+    topicPicker: '选择知识点',
+    selectedTopic: '已选知识点',
+    noTopicsInDomain: '暂无知识点',
+    topicsCount: '{count} 个知识点',
   },
   family: {
     title: '家庭',

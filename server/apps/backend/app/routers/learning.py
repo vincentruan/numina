@@ -77,6 +77,41 @@ def get_topics_batch(
     return [_topic_to_response(t) for t in topics]
 
 
+@router.get("/topics/index")
+def get_topic_index(
+    db: Session = Depends(get_db),
+):
+    """Lightweight index of all topics for browse UI (index bar).
+
+    Returns only the fields needed to build subject → domain → topic navigation.
+    Much smaller payload than the full topic list (~100KB vs ~800KB for 1600 topics).
+    """
+    rows = (
+        db.query(
+            LearningTopic.id,
+            LearningTopic.subject,
+            LearningTopic.domain,
+            LearningTopic.name,
+            LearningTopic.name_zh,
+            LearningTopic.age_group,
+        )
+        .filter(LearningTopic.deprecated == False)  # noqa: E712
+        .order_by(LearningTopic.subject, LearningTopic.domain, LearningTopic.name)
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "subject": r.subject,
+            "domain": r.domain or "",
+            "name": r.name,
+            "name_zh": r.name_zh,
+            "age_group": r.age_group,
+        }
+        for r in rows
+    ]
+
+
 @router.get("/topics", response_model=list[TopicResponse])
 def list_topics(
     subject: str | None = None,

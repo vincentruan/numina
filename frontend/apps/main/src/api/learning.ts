@@ -149,8 +149,23 @@ export async function getTopicsBatch(ids: string[]): Promise<TopicResponse[]> {
   return res.data
 }
 
+/** Lightweight topic index item for browse UI (index bar). */
+export interface TopicIndexItem {
+  id: string
+  subject: string
+  domain: string
+  name: string | null
+  name_zh: string | null
+  age_group: string
+}
+
+export async function getTopicIndex(): Promise<TopicIndexItem[]> {
+  const res = await http.get('/learning/topics/index')
+  return res.data
+}
+
 export async function searchTopics(query: string): Promise<TopicResponse[]> {
-  const res = await http.get('/learning/topics', { params: { search: query } })
+  const res = await http.get('/learning/topics', { params: { search: query, limit: 50 } })
   return res.data
 }
 

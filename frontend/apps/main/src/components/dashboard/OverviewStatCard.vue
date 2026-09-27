@@ -646,7 +646,7 @@ onMounted(() => {
 .ldp-section {
   margin-bottom: 8px;
   padding: 12px 14px;
-  background: var(--card-bg, #f7f8fa);
+  background: #f0f1f4;
   border-radius: 10px;
   border-left: 3px solid transparent;
 }
@@ -654,10 +654,14 @@ onMounted(() => {
   margin-bottom: 0;
 }
 
-/* Total section — subtle left accent instead of full saturated bg */
+/* Total section — subtle left accent */
 .ldp-section--total {
   border-left-color: var(--van-primary-color, #1989fa);
-  background: var(--card-bg, #f7f8fa);
+}
+
+/* Dark mode: card bg must contrast with popup surface */
+[data-theme='dark'] .ldp-section {
+  background: #1e1e3a;
 }
 .ldp-section-header--total {
   padding: 0;

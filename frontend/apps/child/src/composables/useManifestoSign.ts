@@ -36,7 +36,9 @@ export function useManifestoSign(options?: { birthday?: string | null }) {
     loading.value = true
     try {
       const res = await getChildManifesto()
-      manifesto.value = res.data
+      // When no active manifesto exists the backend returns manifesto_id=null;
+      // treat that as "no manifesto" so the popup / summary card stay hidden.
+      manifesto.value = res.data.manifesto_id ? res.data : null
       signed.value = res.data.signed
     } catch {
       manifesto.value = null
