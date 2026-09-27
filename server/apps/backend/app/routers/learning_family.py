@@ -14,12 +14,15 @@ from apps.backend.app.schemas.learning import (
     AssignmentCreate,
     AssignmentResponse,
     ChildLearningOverview,
+    PathCreate,
+    PathResponse,
     ProgressResponse,
     ReviewItemResponse,
     TopicResponse,
 )
 from apps.backend.app.services.learning import (
     assignment_service,
+    path_service,
     progress_service,
 )
 from apps.backend.app.services.notification.dispatcher import (
@@ -28,6 +31,7 @@ from apps.backend.app.services.notification.dispatcher import (
     notify_learning_rejected,
 )
 from packages.db.models.learning.assignment import LearningAssignment
+from packages.db.models.learning.path import LearningPath
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
 from packages.db.models.learning.topic import LearningTopic
@@ -344,3 +348,120 @@ def reject_review(
         notify_learning_rejected(db, user.family_id, child_name, topic_name)
 
     return progress
+
+
+# ---------------------------------------------------------------------------
+# Learning Path endpoints
+# ---------------------------------------------------------------------------
+
+
+def _build_path_response(path: LearningPath, progress: dict) -> dict:
+    """Helper to build PathResponse dict from path + progress data."""
+    return {
+        "id": path.id,
+        "family_id": path.family_id,
+        "child_id": path.child_id,
+        "created_by": path.created_by,
+        "name": path.name,
+        "name_zh": path.name_zh,
+        "description": path.description,
+        "description_zh": path.description_zh,
+        "status": path.status,
+        "per_task_score": path.per_task_score,
+        "bonus_score": path.bonus_score,
+        "milestone_scores": path.milestone_scores or [],
+        "due_date": path.due_date,
+        "created_at": path.created_at,
+        "completed_at": path.completed_at,
+        "items": progress["items"],
+        "completed_count": progress["completed_count"],
+        "total_count": progress["total_count"],
+        "next_milestone": progress["next_milestone"],
+    }
+
+
+@router.post("/paths", response_model=PathResponse, status_code=201)
+def create_path(
+    req: PathCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Create a learning path for a child."""
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == req.child_id, User.family_id == user.family_id)
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.LEARNING_PATH_ACCESS_DENIED)
+
+    path = path_service.create_path(
+        db,
+        family_id=user.family_id,
+        child_id=req.child_id,
+        created_by=user.id,
+        name=req.name,
+        name_zh=req.name_zh,
+        description=req.description,
+        description_zh=req.description_zh,
+        topic_ids=req.topic_ids,
+        per_task_score=req.per_task_score,
+        bonus_score=req.bonus_score,
+        milestone_scores=req.milestone_scores,
+        due_date=req.due_date,
+    )
+
+    progress = path_service.get_path_progress(db, path.id, user.family_id)
+    return _build_path_response(path, progress)
+
+
+@router.get("/paths", response_model=list[PathResponse])
+def list_paths(
+    child_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """List learning paths, optionally filtered by child."""
+    query = db.query(LearningPath).filter(LearningPath.family_id == user.family_id)
+    if child_id:
+        query = query.filter(LearningPath.child_id == child_id)
+    paths = query.order_by(LearningPath.created_at.desc()).all()
+
+    result = []
+    for path in paths:
+        progress = path_service.get_path_progress(db, path.id, user.family_id)
+        result.append(_build_path_response(path, progress))
+    return result
+
+
+@router.get("/paths/{path_id}", response_model=PathResponse)
+def get_path(
+    path_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get path detail with items and progress."""
+    progress = path_service.get_path_progress(db, path_id, user.family_id)
+    return _build_path_response(progress["path"], progress)
+
+
+@router.post("/paths/{path_id}/archive", response_model=PathResponse)
+def archive_path(
+    path_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Archive a learning path."""
+    path = (
+        db.query(LearningPath)
+        .filter(LearningPath.id == path_id, LearningPath.family_id == user.family_id)
+        .first()
+    )
+    if not path:
+        raise AppError(ErrorCode.LEARNING_PATH_NOT_FOUND)
+    path.status = "archived"
+    db.commit()
+    db.refresh(path)
+    progress = path_service.get_path_progress(db, path.id, user.family_id)
+    return _build_path_response(path, progress)

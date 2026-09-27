@@ -15,6 +15,7 @@ from apps.backend.app.schemas.learning import (
     AssessStreamRequest,
     AssignmentResponse,
     ChildProgressOverview,
+    PathResponse,
     ProgressResponse,
     SessionCreate,
     SessionResponse,
@@ -23,6 +24,7 @@ from apps.backend.app.schemas.learning import (
 )
 from apps.backend.app.services.learning import (
     assignment_service,
+    path_service,
     progress_service,
     session_service,
 )
@@ -30,6 +32,7 @@ from apps.backend.app.services.notification.dispatcher import (
     notify_learning_submitted_for_review,
 )
 from packages.db.models.learning.assignment import LearningAssignment
+from packages.db.models.learning.path import LearningPath
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
 from packages.db.models.learning.topic import LearningTopic
@@ -229,6 +232,87 @@ def my_overall_progress(
         parent_review_count=overview["parent_review"],
         **study_minutes,
     )
+
+
+# ---------------------------------------------------------------------------
+# Learning Path endpoints (child view)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/paths", response_model=list[PathResponse])
+def list_my_paths(
+    child: User = Depends(get_current_child_user),
+    db: Session = Depends(get_db),
+):
+    """List child's active learning paths."""
+    paths = path_service.get_child_active_paths(db, child.id, child.family_id)
+    result = []
+    for path in paths:
+        progress = path_service.get_path_progress(db, path.id, child.family_id)
+        result.append({
+            "id": path.id,
+            "family_id": path.family_id,
+            "child_id": path.child_id,
+            "created_by": path.created_by,
+            "name": path.name,
+            "name_zh": path.name_zh,
+            "description": path.description,
+            "description_zh": path.description_zh,
+            "status": path.status,
+            "per_task_score": path.per_task_score,
+            "bonus_score": path.bonus_score,
+            "milestone_scores": path.milestone_scores or [],
+            "due_date": path.due_date,
+            "created_at": path.created_at,
+            "completed_at": path.completed_at,
+            "items": progress["items"],
+            "completed_count": progress["completed_count"],
+            "total_count": progress["total_count"],
+            "next_milestone": progress["next_milestone"],
+        })
+    return result
+
+
+@router.get("/paths/{path_id}", response_model=PathResponse)
+def get_my_path(
+    path_id: int,
+    child: User = Depends(get_current_child_user),
+    db: Session = Depends(get_db),
+):
+    """Get path detail with progress. Validates ownership + family."""
+    path = (
+        db.query(LearningPath)
+        .filter(
+            LearningPath.id == path_id,
+            LearningPath.child_id == child.id,
+            LearningPath.family_id == child.family_id,
+        )
+        .first()
+    )
+    if not path:
+        raise AppError(ErrorCode.LEARNING_PATH_NOT_FOUND)
+    progress = path_service.get_path_progress(db, path.id, child.family_id)
+    return {
+        "id": path.id,
+        "family_id": path.family_id,
+        "child_id": path.child_id,
+        "created_by": path.created_by,
+        "name": path.name,
+        "name_zh": path.name_zh,
+        "description": path.description,
+        "description_zh": path.description_zh,
+        "status": path.status,
+        "per_task_score": path.per_task_score,
+        "bonus_score": path.bonus_score,
+        "milestone_scores": path.milestone_scores or [],
+        "due_date": path.due_date,
+        "created_at": path.created_at,
+        "completed_at": path.completed_at,
+        "items": progress["items"],
+        "completed_count": progress["completed_count"],
+        "total_count": progress["total_count"],
+        "next_milestone": progress["next_milestone"],
+    }
 
 
 @router.post("/sessions/{session_id}/assess/stream")
