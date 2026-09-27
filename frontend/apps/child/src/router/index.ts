@@ -105,6 +105,12 @@ const router = createRouter({
           meta: { hasSkeleton: true },
         },
         {
+          path: 'learning/path/:id',
+          name: 'LearningPath',
+          component: () => import('@/pages/learning/LearningPathPage.vue'),
+          meta: { hasSkeleton: true },
+        },
+        {
           path: 'learning/progress',
           name: 'LearningProgress',
           component: () => import('@/pages/learning/LearningProgressPage.vue'),
