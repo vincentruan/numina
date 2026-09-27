@@ -6,8 +6,10 @@ Usage:
 """
 
 import argparse
+import asyncio
 import json
 import os
+import re
 import subprocess
 from collections import Counter
 from pathlib import Path
@@ -25,6 +27,44 @@ SUBJECT_MAP = {
     "Computing": "computing",
     "Learning to Learn": "learning_to_learn",
 }
+
+
+_INJECTION_PATTERNS = [
+    re.compile(r"ignore\s+(all\s+)?previous\s+instructions", re.IGNORECASE),
+    re.compile(r"忽略\s*(之前|所有)\s*(?:的\s*)?指令", re.IGNORECASE),
+    re.compile(r"forget\s+(all\s+)?instructions", re.IGNORECASE),
+    re.compile(r"system\s*:\s*", re.IGNORECASE),
+    re.compile(r"<\|im_start\|>", re.IGNORECASE),
+]
+
+# Detect homoglyph attacks: Cyrillic/Greek chars that look like Latin
+_HOMOGYPH_RANGES = [
+    ("Ѐ", "ӿ"),  # Cyrillic
+    ("Ͱ", "Ͽ"),  # Greek
+]
+
+
+def has_chinese_chars(text: str) -> bool:
+    """Return True if text contains any CJK Unified Ideograph character."""
+    return any("一" <= ch <= "鿿" for ch in text)
+
+
+def has_injection_pattern(text: str) -> bool:
+    """Return True if text contains prompt injection or homoglyph patterns."""
+    # Check known injection patterns
+    for pattern in _INJECTION_PATTERNS:
+        if pattern.search(text):
+            return True
+    # Check for suspicious homoglyphs (Cyrillic/Greek mixed with Latin context)
+    if len(text) > 10:
+        homoglyph_count = sum(
+            1
+            for ch in text
+            if any(start <= ch <= end for start, end in _HOMOGYPH_RANGES)
+        )
+        if homoglyph_count >= 3:
+            return True
+    return False
 
 
 def compute_age_group(age_start: int | None) -> str:
@@ -248,11 +288,149 @@ def validate_quality(session) -> None:
     print("\n  All quality validations passed.")
 
 
+async def seed_topic_translations(session, data_dir: Path, batch_size: int = 50):
+    """Batch-translate topics with empty *_zh fields using agent LLM infrastructure."""
+    from apps.agent.core.config import get_ai_config
+
+    from apps.agent.services.topic_translate import translate_topic
+    from packages.db.models.learning.topic import LearningTopic
+
+    # Query topics with missing Chinese translations, high-centrality first
+    untranslated = (
+        session.query(LearningTopic)
+        .filter(
+            (LearningTopic.name_zh.is_(None)) | (LearningTopic.name_zh == "")
+        )
+        .filter(LearningTopic.deprecated == False)  # noqa: E712
+        .order_by(LearningTopic.centrality.desc().nullslast())
+        .all()
+    )
+
+    # Skip topics whose English name already contains Chinese chars
+    untranslated = [t for t in untranslated if not has_chinese_chars(t.name or "")]
+
+    if not untranslated:
+        print("All topics already translated. Skipping.")
+        return
+
+    print(f"Translating {len(untranslated)} topics (high-centrality first)...")
+
+    ai_config = get_ai_config()
+    total_translated = 0
+
+    for batch_start in range(0, len(untranslated), batch_size):
+        batch = untranslated[batch_start : batch_start + batch_size]
+        for topic in batch:
+            try:
+                topic_dict = {
+                    "name": topic.name,
+                    "description": topic.description or "",
+                    "evidence": topic.evidence or [],
+                    "assessment_prompt": topic.assessment_prompt or "",
+                }
+                zh_fields = await translate_topic(topic_dict, ai_config)
+            except Exception as e:
+                print(f"  WARNING: Translation error for {topic.topic_key}: {e}")
+                continue
+
+            if zh_fields and zh_fields.get("name_zh"):
+                # Validate assessment_prompt_zh
+                prompt_zh = zh_fields.get("assessment_prompt_zh", "")
+                if prompt_zh and (
+                    len(prompt_zh) > 500 or has_injection_pattern(prompt_zh)
+                ):
+                    print(
+                        f"  WARNING: Bad assessment_prompt_zh for {topic.topic_key}, keeping English"
+                    )
+                    zh_fields["assessment_prompt_zh"] = topic.assessment_prompt
+
+                topic.name_zh = zh_fields.get("name_zh")
+                topic.description_zh = zh_fields.get("description_zh")
+                topic.evidence_zh_json = json.dumps(
+                    zh_fields.get("evidence_zh", []), ensure_ascii=False
+                )
+                topic.assessment_prompt_zh = zh_fields.get("assessment_prompt_zh")
+                total_translated += 1
+            else:
+                print(
+                    f"  WARNING: Translation failed for {topic.topic_key}, keeping English"
+                )
+
+        session.commit()
+        batch_num = batch_start // batch_size + 1
+        total_batches = (len(untranslated) - 1) // batch_size + 1
+        print(f"  Translated batch {batch_num}/{total_batches}")
+
+    print(
+        f"Translation complete: {total_translated}/{len(untranslated)} topics translated."
+    )
+
+
+async def seed_cluster_translations(session, ai_config):
+    """Translate cluster summaries to Chinese."""
+    from apps.agent.services.topic_translate import translate_topic
+    from packages.db.models.learning.topic import LearningCluster
+
+    clusters = (
+        session.query(LearningCluster)
+        .filter(
+            (LearningCluster.summary_zh.is_(None)) | (LearningCluster.summary_zh == "")
+        )
+        .all()
+    )
+
+    if not clusters:
+        print("All clusters already translated. Skipping.")
+        return
+
+    print(f"Translating {len(clusters)} cluster summaries...")
+    translated = 0
+
+    for cluster in clusters:
+        try:
+            # Reuse translate_topic with a dict shaped like a topic
+            result = await translate_topic(
+                {
+                    "name": f"{cluster.subject} - {cluster.domain}",
+                    "description": cluster.summary or "",
+                    "evidence": [],
+                    "assessment_prompt": "",
+                },
+                ai_config,
+            )
+            if result and result.get("description_zh"):
+                cluster.summary_zh = result["description_zh"]
+                translated += 1
+        except Exception as e:
+            print(
+                f"  WARNING: Cluster translation error for {cluster.subject}/{cluster.domain}: {e}"
+            )
+
+    session.commit()
+    print(f"Cluster translation complete: {translated}/{len(clusters)} translated.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Seed learning OS data from os-taxonomy")
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
     parser.add_argument(
         "--skip-validate", action="store_true", help="Skip post-seed quality validation"
+    )
+    parser.add_argument(
+        "--skip-translation",
+        action="store_true",
+        help="Skip the translation pass (for re-seed without re-translating)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=50,
+        help="Translation batch size (default: 50)",
+    )
+    parser.add_argument(
+        "--force-retranslate",
+        action="store_true",
+        help="Force re-translate topics that already have _zh data",
     )
     args = parser.parse_args()
 
@@ -274,6 +452,13 @@ def main():
         print("Seeding clusters...")
         seed_clusters(session, args.data_dir)
         session.commit()
+
+        if not args.skip_translation:
+            asyncio.run(seed_topic_translations(session, args.data_dir, args.batch_size))
+            from apps.agent.core.config import get_ai_config
+
+            asyncio.run(seed_cluster_translations(session, get_ai_config()))
+
         print("Done!")
 
         if not args.skip_validate:
