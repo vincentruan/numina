@@ -27,7 +27,6 @@
           <span class="day-date">{{ formatDate(day.date) }}</span>
           <span class="day-weekday">{{ formatWeekday(day.date) }}</span>
           <van-button
-            v-if="day.items.filter(d => d.isStartDay).length === 0"
             size="mini"
             round
             plain

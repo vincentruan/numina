@@ -3,7 +3,7 @@
     <van-swipe-cell>
       <div class="card-body" @click="$emit('edit', item)">
         <div class="card-icon">
-          <van-icon :name="typeIcon" size="22" />
+          <IIcon :icon="typeIcon" :size="22" />
         </div>
         <div class="card-content">
           <div class="card-header">
@@ -14,7 +14,7 @@
             <span v-if="item.end_time" class="card-time">{{ item.end_time }}</span>
           </div>
           <div v-if="item.location" class="card-location">
-            <van-icon name="location-o" size="12" />
+            <IIcon icon="lucide:map-pin" :size="12" />
             {{ item.location }}
           </div>
           <div v-if="typeMetaSummary" class="card-meta">{{ typeMetaSummary }}</div>
@@ -25,7 +25,7 @@
             {{ formatIn(item.cost_amount, item.cost_currency || 'CNY') }}
           </div>
           <div v-if="item.cost_amount" class="card-linked" :title="t('travel.itinerary.linkedExpense')">
-            <van-icon name="link-o" size="12" />
+            <IIcon icon="lucide:link" :size="12" />
           </div>
         </div>
       </div>
@@ -36,7 +36,7 @@
           class="action-button"
           @click.stop="$emit('edit', item)"
         >
-          <van-icon name="edit" />
+          <IIcon icon="lucide:pencil" :size="18" />
         </van-button>
       </template>
       <template #right>
@@ -46,7 +46,7 @@
           class="action-button"
           @click.stop="$emit('delete', item)"
         >
-          <van-icon name="delete-o" />
+          <IIcon icon="lucide:trash-2" :size="18" />
         </van-button>
       </template>
     </van-swipe-cell>
@@ -57,6 +57,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
+import IIcon from '@/components/IIcon.vue'
 import type { ItineraryItem, ItineraryItemTypeDef } from '@/types/travel'
 
 const props = defineProps<{
@@ -87,11 +88,11 @@ const durationBadge = computed(() => {
 })
 
 const ICON_MAP: Record<string, string> = {
-  accommodation: 'hotel-o',
-  dining: 'restaurant-o',
-  transport: 'car-o',
-  activity: 'fire-o',
-  custom: 'star-o',
+  accommodation: 'lucide:bed-double',
+  dining: 'lucide:utensils',
+  transport: 'lucide:car',
+  activity: 'lucide:flame',
+  custom: 'lucide:star',
 }
 
 const typeIcon = computed(() => {
@@ -99,7 +100,7 @@ const typeIcon = computed(() => {
     const ct = props.customTypes.find(c => c.id === props.item.custom_type_id)
     if (ct) return ct.icon
   }
-  return ICON_MAP[props.item.type] || 'star-o'
+  return ICON_MAP[props.item.type] || 'lucide:star'
 })
 
 const typeName = computed(() => {
