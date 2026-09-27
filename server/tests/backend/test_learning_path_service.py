@@ -492,3 +492,30 @@ class TestTryAdvancePathForTopic:
 
         result = try_advance_path_for_topic(db_session, child_id=1, family_id=1, topic_id=131)
         assert result is None
+
+    def test_path_advances_when_topic_mastered_via_mcp(self, db_session):
+        """Integration test: when try_advance_path_for_topic is called after MCP mastery,
+        the path item should advance to completed status."""
+        # Setup: create a topic and a path containing that topic
+        _make_topic(db_session, 140, "Fractions", "分数")
+        _make_path(db_session, path_id=1400, family_id=1, child_id=1, name="Math Path")
+        _make_path_item(
+            db_session, item_id=4100, path_id=1400, topic_id=140, sort_order=0, status="pending"
+        )
+        db_session.commit()
+
+        # Simulate: after MCP assessment marks topic as mastered, call path advancement
+        result = try_advance_path_for_topic(db_session, child_id=1, family_id=1, topic_id=140)
+
+        # Verify: path item should be advanced
+        assert result is not None
+        assert result["item"].status == "completed"
+        assert result["rewards"]["per_task"] == 5
+
+        # Verify: coin transaction was emitted
+        txs = db_session.query(CoinTransaction).filter(
+            CoinTransaction.child_user_id == 1,
+            CoinTransaction.transaction_type == "path_earn",
+        ).all()
+        assert len(txs) == 1
+        assert txs[0].amount == 5

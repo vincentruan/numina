@@ -862,6 +862,20 @@ class MCPSession:
                                                 progress_service.unlock_dependent_topics(
                                                     db, child.id, progress.topic_id
                                                 )
+                                                # Best-effort: advance learning path if topic is part of one
+                                                try:
+                                                    from apps.backend.app.services.learning import (
+                                                        path_service,
+                                                    )
+
+                                                    path_service.try_advance_path_for_topic(
+                                                        db,
+                                                        child.id,
+                                                        int(self._family_id),
+                                                        progress.topic_id,
+                                                    )
+                                                except Exception:
+                                                    pass  # Best-effort path advancement
                                         except AppError:
                                             data = {
                                                 "error": "invalid_mastery_transition",
