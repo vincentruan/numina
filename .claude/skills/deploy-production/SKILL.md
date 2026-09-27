@@ -504,9 +504,21 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 
 **Seed 流程（仅在 count = 0 或异常时执行）：**
 
+> **⚠️ 重要：** seed 脚本（`server/scripts/`）**不包含在 Docker 镜像中**（Dockerfile 只 COPY `apps/backend/` 和 `packages/`）。必须先从本地 rsync 到服务器，再通过 `docker exec -i` 管道传入容器执行。
+
 需要两个脚本，按顺序执行：
 
-**前置条件：** os-taxonomy 数据文件需已存在于服务器上。数据目录包含 `topics.json`、`dependencies.json`、`clusters.json`。默认位置：`${DEPLOY_REMOTE_DIR}/os-taxonomy-data/`。
+**前置条件 1：** 将 seed 脚本从本地同步到服务器：
+
+```bash
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
+rsync -avz --progress -e "ssh -p ${DEPLOY_SSH_PORT:-22}" \
+  server/scripts/seed_learning_topics.py \
+  server/scripts/seed_learning_badges.py \
+  ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}:/tmp/
+```
+
+**前置条件 2：** os-taxonomy 数据文件需已存在于服务器上。数据目录包含 `topics.json`、`dependencies.json`、`clusters.json`。默认位置：`${DEPLOY_REMOTE_DIR}/os-taxonomy-data/`。
 
 ```
 # 如果 os-taxonomy 数据尚未在服务器上（首次），需要先准备数据：
@@ -516,27 +528,42 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 
 **Step 5c-1: Seed learning topics + dependencies + clusters**
 
+通过管道将脚本传入运行中的 backend 容器（使用 `uv run` 确保依赖可用）：
+
 ```bash
 set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  cat /tmp/seed_learning_topics.py | sudo docker exec -i numina-backend bash -c \
+    'cd /app && PYTHONPATH=/app uv run python - --data-dir /os-taxonomy-data'
+"
+```
+
+> **注意：** `seed_learning_topics.py` 需要 os-taxonomy 数据目录。如果数据不在容器默认路径，需先将数据 rsync 到服务器并用 `-v` 挂载，或修改脚本的 `--data-dir` 参数指向容器内可访问的路径。如果 os-taxonomy 数据目录在服务器 `${DEPLOY_REMOTE_DIR}/os-taxonomy-data/`，需要额外挂载：
+
+```bash
+# 如果 os-taxonomy 数据需要挂载进容器（首次 seed 且数据不在容器内）：
+# 方法：临时运行一个带 volume mount 的容器
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
   cd ${DEPLOY_REMOTE_DIR} &&
-  sudo docker compose -f docker-compose.production.yml run --rm --no-deps \
-    -v ${DEPLOY_REMOTE_DIR}/os-taxonomy-data:/taxonomy-data:ro \
-    backend bash -c '
-      cd /app && uv run python scripts/seed_learning_topics.py --data-dir /taxonomy-data
-    '
+  cat /tmp/seed_learning_topics.py | sudo docker run --rm --network host \
+    -v ${DEPLOY_REMOTE_DIR}/os-taxonomy-data:/os-taxonomy-data:ro \
+    -e DATABASE_URL=\"\$(grep ^DATABASE_URL= .env | cut -d= -f2-)\" \
+    -e ENVIRONMENT=production \
+    \$(grep ^BACKEND_IMAGE= .env | cut -d= -f2-) \
+    bash -c 'cd /app && PYTHONPATH=/app uv run python - --data-dir /os-taxonomy-data'
 "
 ```
 
 **Step 5c-2: Seed learning badges（27 个徽章定义）**
 
+badges 脚本无外部数据依赖，直接管道传入运行中的容器：
+
 ```bash
 set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
-  cd ${DEPLOY_REMOTE_DIR} &&
-  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c '
-    cd /app && uv run python scripts/seed_learning_badges.py
-  '
+  cat /tmp/seed_learning_badges.py | sudo docker exec -i numina-backend bash -c \
+    'cd /app && PYTHONPATH=/app uv run python -'
 "
 ```
 
@@ -1106,7 +1133,8 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | Backend can't reach postgres | `DATABASE_URL` in `.env` must use `172.17.0.1:5432` (Docker host bridge). Verify: `sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c "SELECT 1"`. If using compose defaults (no `.env` override), host is `postgres` which requires a postgres service in the compose stack — **not** the production-pg architecture |
 | `docker-compose.production-pg.yml` uses named volume but server uses bind mount | The local `docker-compose.production-pg.yml` uses `${PROD_PG_DATA_DIR:-/home/geek/data/numina-prod-db/data}` bind mount. If the server has a different data path, set `PROD_PG_DATA_DIR` on the server or override in a `.env` for the production-pg compose |
 | `learning_topics` 表为空 / 儿童学习地图无数据 | alembic 创建表但不包含数据。执行 Mode A Step 5c seed 流程：先确保 os-taxonomy 数据在服务器 `${DEPLOY_REMOTE_DIR}/os-taxonomy-data/`，再运行 seed_learning_topics.py + seed_learning_badges.py |
-| seed_learning_topics.py 报 "data directory does not exist" | os-taxonomy 数据未拷贝到服务器。将包含 `topics.json`、`dependencies.json`、`clusters.json` 的目录 rsync 到 `${DEPLOY_REMOTE_DIR}/os-taxonomy-data/`，或通过 `-v` 挂载到容器的 `/taxonomy-data` |
+| seed_learning_topics.py 报 "No such file or directory" | seed 脚本未打包进 Docker 镜像。先从本地 `rsync server/scripts/seed_*.py` 到服务器 `/tmp/`，再 `cat /tmp/script.py \| docker exec -i numina-backend bash -c 'cd /app && PYTHONPATH=/app uv run python -'` |
+| seed 脚本报 "ModuleNotFoundError: No module named 'sqlalchemy'" | 用了容器系统 Python 而非 uv 环境。必须用 `uv run python` 而非 `python`，并设置 `PYTHONPATH=/app` |
 | seed 后 badges 数量不为 27 | `seed_learning_badges.py` 未运行或运行失败。重新执行 Step 5c-2 |
 | SSH: `cd: $DEPLOY_REMOTE_DIR: No such file or directory` | 单引号内 `$DEPLOY_REMOTE_DIR` 不会在远程展开（它是本地变量）。SSH 命令必须用双引号包裹，让本地 shell 先展开变量。见上方 "SSH quoting" 说明 |
 | `--remove-orphans` 误删 PG 容器 | 永远不要对 `docker-compose.production.yml` 使用 `--remove-orphans`，它会删除 `numina-postgres-prod`。恢复：`sudo docker compose -f docker-compose.production-pg.yml up -d` |
