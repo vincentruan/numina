@@ -413,15 +413,15 @@ class TestGetLiabilityDetail:
         assert result.total_liabilities == 0
         assert result.categories == []
         assert result.rent_monthly_expense is None
-        assert result.travel_last_month == 0
-        assert result.travel_this_month == 0
+        assert result.travel_ancient_total == 0
+        assert result.travel_monthly == []
 
-    def test_travel_expenses_with_purchase_date(self, db, trip, test_user):
-        """Travel expenses bucketed by purchase_date."""
+    def test_travel_expenses_by_departure_date(self, db, trip, test_user):
+        """Travel expenses bucketed by Trip.departure_date month."""
         from apps.backend.app.services.dashboard import get_liability_detail
 
         today = date.today()
-        # Create item with purchase_date this month
+        # trip fixture has departure_date=2026-10-01; item cost bucketed there
         data = ItineraryItemCreate(
             date=today,
             type="accommodation",
@@ -432,32 +432,31 @@ class TestGetLiabilityDetail:
         itinerary_service.create_item(db, trip, test_user.id, data)
 
         result = get_liability_detail(db, test_user)
-        assert result.travel_this_month == 500.0
+        # Trip departure is 2026-10 — bucketed in "2026-10" regardless of purchase_date
+        assert any(m.month == "2026-10" and m.amount == 500.0 for m in result.travel_monthly)
 
-    def test_travel_expenses_coalesce_fallback(self, db, trip, test_user):
-        """Items without purchase_date fall back to date field (coalesce)."""
+    def test_travel_expenses_without_purchase_date(self, db, trip, test_user):
+        """Items without purchase_date are still counted via Trip.departure_date."""
         from apps.backend.app.services.dashboard import get_liability_detail
 
         today = date.today()
-        # Create item WITHOUT purchase_date — should use date for bucketing
         data = ItineraryItemCreate(
             date=today,
             type="dining",
             cost_amount=Decimal("200.00"),
             cost_currency="CNY",
-            # no purchase_date — coalesce(purchase_date, date) should use date
         )
         itinerary_service.create_item(db, trip, test_user.id, data)
 
         result = get_liability_detail(db, test_user)
-        assert result.travel_this_month == 200.0
+        assert any(m.month == "2026-10" and m.amount == 200.0 for m in result.travel_monthly)
 
     def test_travel_expenses_exclude_inactive_trips(self, db, test_user, test_family):
         """Travel expenses only count items from active trips."""
         from apps.backend.app.services.dashboard import get_liability_detail
 
         today = date.today()
-        # Create an inactive trip
+        # Create an inactive trip with departure_date within the window
         inactive_trip = Trip(
             family_id=test_family.id,
             user_id=test_user.id,
@@ -485,7 +484,8 @@ class TestGetLiabilityDetail:
 
         result = get_liability_detail(db, test_user)
         # Inactive trip items should NOT be counted
-        assert result.travel_this_month == 0
+        assert result.travel_monthly == []
+        assert result.travel_ancient_total == 0
 
     def test_rent_expense_from_tenant_contracts(self, db, test_user, test_family):
         """Rent expense aggregated from active tenant rental contracts."""

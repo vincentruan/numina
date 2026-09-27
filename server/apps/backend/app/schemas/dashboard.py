@@ -50,18 +50,26 @@ class LiabilityAllocationResponse(BaseModel):
     total: float
 
 
+class MonthlyTravelItem(BaseModel):
+    month: str  # "YYYY-MM"
+    amount: float
+
+
 class LiabilityDetailResponse(BaseModel):
     """Extended liability breakdown for the detail popup on overview card.
 
     Combines liability category totals with current monthly obligations:
-    tenant rent expense and recent travel spending (by purchase_date).
+    tenant rent expense and travel spending by Trip departure_date.
+    travel_ancient_total aggregates all months ≥3 months ago;
+    travel_monthly lists each month from 3 months back to 6 months forward
+    (only months with non-zero spending are included).
     """
 
     total_liabilities: float
     categories: list[LiabilityAllocationItem]
     rent_monthly_expense: float | None = None
-    travel_last_month: float = 0
-    travel_this_month: float = 0
+    travel_ancient_total: float = 0
+    travel_monthly: list[MonthlyTravelItem] = []
 
 
 class TrendPoint(BaseModel):

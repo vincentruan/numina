@@ -276,12 +276,17 @@ export interface LiabilityAllocationResponse {
   total: number
 }
 
+export interface MonthlyTravelItem {
+  month: string  // "YYYY-MM"
+  amount: number
+}
+
 export interface LiabilityDetailResponse {
   total_liabilities: number
   categories: LiabilityAllocationItem[]
   rent_monthly_expense: number | null
-  travel_last_month: number
-  travel_this_month: number
+  travel_ancient_total: number
+  travel_monthly: MonthlyTravelItem[]
 }
 
 export interface TrendResponse {

@@ -142,19 +142,29 @@
           </div>
         </div>
 
-        <!-- 3. Travel expenses (two months) -->
+        <!-- 3. Travel expenses (ancient total + monthly breakdown) -->
         <div
-          v-if="(liabilityDetail?.travel_last_month ?? 0) > 0 || (liabilityDetail?.travel_this_month ?? 0) > 0"
+          v-if="(liabilityDetail?.travel_ancient_total ?? 0) > 0 || (liabilityDetail?.travel_monthly?.length ?? 0) > 0"
           class="ldp-section"
         >
           <div class="ldp-section-label ldp-section-label--mb">{{ t('dashboard.travelExpense') }}</div>
-          <div v-if="(liabilityDetail?.travel_last_month ?? 0) > 0" class="ldp-section-header">
-            <span class="ldp-section-label">{{ travelLastMonthLabel }}</span>
-            <MoneyDisplay :amount="liabilityDetail!.travel_last_month" />
+
+          <!-- Ancient total (3+ months ago) -->
+          <div v-if="(liabilityDetail?.travel_ancient_total ?? 0) > 0" class="ldp-section-header">
+            <span class="ldp-section-label">{{ t('dashboard.travelAncientTotal') }}</span>
+            <MoneyDisplay :amount="liabilityDetail!.travel_ancient_total" />
           </div>
-          <div v-if="(liabilityDetail?.travel_this_month ?? 0) > 0" class="ldp-section-header">
-            <span class="ldp-section-label">{{ travelThisMonthLabel }}</span>
-            <MoneyDisplay :amount="liabilityDetail!.travel_this_month" />
+
+          <!-- Monthly breakdown -->
+          <div v-if="liabilityDetail?.travel_monthly?.length" class="ldp-monthly-list">
+            <div
+              v-for="item in liabilityDetail.travel_monthly"
+              :key="item.month"
+              class="ldp-section-header"
+            >
+              <span class="ldp-section-label">{{ formatTravelMonth(item.month) }}</span>
+              <MoneyDisplay :amount="item.amount" />
+            </div>
           </div>
         </div>
 
@@ -216,15 +226,12 @@ function categoryLabel(key: string): string {
   return t(categoryLabelMap[key] || 'liability.other')
 }
 
-const travelLastMonthLabel = computed(() => {
-  const d = new Date()
-  d.setMonth(d.getMonth() - 1)
+function formatTravelMonth(monthStr: string): string {
+  // monthStr is "YYYY-MM"; parse as local date (day 1) for locale formatting
+  const [year, month] = monthStr.split('-').map(Number)
+  const d = new Date(year, month - 1, 1)
   return d.toLocaleDateString(locale.value, { year: 'numeric', month: 'long' })
-})
-const travelThisMonthLabel = computed(() => {
-  const d = new Date()
-  return d.toLocaleDateString(locale.value, { year: 'numeric', month: 'long' })
-})
+}
 
 async function openLiabilityDetail() {
   showLiabilityDetail.value = true
@@ -653,6 +660,11 @@ onMounted(() => {
   margin-bottom: 4px;
 }
 .ldp-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ldp-monthly-list {
   display: flex;
   flex-direction: column;
   gap: 2px;

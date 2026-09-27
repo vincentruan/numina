@@ -30,6 +30,7 @@ from apps.backend.app.schemas.dashboard import (
     LiabilityDetailResponse,
     LongestHeldStat,
     LowUsageItem,
+    MonthlyTravelItem,
     NewAssetItem,
     NewAssetsResponse,
     OverviewResponse,
@@ -384,46 +385,62 @@ def get_liability_detail(db: Session, user: User) -> LiabilityDetailResponse:
             )
         rent_expense = round(rent_total, 2)
 
-    # --- Travel expenses by purchase_date (last month + this month) ---
+    # --- Travel expenses by Trip departure_date ---
+    # Window: 3 months back to 6 months forward.
+    # Months ≥3 months ago are aggregated into travel_ancient_total.
+    # Individual months in the window with non-zero spending go into travel_monthly.
     this_month_start = today.replace(day=1)
-    last_month_start = (this_month_start - timedelta(days=1)).replace(day=1)
+    ancient_cutoff = (this_month_start - timedelta(days=90)).replace(day=1)
+    window_end = (this_month_start + timedelta(days=180))
 
-    def _sum_travel(start: date, end: date) -> float:
-        # coalesce(purchase_date, date): fallback for items created before
-        # purchase_date was added; ensures old itinerary items still count.
-        purchase_date_col = func.coalesce(ItineraryItem.purchase_date, ItineraryItem.date)
-        items = (
-            db.query(ItineraryItem.cost_amount, ItineraryItem.cost_currency)
-            .join(Trip)
-            .filter(
-                ItineraryItem.family_id == family_id,
-                Trip.is_active == True,  # noqa: E712
-                purchase_date_col >= start,
-                purchase_date_col < end,
-                ItineraryItem.cost_amount.isnot(None),
-                ItineraryItem.cost_amount > 0,
-            )
-            .all()
+    travel_items = (
+        db.query(
+            Trip.departure_date,
+            ItineraryItem.cost_amount,
+            ItineraryItem.cost_currency,
         )
-        total = 0.0
-        for item in items:
-            total += ExchangeRateService.convert(
-                float(item.cost_amount),
-                item.cost_currency or default_currency,
-                default_currency,
-                db,
-            )
-        return round(total, 2)
+        .join(Trip)
+        .filter(
+            ItineraryItem.family_id == family_id,
+            Trip.is_active == True,  # noqa: E712
+            Trip.departure_date >= ancient_cutoff,
+            Trip.departure_date < window_end,
+            ItineraryItem.cost_amount.isnot(None),
+            ItineraryItem.cost_amount > 0,
+        )
+        .all()
+    )
 
-    travel_last_month = _sum_travel(last_month_start, this_month_start)
-    travel_this_month = _sum_travel(this_month_start, today + timedelta(days=1))
+    monthly_totals: dict[str, float] = {}
+    for item in travel_items:
+        converted = ExchangeRateService.convert(
+            float(item.cost_amount),
+            item.cost_currency or default_currency,
+            default_currency,
+            db,
+        )
+        month_key = item.departure_date.strftime("%Y-%m")
+        monthly_totals[month_key] = monthly_totals.get(month_key, 0.0) + converted
+
+    # Months ≥3 months ago → travel_ancient_total; recent + future → travel_monthly
+    three_months_ago_str = (this_month_start - timedelta(days=60)).strftime("%Y-%m")
+    travel_ancient_total = 0.0
+    travel_monthly: list[MonthlyTravelItem] = []
+    for month_str, total in sorted(monthly_totals.items()):
+        rounded = round(total, 2)
+        if month_str < three_months_ago_str:
+            travel_ancient_total += rounded
+        else:
+            travel_monthly.append(MonthlyTravelItem(month=month_str, amount=rounded))
+
+    travel_ancient_total = round(travel_ancient_total, 2)
 
     return LiabilityDetailResponse(
         total_liabilities=alloc.total,
         categories=alloc.items,
         rent_monthly_expense=rent_expense,
-        travel_last_month=travel_last_month,
-        travel_this_month=travel_this_month,
+        travel_ancient_total=travel_ancient_total,
+        travel_monthly=travel_monthly,
     )
 
 

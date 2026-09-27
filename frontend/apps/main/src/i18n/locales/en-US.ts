@@ -112,8 +112,7 @@ export default {
     liabilityCategoryTotal: 'Total Liabilities',
     rentExpense: 'Monthly Rent',
     travelExpense: 'Travel Expenses',
-    travelLastMonth: 'Last Month',
-    travelThisMonth: 'This Month',
+    travelAncientTotal: 'Earlier Travel Total',
     emptyState: {
       startRecording: 'Start recording your first asset',
       addAssetBtn: 'Add Asset',
