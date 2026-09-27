@@ -642,34 +642,35 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
-/* ---- Section (first-level group) ---- */
+/* ---- Section (first-level group) — uniform light card ---- */
 .ldp-section {
-  margin-bottom: 4px;
-  padding: 10px 12px;
+  margin-bottom: 8px;
+  padding: 12px 14px;
   background: var(--card-bg, #f7f8fa);
   border-radius: 10px;
+  border-left: 3px solid transparent;
 }
 .ldp-section:last-child {
   margin-bottom: 0;
 }
 
-/* Total section — extra emphasis */
+/* Total section — subtle left accent instead of full saturated bg */
 .ldp-section--total {
-  background: var(--van-primary-color, #1989fa);
-  color: #fff;
+  border-left-color: var(--van-primary-color, #1989fa);
+  background: var(--card-bg, #f7f8fa);
 }
 .ldp-section-header--total {
   padding: 0;
 }
 .ldp-section-label--total {
   font-size: 14px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  color: var(--text-primary);
 }
 .ldp-section-value--total :deep(span) {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
-  color: #fff;
+  color: var(--van-primary-color, #1989fa);
 }
 
 /* Section header row (rent / travel — first-level items) */
