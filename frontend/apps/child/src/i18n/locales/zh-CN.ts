@@ -537,6 +537,7 @@ export default {
       rewards: '奖励规则',
       perTask: '每个任务: +{score}分',
       bonus: '全部完成: +{score}分',
+      dueDate: '截止',
     },
   },
   empty: {

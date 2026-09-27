@@ -15,7 +15,7 @@
         <p v-if="displayDescription" class="path-desc">{{ displayDescription }}</p>
         <div class="path-meta">
           <van-tag type="primary">{{ t('learning.path.progress', { completed: path.completed_count, total: path.total_count }) }}</van-tag>
-          <van-tag v-if="path.due_date" type="warning">截止: {{ path.due_date }}</van-tag>
+          <van-tag v-if="path.due_date" type="warning">{{ t('learning.path.dueDate') }}: {{ path.due_date }}</van-tag>
         </div>
       </div>
 
@@ -44,7 +44,7 @@
           v-for="item in path.items"
           :key="item.id"
           class="path-item"
-          :class="{ completed: item.status === 'completed', current: item.status === 'pending' && isNext(item) }"
+          :class="{ completed: item.status === 'completed', current: isNext(item) }"
           @click="navigateToTopic(item)"
         >
           <span class="item-icon">{{ statusIcon(item.status) }}</span>
@@ -90,6 +90,11 @@ const progressPercent = computed(() => {
   return Math.round((path.value.completed_count / path.value.total_count) * 100)
 })
 
+const firstNonCompletedIndex = computed(() => {
+  if (!path.value) return -1
+  return path.value.items.findIndex(i => i.status !== 'completed')
+})
+
 function statusIcon(status: string) {
   switch (status) {
     case 'completed': return '✅'
@@ -102,8 +107,7 @@ function isNext(item: PathItemResponse) {
   if (!path.value) return false
   const items = path.value.items
   const idx = items.findIndex(i => i.id === item.id)
-  // Next is the first non-completed item
-  return items.findIndex(i => i.status !== 'completed') === idx
+  return firstNonCompletedIndex.value === idx
 }
 
 function itemTopicName(item: PathItemResponse) {

@@ -536,6 +536,7 @@ export default {
       rewards: 'Reward Rules',
       perTask: 'Per task: +{score} pts',
       bonus: 'Complete all: +{score} pts',
+      dueDate: 'Due',
     },
   },
   empty: {
