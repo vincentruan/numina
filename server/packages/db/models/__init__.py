@@ -13,6 +13,7 @@ from packages.db.models.file_remote_location import FileRemoteLocation
 from packages.db.models.itinerary_item import ItineraryItem
 from packages.db.models.itinerary_item_type import ItineraryItemType
 from packages.db.models.learning.assignment import LearningAssignment
+from packages.db.models.learning.path import LearningPath, LearningPathItem
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import (
     LearningAssessmentAttempt,
@@ -68,6 +69,8 @@ __all__ = [
     "LearningAssessmentAttempt",
     "LearningCluster",
     "LearningDependency",
+    "LearningPath",
+    "LearningPathItem",
     "LearningProgress",
     "LearningSession",
     "LearningTopic",
