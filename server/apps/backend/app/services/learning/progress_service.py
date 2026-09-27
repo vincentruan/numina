@@ -271,6 +271,16 @@ def approve_parent_review(
     # Link coin transaction to attempt for idempotency
     txn.ref_id = attempt.id
 
+    # Advance any active learning path that includes this topic
+    import contextlib
+
+    from apps.backend.app.services.learning import path_service
+
+    with contextlib.suppress(Exception):
+        path_service.try_advance_path_for_topic(
+            db, progress.child_id, family_id, progress.topic_id
+        )
+
     return progress
 
 

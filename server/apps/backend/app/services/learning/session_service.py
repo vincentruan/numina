@@ -116,9 +116,10 @@ def create_session(
         else:
             # Auto-create self_selected assignment
             child = db.query(User).filter(User.id == child_id).first()
-            family_id = child.family_id if child else 0
+            if not child:
+                raise AppError(ErrorCode.CHILD_NOT_FOUND)
             assignment = LearningAssignment(
-                family_id=family_id,
+                family_id=child.family_id,
                 child_id=child_id,
                 topic_id=req.topic_id,
                 created_by=child_id,
