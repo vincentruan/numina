@@ -41,15 +41,19 @@ class CoinTransaction(Base):
     def ref_type(self) -> str | None:
         """Maps transaction_type to the referenced entity type.
 
-        chore_earn    -> "chore_instance"             (the ChoreInstance that earned coins)
-        wish_spend    -> "child_wish"                 (the ChildWish that was purchased)
-        learning_earn -> "learning_assessment_attempt" (the LearningAssessmentAttempt)
-        parent_grant, gift_sent, gift_received -> None (no referenced entity)
+        chore_earn        -> "chore_instance"
+        wish_spend        -> "child_wish"
+        learning_earn     -> "learning_assessment_attempt"
+        path_earn         -> "learning_path_item"
+        path_completion   -> "learning_path"
+        parent_grant, gift_sent, gift_received -> None
         """
         _MAP = {
             "chore_earn": "chore_instance",
             "wish_spend": "child_wish",
             "learning_earn": "learning_assessment_attempt",
+            "path_earn": "learning_path_item",
+            "path_completion": "learning_path",
         }
         return _MAP.get(self.transaction_type)
 

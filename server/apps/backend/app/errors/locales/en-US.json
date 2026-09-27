@@ -142,5 +142,8 @@
   "LEARNING_ASSESSMENT_NOT_AVAILABLE": "Assessment is not available",
   "LEARNING_INVALID_STATE_TRANSITION": "Invalid state transition",
   "LEARNING_SESSION_ALREADY_ENDED": "Learning session has already ended",
-  "LEARNING_TRANSLATION_UNAVAILABLE": "Translation service unavailable, please try again later"
+  "LEARNING_TRANSLATION_UNAVAILABLE": "Translation service unavailable, please try again later",
+  "LEARNING_PATH_NOT_FOUND": "Learning path not found",
+  "LEARNING_PATH_ACCESS_DENIED": "Access denied to this learning path",
+  "LEARNING_PATH_INVALID_MILESTONE": "Invalid milestone configuration"
 }
