@@ -480,6 +480,84 @@ conn.close()
 
 **如何对齐 Supabase DDL：** 在 Supabase Dashboard → SQL Editor 中执行与 alembic migration 等效的 DDL 语句。每个 migration 文件的 `upgrade()` 函数内容即为需要执行的 SQL。完整流程见 [references/supabase-ddl-sync.md](references/supabase-ddl-sync.md)。
 
+### Step 5c: Learning OS Seed Data Gate (首次发布 Learning OS)
+
+> **⚠️ 首次发布门禁：** `learning_topics` 表由 alembic 创建但**不包含数据**——知识图谱数据需要通过 seed 脚本手动导入（来自 os-taxonomy 外部数据源）。如果 `learning_topics` 为空，儿童学习系统的所有功能（知识地图、AI 辅导、进度追踪）均不可用。
+
+**检查流程：**
+
+```bash
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -t -c \
+    \"SELECT count(*) FROM learning_topics WHERE deprecated = false;\"
+"
+```
+
+**判定标准：**
+
+| count(*) | 判定 | 操作 |
+|----------|------|------|
+| ≥ 1000 | ✅ 已初始化（正常 1590 条） | 跳过 seed，继续部署 |
+| 0 | ❌ 从未 seed | 执行下方 seed 流程 |
+| 1 ~ 999 | ⚠️ 部分 seed | 检查 seed 脚本日志，重新运行完整 seed |
+
+**Seed 流程（仅在 count = 0 或异常时执行）：**
+
+需要两个脚本，按顺序执行：
+
+**前置条件：** os-taxonomy 数据文件需已存在于服务器上。数据目录包含 `topics.json`、`dependencies.json`、`clusters.json`。默认位置：`${DEPLOY_REMOTE_DIR}/os-taxonomy-data/`。
+
+```
+# 如果 os-taxonomy 数据尚未在服务器上（首次），需要先准备数据：
+# 方式 1: 从 os-taxonomy 仓库导出后 rsync 到服务器
+# 方式 2: 在服务器上 clone os-taxonomy 仓库到 ${DEPLOY_REMOTE_DIR}/os-taxonomy-data/
+```
+
+**Step 5c-1: Seed learning topics + dependencies + clusters**
+
+```bash
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  cd ${DEPLOY_REMOTE_DIR} &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps \
+    -v ${DEPLOY_REMOTE_DIR}/os-taxonomy-data:/taxonomy-data:ro \
+    backend bash -c '
+      cd /app && uv run python scripts/seed_learning_topics.py --data-dir /taxonomy-data
+    '
+"
+```
+
+**Step 5c-2: Seed learning badges（27 个徽章定义）**
+
+```bash
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  cd ${DEPLOY_REMOTE_DIR} &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c '
+    cd /app && uv run python scripts/seed_learning_badges.py
+  '
+"
+```
+
+**验证 seed 成功：**
+
+```bash
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c '
+    SELECT
+      (SELECT count(*) FROM learning_topics WHERE deprecated = false) AS topics,
+      (SELECT count(*) FROM learning_dependencies) AS dependencies,
+      (SELECT count(*) FROM learning_clusters) AS clusters,
+      (SELECT count(*) FROM literacy_badge_definitions) AS badges;
+  '
+"
+# 期望值: topics ≈ 1590, dependencies ≈ 3221, clusters ≈ 183, badges = 27
+```
+
+> **注意：** seed 脚本是幂等的（upsert 语义），重复运行安全。如果 os-taxonomy 数据更新，重新运行脚本即可增量更新数据库。
+
 ### Step 6: Recreate Services
 
 ```bash
@@ -660,6 +738,8 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 If upgrade fails → follow [references/db-migration.md](references/db-migration.md) §Handle Failures.
 
 > **DDL 对齐：** 如果执行了 migration，参见 Mode A Step 5b — 确认 Supabase 备库 DDL 已对齐（含复制延迟检查）后再发布。
+
+> **Learning OS seed：** 如果 migration 创建了 `learning_topics` 表（首次部署 Learning OS），参见 Mode A Step 5c — 确认 seed 数据已导入后再发布。
 
 ### Step 3: Build & Deploy
 
@@ -851,6 +931,8 @@ If upgrade fails → follow [references/db-migration.md](references/db-migration
 
 > **DDL 对齐：** 如果执行了 migration，参见 Mode A Step 5b — 确认 Supabase 备库 DDL 已对齐（含复制延迟检查）后再发布。
 
+> **Learning OS seed：** 如果 migration 创建了 `learning_topics` 表（首次部署 Learning OS），参见 Mode A Step 5c — 确认 seed 数据已导入后再发布。
+
 ### Step 5: Health Check + Smoke Test
 
 Same as Mode A Step 7 (7a 容器状态 + 7b 启动日志 + 7c 功能冒烟测试).
@@ -989,6 +1071,8 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | Code change only | Steps 4-7 | Steps 2-3 | `make deploy-local` + Steps 4-5 |
 | DB migration only | Steps 4-5b | Step 2 | Step 4 |
 | DDL alignment check | Step 5b | Step 2 (+ 5b gate) | Step 4 (+ 5b gate) |
+| Learning OS seed (首次) | Step 5c | Step 2 (+ 5c gate) | Step 4 (+ 5c gate) |
+| Check learning data | `SELECT count(*) FROM learning_topics` | same | same |
 | Build images | (CI does this) | (server does this) | `make build-local` |
 | Health check + smoke | Step 7 (7a+7b+7c) | Step 4 | (automatic in `deploy-remote`) |
 | Startup log verify | Step 7b | Step 4 (+ 7b) | Step 5 (+ 7b) |
@@ -1021,6 +1105,9 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | `numina-postgres-prod` not running | Start with: `ssh ... "cd ${DEPLOY_REMOTE_DIR} && sudo docker compose -f docker-compose.production-pg.yml up -d"`. Data is in bind mount `/home/geek/data/numina-prod-db/data` — survives container restart. Check logs: `sudo docker compose -f docker-compose.production-pg.yml logs --tail 30` |
 | Backend can't reach postgres | `DATABASE_URL` in `.env` must use `172.17.0.1:5432` (Docker host bridge). Verify: `sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c "SELECT 1"`. If using compose defaults (no `.env` override), host is `postgres` which requires a postgres service in the compose stack — **not** the production-pg architecture |
 | `docker-compose.production-pg.yml` uses named volume but server uses bind mount | The local `docker-compose.production-pg.yml` uses `${PROD_PG_DATA_DIR:-/home/geek/data/numina-prod-db/data}` bind mount. If the server has a different data path, set `PROD_PG_DATA_DIR` on the server or override in a `.env` for the production-pg compose |
+| `learning_topics` 表为空 / 儿童学习地图无数据 | alembic 创建表但不包含数据。执行 Mode A Step 5c seed 流程：先确保 os-taxonomy 数据在服务器 `${DEPLOY_REMOTE_DIR}/os-taxonomy-data/`，再运行 seed_learning_topics.py + seed_learning_badges.py |
+| seed_learning_topics.py 报 "data directory does not exist" | os-taxonomy 数据未拷贝到服务器。将包含 `topics.json`、`dependencies.json`、`clusters.json` 的目录 rsync 到 `${DEPLOY_REMOTE_DIR}/os-taxonomy-data/`，或通过 `-v` 挂载到容器的 `/taxonomy-data` |
+| seed 后 badges 数量不为 27 | `seed_learning_badges.py` 未运行或运行失败。重新执行 Step 5c-2 |
 | SSH: `cd: $DEPLOY_REMOTE_DIR: No such file or directory` | 单引号内 `$DEPLOY_REMOTE_DIR` 不会在远程展开（它是本地变量）。SSH 命令必须用双引号包裹，让本地 shell 先展开变量。见上方 "SSH quoting" 说明 |
 | `--remove-orphans` 误删 PG 容器 | 永远不要对 `docker-compose.production.yml` 使用 `--remove-orphans`，它会删除 `numina-postgres-prod`。恢复：`sudo docker compose -f docker-compose.production-pg.yml up -d` |
 | PG PANIC: `No space left on device` | 磁盘满导致 PG crash loop + 复制槽损坏。完整恢复流程见 [references/ipv6-disk-recovery.md](references/ipv6-disk-recovery.md) §Disk-Full Crash Recovery。快速修复：`sudo docker image prune -af`，PG 自动恢复 |
