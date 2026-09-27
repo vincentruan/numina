@@ -257,7 +257,7 @@ def advance_path_item(
 
     # Get topic name for narrative
     topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
-    topic_label = topic.name_zh or topic.name if topic else f"topic:{topic_id}"
+    topic_label = (topic.name_zh or topic.name or f"topic:{topic_id}") if topic else f"topic:{topic_id}"
 
     # Combine per-task and milestone into a SINGLE path_earn transaction to
     # avoid UniqueConstraint("ref_id", "transaction_type") violation.
