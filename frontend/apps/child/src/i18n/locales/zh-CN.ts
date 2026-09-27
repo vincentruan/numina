@@ -490,6 +490,10 @@ export default {
       reconnect: '重新连接失败: {status}',
       send: '发送消息失败: {status}',
       gap_reconnect: '断点恢复失败: {status}',
+      sessionCreateFailed: '创建学习会话失败，请稍后再试',
+      topicLocked: '请先完成前置知识的学习',
+      prerequisiteNotMet: '前置知识还未完成哦',
+      noThread: 'AI 导师连接失败，请返回重试',
     },
     progress: {
       title: '学习进度',

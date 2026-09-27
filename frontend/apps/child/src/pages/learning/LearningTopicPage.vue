@@ -133,6 +133,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { showSuccessToast, showFailToast, type TagType } from 'vant'
+import axios from 'axios'
 import { usePageLoading } from '@/composables/usePageLoading'
 import {
   getTopicDetail,
@@ -262,8 +263,17 @@ async function onStartLearning() {
   try {
     const session = await createSession({ topic_id: topicId.value })
     router.push(`/learning/session/${session.id}`)
-  } catch {
-    showFailToast(t('toast.submitFailed'))
+  } catch (err: unknown) {
+    const code = axios.isAxiosError(err)
+      ? (err.response?.data as Record<string, unknown> | undefined)?.code as string | undefined
+      : undefined
+    if (code === 'LEARNING_TOPIC_LOCKED') {
+      showFailToast(t('learning.error.topicLocked'))
+    } else if (code === 'LEARNING_PREREQUISITE_NOT_MET') {
+      showFailToast(t('learning.error.prerequisiteNotMet'))
+    } else {
+      showFailToast(t('learning.error.sessionCreateFailed'))
+    }
   } finally {
     starting.value = false
   }

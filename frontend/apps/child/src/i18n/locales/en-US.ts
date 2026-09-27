@@ -489,6 +489,10 @@ export default {
       reconnect: 'Reconnect failed: {status}',
       send: 'Send message failed: {status}',
       gap_reconnect: 'Gap recovery failed: {status}',
+      sessionCreateFailed: 'Failed to create learning session, please try again',
+      topicLocked: 'Please complete prerequisite topics first',
+      prerequisiteNotMet: 'You need to finish the prerequisites first',
+      noThread: 'AI tutor connection failed, please go back and retry',
     },
     progress: {
       title: 'Learning Progress',

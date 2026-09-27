@@ -197,6 +197,9 @@ async function load() {
     // Start the assessment stream if session has a thread_id
     if (sessionData.thread_id) {
       await startAssessment(sessionId.value)
+    } else {
+      // thread_id not yet assigned — show a friendly message instead of blank page
+      chatError.value = t('learning.error.noThread')
     }
   } catch {
     loadError.value = t('toast.loadFailed')
