@@ -288,23 +288,30 @@ def validate_quality(session) -> None:
     print("\n  All quality validations passed.")
 
 
-async def seed_topic_translations(session, data_dir: Path, batch_size: int = 50):
-    """Batch-translate topics with empty *_zh fields using agent LLM infrastructure."""
-    from apps.agent.core.config import get_ai_config
+async def seed_topic_translations(
+    session, batch_size: int = 50, force_retranslate: bool = False
+):
+    """Batch-translate topics using agent LLM infrastructure.
 
+    When *force_retranslate* is False (default), only topics with NULL/empty
+    ``name_zh`` are translated.  When True, all non-deprecated topics are
+    re-translated — existing ``_zh`` fields are cleared first so the
+    translation function overwrites them.
+    """
+    from apps.agent.core.config import get_ai_config
     from apps.agent.services.topic_translate import translate_topic
     from packages.db.models.learning.topic import LearningTopic
 
-    # Query topics with missing Chinese translations, high-centrality first
-    untranslated = (
-        session.query(LearningTopic)
-        .filter(
+    query = session.query(LearningTopic).filter(
+        LearningTopic.deprecated == False  # noqa: E712
+    )
+
+    if not force_retranslate:
+        query = query.filter(
             (LearningTopic.name_zh.is_(None)) | (LearningTopic.name_zh == "")
         )
-        .filter(LearningTopic.deprecated == False)  # noqa: E712
-        .order_by(LearningTopic.centrality.desc().nullslast())
-        .all()
-    )
+
+    untranslated = query.order_by(LearningTopic.centrality.desc().nullslast()).all()
 
     # Skip topics whose English name already contains Chinese chars
     untranslated = [t for t in untranslated if not has_chinese_chars(t.name or "")]
@@ -312,6 +319,15 @@ async def seed_topic_translations(session, data_dir: Path, batch_size: int = 50)
     if not untranslated:
         print("All topics already translated. Skipping.")
         return
+
+    if force_retranslate:
+        # Clear existing _zh fields so translate_topic overwrites them
+        for topic in untranslated:
+            topic.name_zh = None
+            topic.description_zh = None
+            topic.evidence_zh_json = None
+            topic.assessment_prompt_zh = None
+        session.flush()
 
     print(f"Translating {len(untranslated)} topics (high-centrality first)...")
 
@@ -366,10 +382,13 @@ async def seed_topic_translations(session, data_dir: Path, batch_size: int = 50)
     )
 
 
-async def seed_cluster_translations(session, ai_config):
+async def seed_cluster_translations(session):
     """Translate cluster summaries to Chinese."""
+    from apps.agent.core.config import get_ai_config
     from apps.agent.services.topic_translate import translate_topic
     from packages.db.models.learning.topic import LearningCluster
+
+    ai_config = get_ai_config()
 
     clusters = (
         session.query(LearningCluster)
@@ -454,10 +473,12 @@ def main():
         session.commit()
 
         if not args.skip_translation:
-            asyncio.run(seed_topic_translations(session, args.data_dir, args.batch_size))
-            from apps.agent.core.config import get_ai_config
-
-            asyncio.run(seed_cluster_translations(session, get_ai_config()))
+            asyncio.run(
+                seed_topic_translations(
+                    session, args.batch_size, args.force_retranslate
+                )
+            )
+            asyncio.run(seed_cluster_translations(session))
 
         print("Done!")
 
