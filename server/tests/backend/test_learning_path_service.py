@@ -347,6 +347,41 @@ class TestAdvancePathItem:
         assert result["item"] is None
         assert result["rewards"] is None
 
+    def test_milestone_combined_with_per_task_no_integrity_error(self, db_session):
+        """When milestone is hit, per-task and milestone amounts are combined
+        into a SINGLE path_earn transaction to avoid UniqueConstraint violation."""
+
+        # 2-item path; milestone at threshold=2 (hits when second item completed)
+        _make_topic(db_session, 105, "T1", "题1")
+        _make_topic(db_session, 106, "T2", "题2")
+        _make_path(
+            db_session, path_id=1005, family_id=1, child_id=1,
+            per_task_score=5,
+            milestone_scores=[{"threshold": 2, "bonus": 10}],
+        )
+        _make_path_item(db_session, item_id=2010, path_id=1005, topic_id=105, sort_order=0, status="completed")
+        _make_path_item(db_session, item_id=2011, path_id=1005, topic_id=106, sort_order=1)
+        db_session.commit()
+
+        # This should NOT raise IntegrityError
+        result = advance_path_item(db_session, 1005, 106, child_user_id=1, family_id=1)
+
+        assert result["item"].status == "completed"
+        assert result["rewards"]["per_task"] == 5
+        assert result["rewards"]["milestone"] == 10
+
+        # Exactly ONE path_earn tx for this item (combined amount = 15)
+        earn_txs = db_session.query(CoinTransaction).filter(
+            CoinTransaction.child_user_id == 1,
+            CoinTransaction.transaction_type == "path_earn",
+            CoinTransaction.ref_id == 2011,
+        ).all()
+        assert len(earn_txs) == 1
+        assert earn_txs[0].amount == 15
+        # Narrative should mention both components
+        assert "+5" in earn_txs[0].narrative
+        assert "+10" in earn_txs[0].narrative
+
     def test_completion_bonus_when_all_done(self, db_session):
         """Completing the last item emits per_task + completion coins."""
 

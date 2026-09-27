@@ -34,16 +34,12 @@ def sort_topics_by_prerequisites(
     # and we need intermediate nodes outside topic_set for transitive ordering.
     all_deps = db.query(LearningDependency).all()
 
-    # Build in-memory adjacency: prerequisite -> [topics that require it]
-    prereq_forward: dict[int, list[int]] = {}
-    # Also build reverse: topic -> [its direct prerequisites]
+    # Build adjacency: topic -> [its direct prerequisites]
     topic_prereqs: dict[int, list[int]] = {}
     for dep in all_deps:
-        prereq_forward.setdefault(dep.prerequisite_id, []).append(dep.topic_id)
         topic_prereqs.setdefault(dep.topic_id, []).append(dep.prerequisite_id)
 
-    # For each topic in the set, backward-BFS through prereq_forward edges
-    # (reversed) to find which other set-members are its transitive prerequisites.
+    # For each topic in the set, backward-BFS through prerequisite edges
     # effective_prereqs[tid] = set of topics in topic_set that must come before tid
     effective_prereqs: dict[int, set[int]] = {tid: set() for tid in topic_ids}
 
@@ -263,35 +259,33 @@ def advance_path_item(
     topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
     topic_label = topic.name_zh or topic.name if topic else f"topic:{topic_id}"
 
-    # 1. Per-task coins
+    # Combine per-task and milestone into a SINGLE path_earn transaction to
+    # avoid UniqueConstraint("ref_id", "transaction_type") violation.
     per_task = min(rewards["per_task"], remaining_cap)
-    if per_task > 0:
+    milestone_amount = 0
+    if rewards["milestone"] and remaining_cap - per_task > 0:
+        milestone_amount = min(rewards["milestone"], remaining_cap - per_task)
+
+    total_earn = per_task + milestone_amount
+    if total_earn > 0:
+        if milestone_amount > 0:
+            narrative = (
+                f"路径任务：{topic_label} (+{per_task}) "
+                f"+ 里程碑 (+{milestone_amount})"
+            )
+        else:
+            narrative = f"路径任务：{topic_label}"
         tx = CoinTransaction(
             family_id=family_id,
             child_user_id=child_user_id,
-            amount=per_task,
+            amount=total_earn,
             transaction_type="path_earn",
             ref_id=item.id,
-            narrative=f"路径任务：{topic_label}",
+            narrative=narrative,
             narrative_emoji="📋",
         )
         db.add(tx)
-        remaining_cap -= per_task
-
-    # 2. Milestone coins (only if remaining_cap > 0 and milestone was hit)
-    if rewards["milestone"] and remaining_cap > 0:
-        milestone_amount = min(rewards["milestone"], remaining_cap)
-        tx_ms = CoinTransaction(
-            family_id=family_id,
-            child_user_id=child_user_id,
-            amount=milestone_amount,
-            transaction_type="path_earn",
-            ref_id=item.id,
-            narrative=f"里程碑奖励：完成 {completed_count}/{total_count}",
-            narrative_emoji="🏆",
-        )
-        db.add(tx_ms)
-        remaining_cap -= milestone_amount
+        remaining_cap -= total_earn
 
     # 3. Completion bonus
     if rewards["completion"] and remaining_cap > 0:
