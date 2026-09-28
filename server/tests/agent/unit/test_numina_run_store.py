@@ -1,4 +1,4 @@
-"""Tests for NuminaSqliteRunStore.
+"""Tests for NuminaSqlRunStore.
 
 Verifies:
 - put/get/delete cycle
@@ -24,9 +24,9 @@ def make_store():
 @pytest.fixture
 async def store_and_factory():
     engine, factory = make_store()
-    from apps.agent.services.runtime.numina_run_store import NuminaSqliteRunStore
+    from apps.agent.services.runtime.numina_run_store import NuminaSqlRunStore
 
-    store = NuminaSqliteRunStore(factory)
+    store = NuminaSqlRunStore(factory)
     await store._ensure_table()
     yield store
     await engine.dispose()

@@ -1,4 +1,4 @@
-"""SQLite-backed RunStore for Numina agent persistence.
+"""SQL-backed RunStore for Numina agent persistence.
 
 Implements DeerFlow's RunStore interface using the shared DeerFlow engine.
 Supports cross-restart run state recovery and orphan cleanup.
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
@@ -68,7 +68,7 @@ _ALL_COLUMNS = (
 )
 
 
-class NuminaSqliteRunStore:
+class NuminaSqlRunStore:
     """DeerFlow RunStore implementation backed by the shared async engine."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -402,20 +402,23 @@ class NuminaSqliteRunStore:
         self,
         *,
         before: str | None = None,
-        now: datetime | None = None,
+        grace_seconds: int = 10,
     ) -> list[dict[str, Any]]:
-        """List running runs whose lease has expired (orphan candidates)."""
+        """List running/pending runs whose lease has expired (orphan candidates).
+
+        Rows with a NULL lease (pre-ownership data) are also returned so they
+        can be reclaimed, matching the DeerFlow reference implementation.
+        """
         await self._ensure_table()
-        ts = (now or datetime.now(UTC)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(seconds=grace_seconds)).isoformat()
+        before_iso = before if before else datetime.now(UTC).isoformat()
         sql = (
             f"SELECT {_ALL_COLUMNS} FROM run_records "
-            "WHERE status = 'running' "
-            "AND lease_expires_at IS NOT NULL AND lease_expires_at < :ts"
+            "WHERE status IN ('pending', 'running') "
+            "AND created_at <= :before "
+            "AND (lease_expires_at IS NULL OR lease_expires_at < :cutoff)"
         )
-        params: dict[str, Any] = {"ts": ts}
-        if before:
-            sql += " AND created_at < :before"
-            params["before"] = before
+        params: dict[str, Any] = {"before": before_iso, "cutoff": cutoff}
         sql += " ORDER BY created_at ASC"
         async with self._sf() as session:
             result = await session.execute(text(sql), params)
