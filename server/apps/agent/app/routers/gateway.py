@@ -286,8 +286,9 @@ async def trigger_asset_report_run(
     run_mgr = get_run_manager(request)
 
     async def sse_generator():
+        bridge = await get_stream_bridge(request)
         async for frame in sse_consumer(
-            get_stream_bridge(request), record, request, run_mgr
+            bridge, record, request, run_mgr
         ):
             yield frame
 
@@ -359,8 +360,9 @@ async def trigger_finance_coach_run(
     run_mgr = get_run_manager(request)
 
     async def sse_generator():
+        bridge = await get_stream_bridge(request)
         async for frame in sse_consumer(
-            get_stream_bridge(request), record, request, run_mgr
+            bridge, record, request, run_mgr
         ):
             yield frame
 
@@ -435,8 +437,9 @@ async def trigger_chat_run(
     run_mgr = get_run_manager(request)
 
     async def sse_generator():
+        bridge = await get_stream_bridge(request)
         async for frame in sse_consumer(
-            get_stream_bridge(request), record, request, run_mgr
+            bridge, record, request, run_mgr
         ):
             yield frame
 
@@ -507,8 +510,9 @@ async def trigger_wish_advice_run(
     run_mgr = get_run_manager(request)
 
     async def sse_generator():
+        bridge = await get_stream_bridge(request)
         async for frame in sse_consumer(
-            get_stream_bridge(request), record, request, run_mgr
+            bridge, record, request, run_mgr
         ):
             yield frame
 
@@ -576,8 +580,9 @@ async def trigger_dashboard_narrative_run(
     run_mgr = get_run_manager(request)
 
     async def sse_generator():
+        bridge = await get_stream_bridge(request)
         async for frame in sse_consumer(
-            get_stream_bridge(request), record, request, run_mgr
+            bridge, record, request, run_mgr
         ):
             yield frame
 
@@ -632,8 +637,9 @@ async def trigger_literacy_weekly_report_run(
     run_mgr = get_run_manager(request)
 
     async def sse_generator():
+        bridge = await get_stream_bridge(request)
         async for frame in sse_consumer(
-            get_stream_bridge(request), record, request, run_mgr
+            bridge, record, request, run_mgr
         ):
             yield frame
 
@@ -694,8 +700,9 @@ async def trigger_learning_tutor_run(
     run_mgr = get_run_manager(request)
 
     async def sse_generator():
+        bridge = await get_stream_bridge(request)
         async for frame in sse_consumer(
-            get_stream_bridge(request), record, request, run_mgr
+            bridge, record, request, run_mgr
         ):
             yield frame
 

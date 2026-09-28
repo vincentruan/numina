@@ -136,7 +136,7 @@ async def stream_run(
     # /internal/mcp/{family_id}/sse endpoint to 403 ("missing caller_user_id")
     # and load zero MCP tools (the agent then reported "所有记录仍为空").
     record = await start_run(body, thread_id, request, x_family_id, verified.user_id)
-    bridge = get_stream_bridge(request)
+    bridge = await get_stream_bridge(request)
     run_mgr = get_run_manager(request)
 
     watcher_task = asyncio.create_task(disconnect_watcher(request, record, run_mgr))
