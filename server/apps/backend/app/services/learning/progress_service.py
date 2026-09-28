@@ -288,6 +288,14 @@ def approve_parent_review(
             e,
         )
 
+    # Award XP for mastery
+    from apps.backend.app.services.learning import stats_service
+
+    try:
+        stats_service.award_xp(db, progress.child_id, family_id, xp_amount=20)
+    except Exception as e:
+        logger.warning("XP award failed on parent review for child %s: %s", progress.child_id, e)
+
     return progress
 
 

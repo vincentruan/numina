@@ -15,6 +15,7 @@ from apps.backend.app.schemas.learning import (
     AssessStreamRequest,
     AssignmentResponse,
     ChildProgressOverview,
+    LearningStatsResponse,
     PathResponse,
     ProgressResponse,
     SessionCreate,
@@ -27,6 +28,7 @@ from apps.backend.app.services.learning import (
     path_service,
     progress_service,
     session_service,
+    stats_service,
 )
 from apps.backend.app.services.notification.dispatcher import (
     notify_learning_submitted_for_review,
@@ -128,11 +130,38 @@ def today_learning(
     # 4. study_minutes_today
     study_minutes = progress_service.aggregate_study_minutes(db, child.id)
 
+    # 5. stats — zone + streak
+    stats = stats_service.get_or_create_stats(db, child.id, child.family_id)
+
     return TodayLearningResponse(
         current_topic=current_topic,
         pending_assignment=pending_assignment,
         recommended_topic=recommended_topic,
         study_minutes_today=study_minutes["today_study_minutes"],
+        current_zone=stats.current_zone,
+        learning_streak_days=stats.learning_streak_days,
+    )
+
+
+@router.get("/stats", response_model=LearningStatsResponse)
+def my_learning_stats(
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Get my learning stats — XP, level, streak."""
+    stats = stats_service.get_or_create_stats(db, child.id, child.family_id)
+    level_info = stats_service.get_level_info(stats.level)
+    return LearningStatsResponse(
+        child_id=stats.child_id,
+        cumulative_xp=stats.cumulative_xp,
+        level=stats.level,
+        level_name_zh=level_info["name_zh"],
+        level_name_en=level_info["name_en"],
+        level_emoji=level_info["emoji"],
+        next_level_threshold=level_info["next_threshold"],
+        learning_streak_days=stats.learning_streak_days,
+        current_zone=stats.current_zone,
+        onboarding_completed=stats.onboarding_completed,
     )
 
 

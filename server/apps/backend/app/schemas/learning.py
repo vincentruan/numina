@@ -115,6 +115,23 @@ class TodayLearningResponse(SnowflakeBase):
     pending_assignment: AssignmentResponse | None = None
     recommended_topic: TopicResponse | None = None
     study_minutes_today: int = 0
+    current_zone: str = "growth"
+    learning_streak_days: int = 0
+
+
+class LearningStatsResponse(SnowflakeBase):
+    """Child learning stats — XP, level, streak."""
+
+    child_id: int
+    cumulative_xp: int
+    level: int
+    level_name_zh: str
+    level_name_en: str
+    level_emoji: str
+    next_level_threshold: int | None
+    learning_streak_days: int
+    current_zone: str
+    onboarding_completed: bool
 
 
 class AssessStreamRequest(BaseModel):
