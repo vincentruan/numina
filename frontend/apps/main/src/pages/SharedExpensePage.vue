@@ -118,6 +118,7 @@ import { joinSplitGroup, getSharedExpenses } from '@/api/travel'
 import PageHeader from '@/components/common/PageHeader.vue'
 import type { SharedExpense } from '@/types/travel'
 import { useCurrency } from '@/composables/useCurrency'
+import { copyToClipboard } from '@/utils/ai-chat/tableUtils'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -151,10 +152,10 @@ function formatAmount(amount: string, currency = 'CNY'): string {
 }
 
 async function copyInviteCode() {
-  try {
-    await navigator.clipboard.writeText(inviteCode.value)
+  const ok = await copyToClipboard(inviteCode.value)
+  if (ok) {
     showSuccessToast(t('travel.splitGroup.copied'))
-  } catch {
+  } else {
     showFailToast(t('travel.splitGroup.copyFailed'))
   }
 }

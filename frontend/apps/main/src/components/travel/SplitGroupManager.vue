@@ -160,6 +160,7 @@ import {
 } from '@/api/travel'
 import type { SplitParticipant } from '@/types/travel'
 
+import { copyToClipboard } from '@/utils/ai-chat/tableUtils'
 const props = defineProps<{
   tripId: string
 }>()
@@ -217,10 +218,10 @@ async function handleCreateGroup() {
 
 async function copyInviteCode() {
   if (!splitGroup.value) return
-  try {
-    await navigator.clipboard.writeText(splitGroup.value.invite_code)
+  const ok = await copyToClipboard(splitGroup.value.invite_code)
+  if (ok) {
     showSuccessToast(t('travel.splitGroup.copied'))
-  } catch {
+  } else {
     showFailToast(t('travel.splitGroup.copyFailed'))
   }
 }
@@ -228,10 +229,10 @@ async function copyInviteCode() {
 async function copyInviteLink() {
   if (!splitGroup.value) return
   const link = `${window.location.origin}/travel/shared/${splitGroup.value.invite_code}`
-  try {
-    await navigator.clipboard.writeText(link)
+  const ok = await copyToClipboard(link)
+  if (ok) {
     showSuccessToast(t('travel.splitGroup.copied'))
-  } catch {
+  } else {
     showFailToast(t('travel.splitGroup.copyFailed'))
   }
 }
@@ -239,10 +240,10 @@ async function copyInviteLink() {
 async function resendLink(_participant: SplitParticipant) {
   if (!splitGroup.value) return
   const link = `${window.location.origin}/travel/shared/${splitGroup.value.invite_code}`
-  try {
-    await navigator.clipboard.writeText(link)
+  const ok = await copyToClipboard(link)
+  if (ok) {
     showSuccessToast(t('travel.splitGroup.copied'))
-  } catch {
+  } else {
     showFailToast(t('travel.splitGroup.copyFailed'))
   }
 }
