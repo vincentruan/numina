@@ -29,6 +29,7 @@ from apps.backend.app.services.learning import (
     progress_service,
     session_service,
     stats_service,
+    zone_service,
 )
 from apps.backend.app.services.notification.dispatcher import (
     notify_learning_submitted_for_review,
@@ -124,8 +125,8 @@ def today_learning(
         pending_assignment = AssignmentResponse.model_validate(pending_assignment_orm)
         pending_assignment.topic = a_topic
 
-    # 3. recommended_topic: locked with all hard prereqs met, stable ordering
-    recommended_topic = progress_service.find_recommended_topic(db, child.id)
+    # 3. recommended_topic: zone-aware recommendation (Growth > Comfort by centrality)
+    recommended_topic, _zone_label = zone_service.get_zone_recommended_topic(db, child.id)
 
     # 4. study_minutes_today
     study_minutes = progress_service.aggregate_study_minutes(db, child.id)
