@@ -141,19 +141,20 @@ Production uses a **local Docker PostgreSQL** container (`numina-postgres-prod`)
 
 > **⚠️ `--remove-orphans` 危险**：`numina-postgres-prod` 不在 `docker-compose.production.yml` 中。使用 `docker compose up -d --remove-orphans` 会**删除 PG 容器**。永远不要对 app compose 使用 `--remove-orphans`；PG 容器由 `docker-compose.production-pg.yml` 独立管理。
 
-### Single-Instance Architecture (No Redis)
+### Architecture — Redis-backed (AI Agent Requires Cross-Process Events)
 
-生产环境以**单实例模式**运行，不依赖 Redis：
+生产环境使用 **Redis** 作为事件缓冲和缓存后端。Agent 模块的 StreamBridge **硬编码为 Redis**（无 memory fallback），因为 agent 和 backend 是独立进程，必须通过 Redis 共享事件流。
 
 | 组件 | 模式 | 环境变量 | 说明 |
 |------|------|----------|------|
-| StreamBridge (事件缓冲) | `memory` | `STREAM_BRIDGE_TYPE=memory` | 进程内 asyncio.Condition，agent↔backend 通过 HTTP SSE 通信 |
-| Cache (限流/验证码) | `memory` | `CACHE_BACKEND=memory` | 进程内 dict，单实例足够 |
+| StreamBridge (事件缓冲) | `redis` | `STREAM_BRIDGE_TYPE=redis` | Redis Streams，agent↔backend 跨进程事件分发 |
+| Cache (限流/验证码) | `redis` | `CACHE_BACKEND=redis` | Redis 缓存，支持多实例 |
 
-- **Agent** 始终使用 in-memory bridge（硬编码），无需配置
-- **Scheduler worker** 不使用 Redis 或 StreamBridge
-- `docker-compose.production.yml` 中**不包含 Redis 服务**
-- **仅当扩展到多实例**（多个 backend 进程）时，才需要启用 Redis：设 `STREAM_BRIDGE_TYPE=redis` + `CACHE_BACKEND=redis` + 添加 Redis 容器
+- **Agent** StreamBridge 硬编码 Redis（`get_stream_bridge()` in `lifespan.py`），无 memory 选项
+- **Backend** 默认 `STREAM_BRIDGE_TYPE=redis` + `CACHE_BACKEND=redis`（compose 默认值）
+- **Redis 容器** (`numina-redis`) 在 `docker-compose.production.yml` 中定义，AOF 持久化
+- `REDIS_URL` 默认 `redis://numina-redis:6379/0`（Docker 内部网络）
+- Redis 是**必需组件**，缺少则 AI 功能完全不可用（agent 返回 503）
 
 ### Supabase Logical Replication (DDL Alignment)
 
@@ -190,6 +191,7 @@ sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c \
 | `CAPTCHA_ENABLED` | `false` (默认) | **`true`** | `curl -sk /api/v1/captcha/config` → `captcha_enabled: true` |
 | `DATABASE_URL` | SQLite 或 localhost PG | `postgresql://...@172.17.0.1:5432/numina_prod` | backend 日志 |
 | `DEERFLOW_DB_URL` | SQLite 或 localhost PG | `postgresql://...@172.17.0.1:5432/numina_prod_deerflow` | agent 日志 |
+| `REDIS_URL` | `redis://localhost:6379/0` | `redis://numina-redis:6379/0`（compose 默认值） | `redis-cli ping` → PONG |
 | SSL/TLS | 无 | Origin CA cert (`origin.crt` + `origin.key`) | `curl -sk https://localhost/` |
 | `*_IMAGE` | 无 (compose 默认) | `ghcr.io/...` (Mode A) 或 `numina/...` (Mode C) | `docker inspect` |
 | `CORS_ORIGINS` | `localhost` | 实际域名 JSON 数组 | 浏览器 CORS 头 |
@@ -221,14 +223,15 @@ AGENT_DB_POOL_SIZE=15
 
 默认值对家庭应用足够。如果频繁误触发，在 `.env` 中覆盖。
 
-### 缓存与事件（单实例）
+### 缓存与事件（Redis 后端）
 
 | 配置项 | 生产值 | 说明 |
 |--------|--------|------|
-| `STREAM_BRIDGE_TYPE` | `memory` | 单实例进程内事件缓冲，已在 compose 中硬编码 |
-| `CACHE_BACKEND` | `memory` | 单实例进程内缓存（限流/验证码），已在 compose 中硬编码 |
+| `STREAM_BRIDGE_TYPE` | `redis` | Redis Streams 跨进程事件缓冲，已在 compose 中设默认值 |
+| `CACHE_BACKEND` | `redis` | Redis 缓存（限流/验证码），已在 compose 中设默认值 |
+| `REDIS_URL` | `redis://numina-redis:6379/0` | Redis 连接地址，已在 compose 中设默认值 |
 
-> 这些变量已在 `docker-compose.production.yml` 中固定为 `memory`，无需在 `.env` 中设置。
+> 这些变量已在 `docker-compose.production.yml` 中设默认值为 `redis`，通常无需在 `.env` 中覆盖。Agent 模块硬编码使用 Redis，`REDIS_URL` 通过 compose 环境变量注入。
 
 ### Health Check 验证清单
 
@@ -236,7 +239,7 @@ AGENT_DB_POOL_SIZE=15
 ```bash
 # 1. 容器状态
 sudo docker ps --format "table {{.Names}}\t{{.Status}}" | grep numina
-# 期望: 7 (app) + 1 (postgres-prod) = 8 个容器，backend/agent/scheduler (healthy)
+# 期望: 7 (app) + 1 (postgres-prod) + 1 (redis) = 9 个容器，backend/agent/scheduler/redis (healthy)
 
 # 2. 各服务健康
 curl -sk https://localhost/api/health              # → {"status":"ok"}
@@ -286,13 +289,14 @@ The production server's deploy directory needs only these files (not a full git 
 
 No git on the server. CI builds images on push to `main`; server just pulls them.
 
-### Step 0: Ensure Production PostgreSQL is Running
+### Step 0: Ensure Production PostgreSQL and Redis are Running
 
-The production database (`numina-postgres-prod`) runs as a **separate container** from the app stack. It must be healthy before deploying app services.
+The production database (`numina-postgres-prod`) and Redis (`numina-redis`) run as containers. Both must be healthy before deploying app services.
 
 ```bash
 set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  echo '=== Check PostgreSQL ===' &&
   if sudo docker ps --format '{{.Names}}' | grep -q 'numina-postgres-prod'; then
     echo '✓ numina-postgres-prod is running'
   else
@@ -306,11 +310,27 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
       [ \"\$i\" = \"30\" ] && echo '✗ Postgres startup timeout' && exit 1
       sleep 10
     done
+  fi &&
+  echo '' &&
+  echo '=== Check Redis ===' &&
+  if sudo docker ps --format '{{.Names}}' | grep -q 'numina-redis'; then
+    echo '✓ numina-redis is running'
+  else
+    echo '=== Starting Redis ===' &&
+    cd ${DEPLOY_REMOTE_DIR} &&
+    sudo docker compose -f docker-compose.production.yml up -d redis &&
+    for i in \$(seq 1 15); do
+      if sudo docker ps --format '{{.Names}}\t{{.Status}}' | grep 'numina-redis' | grep -q 'healthy'; then
+        echo '✓ numina-redis healthy'; break
+      fi
+      [ \"\$i\" = \"15\" ] && echo '✗ Redis startup timeout' && exit 1
+      sleep 5
+    done
   fi
 "
 ```
 
-> **First-time setup:** If `numina-postgres-prod` has never been started, ensure `docker-compose.production-pg.yml` and `scripts/init-prod-databases.sql` are synced to the server first (Step 1b). The init script creates `numina_prod` and `numina_prod_deerflow` databases on first boot.
+> **First-time setup:** If `numina-postgres-prod` has never been started, ensure `docker-compose.production-pg.yml` and `scripts/init-prod-databases.sql` are synced to the server first (Step 1b). The init script creates `numina_prod` and `numina_prod_deerflow` databases on first boot. Redis is part of `docker-compose.production.yml` and starts automatically with `docker compose up -d`.
 
 ### Step 1: Verify CI Completed (Build-Images)
 
@@ -622,6 +642,9 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   echo "=== CONTAINERS ===" &&
   sudo docker ps --format "table {{.Names}}\t{{.Status}}" | grep numina &&
   echo "" &&
+  echo "=== REDIS HEALTH ===" &&
+  sudo docker exec numina-redis redis-cli ping &&
+  echo "" &&
   echo "=== BACKEND HEALTH ===" &&
   curl -sk https://localhost/api/health && echo "" &&
   echo "" &&
@@ -645,11 +668,12 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
 
 | 检查项 | 期望值 | 失败时排查 |
 |--------|--------|-----------|
-| 容器数 | 7 (app) + 1 (postgres-prod) = 8 | `docker ps` 查看哪些未启动 |
+| 容器数 | 7 (app) + 1 (postgres-prod) + 1 (redis) = 9 | `docker ps` 查看哪些未启动 |
+| Redis `PING` | `PONG` | `docker compose -f docker-compose.production.yml logs redis` |
 | Backend `(healthy)` | Docker status 显示 `(healthy)` | `docker compose logs --tail 50 backend` |
 | Agent `(healthy)` | Docker status 显示 `(healthy)` | `docker compose logs --tail 50 agent` |
 | `/api/health` | `{"status":"ok"}` | 检查 DB 连接、bootstrap 错误 |
-| Agent `/health` | `{"status":"ok","service":"numina-agent"}` | 检查 DeerFlow init、DB 连接 |
+| Agent `/health` | `{"status":"ok","service":"numina-agent"}` | 检查 DeerFlow init、DB 连接、Redis 连接 |
 | Scheduler `/health` | `status=ok jobs=7` | 检查 scheduler 日志 |
 | `captcha_enabled` | `true` | 检查 `.env` 中 `CAPTCHA_ENABLED=true` |
 | Frontend main | HTTP 200 | 检查 nginx 日志 |
@@ -666,7 +690,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
   sudo docker compose -f docker-compose.production.yml logs --tail 100 backend 2>/dev/null | grep -E '初始化|bootstrap|reconcile|汇率|MCP|orphan|event.persistence|schema|迁移|启动|ERROR|WARNING' | tail -20 &&
   echo '' &&
   echo '=== Agent startup init ===' &&
-  sudo docker compose -f docker-compose.production.yml logs --tail 50 agent 2>/dev/null | grep -E 'init|startup|DeerFlow|checkpointer|MCP|cache|ERROR|WARNING' | tail -10
+  sudo docker compose -f docker-compose.production.yml logs --tail 50 agent 2>/dev/null | grep -E 'init|startup|DeerFlow|checkpointer|MCP|cache|Redis|StreamBridge|ERROR|WARNING' | tail -10
 "
 ```
 
@@ -681,6 +705,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 | MCP registry | `MCP tool registry validated` | 工具注册表完整性验证 |
 | Orphan detector | `Orphan task detector started` | 后台孤儿任务检测循环 |
 | Event persistence | 无 `Event persistence init failed` | DeerFlow 事件持久化（非致命，失败则降级） |
+| Redis 缓存 | `Cache backend initialized (redis)` 或无错误 | `CACHE_BACKEND=redis` 时的连接确认 |
 
 **如果看到 `系统状态协调失败`：** reconcile 检测到关键资源未就绪，服务会拒绝启动。查看日志中的 `report.summary_text()` 获取具体缺失项。
 
@@ -1106,6 +1131,9 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | View logs | `sudo docker compose -f docker-compose.production.yml logs --tail 100 -f <service>` |
 | Restart service | `sudo docker compose -f docker-compose.production.yml restart <service>` |
 | Restart nginx (DNS) | `sudo docker exec numina-nginx nginx -s reload` |
+| Check Redis | `sudo docker exec numina-redis redis-cli ping` → `PONG` |
+| Redis memory | `sudo docker exec numina-redis redis-cli info memory` |
+| Redis restart | `sudo docker compose -f docker-compose.production.yml restart redis` |
 
 ## Troubleshooting
 
@@ -1150,3 +1178,6 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | 前端 icon 缩略图 404 / 空白 | 镜像内 icon 文件缺失。验证：`docker exec numina-frontend-main ls /usr/share/nginx/html/icons/3d-thumbs/`。根因：CI checkout 未拉取 LFS → sharp 生成缩略图失败。修复：确认 ci.yml `build-images` job 有 `lfs: true` |
 | Supabase 备库 `relation "xxx" does not exist` | DDL 未同步到备库。逻辑复制不复制 DDL，需手动执行。完整流程见 [references/supabase-ddl-sync.md](references/supabase-ddl-sync.md) |
 | 容器内 `failed to resolve host ...supabase.co` | Supabase 只有 IPv6 AAAA 记录，Docker 容器无法解析。必须在主机用 Python 直连：`pip3 install psycopg[binary]`，然后 `python3 script.py`。详见 [references/supabase-ddl-sync.md](references/supabase-ddl-sync.md) §Network Constraint |
+| Agent 503 "Stream bridge unavailable" | Redis 不可达。检查：`sudo docker exec numina-redis redis-cli ping`。如果 Redis 未运行：`sudo docker compose -f docker-compose.production.yml up -d redis`。如果 Agent 的 `REDIS_URL` 不正确：检查 compose environment 中 `REDIS_URL=redis://numina-redis:6379/0` |
+| `numina-redis` 未运行 / Redis 连接超时 | Redis 是 app compose 的一部分，`docker compose up -d` 会自动启动。如果手动停止过：`sudo docker compose -f docker-compose.production.yml up -d redis`。数据持久化在 `redis_data` volume (AOF)，重启不丢数据 |
+| AI 聊天无响应 / SSE 流中断 | StreamBridge 依赖 Redis Streams。检查 Redis 连通性 + Agent 日志中 `StreamBridge` 相关错误。如 Redis 重启过，Agent 需要重建连接：`sudo docker compose -f docker-compose.production.yml restart agent` |

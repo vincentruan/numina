@@ -1,4 +1,4 @@
-"""Tests for NuminaSqliteRunStore.
+"""Tests for NuminaSqlRunStore.
 
 Verifies:
 - put/get/delete cycle
@@ -24,9 +24,9 @@ def make_store():
 @pytest.fixture
 async def store_and_factory():
     engine, factory = make_store()
-    from apps.agent.services.runtime.numina_run_store import NuminaSqliteRunStore
+    from apps.agent.services.runtime.numina_run_store import NuminaSqlRunStore
 
-    store = NuminaSqliteRunStore(factory)
+    store = NuminaSqlRunStore(factory)
     await store._ensure_table()
     yield store
     await engine.dispose()
@@ -66,6 +66,8 @@ class TestListByThread:
     async def test_list_by_thread(self, store_and_factory):
         store = store_and_factory
         await store.put("run-1", thread_id="thread-1")
+        # Mark first run completed so partial unique index allows another active run
+        await store.update_status("run-1", "completed")
         await store.put("run-2", thread_id="thread-1")
         await store.put("run-3", thread_id="thread-2")
         result = await store.list_by_thread("thread-1")
@@ -119,9 +121,11 @@ class TestListPendingAndInflight:
     @pytest.mark.asyncio
     async def test_list_pending(self, store_and_factory):
         store = store_and_factory
+        # Use different threads — partial unique index allows only one active
+        # run per thread.
         await store.put("run-1", thread_id="thread-1", status="pending")
-        await store.put("run-2", thread_id="thread-1", status="pending")
-        await store.put("run-3", thread_id="thread-1", status="running")
+        await store.put("run-2", thread_id="thread-2", status="pending")
+        await store.put("run-3", thread_id="thread-3", status="running")
         pending = await store.list_pending()
         assert len(pending) == 2
         ids = {r["run_id"] for r in pending}
@@ -184,3 +188,127 @@ class TestTokenAggregation:
         # Second completion attempt with conflicting terminal status is blocked
         ok2 = await store.update_run_completion("run-1", status="failed")
         assert ok2 is False
+
+
+class TestCreateThreadOperationAtomic:
+    """Atomic admission tests (DeerFlow RunStore interface)."""
+
+    @pytest.mark.asyncio
+    async def test_reject_strategy_no_conflict(self, store_and_factory):
+        """reject: INSERT succeeds when no active run exists."""
+        store = store_and_factory
+        new_run, claimed = await store.create_thread_operation_atomic(
+            run_id="run-new",
+            thread_id="thread-1",
+            owner_worker_id="worker-1",
+            lease_expires_at="2099-01-01T00:00:00+00:00",
+        )
+        assert new_run["run_id"] == "run-new"
+        assert new_run["status"] == "pending"
+        assert claimed == []
+
+    @pytest.mark.asyncio
+    async def test_reject_strategy_conflict(self, store_and_factory):
+        """reject: raises IntegrityError when active run exists."""
+        from sqlalchemy.exc import IntegrityError
+
+        store = store_and_factory
+        # Create first active run
+        await store.create_thread_operation_atomic(
+            run_id="run-1",
+            thread_id="thread-1",
+            owner_worker_id="worker-1",
+            lease_expires_at="2099-01-01T00:00:00+00:00",
+        )
+        # Second attempt should raise IntegrityError
+        with pytest.raises(IntegrityError):
+            await store.create_thread_operation_atomic(
+                run_id="run-2",
+                thread_id="thread-1",
+                owner_worker_id="worker-1",
+                lease_expires_at="2099-01-01T00:00:00+00:00",
+            )
+
+    @pytest.mark.asyncio
+    async def test_reject_allows_after_completion(self, store_and_factory):
+        """reject: allows new run after previous run completed."""
+        store = store_and_factory
+        await store.create_thread_operation_atomic(
+            run_id="run-1",
+            thread_id="thread-1",
+            owner_worker_id="worker-1",
+            lease_expires_at="2099-01-01T00:00:00+00:00",
+        )
+        await store.update_status("run-1", "completed")
+        # Now a new run should succeed
+        new_run, claimed = await store.create_thread_operation_atomic(
+            run_id="run-2",
+            thread_id="thread-1",
+            owner_worker_id="worker-1",
+            lease_expires_at="2099-01-01T00:00:00+00:00",
+        )
+        assert new_run["run_id"] == "run-2"
+        assert claimed == []
+
+    @pytest.mark.asyncio
+    async def test_interrupt_strategy_claims_active(self, store_and_factory):
+        """interrupt: marks existing active run as interrupted, returns it."""
+        store = store_and_factory
+        await store.create_thread_operation_atomic(
+            run_id="run-1",
+            thread_id="thread-1",
+            owner_worker_id="worker-1",
+            lease_expires_at="2020-01-01T00:00:00+00:00",  # expired lease
+        )
+        new_run, claimed = await store.create_thread_operation_atomic(
+            run_id="run-2",
+            thread_id="thread-1",
+            owner_worker_id="worker-2",
+            lease_expires_at="2099-01-01T00:00:00+00:00",
+            multitask_strategy="interrupt",
+        )
+        assert new_run["run_id"] == "run-2"
+        assert len(claimed) == 1
+        assert claimed[0]["run_id"] == "run-1"
+        assert claimed[0]["status"] == "interrupted"
+
+    @pytest.mark.asyncio
+    async def test_interrupt_blocks_live_lease_other_worker(self, store_and_factory):
+        """interrupt: raises ConflictError when live lease owned by another worker."""
+        from deerflow.runtime.runs.manager import ConflictError
+
+        store = store_and_factory
+        await store.create_thread_operation_atomic(
+            run_id="run-1",
+            thread_id="thread-1",
+            owner_worker_id="worker-1",
+            lease_expires_at="2099-01-01T00:00:00+00:00",  # live lease
+        )
+        with pytest.raises(ConflictError):
+            await store.create_thread_operation_atomic(
+                run_id="run-2",
+                thread_id="thread-1",
+                owner_worker_id="worker-2",
+                lease_expires_at="2099-01-01T00:00:00+00:00",
+                multitask_strategy="interrupt",
+            )
+
+    @pytest.mark.asyncio
+    async def test_interrupt_allows_same_worker(self, store_and_factory):
+        """interrupt: allows interrupting own run (same owner_worker_id)."""
+        store = store_and_factory
+        await store.create_thread_operation_atomic(
+            run_id="run-1",
+            thread_id="thread-1",
+            owner_worker_id="worker-1",
+            lease_expires_at="2099-01-01T00:00:00+00:00",
+        )
+        new_run, claimed = await store.create_thread_operation_atomic(
+            run_id="run-2",
+            thread_id="thread-1",
+            owner_worker_id="worker-1",  # same worker
+            lease_expires_at="2099-01-01T00:00:00+00:00",
+            multitask_strategy="interrupt",
+        )
+        assert new_run["run_id"] == "run-2"
+        assert len(claimed) == 1

@@ -144,6 +144,8 @@
         :trip-id="trip.id"
         :edit-item="editingItem"
         :initial-date="addItemDate"
+        :travel-start-date="trip.departure_date"
+        :travel-end-date="trip.return_date"
         @saved="onItinerarySaved"
       />
 

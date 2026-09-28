@@ -2195,7 +2195,7 @@ export default {
   },
   role: {
     owner: '管理员',
-    admin: '大人',
+    member: '成员',
     child: '儿童',
   },
   familyPromo: {
@@ -4178,6 +4178,12 @@ export default {
       generating: '正在生成...',
       viewSettlement: '查看结算',
       noSettlement: '暂无结算方案',
+      shareInviteTitle: '邀请加入分摊组',
+      shareInviteLoading: '正在生成分享链接...',
+      shareInviteLink: '分享链接',
+      shareInviteCopyLink: '复制链接',
+      shareInviteCopied: '链接已复制',
+      shareInviteFailed: '生成分享链接失败',
     },
     settlement: {
       title: '结算方案',
@@ -4313,6 +4319,8 @@ export default {
       durationBadge: '{start}-{end} · {days}天',
       continuationDay: '第{day}天',
       accommodationDateHint: '入住时间为起始日，退房时间为结束日',
+      dateOutOfRange: '该日期不在旅行日期范围内',
+      outOfRange: '超出旅行日期',
     },
   },
 }

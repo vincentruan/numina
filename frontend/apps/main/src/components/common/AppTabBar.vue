@@ -8,7 +8,7 @@
       </template>
       {{ t('nav.ai') }}
     </van-tabbar-item>
-    <van-tabbar-item v-if="isOwner" name="baby" data-tab="baby" icon="friends-o">{{ t('nav.baby') }}</van-tabbar-item>
+    <van-tabbar-item v-if="isAdult" name="baby" data-tab="baby" icon="friends-o">{{ t('nav.baby') }}</van-tabbar-item>
     <van-tabbar-item name="settings" data-tab="settings" icon="setting-o">{{ t('nav.settings') }}</van-tabbar-item>
   </van-tabbar>
 </template>
@@ -25,7 +25,7 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
-const isOwner = computed(() => authStore.user?.role === 'owner')
+const isAdult = computed(() => authStore.user?.role !== 'child')
 
 const activeTab = computed(() => {
   const path = route.path

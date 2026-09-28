@@ -115,6 +115,10 @@ export function addCoOrganizer(tripId: string, targetUserId: string) {
   return http.post(`/trips/${tripId}/split/co-organizers`, { target_user_id: targetUserId })
 }
 
+export function getCoOrganizers(tripId: string) {
+  return http.get<Array<{ user_id: string; display_name: string }>>(`/trips/${tripId}/split/co-organizers`)
+}
+
 export function removeCoOrganizer(tripId: string, targetUserId: string) {
   return http.delete(`/trips/${tripId}/split/co-organizers/${targetUserId}`)
 }
@@ -172,4 +176,9 @@ export function uploadReceipt(tripId: string, file: File) {
   return http.post<ReceiptUploadResponse>('/import/parse-travel-receipt', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
+}
+
+// Share link for split group
+export function createSplitShareLink(tripId: string) {
+  return http.post<{ short_url: string }>(`/trips/${tripId}/split/share-link`)
 }

@@ -7,11 +7,10 @@
     <template v-else>
       <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
         <!-- Empty state -->
-        <EmptyState v-if="reviews.length === 0" :description="t('learning.noPendingReviews')">
-          <template #image>
-            <span class="empty-celebration">🎉</span>
-          </template>
-        </EmptyState>
+        <div v-if="reviews.length === 0" class="empty-state-wrapper">
+          <div class="empty-illustration" v-html="allDoneSvg" />
+          <p class="empty-description">{{ t('learning.noPendingReviews') }}</p>
+        </div>
 
         <template v-else>
           <div class="reviews-list">
@@ -103,7 +102,7 @@ import {
   type ReviewItem,
 } from '@/api/learning'
 import PageHeader from '@/components/common/PageHeader.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
+import { allDoneSvg } from '@numina/assets/empty-states'
 
 const { t, locale } = useI18n()
 const { increment, decrement } = usePageLoading()
@@ -234,8 +233,36 @@ onActivated(async () => {
   padding-bottom: 20px;
 }
 
-.empty-celebration {
-  font-size: 48px;
+.empty-state-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  text-align: center;
+}
+
+.empty-illustration {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 16px;
+  color: var(--color-muted-soft, #c0c4cc);
+}
+
+.empty-illustration :deep(svg) {
+  width: 120px;
+  height: 120px;
+}
+
+.empty-description {
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+  color: var(--color-muted-soft, #c0c4cc);
+  margin: 0;
+  line-height: 1.5;
 }
 
 .reviews-list {

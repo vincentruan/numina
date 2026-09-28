@@ -72,6 +72,13 @@ class AgentSettings(BaseSettings):
     SANDBOX_MAX_CACHED_THREADS: int = 256
     SANDBOX_IDLE_TIMEOUT_SECONDS: int = 600
 
+    # PII redaction (upstream DeerFlow PiiRedactionMiddleware — R5)
+    # When enabled, per-family temp config includes pii_redaction.enabled=true
+    # with a token_secret derived from the deployment SECRET_KEY.  The upstream
+    # middleware handles free-text PII in user messages and tool results;
+    # Numina's PIIRedactor handles structured FamilyContext separately (two-layer).
+    PII_REDACTION_ENABLED: bool = True
+
     # DeerFlow Gateway API 地址（内部代理端点使用）
     DEERFLOW_GATEWAY_URL: str = "http://localhost:8001"
 

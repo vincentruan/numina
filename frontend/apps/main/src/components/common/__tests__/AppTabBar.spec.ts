@@ -50,14 +50,13 @@ describe('AppTabBar (U6)', () => {
     resetState()
   })
 
-  it('non-owner renders 4 tabs and NO wishes tab', () => {
+  it('member renders 5 tabs (with baby) — same as owner', () => {
     userRef.value = { role: 'member' }
     const wrapper = mount(AppTabBar, { global: { stubs } })
 
     const names = wrapper.findAll('.van-tabbar-item').map((n) => n.attributes('data-name'))
-    expect(names).toEqual(['dashboard', 'finance', 'ai', 'settings'])
+    expect(names).toEqual(['dashboard', 'finance', 'ai', 'baby', 'settings'])
     expect(names).not.toContain('wishes')
-    expect(names).not.toContain('baby')
   })
 
   it('owner renders 5 tabs (with baby) and still NO wishes tab', () => {
@@ -67,6 +66,15 @@ describe('AppTabBar (U6)', () => {
     const names = wrapper.findAll('.van-tabbar-item').map((n) => n.attributes('data-name'))
     expect(names).toEqual(['dashboard', 'finance', 'ai', 'baby', 'settings'])
     expect(names).not.toContain('wishes')
+  })
+
+  it('child role does NOT see baby tab', () => {
+    userRef.value = { role: 'child' }
+    const wrapper = mount(AppTabBar, { global: { stubs } })
+
+    const names = wrapper.findAll('.van-tabbar-item').map((n) => n.attributes('data-name'))
+    expect(names).toEqual(['dashboard', 'finance', 'ai', 'settings'])
+    expect(names).not.toContain('baby')
   })
 
   it('highlights finance on /finance, /assets/:id, /wishes/:id, /liabilities/:id', () => {

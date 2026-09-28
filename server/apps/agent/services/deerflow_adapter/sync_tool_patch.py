@@ -40,6 +40,11 @@ What remains here is functionality the upstream harness does NOT provide:
    proxy bypass + coroutine-scoped ContextVar for multi-family MCP config
    isolation). ``tool_name_prefix`` is now declarative (set in
    ``_write_extensions_config``), not patched.
+4. (Removed) ``_apply_mcp_cache_threading_lock_patch`` — upstream v2.1.0
+   rewrote ``mcp/cache.py`` with proper ``threading.RLock`` +
+   ``threading.Condition`` + ``asyncio.run`` fallback. The old module-level
+   ``asyncio.Lock`` deadlock is fixed upstream; our threading.Lock patch
+   would conflict with the new implementation.
 
 Call :func:`apply_sync_tool_patches` once from the agent lifespan startup.
 """
@@ -144,8 +149,10 @@ def apply_sync_tool_patches() -> None:
     # modes (client.py:447-474), so _apply_clarification_artifact_patch was removed.
     # _apply_subagent_contextvar_patch removed (2026-08-07): native context.run()
     # in _submit_to_isolated_loop_in_context already captures all ContextVars.
+    # _apply_mcp_cache_threading_lock_patch removed (2026-09-28): upstream v2.1.0
+    # rewrote mcp/cache.py with a proper threading.RLock + threading.Condition +
+    # asyncio.run fallback — the old module-level asyncio.Lock deadlock is fixed.
     _apply_mcp_httpx_factory_patch()
-    _apply_mcp_cache_threading_lock_patch()
     _apply_original_user_content_patch()
 
 
@@ -422,92 +429,3 @@ def _apply_extensions_config_path_patch() -> None:
     )
 
 
-def _apply_mcp_cache_threading_lock_patch() -> None:
-    """Patch ``deerflow.mcp.cache.get_cached_mcp_tools`` to fix event-loop deadlock.
-
-    Upstream bug: ``_initialization_lock = asyncio.Lock()`` is created at module
-    import time, bound to the main thread's event loop. When DeerFlow's worker
-    threads (``deerflow_N``) lazily initialize MCP tools via ``asyncio.run()``,
-    a *new* event loop is created, but the module-level ``asyncio.Lock`` still
-    references the original loop — ``_get_loop().create_future()`` raises
-    ``RuntimeError`` on a cross-thread loop access. The upstream ``except
-    RuntimeError`` handler at ``cache.py:177`` catches the initial
-    ``get_event_loop()`` failure, retries with ``asyncio.run()``, but that also
-    fails at ``initialize_mcp_tools`` line 125 (``async with _initialization_lock``)
-    for the same reason. Result: **MCP tools: 0** on every agent run.
-
-    Fix: replace the lazy-init path with a ``threading.Lock`` + ``asyncio.run()``
-    combination that works correctly in any thread. The threading lock prevents
-    concurrent re-initialization; ``asyncio.run()`` creates a fresh event loop
-    scoped to the call. The native ``get_mcp_tools`` (via the patched
-    ``build_server_params``) injects ``httpx_client_factory`` for proxy bypass;
-    auth headers are written to extensions_config.json, so no header plumbing
-    is needed here.
-
-    Trigger: ``MCP tools: 0`` in agent logs + ``Failed to lazy-initialize MCP
-    tools`` with ``RuntimeError: There is no current event loop in thread
-    'deerflow_N'``.
-    """
-    try:
-        import deerflow.mcp.cache as _cache_mod
-    except ImportError:
-        logger.warning("[sync_tool_patch] deerflow.mcp.cache not found; skipping")
-        return
-
-    import asyncio as _asyncio
-    import threading as _threading
-
-    _lazy_init_thread_lock = _threading.Lock()
-
-    def _patched_get_cached_mcp_tools():
-        """Thread-safe lazy init of MCP tools, safe to call from worker threads."""
-        if _cache_mod._cache_initialized and not _cache_mod._is_cache_stale():
-            return _cache_mod._mcp_tools_cache or []
-
-        if _cache_mod._is_cache_stale():
-            _cache_mod.reset_mcp_tools_cache()
-
-        if _cache_mod._cache_initialized:
-            return _cache_mod._mcp_tools_cache or []
-
-        # Use a threading lock to serialize init across worker threads, then
-        # asyncio.run() which creates a fresh event loop scoped to this call —
-        # avoids the upstream asyncio.Lock bound to the wrong loop.
-        if not _lazy_init_thread_lock.acquire(blocking=False):
-            # Another thread is initializing; wait briefly then return whatever
-            # is cached (even if empty — better than deadlock).
-            _lazy_init_thread_lock.acquire()
-            _lazy_init_thread_lock.release()
-            return _cache_mod._mcp_tools_cache or []
-        try:
-            # Double-check after acquiring lock
-            if _cache_mod._cache_initialized:
-                return _cache_mod._mcp_tools_cache or []
-            # Bypass upstream initialize_mcp_tools() which uses the broken
-            # module-level asyncio.Lock. Call get_mcp_tools() directly — the
-            # patched build_server_params injects httpx_client_factory.
-            from deerflow.mcp.tools import get_mcp_tools
-
-            _cache_mod._mcp_tools_cache = _asyncio.run(get_mcp_tools())
-            _cache_mod._config_path, _cache_mod._config_signature = (
-                _cache_mod._current_config_state()
-            )
-            _cache_mod._cache_initialized = True
-            logger.info(
-                "[sync_tool_patch] MCP tools initialized via threading-lock patch: %d tool(s)",
-                len(_cache_mod._mcp_tools_cache or []),
-            )
-        except Exception:
-            logger.exception(
-                "[sync_tool_patch] MCP tools init failed via threading-lock patch"
-            )
-            return []
-        finally:
-            _lazy_init_thread_lock.release()
-
-        return _cache_mod._mcp_tools_cache or []
-
-    _cache_mod.get_cached_mcp_tools = _patched_get_cached_mcp_tools
-    logger.info(
-        "[sync_tool_patch] patched get_cached_mcp_tools to use threading.Lock (fixes event-loop deadlock in worker threads)"
-    )

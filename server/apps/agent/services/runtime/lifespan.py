@@ -1,24 +1,25 @@
 """FastAPI lifespan bootstrap and teardown for runtime singletons.
 
 Manages the lifecycle of:
-- ``app.state.stream_bridge`` — StreamBridge for event passing (Redis for cross-process, memory fallback)
+- ``app.state.stream_bridge`` — StreamBridge for cross-process event passing (Redis only, lazy init)
 - ``app.state.run_manager`` — ``RunManager`` for run lifecycle tracking
 
 # [Copied from DeerFlow Reference] — StreamBridge + RunManager singleton pattern
 # [Integrated with Numina Multi-Tenant] — shared instances across all families
 # Agent uses Redis StreamBridge for cross-process event sharing with backend.
+# StreamBridge is lazy-initialized on first SSE request — no Redis connection
+# at startup if no AI traffic arrives.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from typing import Any
 
 from deerflow.runtime import RunManager, StreamBridge
 from fastapi import FastAPI, HTTPException, Request
-
-from packages.stream_bridge import make_stream_bridge
-from packages.stream_bridge.config import StreamBridgeConfig
 
 from .gc import drain_inflight_runs, reconcile_orphaned_runs
 
@@ -26,42 +27,18 @@ logger = logging.getLogger(__name__)
 
 
 async def init_runtime(app: FastAPI) -> None:
-    """Initialize ``RunManager`` + ``StreamBridge`` on ``app.state``.
+    """Initialize ``RunManager`` on ``app.state``.
 
-    Agent uses Redis StreamBridge for cross-process event sharing.
-    Backend subscribes to the same Redis Stream directly.
-    Falls back to memory bridge if Redis is unavailable (dev only).
+    StreamBridge is NOT created here — it is lazy-initialized on the first
+    request that needs it (see ``get_stream_bridge``).  This avoids opening
+    a Redis connection at startup when no AI traffic has arrived yet.
 
     Call from the FastAPI lifespan startup block, after the DeerFlow
     persistence engine and checkpointer have been initialised but before
-    ``yield`` (so the singletons are available for the entire serving
-    lifetime).
+    ``yield``.
     """
-    from apps.agent.app.config import settings
-
-    # Determine Redis URL for StreamBridge
-    redis_url = settings.STREAM_BRIDGE_REDIS_URL or "redis://redis:6379/0"
-
-    try:
-        # Verify Redis connectivity before creating the bridge
-        from redis.asyncio import Redis as AsyncRedis
-
-        client = AsyncRedis.from_url(redis_url, decode_responses=True)
-        await client.ping()
-        await client.aclose()
-
-        config = StreamBridgeConfig(
-            type="redis",
-            redis_url=redis_url,
-            queue_maxsize=256,
-            stream_ttl_seconds=86400,
-        )
-        app.state.stream_bridge = make_stream_bridge(config)
-        logger.info("Initialized StreamBridge (type=redis, url=%s)", redis_url)
-    except Exception as e:
-        logger.warning("Redis bridge unavailable (%s), falling back to memory", e)
-        config = StreamBridgeConfig(type="memory", queue_maxsize=256)
-        app.state.stream_bridge = make_stream_bridge(config)
+    # Initialize the lazy-init lock for StreamBridge
+    app.state._stream_bridge_lock = asyncio.Lock()
 
     # [Copied from DeerFlow Reference] — RunManager, persistent store (U5)
     # when the DeerFlow engine is available; falls back to in-memory
@@ -77,13 +54,13 @@ async def init_runtime(app: FastAPI) -> None:
     )
 
     logger.info(
-        "[runtime] StreamBridge + RunManager initialized (persistent_store=%s)",
+        "[runtime] RunManager initialized (persistent_store=%s, stream_bridge=lazy)",
         store is not None,
     )
 
 
 def _create_persistent_run_store() -> Any | None:
-    """Build a NuminaSqliteRunStore from the DeerFlow engine, or None.
+    """Build a NuminaSqlRunStore from the DeerFlow engine, or None.
 
     Non-fatal: when the DeerFlow persistence engine has not been initialized
     (e.g. tests, or engine init failed at startup), RunManager falls back to
@@ -93,13 +70,13 @@ def _create_persistent_run_store() -> Any | None:
     try:
         from deerflow.persistence.engine import get_session_factory
 
-        from .numina_run_store import NuminaSqliteRunStore
+        from .numina_run_store import NuminaSqlRunStore
 
         session_factory = get_session_factory()
         if session_factory is None:
             logger.info("[runtime] DeerFlow session factory unavailable; using in-memory RunStore")
             return None
-        return NuminaSqliteRunStore(session_factory)
+        return NuminaSqlRunStore(session_factory)
     except Exception:
         logger.warning(
             "[runtime] persistent RunStore init failed; using in-memory store",
@@ -126,7 +103,7 @@ async def shutdown_runtime(app: FastAPI) -> None:
     if bridge is not None:
         await bridge.close()
 
-    logger.info("[runtime] StreamBridge + RunManager shut down")
+    logger.info("[runtime] RunManager + StreamBridge shut down")
 
 
 def get_run_manager(request: Request) -> RunManager:
@@ -137,9 +114,59 @@ def get_run_manager(request: Request) -> RunManager:
     return val
 
 
-def get_stream_bridge(request: Request) -> StreamBridge:
-    """Dependency getter — returns the ``StreamBridge`` from ``app.state``."""
-    val = getattr(request.app.state, "stream_bridge", None)
-    if val is None:
-        raise HTTPException(status_code=503, detail="Stream bridge not available")
-    return val
+async def get_stream_bridge(request: Request) -> StreamBridge:
+    """Lazy-init Redis StreamBridge on first use.
+
+    Agent and backend are separate processes — only Redis works for
+    cross-process event sharing.  No memory fallback: a memory bridge in
+    the agent process is invisible to the backend's bridge_consumer.
+
+    Raises HTTP 503 if Redis is unreachable (AI cannot function without it).
+    """
+    # Fast path: already initialized
+    bridge = getattr(request.app.state, "stream_bridge", None)
+    if bridge is not None:
+        return bridge
+
+    # Slow path: initialize under lock
+    lock: asyncio.Lock = request.app.state._stream_bridge_lock
+    async with lock:
+        # Double-check after acquiring lock
+        bridge = getattr(request.app.state, "stream_bridge", None)
+        if bridge is not None:
+            return bridge
+
+        from apps.agent.app.config import settings
+        from packages.stream_bridge import make_stream_bridge
+        from packages.stream_bridge.config import StreamBridgeConfig
+
+        # Priority: STREAM_BRIDGE_REDIS_URL > REDIS_URL > Docker default
+        redis_url = (
+            settings.STREAM_BRIDGE_REDIS_URL
+            or os.environ.get("REDIS_URL", "")
+            or "redis://redis:6379/0"
+        )
+
+        try:
+            from redis.asyncio import Redis as AsyncRedis
+
+            client = AsyncRedis.from_url(redis_url, decode_responses=True)
+            await client.ping()
+            await client.aclose()
+        except Exception as e:
+            logger.error("Redis unavailable for StreamBridge (%s)", e)
+            raise HTTPException(
+                status_code=503,
+                detail="Stream bridge unavailable: Redis connection failed",
+            ) from e
+
+        config = StreamBridgeConfig(
+            type="redis",
+            redis_url=redis_url,
+            queue_maxsize=256,
+            stream_ttl_seconds=86400,
+        )
+        bridge = make_stream_bridge(config)
+        request.app.state.stream_bridge = bridge
+        logger.info("Lazy-initialized StreamBridge (type=redis, url=%s)", redis_url)
+        return bridge

@@ -260,7 +260,7 @@ async def start_run(
 
     # [Copied from DeerFlow Reference] — app/gateway/services.py start_run
     """
-    bridge = get_stream_bridge(request)
+    bridge = await get_stream_bridge(request)
     run_mgr = get_run_manager(request)
 
     # R1 security gate (P0): the ``app`` field in body.metadata controls which

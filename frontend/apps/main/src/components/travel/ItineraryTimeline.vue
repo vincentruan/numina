@@ -21,58 +21,66 @@
     </template>
 
     <!-- Day sections -->
-    <template v-for="day in days" :key="day.date">
-      <div class="day-section">
-        <div class="day-header" role="heading" :aria-label="formatDate(day.date)">
-          <span class="day-date">{{ formatDate(day.date) }}</span>
-          <span class="day-weekday">{{ formatWeekday(day.date) }}</span>
-          <van-button
-            size="mini"
-            round
-            plain
-            icon="plus"
-            class="day-add-btn"
-            @click="$emit('add', day.date)"
+    <template v-if="totalItems > 0 || standaloneExpenses.length > 0">
+      <template v-for="day in days" :key="day.date">
+        <div class="day-section" :class="{ 'day--oor': day.outOfRange }">
+          <div class="day-header" role="heading" :aria-label="formatDate(day.date)">
+            <span class="day-date">{{ formatDate(day.date) }}</span>
+            <span class="day-weekday">{{ formatWeekday(day.date) }}</span>
+            <van-tag v-if="day.outOfRange" type="warning" size="medium" class="day-oor-tag">
+              {{ t('travel.itinerary.outOfRange') }}
+            </van-tag>
+            <van-button
+              v-if="!day.outOfRange"
+              size="mini"
+              round
+              plain
+              icon="plus"
+              class="day-add-btn"
+              @click="$emit('add', day.date)"
+            />
+          </div>
+
+          <!-- Items for this day -->
+          <template v-for="bucketItem in day.items" :key="`${bucketItem.item.id}-${bucketItem.isStartDay ? 'start' : day.date}`">
+            <ItineraryItemCard
+              v-if="bucketItem.isStartDay"
+              :ref="el => setCardRef(bucketItem.item.id, el)"
+              :item="bucketItem.item"
+              :custom-types="store.itineraryTypes"
+              :out-of-range="day.outOfRange"
+              @edit="$emit('edit', $event)"
+              @delete="$emit('delete', $event)"
+            />
+            <ContinuationHint
+              v-else
+              :type="bucketItem.item.type"
+              :day-number="bucketItem.dayNumber"
+              @scroll-to-start="scrollToItem(bucketItem.item.id)"
+            />
+          </template>
+
+          <!-- Standalone expenses for this day -->
+          <ExpenseTimelineEntry
+            v-for="expense in day.expenses"
+            :key="expense.id"
+            :expense="expense"
           />
+
+          <!-- Empty day state (when there are items on other days) -->
+          <div v-if="day.items.filter(d => d.isStartDay).length === 0 && day.expenses.length === 0 && totalItems > 0" class="day-empty">
+            <span class="day-empty-text">{{ t('travel.itinerary.emptyDay') }}</span>
+            <van-button
+              v-if="!day.outOfRange"
+              size="mini"
+              round
+              plain
+              icon="plus"
+              @click="$emit('add', day.date)"
+            />
+          </div>
         </div>
-
-        <!-- Items for this day -->
-        <template v-for="bucketItem in day.items" :key="`${bucketItem.item.id}-${bucketItem.isStartDay ? 'start' : day.date}`">
-          <ItineraryItemCard
-            v-if="bucketItem.isStartDay"
-            :ref="el => setCardRef(bucketItem.item.id, el)"
-            :item="bucketItem.item"
-            :custom-types="store.itineraryTypes"
-            @edit="$emit('edit', $event)"
-            @delete="$emit('delete', $event)"
-          />
-          <ContinuationHint
-            v-else
-            :type="bucketItem.item.type"
-            :day-number="bucketItem.dayNumber"
-            @scroll-to-start="scrollToItem(bucketItem.item.id)"
-          />
-        </template>
-
-        <!-- Standalone expenses for this day -->
-        <ExpenseTimelineEntry
-          v-for="expense in day.expenses"
-          :key="expense.id"
-          :expense="expense"
-        />
-
-        <!-- Empty day state (when there are items on other days) -->
-        <div v-if="day.items.filter(d => d.isStartDay).length === 0 && day.expenses.length === 0 && totalItems > 0" class="day-empty">
-          <span class="day-empty-text">{{ t('travel.itinerary.emptyDay') }}</span>
-          <van-button
-            size="mini"
-            round
-            plain
-            icon="plus"
-            @click="$emit('add', day.date)"
-          />
-        </div>
-      </div>
+      </template>
     </template>
   </div>
 </template>
@@ -123,6 +131,7 @@ interface DayBucket {
   date: string
   items: DayBucketItem[]
   expenses: ExpenseEntry[]
+  outOfRange: boolean
 }
 
 const days = computed<DayBucket[]>(() => {
@@ -137,9 +146,12 @@ const days = computed<DayBucket[]>(() => {
     endDate.setDate(endDate.getDate() + 7)
   }
 
-  const result: DayBucket[] = []
-  const current = new Date(depDate)
+  const depStr = depDate.toISOString().split('T')[0]
+  const endStr = endDate.toISOString().split('T')[0]
+  const dayMap = new Map<string, DayBucket>()
 
+  // Main range: departureDate → returnDate
+  const current = new Date(depDate)
   while (current <= endDate) {
     const dateStr = current.toISOString().split('T')[0]
     const bucketItems: DayBucketItem[] = []
@@ -169,11 +181,31 @@ const days = computed<DayBucket[]>(() => {
 
     const expenses = standaloneExpenses.value.filter(e => e.expense_date === dateStr)
 
-    result.push({ date: dateStr, items: bucketItems, expenses })
+    dayMap.set(dateStr, { date: dateStr, items: bucketItems, expenses, outOfRange: false })
     current.setDate(current.getDate() + 1)
   }
 
-  return result
+  // Out-of-range items: only show on their start date, no gap filling
+  for (const item of store.itineraryItems) {
+    const isBefore = item.date < depStr
+    const isAfter = props.returnDate != null && item.date > props.returnDate
+    if (!isBefore && !isAfter) continue
+    // Already covered by main range (e.g. multi-day item spanning into range)
+    if (dayMap.has(item.date)) continue
+
+    const startDate = new Date(item.date + 'T00:00:00')
+    const dayNumber = 1
+    const bucket: DayBucket = {
+      date: item.date,
+      items: [{ item, isStartDay: true, dayNumber }],
+      expenses: standaloneExpenses.value.filter(e => e.expense_date === item.date),
+      outOfRange: true,
+    }
+    dayMap.set(item.date, bucket)
+  }
+
+  // Sort all days chronologically
+  return [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date))
 })
 
 function formatDate(dateStr: string): string {
@@ -266,5 +298,13 @@ function scrollToItem(itemId: string) {
 .day-empty-text {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.day--oor .day-header {
+  opacity: 0.75;
+}
+
+.day-oor-tag {
+  margin-left: auto;
 }
 </style>

@@ -184,6 +184,7 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
   padding: 12px;
   border: 1px solid var(--color-card-border);
   cursor: pointer;
+  overflow: hidden;
   transition:
     transform 0.15s,
     border-color 0.15s,

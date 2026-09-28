@@ -139,6 +139,49 @@ def _inject_token_budget(config: dict[str, Any]) -> None:
     config["token_budget"].setdefault("hard_stop_threshold", 1.0)
 
 
+def _inject_pii_redaction(config: dict[str, Any]) -> None:
+    """Inject PII redaction config for upstream PiiRedactionMiddleware (R5/R7).
+
+    When ``PII_REDACTION_ENABLED=true`` (default), writes ``pii_redaction``
+    block with ``enabled: true`` and a deployment-scoped ``token_secret``
+    derived from the shared ``SECRET_KEY``.  Upstream's
+    ``build_lead_runtime_middlewares()`` reads ``app_config.pii_redaction``
+    and auto-instantiates ``PiiRedactionMiddleware`` — **no** manual mount
+    in ``custom_middlewares`` (would trigger class-name dedup AssertionError).
+
+    The ``token_secret`` is SHA-256(SECRET_KEY) → hex (64 chars), well above
+    upstream's 16-char minimum.  Per KTD5, all families share the same
+    per-deployment secret so PII placeholders are stable across families.
+
+    Two-layer design (KTD1):
+    - This middleware: free-text PII in user messages + tool results (agent graph)
+    - Numina PIIRedactor: structured FamilyContext (dispatch-time, pre-graph)
+    """
+    from apps.agent.app.config import settings
+
+    if not settings.PII_REDACTION_ENABLED:
+        return
+
+    import hashlib
+
+    from packages.core.settings import settings as core_settings
+
+    secret = core_settings.SECRET_KEY
+    if not secret:
+        raise ValueError(
+            "[deerflow_config] PII redaction is enabled (PII_REDACTION_ENABLED=true) "
+            "but SECRET_KEY is empty. Upstream PiiRedactionMiddleware requires a "
+            "non-empty token_secret. Set SECRET_KEY in the environment or disable "
+            "PII redaction with PII_REDACTION_ENABLED=false."
+        )
+
+    token_secret = hashlib.sha256(secret.encode("utf-8")).hexdigest()
+    config["pii_redaction"] = {
+        "enabled": True,
+        "token_secret": token_secret,
+    }
+
+
 def _inject_web_search(
     config: dict[str, Any],
     ai_config: dict[str, Any],
@@ -503,6 +546,7 @@ def _generate_temp_config(
     _inject_skills(config)
     _inject_mcp(config, mcp_servers)
     _inject_token_budget(config)
+    _inject_pii_redaction(config)
     web_search_mcp = ai_config.get("web_search_mcp_servers", [])
     _inject_web_search(config, ai_config, mcp_servers, web_search_mcp)
 

@@ -4,16 +4,31 @@
 # models 列表由 family_adapter_cache._generate_temp_config 动态注入，
 # 根据家庭的 ai_provider/ai_model_id/api_key 生成正确的 LangChain 类路径。
 
+# DeerFlow upstream config version (v2.1.0 = config_version 50)
+config_version: 50
+
 # 检查点（对话状态持久化）
 checkpointer:
   type: sqlite
   path: /app/.numina/data/deerflow-checkpoints.db
 
-# 记忆（低敏长期记忆）
+# 记忆（低敏长期记忆）— DeerFlow v2.1.0 pluggable memory
+# DeerMem backend: per-family storage_path injected by family_adapter_cache.
 memory:
-  path: /app/.numina/data/deerflow-memory.json
-  max_facts: 50
-  fact_confidence_threshold: 0.8
+  enabled: true
+  injection_enabled: true
+  manager_class: deermem
+  mode: middleware
+  shutdown_flush_timeout_seconds: 30.0
+  backend_config:
+    max_facts: 50
+    fact_confidence_threshold: 0.8
+    # R8: relevance-aware retrieval (DeerMem issue #4495).
+    # When true, search ranks facts by deterministic lexical relevance
+    # combined with confidence, instead of pure confidence ordering.
+    # CJK bigram tokenization is built into DeerMem's relevance engine.
+    retrieval_relevance_enabled: true
+    retrieval_relevance_weight: 0.5  # 0.0=confidence only, 1.0=relevance only
 
 # 对话历史自动压缩（超过阈值时触发）
 summarization:

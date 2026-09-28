@@ -12,9 +12,23 @@
 | `memory_config_bridge.py` | DeerMem 配置桥接 |
 | `active_skill_context.py` | 当前 skill ContextVar |
 | `original_user_content_context.py` | 原始用户内容 ContextVar |
-| `patched_reasoning_chat.py` | Qwen/Anthropic extended thinking + reasoning_content 统一补丁 |
-| `patched_anthropic.py` | Anthropic thinking block 捕获 + reasoning_content 复制 |
+| `patched_dashscope.py` | DashScope/Qwen reasoning_content 捕获（上游 per-vendor 模式） |
+| `patched_anthropic.py` | Anthropic thinking block 捕获（上游 _extract_text 丢弃 thinking blocks） |
+| `patched_reasoning_chat.py` | **[已废弃]** 被 patched_dashscope.py + 上游 per-vendor classes 替代 |
 | `exceptions.py` | DeerFlowError / SkillNotFoundError / TimeoutError |
+
+## 中间件链 (Phase 2 — 全部 config-driven)
+
+所有保护性中间件均在上游默认链或由 config 驱动启用。**不得**添加到 `custom_middlewares`（触发类名去重 AssertionError）。
+
+| 中间件 | 激活方式 | 层级 |
+|--------|----------|------|
+| `InputSanitizationMiddleware` | 无条件（默认链） | model-call 外层 |
+| `ToolOutputBudgetMiddleware` | 无条件（默认链） | model-call 外层 |
+| `PiiRedactionMiddleware` | `pii_redaction.enabled` (Numina 注入) | model-call 外层 |
+| `LoopDetectionMiddleware` | `loop_detection.enabled` (默认 true) | lead agent 链 |
+| `SafetyFinishReasonMiddleware` | `safety_finish_reason.enabled` (默认 true) | lead agent 链 |
+| `TokenBudgetMiddleware` | `token_budget.enabled` (Numina 注入) | lead agent 链 |
 
 ## sync_tool_patch.py — 5 个 Patch
 
