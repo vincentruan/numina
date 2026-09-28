@@ -188,6 +188,24 @@ class ChildLearningOverview(SnowflakeBase):
     locked_count: int
     review_count: int
     total_study_minutes: int
+    cumulative_xp: int = 0
+    level: int = 1
+    level_name_zh: str = ""
+    learning_streak_days: int = 0
+    current_zone: str = "growth"
+
+
+class ChildSessionLogResponse(SnowflakeBase):
+    """AI session log for parent review."""
+    session_id: int
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    session_type: str
+    score: float | None
+    duration_seconds: int | None
+    started_at: datetime
+    ended_at: datetime | None
 
 
 class ReviewItemResponse(SnowflakeBase):

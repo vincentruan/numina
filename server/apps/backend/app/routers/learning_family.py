@@ -14,6 +14,7 @@ from apps.backend.app.schemas.learning import (
     AssignmentCreate,
     AssignmentResponse,
     ChildLearningOverview,
+    ChildSessionLogResponse,
     PathCreate,
     PathResponse,
     ProgressResponse,
@@ -24,6 +25,7 @@ from apps.backend.app.services.learning import (
     assignment_service,
     path_service,
     progress_service,
+    stats_service,
 )
 from apps.backend.app.services.notification.dispatcher import (
     notify_learning_approved,
@@ -34,6 +36,7 @@ from packages.db.models.learning.assignment import LearningAssignment
 from packages.db.models.learning.path import LearningPath
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
+from packages.db.models.learning.stats import ChildLearningStats
 from packages.db.models.learning.topic import LearningTopic
 
 router = APIRouter(prefix="/family/learning", tags=["learning-family"])
@@ -86,9 +89,19 @@ def list_children(
     )
     study_seconds = {row.child_id: int(row[1]) for row in study_rows}
 
+    # Batch stats: single query for all children
+    stats_rows = (
+        db.query(ChildLearningStats)
+        .filter(ChildLearningStats.child_id.in_(child_ids))
+        .all()
+    )
+    stats_map = {s.child_id: s for s in stats_rows}
+
     result = []
     for child in children:
         ov = overviews.get(child.id, {})
+        stats = stats_map.get(child.id)
+        level_info = stats_service.get_level_info(stats.level) if stats else stats_service.get_level_info(1)
         result.append(
             ChildLearningOverview(
                 child_id=child.id,
@@ -99,6 +112,11 @@ def list_children(
                 locked_count=ov.get("locked", 0),
                 review_count=ov.get("review", 0),
                 total_study_minutes=study_seconds.get(child.id, 0) // 60,
+                cumulative_xp=stats.cumulative_xp if stats else 0,
+                level=stats.level if stats else 1,
+                level_name_zh=level_info["name_zh"],
+                learning_streak_days=stats.learning_streak_days if stats else 0,
+                current_zone=stats.current_zone if stats else "growth",
             )
         )
     return result
@@ -148,6 +166,58 @@ def get_child_progress(
         .order_by(LearningProgress.updated_at.desc())
         .all()
     )
+
+
+@router.get("/children/{child_id}/sessions", response_model=list[ChildSessionLogResponse])
+def get_child_sessions(
+    child_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get child's recent learning sessions for parent review."""
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    sessions = (
+        db.query(LearningSession)
+        .filter(LearningSession.child_id == child_id)
+        .order_by(LearningSession.started_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    # Batch-fetch topic names
+    topic_ids = list({s.topic_id for s in sessions})
+    topics = (
+        db.query(LearningTopic)
+        .filter(LearningTopic.id.in_(topic_ids))
+        .all()
+    ) if topic_ids else []
+    topic_map = {t.id: t for t in topics}
+
+    result = []
+    for s in sessions:
+        topic = topic_map.get(s.topic_id)
+        result.append(
+            ChildSessionLogResponse(
+                session_id=s.id,
+                topic_id=s.topic_id,
+                topic_name=topic.name if topic else "",
+                topic_name_zh=topic.name_zh if topic else None,
+                session_type=s.session_type,
+                score=s.score,
+                duration_seconds=s.duration_seconds,
+                started_at=s.started_at,
+                ended_at=s.ended_at,
+            )
+        )
+    return result
 
 
 @router.get("/topics/{topic_id}", response_model=TopicResponse)
