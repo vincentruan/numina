@@ -4178,6 +4178,12 @@ export default {
       generating: '正在生成...',
       viewSettlement: '查看结算',
       noSettlement: '暂无结算方案',
+      shareInviteTitle: '邀请加入分摊组',
+      shareInviteLoading: '正在生成分享链接...',
+      shareInviteLink: '分享链接',
+      shareInviteCopyLink: '复制链接',
+      shareInviteCopied: '链接已复制',
+      shareInviteFailed: '生成分享链接失败',
     },
     settlement: {
       title: '结算方案',
