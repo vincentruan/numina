@@ -22,7 +22,7 @@ class ChildLearningStats(Base):
     cumulative_xp: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     learning_streak_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    last_learning_date: Mapped[datetime | None] = mapped_column(Date(), nullable=True)
+    last_learning_date: Mapped[date | None] = mapped_column(Date(), nullable=True)
     current_zone: Mapped[str] = mapped_column(
         String(10), nullable=False, default="growth"
     )

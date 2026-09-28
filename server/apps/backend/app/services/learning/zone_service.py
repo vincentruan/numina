@@ -126,6 +126,14 @@ def _find_zone_topic(
 
     Only returns topics where the child has a progress record (available/learning/locked).
     """
+    filters = [
+        LearningTopic.age_group == age_group,
+        LearningTopic.deprecated == False,  # noqa: E712
+        LearningProgress.mastery_level.in_(["available", "learning", "locked"]),
+    ]
+    if mastered_ids:
+        filters.append(LearningTopic.id.notin_(mastered_ids))
+
     # Available topics in this zone, sorted by centrality
     available = (
         db.query(LearningTopic)
@@ -134,12 +142,7 @@ def _find_zone_topic(
             (LearningProgress.topic_id == LearningTopic.id)
             & (LearningProgress.child_id == child_id),
         )
-        .filter(
-            LearningTopic.age_group == age_group,
-            LearningTopic.deprecated == False,  # noqa: E712
-            LearningProgress.mastery_level.in_(["available", "learning", "locked"]),
-            ~LearningTopic.id.in_(mastered_ids) if mastered_ids else True,
-        )
+        .filter(*filters)
         .order_by(LearningTopic.centrality.desc())
         .first()
     )
