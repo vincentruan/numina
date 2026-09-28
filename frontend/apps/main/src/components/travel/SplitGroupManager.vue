@@ -34,7 +34,7 @@
               </van-button>
             </div>
           </div>
-          <van-button type="primary" block round @click="copyInviteLink">
+          <van-button type="primary" block round @click="openSharePopup">
             {{ t('travel.splitGroup.copyLink') }}
           </van-button>
         </van-cell-group>
@@ -141,6 +141,39 @@
       </template>
     </template>
   </div>
+
+        <!-- Share invite link popup -->
+        <van-popup v-model:show="sharePopupVisible" position="bottom" round :style="{ padding: '24px 16px 40px' }">
+          <p class="sheet-title">{{ t('travel.splitGroup.shareInviteTitle') }}</p>
+          <div class="share-popup-body">
+            <div v-if="shareLoading" class="share-loading">
+              <van-loading size="24" />
+              <span>{{ t('travel.splitGroup.shareInviteLoading') }}</span>
+            </div>
+            <template v-else-if="shareShortUrl">
+              <div class="share-qr-wrapper">
+                <img v-if="shareQrDataUrl" :src="shareQrDataUrl" alt="QR Code" class="share-qr-img" />
+              </div>
+              <van-field
+                :model-value="shareShortUrl"
+                readonly
+                :label="t('travel.splitGroup.shareInviteLink')"
+                class="share-url-field"
+              />
+              <van-button
+                block
+                type="primary"
+                icon="link-o"
+                style="margin-top: 16px; border-radius: 12px"
+                @click="copyShareLink"
+              >{{ t('travel.splitGroup.shareInviteCopyLink') }}</van-button>
+            </template>
+            <div v-else class="share-error">
+              <span>{{ t('travel.splitGroup.shareInviteFailed') }}</span>
+              <van-button size="small" plain type="primary" @click="openSharePopup">{{ t('common.retry') }}</van-button>
+            </div>
+          </div>
+        </van-popup>
 </template>
 
 <script setup lang="ts">
@@ -156,11 +189,13 @@ import {
   removeParticipant,
   regenerateInviteCode,
   addCoOrganizer,
+  getCoOrganizers,
   removeCoOrganizer,
 } from '@/api/travel'
 import type { SplitParticipant } from '@/types/travel'
 
 import { copyToClipboard } from '@/utils/ai-chat/tableUtils'
+import QRCode from 'qrcode'
 const props = defineProps<{
   tripId: string
 }>()
@@ -172,6 +207,12 @@ const store = useTravelStore()
 const loading = ref(true)
 const generating = ref(false)
 const showAddCoOrganizer = ref(false)
+
+// Share link popup state
+const sharePopupVisible = ref(false)
+const shareShortUrl = ref('')
+const shareQrDataUrl = ref('')
+const shareLoading = ref(false)
 
 interface FamilyMember {
   id: string
@@ -219,17 +260,6 @@ async function handleCreateGroup() {
 async function copyInviteCode() {
   if (!splitGroup.value) return
   const ok = await copyToClipboard(splitGroup.value.invite_code)
-  if (ok) {
-    showSuccessToast(t('travel.splitGroup.copied'))
-  } else {
-    showFailToast(t('travel.splitGroup.copyFailed'))
-  }
-}
-
-async function copyInviteLink() {
-  if (!splitGroup.value) return
-  const link = `${window.location.origin}/travel/shared/${splitGroup.value.invite_code}`
-  const ok = await copyToClipboard(link)
   if (ok) {
     showSuccessToast(t('travel.splitGroup.copied'))
   } else {
@@ -301,21 +331,11 @@ async function handleRemoveCoOrganizer(userId: string) {
 
 async function fetchCoOrganizers() {
   try {
-    const { getSplitGroup: fetchGroup } = await import('@/api/travel')
-    const groupRes = await fetchGroup(props.tripId)
-    // TODO: Replace with dedicated GET /trips/{id}/co-organizers endpoint.
-    // Currently deriving from participants with family_id set — a heuristic,
-    // not the actual trip_co_organizers table data. Works for display but
-    // won't distinguish co-organizers from regular family-member participants.
-    const members = familyMembers.value
-    const participantFamilyIds = new Set(
-      (groupRes.data.participants || [])
-        .filter(p => p.family_id)
-        .map(p => p.family_id!),
-    )
-    coOrganizers.value = members
-      .filter(m => participantFamilyIds.has(m.id))
-      .map(m => ({ user_id: m.id, display_name: m.display_name }))
+    const res = await getCoOrganizers(props.tripId)
+    coOrganizers.value = (res.data || []).map(co => ({
+      user_id: String(co.user_id),
+      display_name: co.display_name,
+    }))
   } catch {
     // ignore — co-organizer display is non-critical
   }
@@ -336,6 +356,36 @@ async function handleGenerateSettlement() {
 
 function navigateToSettlement() {
   router.push(`/travel/${props.tripId}/settlement`)
+}
+
+
+async function openSharePopup() {
+  sharePopupVisible.value = true
+  shareShortUrl.value = ''
+  shareQrDataUrl.value = ''
+  shareLoading.value = true
+  try {
+    const { createSplitShareLink } = await import('@/api/travel')
+    const res = await createSplitShareLink(props.tripId)
+    shareShortUrl.value = res.data.short_url
+    shareQrDataUrl.value = await QRCode.toDataURL(res.data.short_url, {
+      width: 220,
+      margin: 1,
+      color: { dark: '#333333', light: '#ffffff' },
+    })
+  } catch {
+    shareShortUrl.value = ''
+  } finally {
+    shareLoading.value = false
+  }
+}
+
+async function copyShareLink() {
+  if (!shareShortUrl.value) return
+  const ok = await copyToClipboard(shareShortUrl.value)
+  if (ok) {
+    showSuccessToast(t('travel.splitGroup.shareInviteCopied'))
+  }
 }
 
 onMounted(async () => {
