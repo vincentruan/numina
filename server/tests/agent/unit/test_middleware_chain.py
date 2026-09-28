@@ -8,13 +8,11 @@ Confirms:
 5. No duplicate middleware names (would trigger AssertionError).
 """
 
-import pytest
-
 
 class TestPiiRedactionConfig:
     """PII redaction is config-driven via pii_redaction block in temp YAML."""
 
-    def test_pii_redaction_config_injected_when_enabled(self, tmp_path, monkeypatch):
+    def test_pii_redaction_config_injected_when_enabled(self, monkeypatch):
         """_inject_pii_redaction writes pii_redaction block when enabled."""
         from apps.agent.services.deerflow_adapter.family_adapter_cache import (
             _inject_pii_redaction,
@@ -117,4 +115,4 @@ class TestMiddlewareChainNoDuplicates:
         for name in forbidden_in_custom:
             # Only check if it's in a custom_middlewares context
             # (it's fine to reference them in comments or imports)
-            assert f"custom_middlewares" not in source or name not in source.split("custom_middlewares")[-1] if "custom_middlewares" in source else True
+            assert "custom_middlewares" not in source or name not in source.split("custom_middlewares")[-1] if "custom_middlewares" in source else True

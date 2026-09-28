@@ -55,10 +55,29 @@ services/deerflow_adapter/
 ├── memory_config_bridge.py # bridges DeerMem memory config per family
 ├── original_user_content_context.py  # ContextVar preserving original user content through middleware
 ├── sync_tool_patch.py      # monkey-patches DeerFlow harness: sync wrapping, ContextVar propagation, MCP proxy, active-skill tool filter
+├── patched_dashscope.py    # DashScope/Qwen reasoning_content capture (upstream per-vendor pattern)
+├── patched_anthropic.py    # Anthropic thinking block capture (upstream _extract_text drops thinking blocks)
+├── patched_reasoning_chat.py # [DEPRECATED] replaced by patched_dashscope.py + upstream per-vendor classes
 └── exceptions.py
 ```
 
 Business code (routers, worker) calls adapter methods — never instantiates `DeerFlowClient` directly. Obtain the per-family adapter via `family_adapter_cache.get_family_adapter(...)` (cached) or `DeerFlowAdapter.create_family_adapter(...)`.
+
+### Middleware chain (Phase 2 — all config-driven)
+
+All protective middlewares are in the upstream default chain or config-driven. **Do NOT add them to `custom_middlewares`** (triggers class-name dedup `AssertionError`).
+
+| Middleware | Activation | Layer |
+|------------|-----------|-------|
+| `InputSanitizationMiddleware` | Unconditional (default chain) | Model-call outer wrapper |
+| `ToolOutputBudgetMiddleware` | Unconditional (default chain) | Model-call outer wrapper |
+| `ToolResultSanitizationMiddleware` | Unconditional (default chain) | Model-call outer wrapper |
+| `LoopDetectionMiddleware` | `loop_detection.enabled` (default: true) | Lead agent chain |
+| `SafetyFinishReasonMiddleware` | `safety_finish_reason.enabled` (default: true) | Lead agent chain |
+| `TokenBudgetMiddleware` | `token_budget.enabled` (Numina injects) | Lead agent chain |
+| `PiiRedactionMiddleware` | `pii_redaction.enabled` (Numina injects) | Model-call outer wrapper |
+
+**Two-layer PII** (KTD1): Upstream `PiiRedactionMiddleware` handles free-text in user messages + tool results (agent graph). Numina `PIIRedactor` handles structured `FamilyContext` (pre-dispatch). Both active simultaneously.
 
 ## Runtime & Dispatch (the v2 `stream_run` path)
 
