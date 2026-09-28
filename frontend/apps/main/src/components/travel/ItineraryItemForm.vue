@@ -35,6 +35,10 @@
             @click="showDatePicker = true"
           />
         </van-cell-group>
+        <div v-if="isDateOutOfRange && !isEdit" class="date-warning">
+          <van-icon name="warning-o" size="14" />
+          {{ t('travel.itinerary.dateOutOfRange') }}
+        </div>
 
         <!-- Cross-day toggle -->
         <van-cell-group inset>
@@ -261,6 +265,8 @@ const props = defineProps<{
   tripId: string
   editItem?: ItineraryItem | null
   initialDate?: string
+  travelStartDate?: string
+  travelEndDate?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -312,11 +318,35 @@ const pickerDate = ref([
 ])
 const endDatePickerDate = ref([...pickerDate.value])
 const purchaseDatePickerDate = ref([...pickerDate.value])
-const minDate = new Date(2020, 0, 1)
-const maxDate = new Date(2030, 11, 31)
+const hardMinDate = new Date(2020, 0, 1)
+const hardMaxDate = new Date(2030, 11, 31)
+
+// Travel-date-aware picker bounds
+const minDate = computed(() => {
+  if (props.travelStartDate) {
+    const p = props.travelStartDate.split('-')
+    return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]))
+  }
+  return hardMinDate
+})
+
+const maxDate = computed(() => {
+  if (props.travelEndDate) {
+    const p = props.travelEndDate.split('-')
+    return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]))
+  }
+  return hardMaxDate
+})
+
+// Check if selected date is outside travel range
+const isDateOutOfRange = computed(() => {
+  if (!form.value.date || !props.travelStartDate) return false
+  return form.value.date < props.travelStartDate ||
+    (props.travelEndDate != null && form.value.date > props.travelEndDate)
+})
 
 const startDateAsDate = computed(() => {
-  if (!form.value.date) return minDate
+  if (!form.value.date) return hardMinDate
   const parts = form.value.date.split('-')
   return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
 })
@@ -393,8 +423,9 @@ watch(() => props.editItem, (item) => {
 // Watch for initialDate prop (when opening form from timeline "+")
 watch(() => props.initialDate, (d) => {
   if (d && !props.editItem) {
-    form.value.date = d
-    pickerDate.value = parseDateParts(d)
+    const clamped = clampToTravelRange(d)
+    form.value.date = clamped
+    pickerDate.value = parseDateParts(clamped)
   }
 }, { immediate: true })
 
@@ -405,9 +436,17 @@ watch(showDatePicker, (open) => {
   }
 })
 
+function clampToTravelRange(dateStr: string): string {
+  if (!dateStr) return dateStr
+  if (props.travelStartDate && dateStr < props.travelStartDate) return props.travelStartDate
+  if (props.travelEndDate && dateStr > props.travelEndDate) return props.travelEndDate
+  return dateStr
+}
+
 function resetForm() {
+  const clamped = props.initialDate ? clampToTravelRange(props.initialDate) : ''
   form.value = {
-    date: props.initialDate || '',
+    date: clamped,
     end_date: null,
     type: 'activity',
     start_time: '',
@@ -421,6 +460,7 @@ function resetForm() {
   }
   typeMeta.value = {}
   showCrossDay.value = false
+  if (clamped) pickerDate.value = parseDateParts(clamped)
 }
 
 function onTypeConfirm({ selectedOptions }: { selectedOptions: Array<{ value?: string | number }> }) {
@@ -589,6 +629,15 @@ function handleClose() {
   font-size: 12px;
   color: var(--text-tertiary, #c8c9cc);
   padding: 4px 16px 8px;
+}
+
+.date-warning {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #ff976a;
+  padding: 4px 24px;
 }
 
 .form-footer {

@@ -4313,6 +4313,8 @@ export default {
       durationBadge: '{start}-{end} · {days}天',
       continuationDay: '第{day}天',
       accommodationDateHint: '入住时间为起始日，退房时间为结束日',
+      dateOutOfRange: '该日期不在旅行日期范围内',
+      outOfRange: '超出旅行日期',
     },
   },
 }

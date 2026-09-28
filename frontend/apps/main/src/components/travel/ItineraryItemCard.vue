@@ -8,6 +8,9 @@
         <div class="card-content">
           <div class="card-header">
             <span class="card-type">{{ typeName }}</span>
+            <van-tag v-if="outOfRange" type="warning" size="medium" class="card-oor-tag">
+              {{ t('travel.itinerary.outOfRange') }}
+            </van-tag>
             <span v-if="durationBadge" class="card-duration">{{ durationBadge }}</span>
             <span v-if="item.start_time" class="card-time">{{ item.start_time }}</span>
             <span v-if="item.end_time" class="card-time-sep">–</span>
@@ -63,6 +66,7 @@ import type { ItineraryItem, ItineraryItemTypeDef } from '@/types/travel'
 const props = defineProps<{
   item: ItineraryItem
   customTypes?: ItineraryItemTypeDef[]
+  outOfRange?: boolean
 }>()
 
 defineEmits<{
@@ -234,6 +238,10 @@ const typeMetaSummary = computed(() => {
   background: rgba(var(--van-primary-color-rgb, 79, 70, 229), 0.1);
   padding: 1px 6px;
   border-radius: 4px;
+}
+
+.card-oor-tag {
+  flex-shrink: 0;
 }
 
 .card-time {

@@ -4224,6 +4224,8 @@ Keep the tone warm, like a chat between family members.`,
       durationBadge: '{start}-{end} · {days}d',
       continuationDay: 'Day {day}',
       accommodationDateHint: 'Check-in is on the start date, check-out is on the end date',
+      dateOutOfRange: 'This date is outside the trip date range',
+      outOfRange: 'Outside trip dates',
     },
   },
 }
