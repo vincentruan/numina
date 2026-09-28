@@ -1142,7 +1142,7 @@ defineExpose({
 /* Card mode: 2-column grid */
 .group-items--grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   padding-bottom: 4px;
 }
