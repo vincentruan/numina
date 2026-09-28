@@ -37,7 +37,7 @@
 
         <!-- Pending Approvals (filtered by selected child) -->
         <PendingApprovalsSection
-          v-if="authStore.user?.role === 'owner'"
+          v-if="authStore.user?.role !== 'child'"
           :child-id="selectedChildId ? String(selectedChildId) : null"
         />
 
@@ -1181,7 +1181,7 @@ async function onRefresh() {
     familyStore.fetchFamily(),
     loadData(),
   ]
-  if (authStore.user?.role === 'owner') {
+  if (authStore.user?.role !== 'child') {
     tasks.push(choreStore.fetchPendingApprovals())
   }
   await Promise.all(tasks)
@@ -1192,7 +1192,7 @@ onMounted(async () => {
   increment()
   try {
     await familyStore.fetchFamily()
-    if (authStore.user?.role === 'owner') {
+    if (authStore.user?.role !== 'child') {
       await choreStore.fetchPendingApprovals()
     }
     await loadData()
@@ -1212,7 +1212,7 @@ onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
   increment()
   try {
-    if (authStore.user?.role === 'owner') {
+    if (authStore.user?.role !== 'child') {
       await choreStore.fetchPendingApprovals()
     }
     await loadData()
