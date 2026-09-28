@@ -48,7 +48,7 @@
                   size="small"
                   plain
                   type="primary"
-                  @click="router.push(`/baby/learning/${child.child_id}/map`)"
+                  @click="router.push({ path: `/baby/learning/${child.child_id}/map`, query: { name: child.child_name } })"
                 >
                   {{ t('learning.viewMap') }}
                 </van-button>
