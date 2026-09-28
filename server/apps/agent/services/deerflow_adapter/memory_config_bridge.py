@@ -89,13 +89,11 @@ _store_lock = threading.Lock()
 # reference into the module namespace, so patching the source alone is not
 # enough).
 _MEMORY_CONFIG_IMPORTERS = (
-    "deerflow.client",
-    "deerflow.agents.memory.queue",
-    "deerflow.agents.memory.storage",
-    "deerflow.agents.memory.updater",
+    "deerflow.agents.factory",
+    "deerflow.agents.memory.manager",
     "deerflow.agents.memory.summarization_hook",
     "deerflow.agents.middlewares.memory_middleware",
-    "deerflow.agents.lead_agent.prompt",
+    "deerflow.agents.middlewares.dynamic_context_middleware",
 )
 
 _installed = False
@@ -213,6 +211,7 @@ def install() -> None:
         trace_id: str | None = None,
         *,
         bypass_watermark: bool = False,
+        judge: bool = True,
     ) -> bool:
         cfg = pop_config(thread_id, user_id, agent_name)
         if cfg is None:
@@ -227,6 +226,7 @@ def install() -> None:
                 user_id=user_id,
                 trace_id=trace_id,
                 bypass_watermark=bypass_watermark,
+                judge=judge,
             ))
         push_current_app_config(cfg)
         try:
@@ -239,6 +239,7 @@ def install() -> None:
                 user_id=user_id,
                 trace_id=trace_id,
                 bypass_watermark=bypass_watermark,
+                judge=judge,
             ))
         finally:
             pop_current_app_config()

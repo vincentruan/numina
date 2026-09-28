@@ -926,18 +926,19 @@ wheels = [
 
 [[package]]
 name = "deerflow-extension-api"
-version = "0.1.0"
-source = { git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fextension-api&rev=6556d09d#6556d09d7f3800ca570820819455c39b4584482f" }
+version = "0.2.4"
+source = { git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fextension-api&rev=712a11c0#712a11c0cda0a7c9441c9afd68c1e854d38103c6" }
 
 [[package]]
 name = "deerflow-harness"
 version = "2.1.0"
-source = { git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fharness&rev=6556d09d#6556d09d7f3800ca570820819455c39b4584482f" }
+source = { git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fharness&rev=712a11c0#712a11c0cda0a7c9441c9afd68c1e854d38103c6" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "agent-sandbox" },
     { name = "aiosqlite" },
     { name = "alembic" },
+    { name = "beautifulsoup4" },
     { name = "croniter" },
     { name = "cryptography" },
     { name = "ddgs" },
@@ -947,7 +948,9 @@ dependencies = [
     { name = "e2b-code-interpreter" },
     { name = "exa-py" },
     { name = "firecrawl-py" },
+    { name = "html5lib" },
     { name = "httpx" },
+    { name = "jsonschema" },
     { name = "kubernetes" },
     { name = "langchain" },
     { name = "langchain-anthropic" },
@@ -959,18 +962,21 @@ dependencies = [
     { name = "langfuse" },
     { name = "langgraph" },
     { name = "langgraph-api" },
+    { name = "langgraph-checkpoint" },
     { name = "langgraph-checkpoint-sqlite" },
     { name = "langgraph-cli" },
     { name = "langgraph-runtime-inmem" },
     { name = "langgraph-sdk" },
     { name = "markdownify" },
     { name = "markitdown", extra = ["all", "xlsx"] },
+    { name = "packaging" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "readabilipy" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "tavily-python" },
     { name = "tiktoken" },
+    { name = "tzdata" },
 ]
 
 [[package]]
@@ -2117,15 +2123,15 @@ wheels = [
 
 [[package]]
 name = "langgraph-checkpoint"
-version = "4.1.0"
+version = "4.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain-core" },
     { name = "ormsgpack" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/02/b4/6005c5dd88ad484fe6235d4c43a0d2cee7e91b08ad85a180985c2662df87/langgraph_checkpoint-4.1.0.tar.gz", hash = "sha256:e5bb304e30fc1363ac8fcb5f7dee5ca2185d77fe475b0d01de2c5f91324c2c21", size = 181942, upload-time = "2026-05-12T03:33:49.888Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/dc/e1/089c4c9e0a2fec7f883f82ae8e6a727138d50074cfeb6644bc2d13b1019b/langgraph_checkpoint-4.2.0.tar.gz", hash = "sha256:51a593b6bee684b0818e5d6e58e28ab340c6db7794575056ce7bd1b746a84ed7", size = 180239, upload-time = "2026-08-07T20:05:03.756Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/93/74/d3be2b41955e20ccd624dba5f6fe9d38dcee385ba470a6e13ed86732fc86/langgraph_checkpoint-4.1.0-py3-none-any.whl", hash = "sha256:8bc2a0466a20c38b865ce6671b42093fd5c041133f32351cae4222e0eeaf7fb5", size = 56047, upload-time = "2026-05-12T03:33:48.548Z" },
+    { url = "https://files.pythonhosted.org/packages/05/71/3b475f09bd57d3a5649792c66353312b4432afd843f301739dfcebd157f0/langgraph_checkpoint-4.2.0-py3-none-any.whl", hash = "sha256:0547fd228935a0b758865de3a3d6d7a2537c308895d0f9ab092ce9151b5da942", size = 56833, upload-time = "2026-08-07T20:05:02.655Z" },
 ]
 
 [[package]]
@@ -2145,16 +2151,16 @@ wheels = [
 
 [[package]]
 name = "langgraph-checkpoint-sqlite"
-version = "3.1.0"
+version = "3.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "langgraph-checkpoint" },
     { name = "sqlite-vec" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e3/ea/83917c2369acf8a10a894d4247655fd063c07924ba5bc4e83c85d2eaeded/langgraph_checkpoint_sqlite-3.1.0.tar.gz", hash = "sha256:f926916ebc1b985d802cc9c820026036e84db9d910d62c97b57e4ba64f67d5ae", size = 147902, upload-time = "2026-05-12T03:34:52.503Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/54/b1/26fef7572c4fce0322740ef3fcee471510028355d4d4c1d800f0fd432d73/langgraph_checkpoint_sqlite-3.1.1.tar.gz", hash = "sha256:6fcb20db4c37ef7aad52f29b539eb98c38e2dad6fab7c2446a2a9db24f37a70e", size = 146805, upload-time = "2026-07-30T19:19:37.516Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/97/07/b342811a16327900af2747c752ea19676172fcddf9b592cc384031076623/langgraph_checkpoint_sqlite-3.1.0-py3-none-any.whl", hash = "sha256:cc9b40df0076feae8a9ad42ae713621b148b00ac23adc09dc1dc66090a46e5ad", size = 38587, upload-time = "2026-05-12T03:34:51.231Z" },
+    { url = "https://files.pythonhosted.org/packages/f5/b9/e458601a1718337839bcfeec9d1b27b8b16ce135be2bd50ed0395d33a878/langgraph_checkpoint_sqlite-3.1.1-py3-none-any.whl", hash = "sha256:8505c54c94a658080525d7e6780fdd4e0c078ff2566b30d399c02cc9f9af1c63", size = 40785, upload-time = "2026-07-30T19:19:36.424Z" },
 ]
 
 [[package]]
@@ -2889,7 +2895,7 @@ requires-dist = [
     { name = "bcrypt", marker = "extra == 'backend'", specifier = ">=4.0.0" },
     { name = "cryptography", marker = "extra == 'agent'", specifier = ">=42.0.0" },
     { name = "cryptography", marker = "extra == 'worker'", specifier = ">=44.0.0" },
-    { name = "deerflow-harness", marker = "extra == 'agent'", git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fharness&rev=6556d09d" },
+    { name = "deerflow-harness", marker = "extra == 'agent'", git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fharness&rev=712a11c0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "filelock", specifier = ">=3.29.0" },
     { name = "filelock", marker = "extra == 'backend'", specifier = ">=3.13.0" },

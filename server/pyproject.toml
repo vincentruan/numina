@@ -115,7 +115,7 @@ dev = [
 members = []
 
 [tool.uv.sources]
-deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness", rev = "6556d09d" }
+deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness", rev = "712a11c0" }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
