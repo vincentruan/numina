@@ -49,8 +49,10 @@ class TestPiiRedactionConfig:
 
         assert "pii_redaction" not in config
 
-    def test_pii_redaction_skipped_when_no_secret(self, monkeypatch):
-        """PII redaction warns and skips when SECRET_KEY is empty."""
+    def test_pii_redaction_raises_when_no_secret(self, monkeypatch):
+        """PII redaction raises ValueError when SECRET_KEY is empty (never silently degrade)."""
+        import pytest
+
         from apps.agent.services.deerflow_adapter.family_adapter_cache import (
             _inject_pii_redaction,
         )
@@ -63,9 +65,8 @@ class TestPiiRedactionConfig:
         )
 
         config: dict = {}
-        _inject_pii_redaction(config)
-
-        assert "pii_redaction" not in config
+        with pytest.raises(ValueError, match="SECRET_KEY is empty"):
+            _inject_pii_redaction(config)
 
     def test_token_secret_is_deterministic(self, monkeypatch):
         """Same SECRET_KEY always produces same token_secret (HMAC stability)."""
@@ -113,6 +114,9 @@ class TestMiddlewareChainNoDuplicates:
             "InputSanitizationMiddleware",
         ]
         for name in forbidden_in_custom:
-            # Only check if it's in a custom_middlewares context
-            # (it's fine to reference them in comments or imports)
-            assert "custom_middlewares" not in source or name not in source.split("custom_middlewares")[-1] if "custom_middlewares" in source else True
+            # These names must not appear in run_agent source at all —
+            # they are config-driven (default chain or pii_redaction block).
+            assert name not in source, (
+                f"{name} found in run_agent source — it should be config-driven, "
+                "not added to custom_middlewares (would trigger class-name dedup AssertionError)"
+            )

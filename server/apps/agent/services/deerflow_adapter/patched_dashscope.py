@@ -139,7 +139,18 @@ class PatchedChatDashScope(ChatOpenAI):
         tool_call signature matching.
         """
         original_messages = self._convert_input(input_).to_messages()
-        payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+        # Filter out error-fallback messages (matching upstream PatchedChatDeepSeek).
+        # DeerFlow marks failed tool results with deerflow_error_fallback in
+        # additional_kwargs; sending these to the vendor API would cause errors.
+        filtered_messages = [
+            m
+            for m in original_messages
+            if not (
+                isinstance(m, AIMessage)
+                and (m.additional_kwargs or {}).get("deerflow_error_fallback")
+            )
+        ]
+        payload = super()._get_request_payload(filtered_messages, stop=stop, **kwargs)
 
         payload_messages = payload.get("messages", [])
         restore_assistant_payloads(

@@ -168,11 +168,12 @@ def _inject_pii_redaction(config: dict[str, Any]) -> None:
 
     secret = core_settings.SECRET_KEY
     if not secret:
-        logger.warning(
-            "[deerflow_config] PII redaction enabled but SECRET_KEY is empty; "
-            "skipping pii_redaction injection (upstream requires non-empty token_secret)"
+        raise ValueError(
+            "[deerflow_config] PII redaction is enabled (PII_REDACTION_ENABLED=true) "
+            "but SECRET_KEY is empty. Upstream PiiRedactionMiddleware requires a "
+            "non-empty token_secret. Set SECRET_KEY in the environment or disable "
+            "PII redaction with PII_REDACTION_ENABLED=false."
         )
-        return
 
     token_secret = hashlib.sha256(secret.encode("utf-8")).hexdigest()
     config["pii_redaction"] = {
