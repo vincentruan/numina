@@ -513,6 +513,18 @@ export default {
       exploreSub: '探索知识地图',
       footer: '今日已学习 {minutes} 分钟',
     },
+    stats: {
+      streak: '连续 {days} 天',
+      streakZero: '今天还没开始学习',
+      xpProgress: '距离下一级还需 {xp} XP',
+      levelUp: '升级啦！',
+      currentLevel: '当前等级',
+    },
+    zone: {
+      growth: '成长区',
+      comfort: '舒适区',
+      challenge: '挑战区',
+    },
     prerequisites: '前置知识',
     nextSteps: '后续学习',
     translate: '翻译成中文',

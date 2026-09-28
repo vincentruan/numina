@@ -512,6 +512,18 @@ export default {
       exploreSub: 'Explore the knowledge map',
       footer: 'Studied {minutes} min today',
     },
+    stats: {
+      streak: '{days} day streak',
+      streakZero: 'No learning today yet',
+      xpProgress: '{xp} XP to next level',
+      levelUp: 'Level up!',
+      currentLevel: 'Current level',
+    },
+    zone: {
+      growth: 'Growth Zone',
+      comfort: 'Comfort Zone',
+      challenge: 'Challenge Zone',
+    },
     prerequisites: 'Prerequisites',
     nextSteps: 'Next Steps',
     translate: 'Translate to Chinese',

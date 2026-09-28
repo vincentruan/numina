@@ -18,6 +18,21 @@
           <!-- Page title -->
           <h1 class="page-title">{{ t('learning.progress.title') }}</h1>
 
+          <!-- XP / Level / Streak section -->
+          <div v-if="learningStats" class="xp-level-section">
+            <div class="xp-level-header">
+              <LevelBadge :emoji="learningStats.level_emoji" :name="locale === 'en-US' ? learningStats.level_name_en : learningStats.level_name_zh" />
+              <LearningStreakBadge :days="learningStats.learning_streak_days" />
+            </div>
+            <XPProgressBar
+              :current-xp="learningStats.cumulative_xp"
+              :level="learningStats.level"
+              :level-name="locale === 'en-US' ? learningStats.level_name_en : learningStats.level_name_zh"
+              :emoji="learningStats.level_emoji"
+              :next-threshold="learningStats.next_level_threshold"
+            />
+          </div>
+
           <!-- Stats summary cards -->
           <div class="stats-grid">
             <div class="stat-card stat-card--mastered">
@@ -100,8 +115,11 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { usePageLoading } from '@/composables/usePageLoading'
-import { getMyLearningMap, getMyProgress, getTopicDetail, type ProgressResponse, type TopicResponse, type ChildProgressOverview } from '@/api/learning'
+import { getMyLearningMap, getMyProgress, getMyLearningStats, getTopicDetail, type ProgressResponse, type TopicResponse, type ChildProgressOverview, type LearningStatsResponse } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
+import XPProgressBar from '@/components/learning/XPProgressBar.vue'
+import LevelBadge from '@/components/learning/LevelBadge.vue'
+import LearningStreakBadge from '@/components/learning/LearningStreakBadge.vue'
 
 const { t, locale } = useI18n()
 const { topicDisplayName } = useLocalizedTopic()
@@ -113,6 +131,7 @@ const error = ref('')
 const progressList = ref<ProgressResponse[]>([])
 const topicMap = ref<Map<string, TopicResponse>>(new Map())
 const progressOverview = ref<ChildProgressOverview | null>(null)
+const learningStats = ref<LearningStatsResponse | null>(null)
 
 // Computed stats
 const masteredCount = computed(() =>
@@ -173,12 +192,14 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [progress, overview] = await Promise.all([
+    const [progress, overview, stats] = await Promise.all([
       getMyLearningMap(),
       getMyProgress(),
+      getMyLearningStats(),
     ])
     progressList.value = progress
     progressOverview.value = overview
+    learningStats.value = stats
 
     // Fetch topic details for display names
     const uniqueTopicIds = [...new Set(progress.map((p) => p.topic_id))]
@@ -225,6 +246,32 @@ onMounted(async () => {
   font-weight: 700;
   color: var(--color-ink);
   margin: 0 0 20px;
+}
+
+/* XP/Level section */
+.xp-level-section {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-lg);
+}
+
+.xp-level-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+/* Learning section on home */
+.learning-section {
+  margin: 12px 0;
+}
+
+.learning-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 4px;
 }
 
 .error-msg {
