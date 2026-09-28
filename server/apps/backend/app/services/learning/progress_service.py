@@ -1,6 +1,7 @@
 """Progress service — state machine + spaced repetition for learning progress."""
 
-from datetime import UTC, datetime, timedelta
+import logging
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
@@ -13,6 +14,11 @@ from packages.db.models.learning.session import (
     LearningSession,
 )
 from packages.db.models.learning.topic import LearningDependency, LearningTopic
+
+logger = logging.getLogger(__name__)
+
+# Age group ordering for difficulty comparison
+AGE_GROUP_ORDER = {"low": 0, "mid": 1, "high": 2}
 
 VALID_TRANSITIONS = {
     "locked": {"available"},
@@ -268,6 +274,28 @@ def approve_parent_review(
     # Link coin transaction to attempt for idempotency
     txn.ref_id = attempt.id
 
+    # Advance any active learning path that includes this topic
+    from apps.backend.app.services.learning import path_service
+
+    try:
+        path_service.try_advance_path_for_topic(
+            db, progress.child_id, family_id, progress.topic_id
+        )
+    except Exception as e:
+        logger.warning(
+            "Path advancement failed on parent review for topic %s: %s",
+            progress.topic_id,
+            e,
+        )
+
+    # Award XP for mastery
+    from apps.backend.app.services.learning import stats_service
+
+    try:
+        stats_service.award_xp(db, progress.child_id, family_id, xp_amount=20)
+    except Exception as e:
+        logger.warning("XP award failed on parent review for child %s: %s", progress.child_id, e)
+
     return progress
 
 
@@ -434,3 +462,102 @@ def find_recommended_topic(
                 .first()
             )
     return None
+
+
+def _compute_age(birthday: date) -> int:
+    """Compute age from birthday."""
+    today = date.today()
+    return today.year - birthday.year - (
+        (today.month, today.day) < (birthday.month, birthday.day)
+    )
+
+
+def _age_to_group(age: int) -> str:
+    """Map age to age_group: low (<=7), mid (8-10), high (>=11)."""
+    if age <= 7:
+        return "low"
+    elif age <= 10:
+        return "mid"
+    return "high"
+
+
+def find_age_appropriate_topic(
+    db: Session, child_id: int, subject: str
+) -> LearningTopic | None:
+    """Find a topic in the same subject matching the child's age group.
+
+    Returns a topic where progress is 'available' or 'learning' (not locked/mastered).
+    Falls back to any non-deprecated topic in the subject at child's level.
+    """
+    from packages.db.models.user import User
+
+    child = db.query(User).filter(User.id == child_id).first()
+    if not child or not child.birthday:
+        return None
+
+    age = _compute_age(child.birthday)
+    child_age_group = _age_to_group(age)
+
+    # Find available/learning topics in same subject and age group
+    candidate = (
+        db.query(LearningTopic)
+        .join(
+            LearningProgress,
+            (LearningProgress.topic_id == LearningTopic.id)
+            & (LearningProgress.child_id == child_id),
+        )
+        .filter(
+            LearningTopic.subject == subject,
+            LearningTopic.age_group == child_age_group,
+            LearningTopic.deprecated == False,  # noqa: E712
+            LearningProgress.mastery_level.in_(["available", "learning"]),
+        )
+        .order_by(LearningTopic.centrality.desc())
+        .first()
+    )
+
+    if not candidate:
+        # Fallback: any non-deprecated topic in the subject at child's level
+        candidate = (
+            db.query(LearningTopic)
+            .filter(
+                LearningTopic.subject == subject,
+                LearningTopic.age_group == child_age_group,
+                LearningTopic.deprecated == False,  # noqa: E712
+            )
+            .order_by(LearningTopic.centrality.desc())
+            .first()
+        )
+
+    return candidate
+
+
+def get_unmet_prerequisites(
+    db: Session, topic_id: int, child_id: int
+) -> list[LearningTopic]:
+    """Return prerequisite topics that the child has NOT mastered."""
+    prereq_ids = (
+        db.query(LearningDependency.prerequisite_id)
+        .filter(LearningDependency.topic_id == topic_id)
+        .subquery()
+    )
+
+    mastered_topic_ids = (
+        db.query(LearningProgress.topic_id)
+        .filter(
+            LearningProgress.child_id == child_id,
+            LearningProgress.mastery_level == "mastered",
+        )
+        .subquery()
+    )
+
+    unmet = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id.in_(db.query(prereq_ids)),
+            ~LearningTopic.id.in_(db.query(mastered_topic_ids)),
+        )
+        .all()
+    )
+
+    return list(unmet)

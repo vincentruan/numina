@@ -2,72 +2,161 @@
   <div class="learning-assign-page">
     <PageHeader :title="t('learning.assignTask')" />
 
-    <van-form
-      ref="formRef"
-      :model="formData"
-      :rules="formRules"
-      label-width="80"
-      class="assign-form"
-    >
-      <!-- Child selector -->
-      <van-cell-group inset>
-        <van-field
-          v-model="selectedChildName"
-          is-link
-          readonly
-          :label="t('learning.selectChild')"
-          :placeholder="t('learning.selectChildPlaceholder')"
-          @click="showChildPicker = true"
-        />
-      </van-cell-group>
-
-      <!-- Selected topic summary -->
-      <van-cell-group inset class="topic-section">
-        <van-cell
-          :title="t('learning.selectedTopic')"
-          :value="selectedTopicDisplay || t('learning.topicPicker')"
-          is-link
-          @click="showTopicPicker = true"
-        />
-      </van-cell-group>
-
-      <!-- Due date -->
-      <van-cell-group inset class="date-section">
-        <van-field
-          v-model="dueDateDisplay"
-          is-link
-          readonly
-          :label="t('learning.dueDate')"
-          :placeholder="t('learning.dueDateOptional')"
-          @click="showDatePicker = true"
-        />
-      </van-cell-group>
-
-      <!-- Priority -->
-      <van-cell-group inset class="priority-section">
-        <van-cell :title="t('learning.priority')">
-          <template #value>
-            <van-radio-group v-model="formData.priority" direction="horizontal">
-              <van-radio :name="0">{{ t('learning.priorityNormal') }}</van-radio>
-              <van-radio :name="1">{{ t('learning.priorityHigh') }}</van-radio>
-            </van-radio-group>
-          </template>
-        </van-cell>
-      </van-cell-group>
-
-      <!-- Submit button -->
-      <div class="submit-section">
-        <van-button
-          type="primary"
-          block
-          :loading="submitting"
-          :disabled="!canSubmit"
-          @click="onSubmit"
+    <van-tabs v-model:active="assignMode" class="assign-mode-tabs">
+      <van-tab :title="t('learning.assignMode.single')" name="single">
+        <van-form
+          ref="formRef"
+          :model="formData"
+          :rules="formRules"
+          label-width="80"
+          class="assign-form"
         >
-          {{ t('learning.submitAssignment') }}
-        </van-button>
-      </div>
-    </van-form>
+          <!-- Child selector -->
+          <van-cell-group inset>
+            <van-field
+              v-model="selectedChildName"
+              is-link
+              readonly
+              :label="t('learning.selectChild')"
+              :placeholder="t('learning.selectChildPlaceholder')"
+              @click="showChildPicker = true"
+            />
+          </van-cell-group>
+
+          <!-- Selected topic summary -->
+          <van-cell-group inset class="topic-section">
+            <van-cell
+              :title="t('learning.selectedTopic')"
+              :value="selectedTopicDisplay || t('learning.topicPicker')"
+              is-link
+              @click="showTopicPicker = true"
+            />
+          </van-cell-group>
+
+          <!-- Due date -->
+          <van-cell-group inset class="date-section">
+            <van-field
+              v-model="dueDateDisplay"
+              is-link
+              readonly
+              :label="t('learning.dueDate')"
+              :placeholder="t('learning.dueDateOptional')"
+              @click="showDatePicker = true"
+            />
+          </van-cell-group>
+
+          <!-- Priority -->
+          <van-cell-group inset class="priority-section">
+            <van-cell :title="t('learning.priority')">
+              <template #value>
+                <van-radio-group v-model="formData.priority" direction="horizontal">
+                  <van-radio :name="0">{{ t('learning.priorityNormal') }}</van-radio>
+                  <van-radio :name="1">{{ t('learning.priorityHigh') }}</van-radio>
+                </van-radio-group>
+              </template>
+            </van-cell>
+          </van-cell-group>
+
+          <!-- Submit button -->
+          <div class="submit-section">
+            <van-button
+              type="primary"
+              block
+              :loading="submitting"
+              :disabled="!canSubmit"
+              @click="onSubmit"
+            >
+              {{ t('learning.submitAssignment') }}
+            </van-button>
+          </div>
+        </van-form>
+      </van-tab>
+
+      <van-tab :title="t('learning.assignMode.path')" name="path">
+        <div class="path-form">
+          <!-- Child selector for path -->
+          <van-cell-group inset>
+            <van-field
+              v-model="selectedChildName"
+              is-link
+              readonly
+              :label="t('learning.selectChild')"
+              :placeholder="t('learning.selectChildPlaceholder')"
+              @click="showChildPicker = true"
+            />
+          </van-cell-group>
+
+          <!-- Multi-select topic list -->
+          <div class="path-topic-select">
+            <van-search
+              v-model="pathSearch"
+              :placeholder="t('learning.topicSearchPlaceholder')"
+              shape="round"
+            />
+            <div class="topic-list">
+              <div
+                v-for="topic in filteredPathTopics"
+                :key="topic.id"
+                class="topic-check-item"
+                @click="toggleTopicSelection(topic.id)"
+              >
+                <van-checkbox
+                  :model-value="selectedTopicIds.includes(topic.id)"
+                  shape="square"
+                />
+                <span class="topic-label">{{ topicIndexName(topic) }}</span>
+                <van-tag size="medium" type="primary">{{ subjectLabel(topic.subject) }}</van-tag>
+              </div>
+              <div v-if="filteredPathTopics.length === 0 && !loadingTopics" class="topics-empty">
+                {{ t('learning.noTopicsFound') }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Path settings -->
+          <van-cell-group inset class="path-settings">
+            <van-field
+              v-model="pathName"
+              :label="t('learning.pathName')"
+              :placeholder="t('learning.pathNamePlaceholder')"
+            />
+            <van-field
+              v-model="pathNameZh"
+              :label="t('learning.pathNameZh')"
+              :placeholder="t('learning.optional')"
+            />
+            <van-field
+              v-model="perTaskScore"
+              type="digit"
+              :label="t('learning.perTaskScore')"
+            />
+            <van-field
+              v-model="bonusScore"
+              type="digit"
+              :label="t('learning.bonusScore')"
+            />
+          </van-cell-group>
+
+          <!-- Preview -->
+          <div class="path-preview">
+            <p>{{ selectedTopicIds.length }} {{ t('learning.tasksCount') }} · {{ t('learning.perTask') }} {{ perTaskScore }} {{ t('learning.points') }} · {{ t('learning.bonus') }} +{{ bonusScore }} {{ t('learning.points') }}</p>
+          </div>
+
+          <!-- Submit -->
+          <div class="submit-section">
+            <van-button
+              type="primary"
+              block
+              :loading="creatingPath"
+              :disabled="!canCreatePath"
+              @click="onCreatePath"
+            >
+              {{ t('learning.createPath') }}
+            </van-button>
+          </div>
+        </div>
+      </van-tab>
+    </van-tabs>
 
     <!-- Child picker popup -->
     <van-popup v-model:show="showChildPicker" position="bottom" round>
@@ -198,7 +287,7 @@ import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useFamilyStore } from '@/stores/family'
-import { createAssignment, searchTopics, getTopicIndex } from '@/api/learning'
+import { createAssignment, createPath, searchTopics, getTopicIndex } from '@/api/learning'
 import type { TopicIndexItem } from '@/api/learning'
 import PageHeader from '@/components/common/PageHeader.vue'
 
@@ -382,6 +471,81 @@ const dueDateDisplay = computed(() => {
 
 const canSubmit = computed(() => formData.value.child_id && formData.value.topic_id)
 
+// --- Path creation state ---
+const assignMode = ref<'single' | 'path'>('single')
+const pathSearch = ref('')
+const selectedTopicIds = ref<string[]>([])
+const pathName = ref('')
+const pathNameZh = ref('')
+const perTaskScore = ref('5')
+const bonusScore = ref('10')
+const creatingPath = ref(false)
+
+const PATH_DISPLAY_LIMIT = 100
+
+const filteredPathTopics = computed(() => {
+  const q = pathSearch.value.trim().toLowerCase()
+  const filtered = q
+    ? allTopics.value.filter((topic) => {
+        const name = topicIndexName(topic).toLowerCase()
+        const domain = (topic.domain || '').toLowerCase()
+        return name.includes(q) || domain.includes(q)
+      })
+    : allTopics.value
+  // Cap displayed items when no search query to avoid rendering hundreds of rows.
+  // When searching, show all matches so the user can find what they need.
+  if (!q && filtered.length > PATH_DISPLAY_LIMIT) {
+    return filtered.slice(0, PATH_DISPLAY_LIMIT)
+  }
+  return filtered
+})
+
+const canCreatePath = computed(
+  () => formData.value.child_id && selectedTopicIds.value.length > 0 && pathName.value.trim()
+)
+
+function toggleTopicSelection(topicId: string) {
+  const idx = selectedTopicIds.value.indexOf(topicId)
+  if (idx >= 0) {
+    selectedTopicIds.value.splice(idx, 1)
+  } else {
+    selectedTopicIds.value.push(topicId)
+  }
+}
+
+async function onCreatePath() {
+  if (!formData.value.child_id) {
+    showFailToast(t('learning.childRequired'))
+    return
+  }
+  if (selectedTopicIds.value.length === 0) {
+    showFailToast(t('learning.selectTopics'))
+    return
+  }
+  if (!pathName.value.trim()) {
+    showFailToast(t('learning.pathNameRequired'))
+    return
+  }
+
+  creatingPath.value = true
+  try {
+    await createPath({
+      child_id: formData.value.child_id,
+      name: pathName.value,
+      name_zh: pathNameZh.value || undefined,
+      topic_ids: selectedTopicIds.value,
+      per_task_score: Number(perTaskScore.value),
+      bonus_score: Number(bonusScore.value),
+    })
+    showSuccessToast(t('learning.pathCreated'))
+    router.back()
+  } catch {
+    showFailToast(t('learning.pathCreateFailed'))
+  } finally {
+    creatingPath.value = false
+  }
+}
+
 function onChildConfirm({ selectedValues }: { selectedValues: string[] }) {
   if (selectedValues[0]) {
     formData.value.child_id = selectedValues[0]
@@ -443,7 +607,12 @@ onMounted(async () => {
   padding-bottom: 20px;
 }
 
-.assign-form {
+.assign-mode-tabs {
+  margin-top: 8px;
+}
+
+.assign-form,
+.path-form {
   margin-top: 12px;
 }
 
@@ -455,6 +624,57 @@ onMounted(async () => {
 
 .submit-section {
   padding: 24px 16px;
+}
+
+/* Path creation */
+.path-topic-select {
+  margin-top: 12px;
+}
+
+.path-topic-select .topic-list {
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 0 16px;
+}
+
+.topic-check-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--separator, #f5f5f5);
+  cursor: pointer;
+}
+
+.topic-check-item:last-child {
+  border-bottom: none;
+}
+
+.topic-label {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.path-settings {
+  margin-top: 12px;
+}
+
+.path-preview {
+  padding: 12px 16px;
+  margin: 12px 16px;
+  background: var(--bg-secondary, #f5f5f5);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.path-preview p {
+  margin: 0;
 }
 
 /* Topic picker popup */

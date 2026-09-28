@@ -1,5 +1,16 @@
 <template>
-  <div v-if="displayMode" class="today-learning-card" @click="navigate">
+  <div v-if="pathInfo" class="today-path-card" @click="router.push(`/learning/path/${pathInfo.pathId}`)">
+    <div class="path-card-header">
+      <span class="path-emoji">📋</span>
+      <span class="path-name">{{ pathInfo.name }}</span>
+    </div>
+    <div class="path-card-progress">
+      <van-progress :percentage="pathInfo.percent" :show-pivot="false" stroke-width="6" />
+      <span class="path-count">{{ pathInfo.completed }}/{{ pathInfo.total }}</span>
+    </div>
+  </div>
+
+  <div v-else-if="displayMode" class="today-learning-card" @click="navigate">
     <div class="today-learning-card__content">
       <span class="today-learning-card__icon">{{ icon }}</span>
       <div class="today-learning-card__text">
@@ -23,6 +34,13 @@ import type { TodayLearningResponse } from '@/api/learning'
 
 const props = defineProps<{
   data: TodayLearningResponse
+  pathInfo?: {
+    name: string
+    completed: number
+    total: number
+    percent: number
+    pathId: string
+  } | null
 }>()
 
 const { t } = useI18n()
@@ -131,5 +149,56 @@ function navigate() {
   margin: 8px 0 0;
   padding-top: 8px;
   border-top: 1px solid var(--color-hairline);
+}
+
+.today-path-card {
+  margin: 12px 0;
+  padding: 14px 16px;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.today-path-card:active {
+  transform: scale(0.98);
+}
+
+.path-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.path-emoji {
+  font-size: 20px;
+}
+
+.path-name {
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.path-card-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.path-card-progress :deep(.van-progress) {
+  flex: 1;
+}
+
+.path-count {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-body);
+  white-space: nowrap;
 }
 </style>

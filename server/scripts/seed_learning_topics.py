@@ -6,8 +6,10 @@ Usage:
 """
 
 import argparse
+import asyncio
 import json
 import os
+import re
 import subprocess
 from collections import Counter
 from pathlib import Path
@@ -25,6 +27,44 @@ SUBJECT_MAP = {
     "Computing": "computing",
     "Learning to Learn": "learning_to_learn",
 }
+
+
+_INJECTION_PATTERNS = [
+    re.compile(r"ignore\s+(all\s+)?previous\s+instructions", re.IGNORECASE),
+    re.compile(r"忽略\s*(之前|所有)\s*(?:的\s*)?指令", re.IGNORECASE),
+    re.compile(r"forget\s+(all\s+)?instructions", re.IGNORECASE),
+    re.compile(r"system\s*:\s*", re.IGNORECASE),
+    re.compile(r"<\|im_start\|>", re.IGNORECASE),
+]
+
+# Detect homoglyph attacks: Cyrillic/Greek chars that look like Latin
+_HOMOGYPH_RANGES = [
+    ("Ѐ", "ӿ"),  # Cyrillic
+    ("Ͱ", "Ͽ"),  # Greek
+]
+
+
+def has_chinese_chars(text: str) -> bool:
+    """Return True if text contains any CJK Unified Ideograph character."""
+    return any("一" <= ch <= "鿿" for ch in text)
+
+
+def has_injection_pattern(text: str) -> bool:
+    """Return True if text contains prompt injection or homoglyph patterns."""
+    # Check known injection patterns
+    for pattern in _INJECTION_PATTERNS:
+        if pattern.search(text):
+            return True
+    # Check for suspicious homoglyphs (Cyrillic/Greek mixed with Latin context)
+    if len(text) > 10:
+        homoglyph_count = sum(
+            1
+            for ch in text
+            if any(start <= ch <= end for start, end in _HOMOGYPH_RANGES)
+        )
+        if homoglyph_count >= 3:
+            return True
+    return False
 
 
 def compute_age_group(age_start: int | None) -> str:
@@ -248,11 +288,284 @@ def validate_quality(session) -> None:
     print("\n  All quality validations passed.")
 
 
+# ---------------------------------------------------------------------------
+# MVP Topic Curation
+# ---------------------------------------------------------------------------
+
+MVP_SUBJECTS = {"mathematics", "science", "english"}
+MVP_AGE_GROUP = "mid"
+MVP_MIN_PER_SUBJECT = 20
+MVP_MAX_PER_SUBJECT = 30
+MVP_TOTAL_MIN = 60
+MVP_TOTAL_MAX = 90
+
+
+def select_mvp_topics(session) -> list[int]:
+    """Select 60-90 MVP topics: top by centrality from 3 subjects, age_group=mid.
+
+    Returns list of topic IDs in the MVP set.
+    Ensures dependency completeness: if a selected topic has hard prereqs,
+    those are included too (even if outside the subject/age_group filter).
+    """
+    from packages.db.models.learning.topic import LearningDependency, LearningTopic
+
+    selected: dict[int, LearningTopic] = {}
+
+    for subject in MVP_SUBJECTS:
+        candidates = (
+            session.query(LearningTopic)
+            .filter(
+                LearningTopic.subject == subject,
+                LearningTopic.age_group == MVP_AGE_GROUP,
+                LearningTopic.deprecated == False,  # noqa: E712
+            )
+            .order_by(LearningTopic.centrality.desc())
+            .limit(MVP_MAX_PER_SUBJECT)
+            .all()
+        )
+        for t in candidates:
+            selected[t.id] = t
+
+    # Ensure dependency completeness: add hard prereqs not yet selected
+    added_prereqs = True
+    while added_prereqs:
+        added_prereqs = False
+        for topic_id in list(selected.keys()):
+            hard_deps = (
+                session.query(LearningDependency)
+                .filter_by(topic_id=topic_id, strength="hard")
+                .all()
+            )
+            for dep in hard_deps:
+                if dep.prerequisite_id not in selected:
+                    prereq = session.query(LearningTopic).filter_by(id=dep.prerequisite_id).first()
+                    if prereq:
+                        selected[prereq.id] = prereq
+                        added_prereqs = True
+
+    return list(selected.keys())
+
+
+def validate_mvp_curation(session, topic_ids: list[int]) -> list[str]:
+    """Validate the MVP topic selection.
+
+    Returns list of error messages (empty = all good).
+    """
+    from packages.db.models.learning.topic import LearningDependency, LearningTopic
+
+    errors: list[str] = []
+
+    topics = session.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all()
+    if not topics:
+        errors.append("No topics found in MVP set")
+        return errors
+
+    id_set = {t.id for t in topics}
+
+    # Check total count
+    total = len(topics)
+    if total < MVP_TOTAL_MIN:
+        errors.append(f"Too few MVP topics: {total} (min {MVP_TOTAL_MIN})")
+    if total > MVP_TOTAL_MAX:
+        errors.append(f"Too many MVP topics: {total} (max {MVP_TOTAL_MAX})")
+
+    # Check per-subject counts
+    subject_counts: Counter = Counter()
+    for t in topics:
+        subject_counts[t.subject] += 1
+
+    for subject in MVP_SUBJECTS:
+        count = subject_counts.get(subject, 0)
+        if count < MVP_MIN_PER_SUBJECT:
+            errors.append(f"Subject {subject}: only {count} topics (min {MVP_MIN_PER_SUBJECT})")
+
+    # Check no orphans (all topics have at least one connection)
+    topic_ids_with_deps = set()
+    for dep in session.query(LearningDependency).all():
+        if dep.topic_id in id_set:
+            topic_ids_with_deps.add(dep.topic_id)
+        if dep.prerequisite_id in id_set:
+            topic_ids_with_deps.add(dep.prerequisite_id)
+
+    orphans = id_set - topic_ids_with_deps
+    if orphans:
+        errors.append(f"{len(orphans)} orphan topics (no dependencies)")
+
+    return errors
+
+
+async def seed_topic_translations(
+    session, batch_size: int = 50, force_retranslate: bool = False
+):
+    """Batch-translate topics using agent LLM infrastructure.
+
+    When *force_retranslate* is False (default), only topics with NULL/empty
+    ``name_zh`` are translated.  When True, all non-deprecated topics are
+    re-translated — existing ``_zh`` fields are cleared first so the
+    translation function overwrites them.
+    """
+    from apps.agent.core.config import get_ai_config
+    from apps.agent.services.topic_translate import translate_topic
+    from packages.db.models.learning.topic import LearningTopic
+
+    query = session.query(LearningTopic).filter(
+        LearningTopic.deprecated == False  # noqa: E712
+    )
+
+    if not force_retranslate:
+        query = query.filter(
+            (LearningTopic.name_zh.is_(None)) | (LearningTopic.name_zh == "")
+        )
+
+    untranslated = query.order_by(LearningTopic.centrality.desc().nullslast()).all()
+
+    # Skip topics whose English name already contains Chinese chars
+    untranslated = [t for t in untranslated if not has_chinese_chars(t.name or "")]
+
+    if not untranslated:
+        print("All topics already translated. Skipping.")
+        return
+
+    if force_retranslate:
+        # Clear existing _zh fields so translate_topic overwrites them
+        for topic in untranslated:
+            topic.name_zh = None
+            topic.description_zh = None
+            topic.evidence_zh_json = None
+            topic.assessment_prompt_zh = None
+        session.flush()
+
+    print(f"Translating {len(untranslated)} topics (high-centrality first)...")
+
+    ai_config = get_ai_config()
+    total_translated = 0
+
+    for batch_start in range(0, len(untranslated), batch_size):
+        batch = untranslated[batch_start : batch_start + batch_size]
+        for topic in batch:
+            try:
+                topic_dict = {
+                    "name": topic.name,
+                    "description": topic.description or "",
+                    "evidence": topic.evidence or [],
+                    "assessment_prompt": topic.assessment_prompt or "",
+                }
+                zh_fields = await translate_topic(topic_dict, ai_config)
+            except Exception as e:
+                print(f"  WARNING: Translation error for {topic.topic_key}: {e}")
+                continue
+
+            if zh_fields and zh_fields.get("name_zh"):
+                # Validate assessment_prompt_zh
+                prompt_zh = zh_fields.get("assessment_prompt_zh", "")
+                if prompt_zh and (
+                    len(prompt_zh) > 500 or has_injection_pattern(prompt_zh)
+                ):
+                    print(
+                        f"  WARNING: Bad assessment_prompt_zh for {topic.topic_key}, keeping English"
+                    )
+                    zh_fields["assessment_prompt_zh"] = topic.assessment_prompt
+
+                topic.name_zh = zh_fields.get("name_zh")
+                topic.description_zh = zh_fields.get("description_zh")
+                topic.evidence_zh_json = json.dumps(
+                    zh_fields.get("evidence_zh", []), ensure_ascii=False
+                )
+                topic.assessment_prompt_zh = zh_fields.get("assessment_prompt_zh")
+                total_translated += 1
+            else:
+                print(
+                    f"  WARNING: Translation failed for {topic.topic_key}, keeping English"
+                )
+
+        session.commit()
+        batch_num = batch_start // batch_size + 1
+        total_batches = (len(untranslated) - 1) // batch_size + 1
+        print(f"  Translated batch {batch_num}/{total_batches}")
+
+    print(
+        f"Translation complete: {total_translated}/{len(untranslated)} topics translated."
+    )
+
+
+async def seed_cluster_translations(session):
+    """Translate cluster summaries to Chinese."""
+    from apps.agent.core.config import get_ai_config
+    from apps.agent.services.topic_translate import translate_topic
+    from packages.db.models.learning.topic import LearningCluster
+
+    ai_config = get_ai_config()
+
+    clusters = (
+        session.query(LearningCluster)
+        .filter(
+            (LearningCluster.summary_zh.is_(None)) | (LearningCluster.summary_zh == "")
+        )
+        .all()
+    )
+
+    if not clusters:
+        print("All clusters already translated. Skipping.")
+        return
+
+    print(f"Translating {len(clusters)} cluster summaries...")
+    translated = 0
+
+    for cluster in clusters:
+        try:
+            # Reuse translate_topic with a dict shaped like a topic
+            result = await translate_topic(
+                {
+                    "name": f"{cluster.subject} - {cluster.domain}",
+                    "description": cluster.summary or "",
+                    "evidence": [],
+                    "assessment_prompt": "",
+                },
+                ai_config,
+            )
+            if result and result.get("description_zh"):
+                cluster.summary_zh = result["description_zh"]
+                translated += 1
+        except Exception as e:
+            print(
+                f"  WARNING: Cluster translation error for {cluster.subject}/{cluster.domain}: {e}"
+            )
+
+    session.commit()
+    print(f"Cluster translation complete: {translated}/{len(clusters)} translated.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Seed learning OS data from os-taxonomy")
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
     parser.add_argument(
         "--skip-validate", action="store_true", help="Skip post-seed quality validation"
+    )
+    parser.add_argument(
+        "--skip-translation",
+        action="store_true",
+        help="Skip the translation pass (for re-seed without re-translating)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=50,
+        help="Translation batch size (default: 50)",
+    )
+    parser.add_argument(
+        "--force-retranslate",
+        action="store_true",
+        help="Force re-translate topics that already have _zh data",
+    )
+    parser.add_argument(
+        "--mvp-only",
+        action="store_true",
+        help="Select and validate MVP topic subset (60-90 topics, 3 subjects)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print MVP selection without modifying the database",
     )
     args = parser.parse_args()
 
@@ -274,10 +587,54 @@ def main():
         print("Seeding clusters...")
         seed_clusters(session, args.data_dir)
         session.commit()
+
+        if not args.skip_translation:
+            asyncio.run(
+                seed_topic_translations(
+                    session, args.batch_size, args.force_retranslate
+                )
+            )
+            asyncio.run(seed_cluster_translations(session))
+
         print("Done!")
 
         if not args.skip_validate:
             validate_quality(session)
+
+        if args.mvp_only:
+            print("\n=== MVP Topic Curation ===")
+            mvp_ids = select_mvp_topics(session)
+            errors = validate_mvp_curation(session, mvp_ids)
+
+            # Per-subject breakdown
+            from packages.db.models.learning.topic import LearningTopic
+            mvp_topics = session.query(LearningTopic).filter(LearningTopic.id.in_(mvp_ids)).all()
+            subject_counts: Counter = Counter()
+            for t in mvp_topics:
+                subject_counts[t.subject] += 1
+            print(f"  Total MVP topics: {len(mvp_ids)}")
+            for subj in sorted(subject_counts):
+                print(f"    {subj}: {subject_counts[subj]}")
+
+            if errors:
+                print("\n  Validation ERRORS:")
+                for err in errors:
+                    print(f"    ❌ {err}")
+            else:
+                print("\n  ✅ MVP curation validation passed")
+
+            if args.dry_run:
+                # Export to JSON for review
+                output_path = args.data_dir / "mvp_topics.json"
+                mvp_data = {
+                    "topic_ids": sorted(mvp_ids),
+                    "total": len(mvp_ids),
+                    "subjects": dict(subject_counts),
+                    "taxonomy_version": version,
+                }
+                with open(output_path, "w") as f:
+                    json.dump(mvp_data, f, indent=2, ensure_ascii=False)
+                print(f"\n  MVP topic list exported to {output_path}")
     except Exception:
         session.rollback()
         raise

@@ -71,6 +71,15 @@ export interface SessionResponse {
   duration_seconds: number | null
   started_at: string
   ended_at: string | null
+  difficulty_warning?: {
+    type: 'age' | 'prerequisite'
+    level?: string
+    child_level?: string
+    suggested_topic_id?: string
+    suggested_topic_name?: string
+    suggested_topic_name_zh?: string
+    unmet_count?: number
+  } | null
 }
 
 export interface SessionCreate {
@@ -107,6 +116,21 @@ export interface TodayLearningResponse {
   pending_assignment: AssignmentResponse | null
   recommended_topic: TopicResponse | null
   study_minutes_today: number
+  current_zone: string
+  learning_streak_days: number
+}
+
+export interface LearningStatsResponse {
+  child_id: string
+  cumulative_xp: number
+  level: number
+  level_name_zh: string
+  level_name_en: string
+  level_emoji: string
+  next_level_threshold: number | null
+  learning_streak_days: number
+  current_zone: string
+  onboarding_completed: boolean
 }
 
 export interface TopicGraphResponse {
@@ -164,6 +188,21 @@ export async function getMyProgress(): Promise<ChildProgressOverview> {
   return res.data
 }
 
+export async function getMyLearningStats(): Promise<LearningStatsResponse> {
+  const res = await http.get('/child/learning/stats')
+  return res.data
+}
+
+export async function completeOnboarding(): Promise<{ onboarding_completed: boolean }> {
+  const res = await http.post('/child/learning/onboarding/complete')
+  return res.data
+}
+
+export async function getTodayLearning(): Promise<TodayLearningResponse> {
+  const res = await http.get('/child/learning/today')
+  return res.data
+}
+
 export async function getTopicsBatch(ids: string[]): Promise<TopicResponse[]> {
   const res = await http.get(`/learning/topics/batch?ids=${ids.join(',')}`)
   return res.data
@@ -171,11 +210,6 @@ export async function getTopicsBatch(ids: string[]): Promise<TopicResponse[]> {
 
 export async function endSession(sessionId: string): Promise<SessionResponse> {
   const res = await http.post(`/child/learning/sessions/${sessionId}/end`)
-  return res.data
-}
-
-export async function getTodayLearning(): Promise<TodayLearningResponse> {
-  const res = await http.get('/child/learning/today')
   return res.data
 }
 
@@ -194,4 +228,49 @@ export async function translateTopic(topicId: string): Promise<{
   const res = await http.post(`/learning/topics/${topicId}/translate`)
   return res.data
 }
+
+// --- Path types ---
+
+export interface PathItemResponse {
+  id: string
+  path_id: string
+  topic_id: string
+  sort_order: number
+  status: string
+  topic_name: string | null
+  topic_name_zh: string | null
+  completed_at: string | null
+}
+
+export interface PathResponse {
+  id: string
+  family_id: string
+  child_id: string
+  created_by: string
+  name: string
+  name_zh: string | null
+  description: string
+  status: string
+  per_task_score: number
+  bonus_score: number
+  milestone_scores: { threshold: number; bonus: number }[]
+  due_date: string | null
+  created_at: string
+  completed_at: string | null
+  items: PathItemResponse[]
+  completed_count: number
+  total_count: number
+  next_milestone: { threshold: number; bonus: number; progress: string } | null
+}
+
+export async function getMyPaths(): Promise<PathResponse[]> {
+  const res = await http.get('/child/learning/paths')
+  return res.data
+}
+
+export async function getMyPath(pathId: string): Promise<PathResponse> {
+  const res = await http.get(`/child/learning/paths/${pathId}`)
+  return res.data
+}
+
 

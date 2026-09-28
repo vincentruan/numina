@@ -14,13 +14,18 @@ from apps.backend.app.schemas.learning import (
     AssignmentCreate,
     AssignmentResponse,
     ChildLearningOverview,
+    ChildSessionLogResponse,
+    PathCreate,
+    PathResponse,
     ProgressResponse,
     ReviewItemResponse,
     TopicResponse,
 )
 from apps.backend.app.services.learning import (
     assignment_service,
+    path_service,
     progress_service,
+    stats_service,
 )
 from apps.backend.app.services.notification.dispatcher import (
     notify_learning_approved,
@@ -28,8 +33,10 @@ from apps.backend.app.services.notification.dispatcher import (
     notify_learning_rejected,
 )
 from packages.db.models.learning.assignment import LearningAssignment
+from packages.db.models.learning.path import LearningPath
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
+from packages.db.models.learning.stats import ChildLearningStats
 from packages.db.models.learning.topic import LearningTopic
 
 router = APIRouter(prefix="/family/learning", tags=["learning-family"])
@@ -82,9 +89,19 @@ def list_children(
     )
     study_seconds = {row.child_id: int(row[1]) for row in study_rows}
 
+    # Batch stats: single query for all children
+    stats_rows = (
+        db.query(ChildLearningStats)
+        .filter(ChildLearningStats.child_id.in_(child_ids))
+        .all()
+    )
+    stats_map = {s.child_id: s for s in stats_rows}
+
     result = []
     for child in children:
         ov = overviews.get(child.id, {})
+        stats = stats_map.get(child.id)
+        level_info = stats_service.get_level_info(stats.level) if stats else stats_service.get_level_info(1)
         result.append(
             ChildLearningOverview(
                 child_id=child.id,
@@ -95,6 +112,11 @@ def list_children(
                 locked_count=ov.get("locked", 0),
                 review_count=ov.get("review", 0),
                 total_study_minutes=study_seconds.get(child.id, 0) // 60,
+                cumulative_xp=stats.cumulative_xp if stats else 0,
+                level=stats.level if stats else 1,
+                level_name_zh=level_info["name_zh"],
+                learning_streak_days=stats.learning_streak_days if stats else 0,
+                current_zone=stats.current_zone if stats else "growth",
             )
         )
     return result
@@ -144,6 +166,58 @@ def get_child_progress(
         .order_by(LearningProgress.updated_at.desc())
         .all()
     )
+
+
+@router.get("/children/{child_id}/sessions", response_model=list[ChildSessionLogResponse])
+def get_child_sessions(
+    child_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get child's recent learning sessions for parent review."""
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    sessions = (
+        db.query(LearningSession)
+        .filter(LearningSession.child_id == child_id)
+        .order_by(LearningSession.started_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    # Batch-fetch topic names
+    topic_ids = list({s.topic_id for s in sessions})
+    topics = (
+        db.query(LearningTopic)
+        .filter(LearningTopic.id.in_(topic_ids))
+        .all()
+    ) if topic_ids else []
+    topic_map = {t.id: t for t in topics}
+
+    result = []
+    for s in sessions:
+        topic = topic_map.get(s.topic_id)
+        result.append(
+            ChildSessionLogResponse(
+                session_id=s.id,
+                topic_id=s.topic_id,
+                topic_name=topic.name if topic else "",
+                topic_name_zh=topic.name_zh if topic else None,
+                session_type=s.session_type,
+                score=s.score,
+                duration_seconds=s.duration_seconds,
+                started_at=s.started_at,
+                ended_at=s.ended_at,
+            )
+        )
+    return result
 
 
 @router.get("/topics/{topic_id}", response_model=TopicResponse)
@@ -344,3 +418,100 @@ def reject_review(
         notify_learning_rejected(db, user.family_id, child_name, topic_name)
 
     return progress
+
+
+# ---------------------------------------------------------------------------
+# Learning Path endpoints
+# ---------------------------------------------------------------------------
+
+
+
+@router.post("/paths", response_model=PathResponse, status_code=201)
+def create_path(
+    req: PathCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Create a learning path for a child."""
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == req.child_id, User.family_id == user.family_id)
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.LEARNING_PATH_ACCESS_DENIED)
+
+    path = path_service.create_path(
+        db,
+        family_id=user.family_id,
+        child_id=req.child_id,
+        created_by=user.id,
+        name=req.name,
+        name_zh=req.name_zh,
+        description=req.description,
+        description_zh=req.description_zh,
+        topic_ids=req.topic_ids,
+        per_task_score=req.per_task_score,
+        bonus_score=req.bonus_score,
+        milestone_scores=req.milestone_scores,
+        due_date=req.due_date,
+    )
+
+    progress = path_service.get_path_progress(db, path.id, user.family_id)
+    return path_service.build_path_response(path, progress)
+
+
+@router.get("/paths", response_model=list[PathResponse])
+def list_paths(
+    child_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """List learning paths, optionally filtered by child."""
+    query = db.query(LearningPath).filter(LearningPath.family_id == user.family_id)
+    if child_id:
+        query = query.filter(LearningPath.child_id == child_id)
+    paths = query.order_by(LearningPath.created_at.desc()).all()
+
+    result = []
+    for path in paths:
+        progress = path_service.get_path_progress(db, path.id, user.family_id)
+        result.append(path_service.build_path_response(path, progress))
+    return result
+
+
+@router.get("/paths/{path_id}", response_model=PathResponse)
+def get_path(
+    path_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get path detail with items and progress."""
+    progress = path_service.get_path_progress(db, path_id, user.family_id)
+    return path_service.build_path_response(progress["path"], progress)
+
+
+@router.post("/paths/{path_id}/archive", response_model=PathResponse)
+def archive_path(
+    path_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Archive a learning path.
+
+    Any adult in the family can archive — paths are family-level resources
+    (both parents may need to manage a child's learning plan).
+    """
+    path = (
+        db.query(LearningPath)
+        .filter(LearningPath.id == path_id, LearningPath.family_id == user.family_id)
+        .first()
+    )
+    if not path:
+        raise AppError(ErrorCode.LEARNING_PATH_NOT_FOUND)
+    path.status = "archived"
+    db.commit()
+    db.refresh(path)
+    progress = path_service.get_path_progress(db, path.id, user.family_id)
+    return path_service.build_path_response(path, progress)

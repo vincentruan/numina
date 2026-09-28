@@ -41,7 +41,17 @@
       />
 
       <!-- Today's learning — drives engagement with learning module -->
-      <TodayLearningCard v-if="todayLearning" :data="todayLearning" />
+      <div v-if="todayLearning" class="learning-section">
+        <div class="learning-header">
+          <LearningStreakBadge v-if="todayLearning.learning_streak_days > 0" :days="todayLearning.learning_streak_days" />
+        </div>
+        <LearningRecommendationCard
+          v-if="todayLearning.recommended_topic"
+          :topic="todayLearning.recommended_topic"
+          :zone="todayLearning.current_zone"
+        />
+        <TodayLearningCard :data="todayLearning" />
+      </div>
 
     <!-- Today's chores — read-only preview; tap a card to manage on the Tasks page -->
     <div class="section">
@@ -221,6 +231,8 @@ import { ref, computed, onMounted, watch, onActivated } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ProgressRing from '@/components/ProgressRing.vue'
 import TodayLearningCard from '@/components/TodayLearningCard.vue'
+import LearningStreakBadge from '@/components/learning/LearningStreakBadge.vue'
+import LearningRecommendationCard from '@/components/learning/LearningRecommendationCard.vue'
 import ChildHomeSkeleton from '@/components/skeletons/ChildHomeSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'

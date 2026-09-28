@@ -69,47 +69,47 @@ def progress(db, child_user, topic):
 def test_create_session(db, child_user, topic):
     """Create a learning session."""
     req = SessionCreate(topic_id=topic.id, session_type="tutorial")
-    session = create_session(db, child_user["id"], req)
-    assert session.id is not None
-    assert session.child_id == child_user["id"]
-    assert session.topic_id == topic.id
-    assert session.session_type == "tutorial"
-    assert session.ended_at is None
+    result = create_session(db, child_user["id"], req)
+    assert result["id"] is not None
+    assert result["child_id"] == child_user["id"]
+    assert result["topic_id"] == topic.id
+    assert result["session_type"] == "tutorial"
+    assert result["ended_at"] is None
 
 
 def test_create_session_with_assignment(db, child_user, topic):
     """Create a session linked to an assignment."""
     req = SessionCreate(topic_id=topic.id, assignment_id=12345, session_type="practice")
-    session = create_session(db, child_user["id"], req)
-    assert session.assignment_id == 12345
-    assert session.session_type == "practice"
+    result = create_session(db, child_user["id"], req)
+    assert result["assignment_id"] == 12345
+    assert result["session_type"] == "practice"
 
 
 def test_end_session(db, child_user, topic):
     """End a session with score and evaluation."""
     req = SessionCreate(topic_id=topic.id)
-    session = create_session(db, child_user["id"], req)
+    result = create_session(db, child_user["id"], req)
 
-    result = end_session(
+    ended = end_session(
         db,
-        session.id,
+        result["id"],
         score=0.85,
         ai_evaluation={"feedback": "Good work"},
     )
-    assert result.ended_at is not None
-    assert result.score == 0.85
-    assert result.ai_evaluation == {"feedback": "Good work"}
-    assert result.duration_seconds is not None
-    assert result.duration_seconds >= 0
+    assert ended.ended_at is not None
+    assert ended.score == 0.85
+    assert ended.ai_evaluation == {"feedback": "Good work"}
+    assert ended.duration_seconds is not None
+    assert ended.duration_seconds >= 0
 
 
 def test_end_session_no_score(db, child_user, topic):
     """End a session without a score."""
     req = SessionCreate(topic_id=topic.id)
-    session = create_session(db, child_user["id"], req)
-    result = end_session(db, session.id)
-    assert result.ended_at is not None
-    assert result.score is None
+    result = create_session(db, child_user["id"], req)
+    ended = end_session(db, result["id"])
+    assert ended.ended_at is not None
+    assert ended.score is None
 
 
 def test_end_session_not_found(db):
@@ -122,21 +122,21 @@ def test_end_session_not_found(db):
 def test_end_session_already_ended(db, child_user, topic):
     """Ending an already-ended session raises error."""
     req = SessionCreate(topic_id=topic.id)
-    session = create_session(db, child_user["id"], req)
-    end_session(db, session.id)
+    result = create_session(db, child_user["id"], req)
+    end_session(db, result["id"])
 
     with pytest.raises(AppError) as exc_info:
-        end_session(db, session.id)
+        end_session(db, result["id"])
     assert "LEARNING_SESSION_ALREADY_ENDED" in str(exc_info.value)
 
 
 def test_start_assessment(db, child_user, topic, progress):
     """Start an assessment transitions progress from learning to assessing."""
     req = SessionCreate(topic_id=topic.id)
-    session = create_session(db, child_user["id"], req)
+    result = create_session(db, child_user["id"], req)
 
-    result = start_assessment(db, session.id, child_user["id"])
-    assert result.mastery_level == "assessing"
+    outcome = start_assessment(db, result["id"], child_user["id"])
+    assert outcome.mastery_level == "assessing"
 
 
 def test_start_assessment_session_not_found(db, child_user):

@@ -168,6 +168,7 @@ function masteryLabel(level: string): string {
 function shouldShowTranslate(topic: TopicResponse): boolean {
   if (locale.value !== 'zh-CN') return false
   if (hasChineseChars(topic.name)) return false
+  if (topic.name_zh) return false
   return true
 }
 

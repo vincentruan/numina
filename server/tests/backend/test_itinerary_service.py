@@ -9,7 +9,9 @@ from apps.backend.app.schemas.itinerary_item import (
     ItineraryItemCreate,
     ItineraryItemUpdate,
 )
+from apps.backend.app.seed.expense_categories import bootstrap_expense_categories
 from apps.backend.app.services import itinerary as itinerary_service
+from packages.db.models.expense_category import ExpenseCategory
 from packages.db.models.expense_entry import ExpenseEntry
 from packages.db.models.itinerary_item import ItineraryItem
 from packages.db.models.trip import Trip
@@ -267,6 +269,94 @@ class TestExpenseLedgerIntegration:
 
         db.refresh(trip)
         assert trip.actual_spend == initial_spend + Decimal("200.00")
+
+    def test_itinerary_item_expense_gets_category_id_from_type(self, db, trip, test_user):
+        """R13: itinerary item cost → auto-created expense maps type to category_id."""
+        # Bootstrap expense categories so the mapping can resolve
+        bootstrap_expense_categories(db)
+
+        # Look up the expected category IDs by name
+        transport_cat = db.query(ExpenseCategory).filter(ExpenseCategory.name == "交通").first()
+        dining_cat = db.query(ExpenseCategory).filter(ExpenseCategory.name == "餐饮").first()
+        assert transport_cat is not None, "Transport category must exist after bootstrap"
+        assert dining_cat is not None, "Dining category must exist after bootstrap"
+
+        # Create a transport item with cost
+        transport_data = ItineraryItemCreate(
+            date=date(2026, 10, 1),
+            type="transport",
+            cost_amount=Decimal("3470.00"),
+            cost_currency="CNY",
+            description="三亚→深圳",
+        )
+        item = itinerary_service.create_item(db, trip, test_user.id, transport_data)
+        assert item.id is not None
+
+        expense = (
+            db.query(ExpenseEntry)
+            .filter(ExpenseEntry.itinerary_item_id == item.id)
+            .first()
+        )
+        assert expense is not None
+        assert expense.category_id == transport_cat.id
+        assert expense.description == "三亚→深圳"
+
+        # Create a dining item with cost — should map to dining category
+        dining_data = ItineraryItemCreate(
+            date=date(2026, 10, 2),
+            type="dining",
+            cost_amount=Decimal("200.00"),
+            cost_currency="CNY",
+        )
+        item2 = itinerary_service.create_item(db, trip, test_user.id, dining_data)
+
+        expense2 = (
+            db.query(ExpenseEntry)
+            .filter(ExpenseEntry.itinerary_item_id == item2.id)
+            .first()
+        )
+        assert expense2 is not None
+        assert expense2.category_id == dining_cat.id
+
+    def test_update_item_type_updates_expense_category_id(self, db, trip, test_user):
+        """R13b: Changing item type updates category_id on existing linked expense."""
+        bootstrap_expense_categories(db)
+
+        # Create a transport item with cost
+        data = ItineraryItemCreate(
+            date=date(2026, 10, 1),
+            type="transport",
+            cost_amount=Decimal("500.00"),
+            cost_currency="CNY",
+        )
+        item = itinerary_service.create_item(db, trip, test_user.id, data)
+
+        debit = (
+            db.query(ExpenseEntry)
+            .filter(ExpenseEntry.itinerary_item_id == item.id, ExpenseEntry.leg_type == "debit")
+            .first()
+        )
+        assert debit is not None
+        # Verify category is transport (交通)
+        transport_cat = db.query(ExpenseCategory).get(debit.category_id)
+        assert transport_cat is not None
+        assert transport_cat.name == "交通"
+
+        # Change type to dining (cost stays the same)
+        update = ItineraryItemUpdate(type="dining")
+        itinerary_service.update_item(db, item, test_user.id, update)
+
+        # Existing debit's category_id should be updated to dining
+        same_debit = (
+            db.query(ExpenseEntry)
+            .filter(ExpenseEntry.itinerary_item_id == item.id, ExpenseEntry.leg_type == "debit")
+            .first()
+        )
+        assert same_debit is not None
+        new_cat = db.query(ExpenseCategory).get(same_debit.category_id)
+        assert new_cat is not None
+        assert new_cat.name == "餐饮"
+        assert same_debit.amount == Decimal("500.00")
 
 
 class TestCrossDayAndPurchaseDate:

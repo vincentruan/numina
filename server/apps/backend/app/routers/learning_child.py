@@ -15,6 +15,9 @@ from apps.backend.app.schemas.learning import (
     AssessStreamRequest,
     AssignmentResponse,
     ChildProgressOverview,
+    LearningStatsResponse,
+    OnboardingCompleteResponse,
+    PathResponse,
     ProgressResponse,
     SessionCreate,
     SessionResponse,
@@ -23,18 +26,37 @@ from apps.backend.app.schemas.learning import (
 )
 from apps.backend.app.services.learning import (
     assignment_service,
+    path_service,
     progress_service,
     session_service,
+    stats_service,
+    zone_service,
 )
 from apps.backend.app.services.notification.dispatcher import (
     notify_learning_submitted_for_review,
 )
 from packages.db.models.learning.assignment import LearningAssignment
+from packages.db.models.learning.path import LearningPath
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
 from packages.db.models.learning.topic import LearningTopic
 
 router = APIRouter(prefix="/child/learning", tags=["learning-child"])
+
+
+def _json_text_field_equals(
+    json_column, key: str, value: str, engine
+):
+    """Dialect-aware JSON text field equality filter.
+
+    PostgreSQL uses ``column[key].astext``; SQLite uses ``json_extract``.
+    Centralized here so callers don't duplicate the branching.
+    """
+    if engine.dialect.name == "postgresql":
+        return json_column[key].astext == value
+    from sqlalchemy import func as sa_func
+
+    return sa_func.json_extract(json_column, f"$.{key}") == value
 
 
 @router.get("/map", response_model=list[ProgressResponse])
@@ -104,18 +126,57 @@ def today_learning(
         pending_assignment = AssignmentResponse.model_validate(pending_assignment_orm)
         pending_assignment.topic = a_topic
 
-    # 3. recommended_topic: locked with all hard prereqs met, stable ordering
-    recommended_topic = progress_service.find_recommended_topic(db, child.id)
+    # 3. recommended_topic: zone-aware recommendation (Growth > Comfort by centrality)
+    recommended_topic, _zone_label = zone_service.get_zone_recommended_topic(db, child.id)
 
     # 4. study_minutes_today
     study_minutes = progress_service.aggregate_study_minutes(db, child.id)
+
+    # 5. stats — zone + streak
+    stats = stats_service.get_or_create_stats(db, child.id, child.family_id)
 
     return TodayLearningResponse(
         current_topic=current_topic,
         pending_assignment=pending_assignment,
         recommended_topic=recommended_topic,
         study_minutes_today=study_minutes["today_study_minutes"],
+        current_zone=stats.current_zone,
+        learning_streak_days=stats.learning_streak_days,
     )
+
+
+@router.get("/stats", response_model=LearningStatsResponse)
+def my_learning_stats(
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Get my learning stats — XP, level, streak."""
+    stats = stats_service.get_or_create_stats(db, child.id, child.family_id)
+    level_info = stats_service.get_level_info(stats.level)
+    return LearningStatsResponse(
+        child_id=stats.child_id,
+        cumulative_xp=stats.cumulative_xp,
+        level=stats.level,
+        level_name_zh=level_info["name_zh"],
+        level_name_en=level_info["name_en"],
+        level_emoji=level_info["emoji"],
+        next_level_threshold=level_info["next_threshold"],
+        learning_streak_days=stats.learning_streak_days,
+        current_zone=stats.current_zone,
+        onboarding_completed=stats.onboarding_completed,
+    )
+
+
+@router.post("/onboarding/complete", response_model=OnboardingCompleteResponse)
+def complete_onboarding(
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Mark onboarding as completed for this child."""
+    stats = stats_service.get_or_create_stats(db, child.id, child.family_id)
+    stats.onboarding_completed = True
+    db.flush()
+    return OnboardingCompleteResponse(onboarding_completed=True)
 
 
 @router.get("/topics/{topic_id}", response_model=TopicResponse)
@@ -229,6 +290,47 @@ def my_overall_progress(
         parent_review_count=overview["parent_review"],
         **study_minutes,
     )
+
+
+# ---------------------------------------------------------------------------
+# Learning Path endpoints (child view)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/paths", response_model=list[PathResponse])
+def list_my_paths(
+    child: User = Depends(get_current_child_user),
+    db: Session = Depends(get_db),
+):
+    """List child's active learning paths."""
+    paths = path_service.get_child_active_paths(db, child.id, child.family_id)
+    result = []
+    for path in paths:
+        progress = path_service.get_path_progress(db, path.id, child.family_id)
+        result.append(path_service.build_path_response(path, progress))
+    return result
+
+
+@router.get("/paths/{path_id}", response_model=PathResponse)
+def get_my_path(
+    path_id: int,
+    child: User = Depends(get_current_child_user),
+    db: Session = Depends(get_db),
+):
+    """Get path detail with progress. Validates ownership + family."""
+    path = (
+        db.query(LearningPath)
+        .filter(
+            LearningPath.id == path_id,
+            LearningPath.child_id == child.id,
+            LearningPath.family_id == child.family_id,
+        )
+        .first()
+    )
+    if not path:
+        raise AppError(ErrorCode.LEARNING_PATH_NOT_FOUND)
+    progress = path_service.get_path_progress(db, path.id, child.family_id)
+    return path_service.build_path_response(path, progress)
 
 
 @router.post("/sessions/{session_id}/assess/stream")
@@ -396,15 +498,9 @@ async def get_session_status(
     # Find the learning-tutor AITask scoped to THIS session via progress JSON.
     # Filter at DB level using dialect-aware JSON path (was O(n) Python scan).
     session_id_str = str(session_id)
-    if engine.dialect.name == "postgresql":
-        json_filter = AITask.progress["learning_session_id"].astext == session_id_str
-    else:
-        from sqlalchemy import func as sa_func
-
-        json_filter = (
-            sa_func.json_extract(AITask.progress, "$.learning_session_id")
-            == session_id_str
-        )
+    json_filter = _json_text_field_equals(
+        AITask.progress, "learning_session_id", session_id_str, engine
+    )
 
     task = (
         db.query(AITask)

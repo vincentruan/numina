@@ -106,6 +106,19 @@
         </div>
       </div>
 
+      <!-- Path context bar -->
+      <div v-if="activePathInfo" class="path-context-bar">
+        <span>{{ t('learning.path.contextBar', activePathInfo) }}</span>
+        <van-button
+          size="mini"
+          type="primary"
+          plain
+          @click="router.push(`/learning/path/${activePathInfo.pathId}`)"
+        >
+          {{ t('learning.path.detail') }}
+        </van-button>
+      </div>
+
       <!-- Action buttons -->
       <div class="action-buttons">
         <button class="btn-primary" :disabled="starting" @click="onStartLearning">
@@ -122,6 +135,29 @@
       <p>{{ error }}</p>
       <button class="btn-secondary" @click="load">{{ t('common.retry') }}</button>
     </div>
+
+    <!-- Difficulty warning dialog -->
+    <van-dialog
+      v-model:show="showDifficultyDialog"
+      :title="difficultyDialogTitle"
+      show-cancel-button
+      :confirm-button-text="t('learning.difficultyWarning.continueAnyway')"
+      :cancel-button-text="t('learning.difficultyWarning.goSuggested')"
+      @confirm="proceedToSession"
+      @cancel="goToSuggestedTopic"
+    >
+      <div style="padding: 16px; text-align: center">
+        <div style="font-size: 32px; margin-bottom: 8px">⚠️</div>
+        <p>{{ difficultyMessage }}</p>
+        <p
+          v-if="suggestedTopicName"
+          style="color: var(--van-primary-color); cursor: pointer"
+          @click="goToSuggestedTopic"
+        >
+          {{ t('learning.difficultyWarning.suggestion', { name: suggestedTopicName }) }}
+        </p>
+      </div>
+    </van-dialog>
   </div>
 </template>
 
@@ -133,6 +169,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { showSuccessToast, showFailToast, type TagType } from 'vant'
+import axios from 'axios'
 import { usePageLoading } from '@/composables/usePageLoading'
 import {
   getTopicDetail,
@@ -142,10 +179,12 @@ import {
   createSession,
   submitAssignment,
   translateTopic,
+  getMyPaths,
   type TopicResponse,
   type ProgressResponse,
   type AssignmentResponse,
   type TopicGraphResponse,
+  type SessionResponse,
 } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 import { hasChineseChars } from '@numina/shared'
@@ -168,6 +207,14 @@ const progress = ref<ProgressResponse | null>(null)
 const allProgress = ref<ProgressResponse[]>([])
 const graphData = ref<TopicGraphResponse | null>(null)
 
+// Difficulty dialog state
+const showDifficultyDialog = ref(false)
+const pendingSessionId = ref<string | null>(null)
+const difficultyWarning = ref<SessionResponse['difficulty_warning']>(null)
+
+// Path context state
+const activePathInfo = ref<{ name: string; completed: number; total: number; pathId: string } | null>(null)
+
 const displayName = computed(() => {
   if (!topic.value) return ''
   return topicDisplayName(topic.value)
@@ -184,11 +231,35 @@ const displayEvidence = computed(() => {
   return topic.value.evidence
 })
 
+const difficultyDialogTitle = computed(() => {
+  if (difficultyWarning.value?.type === 'age')
+    return t('learning.difficultyWarning.ageTitle')
+  return t('learning.difficultyWarning.prereqTitle')
+})
+
+const difficultyMessage = computed(() => {
+  const w = difficultyWarning.value
+  if (!w) return ''
+  if (w.type === 'age')
+    return t('learning.difficultyWarning.ageMessage', { level: w.level })
+  return t('learning.difficultyWarning.prereqMessage', { count: w.unmet_count })
+})
+
+const suggestedTopicName = computed(() => {
+  const w = difficultyWarning.value
+  if (!w) return null
+  return locale.value.startsWith('zh')
+    ? w.suggested_topic_name_zh || w.suggested_topic_name
+    : w.suggested_topic_name
+})
+
 const showTranslateButton = computed(() => {
   if (locale.value !== 'zh-CN') return false
   if (!topic.value) return false
   // Don't offer translation for originally-Chinese content
   if (hasChineseChars(topic.value.name)) return false
+  // Hide if already translated
+  if (topic.value.name_zh) return false
   return true
 })
 
@@ -249,10 +320,37 @@ async function load() {
     // Find progress for this topic
     const topicProgress = progressList.find((p) => p.topic_id === topicId.value)
     progress.value = topicProgress ?? null
+
+    // Load path context (non-blocking)
+    loadPathContext()
   } catch {
     error.value = t('toast.loadFailed')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadPathContext() {
+  try {
+    const paths = await getMyPaths()
+    for (const path of paths) {
+      const item = path.items?.find(
+        (i) => String(i.topic_id) === String(topicId.value) && i.status !== 'completed',
+      )
+      if (item) {
+        const displayName =
+          locale.value.startsWith('zh') && path.name_zh ? path.name_zh : path.name
+        activePathInfo.value = {
+          name: displayName,
+          completed: path.completed_count,
+          total: path.total_count,
+          pathId: path.id,
+        }
+        break
+      }
+    }
+  } catch {
+    // Non-critical — silently ignore
   }
 }
 
@@ -261,11 +359,41 @@ async function onStartLearning() {
   starting.value = true
   try {
     const session = await createSession({ topic_id: topicId.value })
-    router.push(`/learning/session/${session.id}`)
-  } catch {
-    showFailToast(t('toast.submitFailed'))
+
+    if (session.difficulty_warning) {
+      // Show dialog instead of navigating directly
+      difficultyWarning.value = session.difficulty_warning
+      pendingSessionId.value = session.id
+      showDifficultyDialog.value = true
+    } else {
+      router.push(`/learning/session/${session.id}`)
+    }
+  } catch (err: unknown) {
+    const code = axios.isAxiosError(err)
+      ? (err.response?.data as Record<string, unknown> | undefined)?.code as string | undefined
+      : undefined
+    if (code === 'LEARNING_TOPIC_LOCKED') {
+      showFailToast(t('learning.error.topicLocked'))
+    } else if (code === 'LEARNING_PREREQUISITE_NOT_MET') {
+      showFailToast(t('learning.error.prerequisiteNotMet'))
+    } else {
+      showFailToast(t('learning.error.sessionCreateFailed'))
+    }
   } finally {
     starting.value = false
+  }
+}
+
+function proceedToSession() {
+  if (pendingSessionId.value) {
+    router.push(`/learning/session/${pendingSessionId.value}`)
+  }
+}
+
+function goToSuggestedTopic() {
+  const w = difficultyWarning.value
+  if (w?.suggested_topic_id) {
+    router.push(`/learning/topic/${w.suggested_topic_id}`)
   }
 }
 
@@ -515,5 +643,21 @@ onMounted(async () => {
 
 .topic-chip:active {
   opacity: 0.7;
+}
+
+/* Path context bar */
+.path-context-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: 16px 0;
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-hairline);
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-body);
 }
 </style>

@@ -2,6 +2,7 @@
 
 import logging
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
@@ -11,12 +12,23 @@ from apps.backend.app.schemas.itinerary_item import (
     ItineraryItemUpdate,
 )
 from apps.backend.app.services import expense_ledger
+from packages.db.models.expense_category import ExpenseCategory
 from packages.db.models.expense_entry import ExpenseEntry
 from packages.db.models.itinerary_item import ItineraryItem
 from packages.db.models.itinerary_item_type import ItineraryItemType
 from packages.db.models.trip import Trip
 
 logger = logging.getLogger(__name__)
+
+# Map itinerary item types to system expense category names.
+# Custom items map to "杂项" (miscellaneous).
+_TYPE_TO_CATEGORY: dict[str, str] = {
+    "accommodation": "住宿",
+    "dining": "餐饮",
+    "transport": "交通",
+    "activity": "活动",
+    "custom": "杂项",
+}
 
 
 def list_items(db: Session, trip_id: int, family_id: int) -> list[ItineraryItem]:
@@ -101,16 +113,35 @@ def update_item(
     new_custom_type_id = update_fields.get("custom_type_id", item.custom_type_id)
     _validate_type_and_custom_type(db, new_type, new_custom_type_id, item.family_id)
 
-    # Check if cost, currency, or purchase_date changed
+    # Check if cost, currency, purchase_date, or type changed
     old_cost = item.cost_amount
     new_cost = update_fields.get("cost_amount", old_cost)
     old_currency = item.cost_currency
     new_currency = update_fields.get("cost_currency", old_currency)
     old_purchase_date = item.purchase_date
     new_purchase_date = update_fields.get("purchase_date", old_purchase_date)
+    old_type = item.type
+    new_type_val = update_fields.get("type", old_type)
     cost_changed = new_cost != old_cost or new_currency != old_currency
     purchase_date_changed = new_purchase_date != old_purchase_date
+    type_changed = new_type_val != old_type
     expense_needs_recreate = cost_changed or purchase_date_changed
+
+    # When only type changes (cost unchanged), update category_id on existing
+    # linked debit entries directly instead of recreating the expense.
+    if type_changed and not expense_needs_recreate and old_cost and old_cost > 0:
+        new_category_id = _get_category_id_for_type(db, item.family_id, new_type_val)
+        linked_debits = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.itinerary_item_id == item.id,
+                ExpenseEntry.leg_type == "debit",
+            )
+            .all()
+        )
+        for entry in linked_debits:
+            entry.category_id = new_category_id
+        db.flush()
 
     # Handle cost removal (set to None or 0)
     if expense_needs_recreate and old_cost and old_cost > 0:
@@ -197,6 +228,29 @@ def _validate_custom_type(db: Session, custom_type_id: int, family_id: int) -> N
         raise AppError(ErrorCode.ITINERARY_TYPE_NOT_FOUND)
 
 
+def _get_category_id_for_type(db: Session, family_id: int, item_type: str) -> int | None:
+    """Look up the system expense category ID matching an itinerary item type.
+
+    Returns None when no matching category is found (graceful — expense will
+    display as "其他" in that case).
+    """
+    category_name = _TYPE_TO_CATEGORY.get(item_type)
+    if not category_name:
+        return None
+    cat = (
+        db.query(ExpenseCategory)
+        .filter(
+            ExpenseCategory.name == category_name,
+            or_(
+                ExpenseCategory.family_id.is_(None),
+                ExpenseCategory.family_id == family_id,
+            ),
+        )
+        .first()
+    )
+    return cat.id if cat else None
+
+
 def _create_linked_expense(
     db: Session,
     trip: Trip,
@@ -206,12 +260,14 @@ def _create_linked_expense(
     no_commit: bool = False,
 ) -> None:
     """Create a debit/credit expense pair linked to an itinerary item."""
+    category_id = _get_category_id_for_type(db, trip.family_id, item.type)
     req = ExpenseEntryCreate(
         amount=item.cost_amount,
         currency=item.cost_currency or trip.currency,
         expense_date=item.purchase_date or item.date,
         ref_id=trip.id,
         ref_type="trip",
+        category_id=category_id,
         description=item.description or item.location or f"{item.type} expense",
         itinerary_item_id=item.id,
     )
