@@ -134,6 +134,12 @@ class LearningStatsResponse(SnowflakeBase):
     onboarding_completed: bool
 
 
+class OnboardingCompleteResponse(BaseModel):
+    """Response for onboarding completion."""
+
+    onboarding_completed: bool
+
+
 class AssessStreamRequest(BaseModel):
     """Optional body for multi-turn tutorial messages. Omit for initial assessment."""
 

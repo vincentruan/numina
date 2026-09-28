@@ -63,11 +63,11 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
     )
-    op.create_index("ix_childLearningStats_childId", "child_learning_stats", ["child_id"])
-    op.create_index("ixChildLearningStats_familyId", "child_learning_stats", ["family_id"])
+    op.create_index("ix_child_learning_stats_child_id", "child_learning_stats", ["child_id"])
+    op.create_index("ix_child_learning_stats_family_id", "child_learning_stats", ["family_id"])
 
 
 def downgrade() -> None:
-    op.drop_index("ixChildLearningStats_familyId", table_name="child_learning_stats")
-    op.drop_index("ixChildLearningStats_childId", table_name="child_learning_stats")
+    op.drop_index("ix_child_learning_stats_family_id", table_name="child_learning_stats")
+    op.drop_index("ix_child_learning_stats_child_id", table_name="child_learning_stats")
     op.drop_table("child_learning_stats")

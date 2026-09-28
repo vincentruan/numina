@@ -1,8 +1,24 @@
-"""Content safety filter for AI tutor output — rule-based keyword/pattern filtering."""
+"""Content safety filter for AI tutor output — rule-based keyword/pattern filtering.
+
+This module provides a rule-based content safety filter for AI tutor outputs.
+It uses keyword/pattern matching to detect potentially inappropriate content.
+
+**Limitations (MVP-grade):**
+- Keyword-based filtering can be bypassed with Unicode homoglyphs, creative spelling,
+  spacing variations, or obfuscation techniques.
+- The consecutive trigger tracker is a module-level singleton, which means it won't
+  work correctly in multi-process deployments (e.g., uvicorn with multiple workers).
+  Each worker maintains its own counter. For multi-process scenarios, consider using
+  Redis-backed counters in a future enhancement.
+
+**Phase 2 Enhancement:** Plan calls for upgrading to an LLM-based classifier for
+more robust content safety detection.
+"""
 
 from __future__ import annotations
 
 import hashlib
+import itertools
 import logging
 import re
 from dataclasses import dataclass, field
@@ -45,23 +61,16 @@ RULE_CATEGORIES: dict[str, list[re.Pattern]] = {
 # Threshold: consecutive triggers before parent notification
 CONSECUTIVE_TRIGGER_THRESHOLD = 3
 
-# Friendly fallback messages (randomized for variety)
-FALLBACK_MESSAGES = [
+# Friendly fallback messages (thread-safe cycling)
+_FALLBACK_MESSAGES = [
     "让我们换个话题聊聊吧！你想了解什么有趣的知识？",
     "这个话题我不太擅长哦。要不要试试探索其他的？",
     "嗯，我们来聊聊别的吧！你对什么感兴趣？",
     "这个问题超出了我的范围。来探索科学知识怎么样？",
 ]
 
-_FALLBACK_INDEX = 0
-
-
-def _next_fallback() -> str:
-    """Round-robin fallback message selection."""
-    global _FALLBACK_INDEX
-    msg = FALLBACK_MESSAGES[_FALLBACK_INDEX % len(FALLBACK_MESSAGES)]
-    _FALLBACK_INDEX += 1
-    return msg
+# Thread-safe fallback message cycling using itertools.cycle
+_fallback_cycle = itertools.cycle(_FALLBACK_MESSAGES)
 
 
 @dataclass
@@ -97,7 +106,7 @@ def filter_tutor_output(text: str, child_id: int | None = None) -> FilterResult:
         text_hash,
     )
 
-    fallback = _next_fallback()
+    fallback = next(_fallback_cycle)
     return FilterResult(
         safe=False,
         filtered_text=fallback,

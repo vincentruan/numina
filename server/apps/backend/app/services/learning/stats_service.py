@@ -128,15 +128,26 @@ def award_xp(
     Returns dict with xp_awarded (actual, after daily cap), leveled_up, new_level.
     Uses SELECT FOR UPDATE for race safety on the stats row.
     """
-    stats = get_or_create_stats(db, child_id, family_id)
-
-    # Lock the row for atomic update
+    # Atomic get-or-create with lock to prevent race conditions
     result = db.execute(
         select(ChildLearningStats)
         .where(ChildLearningStats.child_id == child_id)
         .with_for_update()
     )
-    stats = result.scalar_one()
+    stats = result.scalar_one_or_none()
+
+    if stats is None:
+        # Create new stats record (no lock needed yet since we're creating)
+        stats = ChildLearningStats(child_id=child_id, family_id=family_id)
+        db.add(stats)
+        db.flush()
+        # Re-fetch with lock now that it exists
+        result = db.execute(
+            select(ChildLearningStats)
+            .where(ChildLearningStats.child_id == child_id)
+            .with_for_update()
+        )
+        stats = result.scalar_one()
 
     # Reset daily counter if new day
     _reset_xp_today_if_new_day(stats)

@@ -16,6 +16,7 @@ from apps.backend.app.schemas.learning import (
     AssignmentResponse,
     ChildProgressOverview,
     LearningStatsResponse,
+    OnboardingCompleteResponse,
     PathResponse,
     ProgressResponse,
     SessionCreate,
@@ -166,7 +167,7 @@ def my_learning_stats(
     )
 
 
-@router.post("/onboarding/complete")
+@router.post("/onboarding/complete", response_model=OnboardingCompleteResponse)
 def complete_onboarding(
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
@@ -175,7 +176,7 @@ def complete_onboarding(
     stats = stats_service.get_or_create_stats(db, child.id, child.family_id)
     stats.onboarding_completed = True
     db.flush()
-    return {"onboarding_completed": True}
+    return OnboardingCompleteResponse(onboarding_completed=True)
 
 
 @router.get("/topics/{topic_id}", response_model=TopicResponse)
