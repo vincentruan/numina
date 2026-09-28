@@ -193,6 +193,11 @@ export async function getMyLearningStats(): Promise<LearningStatsResponse> {
   return res.data
 }
 
+export async function completeOnboarding(): Promise<{ onboarding_completed: boolean }> {
+  const res = await http.post('/child/learning/onboarding/complete')
+  return res.data
+}
+
 export async function getTodayLearning(): Promise<TodayLearningResponse> {
   const res = await http.get('/child/learning/today')
   return res.data

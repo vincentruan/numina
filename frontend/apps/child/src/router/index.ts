@@ -87,6 +87,12 @@ const router = createRouter({
           component: () => import('@/pages/ChildBadgesPage.vue'),
         },
         {
+          path: 'learning/onboarding',
+          name: 'LearningOnboarding',
+          component: () => import('@/pages/learning/LearningOnboardingPage.vue'),
+          meta: { hasSkeleton: false },
+        },
+        {
           path: 'learning',
           name: 'LearningMap',
           component: () => import('@/pages/learning/LearningMapPage.vue'),
@@ -194,6 +200,22 @@ async function verifyChildSession(): Promise<boolean> {
 router.beforeEach(async (to, _from, next) => {
   NProgress.start()
   markRouterNprogressActive()
+
+  // Learning onboarding guard: redirect first-time children to onboarding.
+  // Cached in sessionStorage to avoid an API call on every navigation.
+  if (to.name === 'LearningMap' && !sessionStorage.getItem('learning_onboarding_done')) {
+    try {
+      const { getMyLearningStats } = await import('@/api/learning')
+      const stats = await getMyLearningStats()
+      if (!stats.onboarding_completed) {
+        next({ name: 'LearningOnboarding' })
+        return
+      }
+      sessionStorage.setItem('learning_onboarding_done', '1')
+    } catch {
+      // Non-blocking: proceed without guard on API failure
+    }
+  }
 
   // Check cached localStorage first (fast path)
   const authStore = useAuthStore()

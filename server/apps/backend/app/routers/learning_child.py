@@ -166,6 +166,18 @@ def my_learning_stats(
     )
 
 
+@router.post("/onboarding/complete")
+def complete_onboarding(
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Mark onboarding as completed for this child."""
+    stats = stats_service.get_or_create_stats(db, child.id, child.family_id)
+    stats.onboarding_completed = True
+    db.flush()
+    return {"onboarding_completed": True}
+
+
 @router.get("/topics/{topic_id}", response_model=TopicResponse)
 def get_topic_detail(
     topic_id: int,
