@@ -288,6 +288,112 @@ def validate_quality(session) -> None:
     print("\n  All quality validations passed.")
 
 
+# ---------------------------------------------------------------------------
+# MVP Topic Curation
+# ---------------------------------------------------------------------------
+
+MVP_SUBJECTS = {"mathematics", "science", "english"}
+MVP_AGE_GROUP = "mid"
+MVP_MIN_PER_SUBJECT = 20
+MVP_MAX_PER_SUBJECT = 30
+MVP_TOTAL_MIN = 60
+MVP_TOTAL_MAX = 90
+
+
+def select_mvp_topics(session) -> list[int]:
+    """Select 60-90 MVP topics: top by centrality from 3 subjects, age_group=mid.
+
+    Returns list of topic IDs in the MVP set.
+    Ensures dependency completeness: if a selected topic has hard prereqs,
+    those are included too (even if outside the subject/age_group filter).
+    """
+    from packages.db.models.learning.topic import LearningDependency, LearningTopic
+
+    selected: dict[int, LearningTopic] = {}
+
+    for subject in MVP_SUBJECTS:
+        candidates = (
+            session.query(LearningTopic)
+            .filter(
+                LearningTopic.subject == subject,
+                LearningTopic.age_group == MVP_AGE_GROUP,
+                LearningTopic.deprecated == False,  # noqa: E712
+            )
+            .order_by(LearningTopic.centrality.desc())
+            .limit(MVP_MAX_PER_SUBJECT)
+            .all()
+        )
+        for t in candidates:
+            selected[t.id] = t
+
+    # Ensure dependency completeness: add hard prereqs not yet selected
+    added_prereqs = True
+    while added_prereqs:
+        added_prereqs = False
+        for topic_id in list(selected.keys()):
+            hard_deps = (
+                session.query(LearningDependency)
+                .filter_by(topic_id=topic_id, strength="hard")
+                .all()
+            )
+            for dep in hard_deps:
+                if dep.prerequisite_id not in selected:
+                    prereq = session.query(LearningTopic).filter_by(id=dep.prerequisite_id).first()
+                    if prereq:
+                        selected[prereq.id] = prereq
+                        added_prereqs = True
+
+    return list(selected.keys())
+
+
+def validate_mvp_curation(session, topic_ids: list[int]) -> list[str]:
+    """Validate the MVP topic selection.
+
+    Returns list of error messages (empty = all good).
+    """
+    from packages.db.models.learning.topic import LearningDependency, LearningTopic
+
+    errors: list[str] = []
+
+    topics = session.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all()
+    if not topics:
+        errors.append("No topics found in MVP set")
+        return errors
+
+    id_set = {t.id for t in topics}
+
+    # Check total count
+    total = len(topics)
+    if total < MVP_TOTAL_MIN:
+        errors.append(f"Too few MVP topics: {total} (min {MVP_TOTAL_MIN})")
+    if total > MVP_TOTAL_MAX:
+        errors.append(f"Too many MVP topics: {total} (max {MVP_TOTAL_MAX})")
+
+    # Check per-subject counts
+    subject_counts: Counter = Counter()
+    for t in topics:
+        subject_counts[t.subject] += 1
+
+    for subject in MVP_SUBJECTS:
+        count = subject_counts.get(subject, 0)
+        if count < MVP_MIN_PER_SUBJECT:
+            errors.append(f"Subject {subject}: only {count} topics (min {MVP_MIN_PER_SUBJECT})")
+
+    # Check no orphans (all topics have at least one connection)
+    topic_ids_with_deps = set()
+    for dep in session.query(LearningDependency).all():
+        if dep.topic_id in id_set:
+            topic_ids_with_deps.add(dep.topic_id)
+        if dep.prerequisite_id in id_set:
+            topic_ids_with_deps.add(dep.prerequisite_id)
+
+    orphans = id_set - topic_ids_with_deps
+    if orphans:
+        errors.append(f"{len(orphans)} orphan topics (no dependencies)")
+
+    return errors
+
+
 async def seed_topic_translations(
     session, batch_size: int = 50, force_retranslate: bool = False
 ):
@@ -451,6 +557,16 @@ def main():
         action="store_true",
         help="Force re-translate topics that already have _zh data",
     )
+    parser.add_argument(
+        "--mvp-only",
+        action="store_true",
+        help="Select and validate MVP topic subset (60-90 topics, 3 subjects)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print MVP selection without modifying the database",
+    )
     args = parser.parse_args()
 
     if not args.data_dir.exists():
@@ -484,6 +600,41 @@ def main():
 
         if not args.skip_validate:
             validate_quality(session)
+
+        if args.mvp_only:
+            print("\n=== MVP Topic Curation ===")
+            mvp_ids = select_mvp_topics(session)
+            errors = validate_mvp_curation(session, mvp_ids)
+
+            # Per-subject breakdown
+            from packages.db.models.learning.topic import LearningTopic
+            mvp_topics = session.query(LearningTopic).filter(LearningTopic.id.in_(mvp_ids)).all()
+            subject_counts: Counter = Counter()
+            for t in mvp_topics:
+                subject_counts[t.subject] += 1
+            print(f"  Total MVP topics: {len(mvp_ids)}")
+            for subj in sorted(subject_counts):
+                print(f"    {subj}: {subject_counts[subj]}")
+
+            if errors:
+                print("\n  Validation ERRORS:")
+                for err in errors:
+                    print(f"    ❌ {err}")
+            else:
+                print("\n  ✅ MVP curation validation passed")
+
+            if args.dry_run:
+                # Export to JSON for review
+                output_path = args.data_dir / "mvp_topics.json"
+                mvp_data = {
+                    "topic_ids": sorted(mvp_ids),
+                    "total": len(mvp_ids),
+                    "subjects": dict(subject_counts),
+                    "taxonomy_version": version,
+                }
+                with open(output_path, "w") as f:
+                    json.dump(mvp_data, f, indent=2, ensure_ascii=False)
+                print(f"\n  MVP topic list exported to {output_path}")
     except Exception:
         session.rollback()
         raise
