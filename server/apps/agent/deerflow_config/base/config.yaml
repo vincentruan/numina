@@ -23,6 +23,12 @@ memory:
   backend_config:
     max_facts: 50
     fact_confidence_threshold: 0.8
+    # R8: relevance-aware retrieval (DeerMem issue #4495).
+    # When true, search ranks facts by deterministic lexical relevance
+    # combined with confidence, instead of pure confidence ordering.
+    # CJK bigram tokenization is built into DeerMem's relevance engine.
+    retrieval_relevance_enabled: true
+    retrieval_relevance_weight: 0.5  # 0.0=confidence only, 1.0=relevance only
 
 # 对话历史自动压缩（超过阈值时触发）
 summarization:
