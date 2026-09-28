@@ -42,13 +42,12 @@ _PROVIDER_CLASS_MAP: dict[str, str] = {
 
 _THINKING_CLASS_OVERRIDES: dict[str, str] = {
     "deepseek": "deerflow.models.patched_deepseek:PatchedChatDeepSeek",
-    # Generic reasoning patch: captures reasoning_content / reasoning from
-    # streaming deltas and replays thought_signature on historical messages.
-    # Works for any LLM API that returns non-standard reasoning fields.
-    "reasoning": "apps.agent.services.deerflow_adapter.patched_reasoning_chat:PatchedChatReasoning",
-    # Anthropic thinking patch: captures thinking blocks from streaming events
-    # and copies to additional_kwargs["reasoning_content"] — bypasses DeerFlow's
-    # _extract_text which silently drops thinking blocks from content lists.
+    # DashScope/Qwen: captures reasoning_content from OpenAI-compatible deltas
+    # and replays on historical messages (upstream per-vendor patched pattern).
+    "dashscope": "apps.agent.services.deerflow_adapter.patched_dashscope:PatchedChatDashScope",
+    # Anthropic: patched to capture thinking blocks from streaming events
+    # into additional_kwargs["reasoning_content"] — upstream _extract_text
+    # only reads block.get("text"), silently dropping {"type": "thinking"} blocks.
     "anthropic": "apps.agent.services.deerflow_adapter.patched_anthropic:PatchedChatAnthropic",
 }
 
@@ -99,6 +98,28 @@ def _compute_anthropic_thinking_budget(
     return capped
 
 
+def _build_reasoning_contract(
+    provider: str,
+) -> dict[str, Any] | None:
+    """Build the declarative ``reasoning:`` contract for a thinking model.
+
+    Returns a dict that DeerFlow's ``ModelConfig`` parses into
+    ``ReasoningCapabilities``.  The ``dialect`` field tells the factory how
+    to serialise thinking on/off for each provider's API format.
+
+    Returns ``None`` when no contract is needed (e.g. Gemini, whose native
+    API does not expose thinking tokens through the OpenAI-compatible path).
+    """
+    if provider == "gemini":
+        return None
+    if provider == "anthropic":
+        return {"thinking": "optional", "dialect": "anthropic"}
+    # DeepSeek and all OpenAI-compatible vendors (DashScope/Qwen, StepFun,
+    # vLLM, etc.) use the ``openai_extra_body`` dialect — thinking params
+    # are nested inside ``extra_body``.
+    return {"thinking": "optional", "dialect": "openai_extra_body"}
+
+
 def build_model_entry(ai_provider: dict[str, Any]) -> dict[str, Any]:
     """Build the ``models[0]`` dict for the DeerFlow temp config.
 
@@ -135,18 +156,18 @@ def build_model_entry(ai_provider: dict[str, Any]) -> dict[str, Any]:
             use_class = _THINKING_CLASS_OVERRIDES["deepseek"]
         elif provider == "anthropic":
             # Anthropic: patched to capture thinking blocks from streaming
-            # events into additional_kwargs["reasoning_content"] — bypasses
-            # DeerFlow's _extract_text which silently drops thinking blocks.
+            # events into additional_kwargs["reasoning_content"] — upstream
+            # _extract_text only reads block.get("text"), silently dropping
+            # {"type": "thinking"} blocks.
             use_class = _THINKING_CLASS_OVERRIDES["anthropic"]
         elif provider == "openai" and not base_url:
             # Native OpenAI: stock ChatOpenAI; reasoning effort via
             # supports_reasoning_effort + Responses API.
             use_class = "langchain_openai:ChatOpenAI"
         elif provider in ("openai", "openai_compatible"):
-            # Any LLM API with thinking that returns non-standard reasoning
-            # fields.  Vendor-agnostic — captures reasoning_content / reasoning
-            # from deltas and replays thought_signature for multi-turn.
-            use_class = _THINKING_CLASS_OVERRIDES["reasoning"]
+            # DashScope/Qwen and other OpenAI-compatible vendors with thinking:
+            # captures reasoning_content from streaming deltas.
+            use_class = _THINKING_CLASS_OVERRIDES["dashscope"]
 
     entry: dict[str, Any] = {
         "name": "main",
@@ -197,6 +218,15 @@ def build_model_entry(ai_provider: dict[str, Any]) -> dict[str, Any]:
     db_timeout = ai_provider.get("timeout_seconds")
     if isinstance(db_timeout, int) and db_timeout > 0:
         entry.setdefault("stream_chunk_timeout", float(db_timeout))
+
+    # Declarative reasoning contract (R1).  Tells DeerFlow's ReasoningContract
+    # resolver the model's thinking dialect so the factory can serialise
+    # thinking on/off correctly.  Omitted for non-thinking models and for
+    # native OpenAI (which uses supports_reasoning_effort, not the contract).
+    if thinking_supported and provider != "openai":
+        reasoning_contract = _build_reasoning_contract(provider)
+        if reasoning_contract is not None:
+            entry["reasoning"] = reasoning_contract
 
     return entry
 

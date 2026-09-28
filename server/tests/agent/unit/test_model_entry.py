@@ -97,9 +97,9 @@ class TestThinkingClassOverrides:
         assert "PatchedChatOpenAI" not in entry["use"]
         assert "ReasoningChatOpenAI" not in entry["use"]
 
-    def test_openai_with_base_url_uses_reasoning_chat(self):
-        """OpenAI-compatible gateway with thinking routes to the generic
-        reasoning patch (captures reasoning_content from vendor deltas)."""
+    def test_openai_with_base_url_uses_dashscope_patched_class(self):
+        """OpenAI-compatible gateway with thinking routes to PatchedChatDashScope
+        (captures reasoning_content from vendor deltas)."""
         entry = build_model_entry({
             "ai_provider": "openai",
             "ai_model_id": "qwen3-32b",
@@ -107,17 +107,17 @@ class TestThinkingClassOverrides:
             "ai_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "model_1_capabilities": ["text_generation", "deep_thinking"],
         })
-        assert entry["use"] == "apps.agent.services.deerflow_adapter.patched_reasoning_chat:PatchedChatReasoning"
+        assert entry["use"] == "apps.agent.services.deerflow_adapter.patched_dashscope:PatchedChatDashScope"
 
-    def test_openai_compatible_thinking_uses_reasoning_chat(self):
-        """Any model with thinking routes to the generic reasoning patch."""
+    def test_openai_compatible_thinking_uses_dashscope_patched_class(self):
+        """OpenAI-compatible thinking models route to PatchedChatDashScope."""
         entry = build_model_entry({
             "ai_provider": "openai_compatible",
             "ai_model_id": "qwen3-235b",
             "api_key": "sk-qw",
             "model_1_capabilities": ["text_generation", "deep_thinking"],
         })
-        assert entry["use"] == "apps.agent.services.deerflow_adapter.patched_reasoning_chat:PatchedChatReasoning"
+        assert entry["use"] == "apps.agent.services.deerflow_adapter.patched_dashscope:PatchedChatDashScope"
 
     def test_anthropic_thinking_uses_patched_class(self):
         """Anthropic thinking routes to PatchedChatAnthropic which captures
@@ -476,3 +476,64 @@ class TestGeminiThinkingConfig:
             resolved_max_tokens=4096,
         )
         assert result == {}
+
+
+class TestReasoningContract:
+    """Tests for the declarative reasoning: block on model entries (R1)."""
+
+    def test_thinking_model_has_reasoning_contract(self):
+        """Thinking models include a reasoning: dict for DeerFlow's
+        ReasoningContract resolver."""
+        entry = build_model_entry({
+            "ai_provider": "openai_compatible",
+            "ai_model_id": "qwen3-235b",
+            "api_key": "sk-qw",
+            "model_1_capabilities": ["text_generation", "deep_thinking"],
+        })
+        assert "reasoning" in entry
+        assert entry["reasoning"]["thinking"] == "optional"
+        assert entry["reasoning"]["dialect"] == "openai_extra_body"
+
+    def test_anthropic_thinking_has_anthropic_dialect(self):
+        entry = build_model_entry({
+            "ai_provider": "anthropic",
+            "ai_model_id": "claude-sonnet-4-6",
+            "api_key": "sk-ant",
+            "model_1_capabilities": ["text_generation", "deep_thinking"],
+        })
+        assert entry["reasoning"]["thinking"] == "optional"
+        assert entry["reasoning"]["dialect"] == "anthropic"
+
+    def test_deepseek_thinking_has_openai_extra_body_dialect(self):
+        entry = build_model_entry({
+            "ai_provider": "openai_compatible",
+            "ai_model_id": "deepseek-r1",
+            "api_key": "sk-ds",
+            "model_1_capabilities": ["text_generation", "deep_thinking"],
+        })
+        assert entry["reasoning"]["thinking"] == "optional"
+        assert entry["reasoning"]["dialect"] == "openai_extra_body"
+
+    def test_non_thinking_model_omits_reasoning_contract(self):
+        entry = build_model_entry({
+            "ai_provider": "openai_compatible",
+            "ai_model_id": "qwen3-32b",
+            "api_key": "sk-qw",
+            "model_1_capabilities": ["text_generation"],
+        })
+        assert "reasoning" not in entry
+
+    def test_native_openai_omits_reasoning_contract(self):
+        """Native OpenAI uses supports_reasoning_effort, not the contract."""
+        entry = build_model_entry({
+            "ai_provider": "openai",
+            "ai_model_id": "gpt-5",
+            "api_key": "sk-o1",
+            "model_1_capabilities": ["text_generation", "deep_thinking"],
+        })
+        assert "reasoning" not in entry
+
+    def test_gemini_thinking_omits_reasoning_contract(self):
+        """Gemini native API doesn't use the reasoning contract path."""
+        from packages.core.model_entry import _build_reasoning_contract
+        assert _build_reasoning_contract("gemini") is None
