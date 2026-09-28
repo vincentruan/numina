@@ -17,9 +17,12 @@
           <span class="topic-card__status" aria-hidden="true">{{ statusIcon(masteryStatus(item)) }}</span>
           <div class="topic-card__info">
             <p class="topic-card__name">{{ topicDisplayName(item.topic) }}</p>
-            <p v-if="item.attempts" class="topic-card__meta">
-              {{ t('learning.attempts', { count: item.attempts }) }}
-            </p>
+            <div class="topic-card__badges">
+              <ZoneBadge v-if="childAgeGroup && topicZone(item.topic)" :zone="topicZone(item.topic)!" />
+              <span v-if="item.attempts" class="topic-card__meta">
+                {{ t('learning.attempts', { count: item.attempts }) }}
+              </span>
+            </div>
           </div>
         </button>
       </div>
@@ -33,11 +36,13 @@ defineOptions({ name: 'TopicGrid' })
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProgressWithTopic } from '@/api/learning'
+import ZoneBadge from './ZoneBadge.vue'
 
 const { t, locale } = useI18n()
 
 const props = defineProps<{
   items: ProgressWithTopic[]
+  childAgeGroup?: string
 }>()
 
 defineEmits<{
@@ -75,6 +80,19 @@ function statusIcon(status: MasteryStatus): string {
 function topicDisplayName(topic: ProgressWithTopic['topic']): string {
   if (locale.value.startsWith('zh') && topic.name_zh) return topic.name_zh
   return topic.name || topic.topic_key
+}
+
+const AGE_ORDER: Record<string, number> = { low: 0, mid: 1, high: 2 }
+
+function topicZone(topic: ProgressWithTopic['topic']): string | null {
+  if (!props.childAgeGroup) return null
+  const topicAge = topic.age_group
+  if (topicAge === props.childAgeGroup) return 'growth'
+  const childOrder = AGE_ORDER[props.childAgeGroup] ?? 1
+  const topicOrder = AGE_ORDER[topicAge] ?? 1
+  if (topicOrder < childOrder) return 'comfort'
+  if (topicOrder > childOrder) return 'challenge'
+  return 'growth'
 }
 
 interface DomainGroup {
@@ -179,5 +197,13 @@ const domainGroups = computed<DomainGroup[]>(() => {
   font-size: 12px;
   color: var(--color-muted-soft);
   margin: 4px 0 0;
+}
+
+.topic-card__badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
 }
 </style>

@@ -481,6 +481,10 @@ export default {
       completed: '已完成',
       inputPlaceholder: '输入你的回答...',
       send: '发送',
+      timeRemaining: '还有 {minutes} 分钟哦',
+      timeExpired: '时间到了！今天你发现了 {topics} 个新知识，明天见！',
+      goHome: '回到首页',
+      progressSaved: '进度已保存',
     },
     error: {
       stream: '流式连接错误',

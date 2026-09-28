@@ -480,6 +480,10 @@ export default {
       completed: 'Completed',
       inputPlaceholder: 'Type your answer...',
       send: 'Send',
+      timeRemaining: '{minutes} minutes left',
+      timeExpired: 'Time\'s up! You discovered {topics} new things today, see you tomorrow!',
+      goHome: 'Back to Home',
+      progressSaved: 'Progress saved',
     },
     error: {
       stream: 'Stream connection error',
