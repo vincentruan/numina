@@ -928,6 +928,24 @@ class MCPSession:
                                         db.add(txn)
                                         coins_earned = coin_amount
 
+                                # Award XP for AI assessment mastery (best-effort)
+                                try:
+                                    from apps.backend.app.services.learning import (
+                                        stats_service,
+                                    )
+
+                                    xp_amount = {"mastered": 20, "needs_review": 10, "keep_learning": 5}.get(rec, 0)
+                                    if xp_amount > 0:
+                                        stats_service.award_xp(
+                                            db, child.id, int(self._family_id), xp_amount=xp_amount
+                                        )
+                                except Exception:
+                                    logger.warning(
+                                        "[mcp_session] XP award failed for child=%s (non-blocking)",
+                                        child.id,
+                                        exc_info=True,
+                                    )
+
                                 # Check milestones + challenges (non-blocking)
                                 try:
                                     from apps.backend.app.services.milestones import (
