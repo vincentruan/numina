@@ -65,6 +65,27 @@ DeerFlow `run_in_executor` **不传播** `contextvars`。`_run_in_executor_with_
 
 **教训**: 工具返回成功但文件不存在 = ContextVar 未传播，不是工具 bug。
 
+## 核心原则
+
+不依赖 DeerFlow 版本的持久原则 — harness 升级后仍然适用。
+
+**永不静默降级** — 初始化/adapter 构建的 `except Exception` 必须 log + re-raise（或至少设可见标志），不得返回 `None` 让功能隐形失效：
+```python
+try:
+    adapter = build_adapter()
+except Exception as e:
+    logger.warning(f"Adapter init failed: {e}")
+    raise  # 不要静默降级
+```
+
+**Thinking blocks 不得泄漏到用户可见字符串** — thinking 模型返回的 `content` 是 block list（`[{"type":"thinking",...}, {"type":"text",...}]`），任何字符串消费方（标题、suggestion、metadata）必须用 `_extract_text_from_content_blocks()`，不得直接 `str(content)`。须在**所有写入路径**同时应用，不只一处。
+- 现有 helpers：`server/apps/agent/services/runtime/run_extras.py` — `_strip_thinking_from_text`、`_extract_text_from_content_blocks`
+- 新增 title / suggestion 写入路径时必须检查此规则
+
+**SSE stream proxy 用 `aiter_lines()`，不用 `aiter_text()`** — `aiter_text()` 不能可靠地上游流结束信号，导致前端 `reader.read()` 永远不返回 `done: true`，消息停留在 processing 状态。所有 SSE proxy 循环均用 `aiter_lines()`（参考 `ai_threads.py`、`dashboard_narrative.py`）。
+
+**Generator yield 类型变更须同步更新所有 caller** — 改 `AsyncGenerator[X, None]` 的 yield 类型（如 `str` → `StreamChunk`）必须在同一 commit 内搜索并更新所有 `async for chunk in <gen>` 调用点；漏掉任何一个都会造成运行时类型错误。
+
 ## 多租户管理
 
 ### 按家庭隔离 (family-wall)
