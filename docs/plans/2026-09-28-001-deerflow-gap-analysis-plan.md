@@ -1,7 +1,10 @@
 ---
 artifact_contract: ce-unified-plan/v1
-artifact_readiness: requirements-only
+artifact_readiness: implementation-ready
 product_contract_source: ce-brainstorm
+execution: code
+title: DeerFlow Gap Analysis - Plan
+type: feat
 date: 2026-09-28
 topic: deerflow-gap-analysis
 ---
@@ -10,265 +13,351 @@ topic: deerflow-gap-analysis
 
 ## Goal Capsule
 
-**Objective**: 对比 Numina 当前 DeerFlow 集成（pin `6556d09d`, 2026-08-07）与上游 HEAD（`712a11c0`, 2026-09-28）的能力差异，识别值得引入增强的上游新能力。
+**Objective**: 对比 Numina 当前 DeerFlow 集成（pin `6556d09d`, 2026-08-07）与上游 HEAD（`712a11c0`, 2026-09-28）的能力差异，识别值得引入增强的上游新能力，并实施 Phase 2 增强。
 
-**Product authority**: 分析型交付 — 不涉及产品行为变更，仅为后续决策提供依据。
+**Product authority**: 分析型 + 实施型交付 — Phase 1 已完成（差距分析 + submodule 升级），Phase 2 进入实施（reasoning contract、PII middleware、memory 增强、middleware 挂载）。
 
-**Upstream gap**: 693 commits, ~7 weeks of development (Aug 7 → Sep 28).
-
----
-
-## 1. 当前 Numina 已使用的 DeerFlow 能力
-
-| 能力 | 上游路径 | Numina 用法 |
-|------|----------|-------------|
-| DeerFlowClient | `client.py` | 同步 generator stream()，ThreadPoolExecutor 桥接 |
-| StreamBridge | `runtime/stream_bridge/` | Redis-only 跨进程事件分发 |
-| RunManager | `runtime/runs/manager.py` | Run 生命周期管理 |
-| make_lead_agent() | `agents/lead_agent/agent.py` | 构建 LangGraph agent 图 |
-| create_chat_model() | `models/factory.py` | 多供应商模型路由 |
-| Checkpoint (SQLite) | `runtime/checkpointer/` | Supabase PostgreSQL 持久化 |
-| ExtensionsConfig | `config/extensions_config.py` | Skill enable/disable |
-| Skill Storage | `skills/storage.py` | LocalSkillStorage scanner |
-| MultiServerMCPClient | `mcp/` | MCP server 连接管理 |
-| Sandbox | `sandbox/` | write_file / read_file / str_replace |
-
-**Numina 自建层**（不在上游、属于项目独有）：
-
-| 自建模块 | 职责 |
-|----------|------|
-| FamilyAdapterCache + EffectiveConfigBuilder | 按家庭多租户隔离 |
-| PolicyGuard | 角色/能力权限门控 |
-| sync_tool_patch.py (5 patches) | ContextVar 传播、MCP 代理、工具过滤 |
-| 19 个 Builtin Skills | 领域专属 (asset-report, finance-coach, etc.) |
-| 8 个 Dispatch Apps | numina, asset-report, import-parse, finance-coach, etc. |
-| 三态熔断器 | FSM + 4 adapters cascade retry |
-| SSE Gateway | R1 allowlist + 鉴权 |
-| Patched Reasoning | Qwen/Anthropic extended thinking 统一 |
-| RunContext | ContextVar facade |
+**Upstream gap**: 693 commits, ~7 weeks of development (Aug 7 → Sep 28). ✅ Phase 1 已追平。
 
 ---
 
-## 2. 上游新能力差距分析（按优先级分级）
+## Product Contract
 
-### Tier 1 — 高价值，建议优先引入
+### Summary
 
-#### 2.1 Subagent 委托系统 ⭐⭐⭐
-- **上游**: `subagents/` — 完整 subagent 委托框架
-  - Batch runtime (`batch_runtime.py`, `batch_service.py`)
-  - Token collector + turn budget 控制
-  - Capacity management + acceptance checks
-  - Built-in subagents (`builtins/`)
-  - Context snapshot preservation
-  - Step events + report contract
-- **Numina**: `runtime/subagent_registry.py` 存在但功能有限；无 batch/turn budget/capacity
-- **引入价值**: 让 finance-coach、deep-research 等复杂 skill 可将子任务委托给专用 subagent，减少 lead agent 上下文膨胀
-- **适配工作量**: 中 — 需要通过 adapter 层集成，与多租户隔离对齐
+Phase 1（已完成）将 HARNESS_VERSION 从 `6556d09d` 升级到 `712a11c0`，获取了上游 693 个 commit 的修复和增强。Phase 2 将上游能力引入 Numina：声明式 Reasoning Contract（替代手写 thinking 补丁）、两层 PII 脱敏（上游 config-driven 中间件 + 自建结构化脱敏共存）、DeerMem 相关性排序。保护性中间件（LoopDetection、SafetyFinishReason、ToolOutputBudget、PiiRedaction）均已在默认链或由 config 驱动启用。
 
-#### 2.2 声明式推理能力契约 (Reasoning Contract) ⭐⭐⭐
-- **上游**: `models/` — 模型可声明 `reasoning:` 块
-  - `thinking: unsupported|optional|required`
-  - `effort: {values, default, aliases, path}`
-  - `create_chat_model` 统一强制规范化策略
-  - 前端按模型声明生成 effort 菜单
-- **Numina**: 自建 `patched_reasoning_chat.py` + `patched_anthropic.py` 做 thinking 补丁，模型 reasoning 能力靠手动配置
-- **引入价值**: 取代手写 reasoning 补丁，新模型只需声明契约即可自动适配；GLM/Qwen/Anthropic 统一路径
-- **适配工作量**: 中 — 需迁移现有 thinking 配置到契约格式
+### Problem Frame
 
-#### 2.3 Operator Prompt Overlay ⭐⭐⭐
-- **上游**: `lead_prompt_overlay.prepend/append` — 无需改源码即可叠加系统提示词
-  - Lead agent prompt prepend/append
-  - Subagent prompt overlay (`subagents.agents.<name>.prompt_overlay`)
-  - DeerMem memory prompt prepend/append
-- **Numina**: 系统提示词硬编码在 skill SKILL.md 或 adapter 代码中
-- **引入价值**: 运维可热更新提示词（加家族特定指令、合规要求），无需修改 SKILL.md 或重新部署
-- **适配工作量**: 低 — 纯配置项，向后兼容
+Numina 在 Phase 1 升级后已获取上游修复（MCP 死锁、think-block 剥离、deep-merge 等），但仍有四个领域依赖手写补丁或未启用上游增强：
 
-#### 2.4 PII 脱敏中间件 ⭐⭐⭐
-- **上游**: `pii_redaction_middleware.py` — 确定性 PII 脱敏
-  - 正则检测: email, API keys, credit card (Luhn), phone, ID card (CN/US/BR)
-  - 不可逆占位符 `[EMAIL_1]`，编号跨回合稳定
-  - 子 agent 自动继承
-  - 我们已有自建 `services/pii_redactor.py`
-- **Numina**: `services/pii_redactor.py` 是自建版本
-- **引入价值**: 上游版本更完整（覆盖更多 PII 类型、跨回合编号稳定、中间件链自动传播），可替换自建版本
-- **适配工作量**: 低-中 — 对比两版本，合并或替换
+1. **Reasoning patches** — `patched_reasoning_chat.py` 和 `patched_anthropic.py` 手写了 reasoning_content 捕获和 multi-turn replay，上游已有声明式 `ReasoningCapabilities` 契约和 per-vendor patched classes
+2. **PII 脱敏** — 自建 `PIIRedactor` 仅覆盖正则匹配的自由文本和结构化数据，缺少 tool-result 边界脱敏和 memory 注入路径脱敏
+3. **Memory 检索** — `retrieval_relevance_enabled` 未启用，记忆注入基于时间排序而非相关性
+4. **Middleware 链** — `LoopDetection`、`SafetyFinishReason`、`ToolOutputBudget` 已在默认链（自动获得），`PiiRedaction` 通过 config 启用（`pii_redaction.enabled: true`）
 
-#### 2.5 记忆增强 ⭐⭐⭐
-- **上游**: 多项记忆改进
-  - **认知风格** (`user.cognitiveStyle`): 沉淀协作偏好（响应结构、详略程度）
-  - **相关性排序** (`retrieval_relevance_enabled`): IDF 加权查询覆盖率 + 置信度混合打分，CJK 二元组
-  - **容错存储** (`MarkdownMemoryStorage`): 损坏文件不崩溃，尽力恢复
-  - **Jev 预筛选**: 记忆更新前的 TypeSafe 信号分类
-- **Numina**: 通过 `memory_config_bridge.py` 使用基础 DeerMem，无高级特性
-- **引入价值**: 相关性排序直接提升记忆注入质量；认知风格让 AI 回复更贴合用户偏好
-- **适配工作量**: 低 — 配置驱动，`retrieval_relevance_enabled: true` 即可
+### Requirements
 
----
+**Reasoning Contract 迁移**
 
-### Tier 2 — 中等价值，可按需引入
+- R1. 在 `family_adapter_cache._generate_temp_config()` 生成的 per-family 临时 YAML 中写入 `reasoning:` 声明式契约块，包含 `thinking`、`dialect`、`effort` 字段
+- R2. 将 `config.yaml` 模型配置的 `use:` 字段指向上游 per-vendor patched classes（`deerflow.models.patched_deepseek:PatchedChatDeepSeek`、`deerflow.models.patched_stepfun:PatchedChatStepFun`、`deerflow.models.patched_openai:PatchedChatOpenAI`）
+- R3. 为 DashScope/Qwen 编写上游风格的 `patched_dashscope.py`（捕获 `reasoning_content` from streaming delta），替代现有通用的 `patched_reasoning_chat.py`
+- R4. 验证 `patched_anthropic.py` 是否可删除 — 上游 `_extract_text(thinking_sink=...)` 是否已满足下游 `reasoning_content` 需求
 
-#### 2.6 插件系统 (Plugin API) ⭐⭐
-- **上游**: 全栈插件框架
-  - `registry.plugin(PluginContribution(...))` 注册浏览器页面、会话动作、模型工具
-  - Manifest + 静态资源目录支持
-  - Host model invocation（插件可调用宿主模型）
-  - 示例: bookmarks, jev-context, jev-classify, jev-screening
-- **Numina**: 无插件系统；扩展通过 adapter 层或 MCP server
-- **引入价值**: 如果需要第三方扩展能力（如家庭自定义工具），这是正式路径
-- **适配工作量**: 高 — 需完整引入 extensions 框架 + 鉴权对齐
-- **建议**: 当前 MCP + skill 系统已满足需求，暂不急
+**PII 两层脱敏**
 
-#### 2.7 Guardrails 护栏 ⭐⭐
-- **上游**: `guardrails/` — 工具调用风险闸门
-  - TypeSafe (Jev) provider: 是非题判断工具调用风险
-  - `allowed_tools` 本地硬许可 + 远程风险评估
-  - fail_closed 策略
-- **Numina**: 工具安全依赖 `allowed-tools` in SKILL.md + PolicyGuard
-- **引入价值**: 为高风险操作（金融交易、数据删除）增加一层运行时风险评估
-- **适配工作量**: 中 — 需要 TypeSafe/Jev API key
+- R5. 通过配置启用上游 `PiiRedactionMiddleware`（在临时 YAML 中写入 `pii_redaction.enabled: true`），处理 free-text user message 和 tool-result 边界脱敏。注意：上游 `build_lead_runtime_middlewares()` 根据 config 自动实例化该中间件，**不得**通过 `custom_middlewares` 挂载（会触发类名去重 AssertionError）
+- R6. 保留 Numina `PIIRedactor.redact()` 对结构化 `FamilyContext` 的脱敏（资产/负债/成员名称、机构、金额）— 上游中间件不处理此类数据
+- R7. 为 PII 中间件生成 per-deployment `token_secret`（256-bit HMAC key，SHA-256 full output → hex），写入 per-family 临时配置
 
-#### 2.8 更多中间件 ⭐⭐
-- **上游**: 60+ 中间件，我们只用了少量
-- **值得引入的**:
-  - `read_before_write_middleware.py` — 写前强制读，防盲目覆盖
-  - `tool_receipt_middleware.py` — 工具调用收据/审计
-  - `loop_detection_middleware.py` — 循环检测（我们遇到过 agent 循环问题）
-  - `tool_output_budget_middleware.py` — 工具输出预算控制
-  - `clarification_middleware.py` — 智能澄清（agent 不确定时主动提问）
-  - `durable_context_middleware.py` — 持久上下文管理
-  - `safety_finish_reason_middleware.py` — 安全终止检测
-- **Numina**: 主要依赖 skill 层面的控制，中间件链较薄
-- **引入价值**: 增强 agent 运行的健壮性和安全性
-- **适配工作量**: 低-中 — 中间件按配置启用
+**Memory 增强**
 
-#### 2.9 知识检索增强 (RAGFlow) ⭐⭐
-- **上游**:
-  - Per-message knowledge scope selection
-  - Verifiable source citations（页码、摘录、可追溯）
-  - Knowledge scope enforcement at gateway/middleware/subagent
-- **Numina**: 无 RAGFlow 集成
-- **引入价值**: 如果未来需要家族知识库（财务文档、保险条款等），这是现成路径
-- **适配工作量**: 高 — 需部署 RAGFlow + 多租户隔离
+- R8. 在 `deerflow_config/base/config.yaml` 的 `memory.backend_config` 下启用 `retrieval_relevance_enabled: true`
+- R9. 保持 `memory_config_bridge.py` 不变 — ContextVar 传播修复是 Numina 多租户独有需求
 
-#### 2.10 调度器 (Scheduler) ⭐⭐
-- **上游**: 定时任务系统
-  - 按标题/prompt 搜索
-  - Interval task 管理
-  - Scheduled task runs 持久化
-- **Numina**: `scheduler_worker` 是自建 APScheduler 方案
-- **引入价值**: 统一调度入口（AI 定期报告、资产快照等）
-- **适配工作量**: 高 — 需与现有 scheduler_worker 合并或替换
+**Middleware 挂载**
 
-#### 2.11 更多 Community Tools / 搜索 Provider ⭐⭐
-- **上游新增**:
-  - Unbrowse web_fetch (JS 渲染 + Markdown 输出)
-  - Firecrawl async 迁移
-  - Tavily async 迁移
-  - InfoQuest async 迁移
-  - Image search: color + license 过滤
-  - 总计 20+ community providers (brave, exa, searxng, serper, tavily, jina_ai, ragflow, crawl4ai, etc.)
-- **Numina**: 使用 ddg_search + 有限的 web_search_providers 配置
-- **引入价值**: 多 provider 降级 + 专业搜索（金融数据、图片搜索）
-- **适配工作量**: 低 — 配置驱动
+- R10. 确认 `ToolOutputBudgetMiddleware` 已在默认链中（上游 `build_lead_runtime_middlewares()` 无条件添加），可选配置 `tool_output` 块调整预算参数
+- R11. 不将 `LoopDetectionMiddleware`、`SafetyFinishReasonMiddleware`、`ToolOutputBudgetMiddleware`、`PiiRedactionMiddleware` 加入 `custom_middlewares`（均在默认链或由 config 驱动，重复挂载会触发 AssertionError）
 
----
+### Scope Boundaries
 
-### Tier 3 — 长期价值，低优先级
+**Deferred for later (Phase 3)**
+- Subagent 委托系统 — 需确保 family_id ContextVar 传播到 subagent runtime
+- Guardrails 护栏 — 需要 TypeSafe/Jev API key
+- Scheduler 统一 — 需与现有 scheduler_worker 合并
 
-#### 2.12 Blob Storage 契约 ⭐
-- **上游**: 内容寻址 blob 存储（sha256, BlobRef, local_fs backend）
-- **Numina**: 用 storage package
-- **引入价值**: 大文件/图片/附件管理
-- **建议**: 当前 storage package 够用
-
-#### 2.13 Checkpoint Retention Service ⭐
-- **上游**: checkpoint 修剪服务（叶子节点修剪、恢复头保护）
-- **Numina**: 无自动修剪
-- **引入价值**: 长期运行的 checkpoint DB 大小控制
-- **建议**: 当 DB 增长成问题时再引入
-
-#### 2.14 Managed Models (Settings UI) ⭐
-- **上游**: 管理员可从 Settings → Models 管理共享模型
-- **Numina**: 模型配置在 config.yaml 或 AI config 页面
-- **引入价值**: 更友好的模型管理 UX
-- **建议**: 我们已有自建 AI 配置页面
-
-#### 2.15 IM Channels (WeChat, Slack, etc.) ⭐
-- **上游**: 微信二维码登录、飞书/Slack/Telegram/Discord/钉钉桥接
-- **Numina**: 纯 Web 端
-- **引入价值**: 如果需要微信/IM 接入
-- **建议**: 产品方向决策，非技术优先级
-
-#### 2.16 Auth 增强 ⭐
-- **上游**: Resource-level authorization, skill visibility filtering, plugin action auth
-- **Numina**: PolicyGuard 做角色/能力门控
-- **引入价值**: 更细粒度的权限控制
-- **建议**: 当前 PolicyGuard 满足需求
-
----
-
-## 3. 上游重要 Fix（值得通过升级获取）
-
-| Fix | 描述 | Numina 是否受影响 |
-|-----|------|-------------------|
-| `avoid quadratic think-block stripping` | 未关闭标签的二次复杂度修复 | ✅ 我们遇到过 thinking block 泄漏 |
-| `preserve response_metadata in dynamic_context` | 动态上下文复制时丢失元数据 | ✅ 可能影响 context 管理 |
-| `deep-merge when_thinking_enabled` | 旧路径 extra_body 浅合并导致键丢失 | ✅ GLM/Qwen thinking 配置可能受影响 |
-| `close pooled MCP sessions on shutdown` | 关闭时 MCP 连接泄漏 | ✅ 我们修过类似的 |
-| `isolate personal connections from deployment` | MCP 个人连接与部署配置隔离 | ✅ 多租户相关 |
-| `load skills off event loop` | 技能加载阻塞事件循环 | ✅ 大 skill 树时性能问题 |
-| `keep additional_kwargs through upload` | 上传后乐观气泡丢失引用 | 前端相关 |
-| `terminalize batches after exhausted leases` | Subagent batch 租约耗尽后终止 | 如果引入 subagent |
-
----
-
-## 4. 建议引入优先级路线图
-
-### Phase 1 — 低风险高收益（1-2 周）
-1. **Operator Prompt Overlay** — 纯配置，热更新提示词
-2. **Memory 增强** — `retrieval_relevance_enabled` + `cognitiveStyle`
-3. **Community Tools 扩展** — 添加更多 web_search/web_fetch providers
-4. **上游 bug fixes** — 通过 submodule 升级自动获取
-
-### Phase 2 — 中等投入（2-4 周）
-5. **Reasoning Contract** — 替代手写 thinking 补丁
-6. **PII Redaction 中间件** — 替换/合并自建版本
-7. **关键中间件引入** — loop_detection, tool_output_budget, safety_finish
-8. **HARNESS_VERSION 升级** — 追平到最新稳定版
-
-### Phase 3 — 战略投入（4-8 周）
-9. **Subagent 委托系统** — 复杂 skill 拆分
-10. **Guardrails** — 高风险工具调用保护
-11. **Scheduler 统一** — 合并自建 scheduler_worker
-
-### 暂缓
+**Outside this plan's identity**
 - Plugin 系统（MCP + skill 已够用）
 - RAGFlow 知识检索（需要产品决策）
 - IM Channels（需要产品方向）
 - Blob Storage（当前方案够用）
 
----
+### Outstanding Questions
 
-## 5. 升级风险评估
-
-| 风险 | 级别 | 缓解策略 |
-|------|------|----------|
-| sync_tool_patch.py 5 个 patch 签名变化 | 中 | 逐一验证上游目标函数 |
-| make_lead_agent() 签名变化 | 低 | CHANGELOG 未标记 breaking |
-| StreamEvent 类型变化 | 低 | 上游保持向后兼容 |
-| Extensions config_version 升级 | 低 | 配置迁移脚本 |
-| 新中间件与现有 adapter 冲突 | 中 | 在 staging 充分测试 |
-| Subagent 与多租户隔离冲突 | 高 | 需确保 family_id ContextVar 传播 |
+- Q1. `patched_anthropic.py` 可删除性需运行时验证 — `reasoning_content` 是否通过 `additional_kwargs` 传递到 `reasoning_delta` SSE 事件？(deferred to implementation)
+- Q2. DashScope/Qwen 的 `reasoning:` 块中 `dialect` 应设为 `openai_extra_body` 还是 `auto`？(deferred to implementation — `auto` 推断应能正确处理)
 
 ---
 
-## Outstanding Questions
+## Planning Contract
 
-1. **Subagent 多租户**: 上游 subagent 是否支持 per-family 隔离？需要验证 ContextVar 传播
-2. **Reasoning Contract 迁移**: 现有 patched_reasoning_chat.py 的 GLM/Qwen 特殊处理是否都能映射到契约格式？
-3. **PII Redaction 对比**: 自建 pii_redactor.py vs 上游 pii_redaction_middleware.py 功能覆盖差异？
-4. ~~**升级节奏**: 是追平到最新 HEAD 还是选择某个稳定 tag？~~ ✅ 已追平到 `712a11c0`
+### Key Technical Decisions
+
+KTD1. **两层 PII 方案（而非替代）** — 上游 `PiiRedactionMiddleware` 在 LangGraph agent 图内处理 `HumanMessage` 和 tool result 的 free-text 脱敏；Numina `PIIRedactor` 在 dispatch 前处理结构化 `FamilyContext`（资产/负债/成员数据）。两层互补：上游覆盖 agent 运行时的 PII 泄漏路径（tool boundary、memory enqueue、compaction），Numina 覆盖上游不知道的业务数据结构。
+
+KTD2. **Reasoning Contract 使用上游 per-vendor patched classes** — 不再维护通用的 `PatchedChatReasoning`，改为 config.yaml `use:` 字段指向上游对应的 patched class。上游已有 `PatchedChatDeepSeek`、`PatchedChatStepFun`、`PatchedChatOpenAI`（Gemini）、`PatchedChatMiMo`、`PatchedChatMiniMax`。DashScope/Qwen 需新写 `patched_dashscope.py`，因为上游没有通用 OpenAI-compatible reasoning capture class。
+
+KTD3. **中间件均在默认链或由 config 驱动** — 上游 `build_lead_runtime_middlewares()` 包含：`LoopDetectionMiddleware`（无条件）、`SafetyFinishReasonMiddleware`（条件）、`ToolOutputBudgetMiddleware`（无条件）、`PiiRedactionMiddleware`（`pii_redaction.enabled: true` 时）、`InputSanitizationMiddleware`（无条件）。Numina 自动获得这些中间件，**不得**添加到 `custom_middlewares`（会触发类名去重 AssertionError）。
+
+KTD4. **`reasoning:` 块写入 per-family 临时 YAML** — Numina 的多租户架构要求每个家庭有独立的 model config。`family_adapter_cache._generate_temp_config()` 必须在生成的临时 YAML 中写入 `reasoning:` 块（基于家庭的 `ai_provider` 配置），而非仅在 `base/config.yaml` 模板中配置。
+
+KTD5. **`token_secret` 使用 deployment-level 固定值** — PII 中间件的 HMAC key 使用 per-deployment 固定值（从 `SECRET_KEY` 派生或独立生成），而非 per-family 动态生成。所有家庭共享同一 `token_secret`，PII 占位符在同一部署内跨家庭稳定。
+
+### High-Level Technical Design
+
+```mermaid
+flowchart TB
+    subgraph "Per-Family Config Generation"
+        A[family_adapter_cache._generate_temp_config] -->|writes| B[temp config.yaml]
+        B -->|includes| C["reasoning: block<br/>(thinking, dialect, effort)"]
+        B -->|includes| D["pii_redaction.token_secret"]
+        B -->|includes| E["memory.backend_config<br/>.retrieval_relevance_enabled: true"]
+    end
+
+    subgraph "Middleware Chain (all config-driven — DO NOT add to custom_middlewares)"
+        F[build_lead_runtime_middlewares — default chain] --> F1[LoopDetection ✅ auto]
+        F --> F2[SafetyFinishReason ✅ auto]
+        F --> F3[TokenBudget ✅ auto]
+        F --> F4[InputSanitization ✅ auto]
+        F --> F5[ToolOutputBudget ✅ auto]
+        F --> F6["PiiRedaction ✅ config-driven<br/>(pii_redaction.enabled: true)"]
+    end
+
+    subgraph "Reasoning Model Routing"
+        H[config.yaml use: field] -->|deepseek| H1[upstream PatchedChatDeepSeek]
+        H -->|stepfun| H2[upstream PatchedChatStepFun]
+        H -->|gemini| H3[upstream PatchedChatOpenAI]
+        H -->|dashscope/qwen| H4[new patched_dashscope.py]
+        H -->|anthropic| H5[ChatAnthropic + verify]
+    end
+
+    subgraph "PII Two-Layer"
+        I[RunPipeline.run_skill] -->|structured| I1[PIIRedactor.redact — FamilyContext]
+        I -->|dispatch| I2[DeerFlow agent graph]
+        I2 -->|model-call boundary| I3[PiiRedactionMiddleware — free text]
+        I2 -->|tool-result boundary| I3
+    end
+```
+
+---
+
+## Implementation Units
+
+### U1. Reasoning Contract — per-family config + model routing
+
+**Goal:** 将 Numina 的 reasoning 配置从手写 patch 迁移到上游声明式 `ReasoningCapabilities` 契约。
+
+**Requirements:** R1, R2, R3, R4
+
+**Dependencies:** none
+
+**Files:**
+- `server/apps/agent/services/deerflow_adapter/family_adapter_cache.py` — 在 `_generate_temp_config()` 中写入 `reasoning:` 块
+- `server/apps/agent/deerflow_config/base/config.yaml` — 更新模型 `use:` 字段指向上游 patched classes
+- `server/apps/agent/services/deerflow_adapter/patched_dashscope.py` — 新建，上游风格的 DashScope/Qwen reasoning_content 捕获
+- `server/apps/agent/services/deerflow_adapter/patched_reasoning_chat.py` — 标记废弃或删除（被 `patched_dashscope.py` + 上游 classes 替代）
+- `server/apps/agent/services/deerflow_adapter/patched_anthropic.py` — 验证后可删除
+- `server/apps/agent/services/deerflow_adapter/client_factory.py` — 更新模型路由逻辑
+- `server/packages/core/model_entry.py` — 更新 `_THINKING_CLASS_OVERRIDES` 映射
+
+**Approach:**
+1. 在 `_generate_temp_config()` 中，根据家庭 `ai_provider` 的 `thinking_supported` 标志和 provider 类型，生成对应的 `reasoning:` 块：
+   - `openai_compatible` + thinking → `reasoning: {thinking: optional, dialect: openai_extra_body}`
+   - `anthropic` + thinking → `reasoning: {thinking: optional, dialect: anthropic}`
+   - non-thinking → `reasoning: {thinking: unsupported}` (或省略)
+2. 更新 `base/config.yaml` 模板中各模型的 `use:` 字段：
+   - DeepSeek → `deerflow.models.patched_deepseek:PatchedChatDeepSeek`
+   - StepFun → `deerflow.models.patched_stepfun:PatchedChatStepFun`
+   - Gemini → `deerflow.models.patched_openai:PatchedChatOpenAI`
+   - DashScope/Qwen → `services.deerflow_adapter.patched_dashscope:PatchedChatDashScope`（新建）
+   - Anthropic → `langchain_anthropic:ChatAnthropic`（验证后可用原生）
+3. 编写 `patched_dashscope.py`：参考上游 `patched_deepseek.py` 模式，override `_convert_chunk_to_generation_chunk` 捕获 `reasoning_content`，override `_get_request_payload` 做 multi-turn replay
+4. 验证 Anthropic：在测试环境中确认 `ChatAnthropic` + DeerFlow `_extract_text(thinking_sink=...)` 是否能正确传递 `reasoning_content` 到下游 SSE 事件
+
+**Patterns to follow:**
+- 上游 `backend/packages/harness/deerflow/models/patched_deepseek.py` — reasoning_content 捕获 + replay 模式
+- 上游 `backend/packages/harness/deerflow/models/patched_openai.py` — thought_signature 保留模式
+- 上游 `config/model_config.py:ReasoningCapabilities` — 声明式契约 schema
+
+**Test scenarios:**
+- DashScope/Qwen thinking 模型 streaming 返回 `reasoning_content`，验证捕获到 `additional_kwargs["reasoning_content"]`
+- DeepSeek thinking 模型使用上游 `PatchedChatDeepSeek`，验证 streaming + multi-turn replay
+- Anthropic thinking 模型验证 `reasoning_content` 通过 `_extract_text(thinking_sink)` 正确传递
+- per-family config 生成的临时 YAML 包含正确的 `reasoning:` 块（不同 provider 类型）
+- 非 thinking 模型不受影响（无 `reasoning:` 块或 `thinking: unsupported`）
+
+**Verification:**
+- `uv run pytest tests/agent/unit/ -v` — 现有 reasoning/thinking 相关测试通过
+- 手动测试：在 `/ai/chat` 中使用 Qwen/DeepSeek/Anthropic thinking 模型，验证 thinking 内容在 UI 中正确显示为 ChainOfThought 卡片
+
+---
+
+### U2. PII 两层脱敏 — 上游中间件 + 结构化保留
+
+**Goal:** 在 agent 图内启用上游 `PiiRedactionMiddleware` 处理 free-text 脱敏，同时保留 Numina `PIIRedactor` 处理结构化 `FamilyContext`。
+
+**Requirements:** R5, R6, R7
+
+**Dependencies:** none
+
+**Files:**
+- `server/apps/agent/services/deerflow_adapter/family_adapter_cache.py` — 生成 `pii_redaction.token_secret` 到临时配置
+- `server/apps/agent/app/config.py` — 添加 `PII_REDACTION_ENABLED` 配置项（默认 `true`）
+- `server/tests/agent/unit/test_pii_redactor.py` — 确认结构化脱敏测试不受影响
+
+**Approach:**
+1. 在 `AgentSettings` 中添加 `PII_REDACTION_ENABLED: bool = True` 开关
+2. `token_secret` 从 `SECRET_KEY` 派生（SHA-256 hash → full 32 bytes → hex = 64 chars），确保 per-deployment 稳定
+3. 在 `_generate_temp_config()` 中写入 `pii_redaction: {enabled: true, token_secret: "<derived>"}` — 上游 `build_lead_runtime_middlewares()` 根据此 config 自动实例化 `PiiRedactionMiddleware`，**无需**在 `client_factory.py` 中手动挂载
+4. `PIIRedactor.redact()` 在 `RunPipeline.run_skill()` 中的调用保持不变 — 仍处理结构化 `FamilyContext`
+5. 验证两层不冲突：`PIIRedactor` 在 dispatch 前运行（system prompt 注入前），`PiiRedactionMiddleware` 在 agent 图 model-call 边界运行
+
+**Patterns to follow:**
+- 上游 `agents/middlewares/pii_redaction_middleware.py:PiiRedactionMiddleware` — 中间件接口
+- 上游 `agents/middlewares/pii_redaction_middleware.py:PiiRedactionConfig` — 配置 schema
+- 上游 `build_lead_runtime_middlewares()` 的 config-driven 中间件实例化模式
+
+**Test scenarios:**
+- 用户消息包含 email/手机号/API key → `PiiRedactionMiddleware` 替换为 HMAC 占位符
+- MCP tool result 包含身份证号 → 中间件在 tool boundary 脱敏
+- 结构化 `FamilyContext`（资产名称、成员名）→ `PIIRedactor` 在 dispatch 前脱敏（不受影响）
+- `PII_REDACTION_ENABLED=false` → 中间件不挂载，仅 `PIIRedactor` 工作
+- 同一 PII 在多轮对话中映射到相同占位符（HMAC 确定性）
+
+**Verification:**
+- `uv run pytest tests/agent/ -v` — 所有 agent 测试通过
+- `numina-sim-test` Area 11 对抗性测试中 PII 相关 case 通过
+
+---
+
+### U3. Memory 增强 — 启用 `retrieval_relevance_enabled`
+
+**Goal:** 启用 DeerMem 的相关性排序，提升记忆注入质量。
+
+**Requirements:** R8, R9
+
+**Dependencies:** none
+
+**Files:**
+- `server/apps/agent/deerflow_config/base/config.yaml` — 在 `memory.backend_config` 下添加 `retrieval_relevance_enabled: true`
+
+**Approach:**
+1. 在 `memory.backend_config` 下添加：
+   ```yaml
+   memory:
+     backend_config:
+       retrieval_relevance_enabled: true
+       retrieval_relevance_weight: 0.5  # 0.0 = confidence only, 1.0 = relevance only
+   ```
+2. `memory_config_bridge.py` 无需修改 — 它桥接的是 ContextVar 传播，不影响 backend config 内容
+3. CJK 二元组分词已内置于 DeerMem 的 `retrieval_relevance` 实现中，无需额外配置
+
+**Patterns to follow:**
+- 上游 `agents/memory/backends/deermem/deermem/config.py:DeerMemConfig` — 配置字段定义
+
+**Test scenarios:**
+- 记忆注入返回的事实按查询相关性排序（而非纯时间排序）
+- 中文查询能正确匹配中文记忆（CJK 二元组覆盖）
+- `memory_config_bridge.py` ContextVar 传播不受影响（多租户隔离）
+
+**Verification:**
+- `uv run pytest tests/agent/unit/test_memory_config_bridge.py -v` — bridge 测试通过
+- 手动测试：在有记忆的家庭中发起对话，验证注入的记忆与查询相关
+
+---
+
+### U4. 中间件链验证 + 可选配置
+
+**Goal:** 确认 Phase 1 升级后所有保护性中间件已在默认链中生效，可选调整预算参数。
+
+**Requirements:** R10, R11
+
+**Dependencies:** none
+
+**Files:**
+- `server/apps/agent/deerflow_config/base/config.yaml` — 可选：添加 `tool_output` 配置块（预算参数）
+- `server/tests/agent/unit/test_middleware_chain.py` — 新建或更新，验证中间件链正确性
+
+**Approach:**
+1. **无需挂载任何中间件** — `ToolOutputBudgetMiddleware`、`PiiRedactionMiddleware`、`LoopDetectionMiddleware`、`SafetyFinishReasonMiddleware` 均已在 `build_lead_runtime_middlewares()` 默认链中（config-driven），详见 KTD3
+2. **关键约束**: **不得**将上述中间件添加到 `custom_middlewares`（会触发类名去重 `AssertionError`）
+3. 可选：在 `base/config.yaml` 中配置 `tool_output` 块设定预算参数（默认值通常足够）
+4. 编写测试验证中间件链无重复、config 驱动的中间件正确启用
+
+**Patterns to follow:**
+- 上游 `build_lead_runtime_middlewares()` 的 config-driven 中间件实例化模式
+
+**Test scenarios:**
+- 验证 `LoopDetection`、`SafetyFinishReason`、`ToolOutputBudget` 在默认链中（无 AssertionError）
+- 验证 `pii_redaction.enabled: true` 时 `PiiRedactionMiddleware` 自动启用
+- 工具返回超大输出（>budget）→ `ToolOutputBudgetMiddleware` 将输出外部化到文件
+- 工具返回正常大小输出 → 不受影响
+
+**Verification:**
+- `uv run pytest tests/agent/ -v` — 所有 agent 测试通过
+- 验证中间件链无 AssertionError
+
+---
+
+### U5. Adapter 层文档更新 + 兼容性验证
+
+**Goal:** 更新 adapter 层文档反映 Phase 2 变更，运行完整兼容性检查。
+
+**Requirements:** Verification support for R1-R11 (documentation only)
+
+**Dependencies:** U1, U2, U3, U4
+
+**Files:**
+- `server/apps/agent/CLAUDE.md` — 更新 adapter 文件职责表、中间件说明
+- `.claude/skills/deerflow-agent-dev/references/adapter-layer.md` — 更新 patch 列表和文件职责
+- `server/apps/agent/deerflow_config/HARNESS_VERSION` — 确认无需更新（Phase 1 已追平）
+
+**Approach:**
+1. 更新 `agent/CLAUDE.md` adapter package layout：
+   - 添加 `patched_dashscope.py` 说明
+   - 标注 `patched_reasoning_chat.py` 为 deprecated（或已删除）
+   - 标注 `patched_anthropic.py` 为 deprecated（或已删除）
+2. 更新中间件说明：明确哪些在默认链（自动获得）、哪些需显式挂载
+3. 更新 skill reference 的 adapter-layer.md
+4. 运行完整兼容性检查清单（sync_tool_patch 4 patches、make_lead_agent 签名等）
+
+**Test scenarios:**
+- Test expectation: none — 文档更新，无行为变更
+
+**Verification:**
+- 文档与代码一致
+- `uv run pytest tests/agent/ -v` — 全量测试通过
+- `uv run ruff check apps/agent/` — lint 通过
+
+---
+
+## Verification Contract
+
+| Gate | Command | Applies to |
+|------|---------|------------|
+| Agent unit tests | `cd server && uv run pytest tests/agent/ -v` | U1-U5 |
+| Agent lint | `cd server && uv run ruff check apps/agent/` | U1-U4 |
+| Memory bridge tests | `cd server && uv run pytest tests/agent/unit/test_memory_config_bridge.py -v` | U3 |
+| PII redactor tests | `cd server && uv run pytest tests/agent/unit/test_pii_redactor.py -v` | U2 |
+| Middleware chain test | `cd server && uv run pytest tests/agent/unit/test_middleware_chain.py -v` | U4 |
+| Full server tests | `cd server && uv run pytest tests/ -v` | U5 (final) |
+| Sim test Area 11 | `numina-sim-test` adversarial security tests | U2, U5 |
+
+---
+
+## Definition of Done
+
+**Global:**
+- 所有 Verification Contract gates 通过
+- 现有 thinking/reasoning 功能无回归（Qwen/DeepSeek/Anthropic thinking 模型正常工作）
+- PII 脱敏两层方案验证：结构化 + free-text 均覆盖
+- Memory 检索返回相关性排序的结果
+- 中间件链无 AssertionError、无重复
+- `agent/CLAUDE.md` 和 skill reference 文档已更新
+- 无新增 monkey-patch（使用上游 patched classes 或新建上游风格的 patch）
+
+**Per-unit:**
+- U1: reasoning_content 在所有 provider 的 streaming 中正确捕获和传递
+- U2: 两层 PII 脱敏独立工作、不冲突
+- U3: `retrieval_relevance_enabled: true` 配置生效
+- U4: `ToolOutputBudgetMiddleware` 正确挂载，默认链中间件无重复
+- U5: 文档与代码一致，全量测试通过
+
+**Cleanup:**
+- 废弃文件（`patched_reasoning_chat.py`、`patched_anthropic.py`）已删除或明确标注 deprecated
+- 临时调试代码、实验性代码已移除
 
 ---
 
@@ -301,9 +390,55 @@ topic: deerflow-gap-analysis
 - Skill 加载移出事件循环 (性能)
 - 多个中间件安全性修复
 
-### 下一步 (Phase 2)
+---
 
-1. **Reasoning Contract** — 替代 `patched_reasoning_chat.py`
-2. **PII Redaction 中间件** — 评估是否替换自建版本
-3. **可选中间件引入** — loop_detection, tool_output_budget, safety_finish
-4. **Memory 增强** — `retrieval_relevance_enabled`, `cognitiveStyle`
+## 当前 Numina 已使用的 DeerFlow 能力
+
+| 能力 | 上游路径 | Numina 用法 |
+|------|----------|-------------|
+| DeerFlowClient | `client.py` | 同步 generator stream()，ThreadPoolExecutor 桥接 |
+| StreamBridge | `runtime/stream_bridge/` | Redis-only 跨进程事件分发 |
+| RunManager | `runtime/runs/manager.py` | Run 生命周期管理 |
+| make_lead_agent() | `agents/lead_agent/agent.py` | 构建 LangGraph agent 图 |
+| create_chat_model() | `models/factory.py` | 多供应商模型路由 |
+| Checkpoint (SQLite) | `runtime/checkpointer/` | Supabase PostgreSQL 持久化 |
+| ExtensionsConfig | `config/extensions_config.py` | Skill enable/disable |
+| Skill Storage | `skills/storage.py` | LocalSkillStorage scanner |
+| MultiServerMCPClient | `mcp/` | MCP server 连接管理 |
+| Sandbox | `sandbox/` | write_file / read_file / str_replace |
+
+**Numina 自建层**（不在上游、属于项目独有）：
+
+| 自建模块 | 职责 |
+|----------|------|
+| FamilyAdapterCache + EffectiveConfigBuilder | 按家庭多租户隔离 |
+| PolicyGuard | 角色/能力权限门控 |
+| sync_tool_patch.py (4 patches) | ContextVar 传播、MCP 代理、工具过滤 |
+| 19 个 Builtin Skills | 领域专属 (asset-report, finance-coach, etc.) |
+| 8 个 Dispatch Apps | numina, asset-report, import-parse, finance-coach, etc. |
+| 三态熔断器 | FSM + 4 adapters cascade retry |
+| SSE Gateway | R1 allowlist + 鉴权 |
+| Patched Reasoning (Phase 2 迁移) | Qwen/Anthropic extended thinking 统一 |
+| PIIRedactor (Phase 2 两层方案) | 结构化 FamilyContext 脱敏 |
+| RunContext | ContextVar facade |
+| memory_config_bridge.py | DeerMem ContextVar 传播（多租户独有） |
+
+---
+
+## 升级风险评估
+
+| 风险 | 级别 | 缓解策略 |
+|------|------|----------|
+| `patched_dashscope.py` 新写的 streaming capture 与上游行为不一致 | 中 | 参考上游 `patched_deepseek.py` 模式 + 完整测试覆盖 |
+| per-family `reasoning:` 块生成逻辑 edge case | 中 | 覆盖所有 provider 类型的单元测试 |
+| `PiiRedactionMiddleware` 与 `PIIRedactor` 脱敏范围重叠 | 低 | 两层处理不同数据（free-text vs structured），不冲突 |
+| `ToolOutputBudgetMiddleware` 与 sandbox 文件路径交互 | 低 | 使用上游默认配置，sandbox 路径由 ContextVar 隔离 |
+| Anthropic `patched_anthropic.py` 删除后 thinking 内容丢失 | 中 | 先验证 `_extract_text(thinking_sink)` 路径，再决定是否删除 |
+
+---
+
+## 下一步 (Phase 3 — 未来)
+
+1. **Subagent 委托系统** — 复杂 skill 拆分（需确保 family_id ContextVar 传播）
+2. **Guardrails** — 高风险工具调用保护（需 TypeSafe/Jev API key）
+3. **Scheduler 统一** — 合并自建 scheduler_worker
