@@ -1923,7 +1923,7 @@ Keep the tone warm, like a chat between family members.`,
   },
   role: {
     owner: 'Owner',
-    admin: 'Adult',
+    member: 'Member',
     child: 'Child',
   },
   familyPromo: {

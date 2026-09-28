@@ -2195,7 +2195,7 @@ export default {
   },
   role: {
     owner: '管理员',
-    admin: '大人',
+    member: '成员',
     child: '儿童',
   },
   familyPromo: {
