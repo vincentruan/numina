@@ -22,38 +22,43 @@ Numina 是一个完全自托管的家庭资产可视化管理系统，帮助家�
 ### 核心特性
 
 **资产管理**
-- **全资产覆盖** — 实物资产（房产、车辆、数码等）+ 金融资产（存款、基金、股票等），支持多币种
-- **负债管理** — 房贷、车贷、信用卡追踪，自动计算净资产
+- **全资产覆盖** — 实物资产（房产、车辆、数码等）+ 金融资产（存款、基金、股票等），支持多币种；多格式智能导入（PDF 账单 / 截图 / Excel，AI 自动分类识别）
+- **负债管理** — 房贷、车贷、信用卡追踪，支持 4 种还款方式（等额本息/等额本金等）与历史追溯，自动计算净资产
 - **租约管理** — 房东收租 / 租客付租 / 双角色视图，押金与到期提醒
+- **旅行规划** — 多日行程时间线 + 日程安排，跨天项（酒店、租车）自动展开，多币种记账 / AA 分摊 / 小票 AI 识别，费用同步日程
+- **心愿关联** — 心愿兑现后自动关联实际资产，双向跳转
 - **数据可视化** — 财务仪表盘、净资产趋势、资产配置分布、日均成本分析
 
 **AI 能力**
-- **对话式财务助理** — 基于 DeerFlow 的多 Provider AI 聊天，支持 Web 搜索和 MCP 工具
+- **对话式财务助理** — 基于 DeerFlow 的多 Provider AI 聊天（OpenAI / Anthropic / Gemini / Ollama），支持 Web 搜索和 MCP 工具
 - **财务教练** — AI 驱动的个性化财务建议
 - **资产报告** — AI 自动生成资产分析报告
 - **心愿建议** — 智能心愿评估与建议
-- **仪表盘叙事** — AI 驱动的财务摘要与洞察
+- **仪表盘叙事** — AI 生成月度财务摘要，自然语言解读数据变化
 - **PDF / 图片导入** — 扫描文档 AI 识别，批量导入资产
+- **任务断线续传** — AI 任务在服务端持续运行，前端重连后自动回放事件，关浏览器不丢进度
 - **AI 学习导师** — 基于知识图谱的 AI 辅导，支持中文对话、互动教学和自适应评估
 
 **家庭与儿童**
 - **多用户家庭** — 成员各自记录，家庭级汇总视图，数据完全隔离
-- **儿童激励系统** — 家务赚星星币、心愿兑现、盲盒抽奖、三级货币体系
-- **财商素养** — 学习场景、徽章系统、AI 周报
+- **儿童激励系统** — 家务赚星星币、心愿兑现、盲盒抽奖、三级货币体系；支持个人头像（图片 / 3D 图标 / 表情）
+- **财商素养** — 场景学习、徽章系统、AI  literacy 周报（行为证据 + 家庭活动建议）
 - **AI 学习操作系统 (Learning OS)** — 基于 os-taxonomy 知识图谱的儿童学习系统，覆盖数学、科学、英语等 8 大学科 1,590 个知识点
   - **知识地图** — 按学科和领域可视化的知识图谱，展示前置/后续知识关系
-  - **AI 辅导对话** — DeerFlow 驱动的流式 AI 导师，中文对话优先，互动教学 + 评估
+  - **AI 辅导对话** — DeerFlow 驱动的流式 AI 导师，中文对话优先，互动教学 + 评估，输出经安全过滤
   - **掌握度追踪** — 7 级状态机（locked → available → learning → assessing → mastered → review），间隔重复算法
+  - **学习路径与成长** — 家长指派任务自动按前置依赖排序，XP/等级体系（🌱种子→🌟大师）+ 里程碑奖励；孩子也可自主探索，超龄时弹出难度提示
   - **双语支持** — 英文原文 + LLM 按需中文翻译，学科术语保留英文
   - **家长看板** — 孩子学习概览、任务派发、审核队列、学习时长统计
   - **连续失败提醒** — 同一知识点连续 3 次未通过自动通知家长
-- **家庭宣言** — 可签署的家庭财务目标与承诺
+- **家庭宣言** — 可签署的家庭财务目标与承诺，含书法签名、家族徽章、签署仪式可视化
 
 **安全与体验**
 - **隐私安全** — 完全自托管，JWT 认证，bcrypt 加密，文件加密存储
 - **移动优先** — 响应式 H5 设计，适配手机浏览器
 - **暗黑模式** — 自动跟随系统主题
 - **一键部署** — Docker Compose 快速启动，支持 GHCR 预构建镜像
+- **PWA** — 可安装到桌面，离线查看仪表盘与资产，推送通知
 
 ## 技术栈
 
@@ -61,8 +66,8 @@ Numina 是一个完全自托管的家庭资产可视化管理系统，帮助家�
 |------|------|
 | 前端 | Vue 3 + TypeScript + Vite + Vant 4 + ECharts + Pinia |
 | 后端 | Python 3.12+ · FastAPI · SQLAlchemy 2.0 · Alembic |
-| AI Agent | Python 3.12+ · DeerFlow · LangChain · 多 Provider (OpenAI / Anthropic / Ollama) |
-| 流式通信 | Redis Streams (跨进程事件分发，Last-Event-ID 重连) |
+| AI Agent | Python 3.12+ · DeerFlow · LangChain · 多 Provider (OpenAI / Anthropic / Gemini / Ollama) |
+| 流式通信 | Redis Streams + 统一缓存层 (跨进程事件分发与共享，Last-Event-ID 重连) |
 | 数据库 | SQLite (默认) · PostgreSQL · MySQL |
 | 部署 | Docker Compose · Nginx · GHCR 镜像 |
 
@@ -115,6 +120,8 @@ make deploy-images    # 拉取预构建镜像
 
 SQLite 数据库位于 `./.numina/data/db/numina.db`，定期备份此文件即可。
 
+> **路径说明：** 环境变量中的 `DATABASE_URL` 使用容器内路径 (`/app/.numina/data/...`)，通过 Docker volume 映射到宿主机 `.numina/data/`。实际数据库文件在宿主机的 `.numina/data/db/numina.db`。
+
 ```bash
 cp ./.numina/data/db/numina.db ./backups/numina-$(date +%Y%m%d).db
 ```
@@ -139,12 +146,13 @@ numina/
 │   │   ├── agent/              # AI 分析微服务 (DeerFlow, :8001)
 │   │   └── scheduler_worker/   # 定时任务执行器 (:8002)
 │   ├── packages/               # 共享 Python 包
-│   │   ├── core/               # 基础设施 (配置、Snowflake ID、熔断器)
+│   │   ├── core/               # 基础设施 (配置、Snowflake ID、熔断器、缓存)
 │   │   ├── db/                 # SQLAlchemy 模型与数据库会话
 │   │   ├── domain/             # 领域逻辑与计算
 │   │   ├── security/           # 认证、加密、JWT
 │   │   ├── storage/            # 文件存储与加密
-│   │   └── stream_bridge/      # DeerFlow 跨进程事件分发 (Redis Streams)
+│   │   ├── stream_bridge/      # DeerFlow 跨进程事件分发 (Redis Streams)
+│   │   └── os_taxonomy/        # 开源知识图谱数据 (学科分类、学习主题)
 │   ├── scripts/                # 数据种子脚本 (知识图谱导入、徽章定义)
 │   ├── tests/                  # 统一测试集
 │   └── pyproject.toml
