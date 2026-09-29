@@ -91,6 +91,16 @@
       <!-- No report for this week -->
       <div v-else class="empty-state">
         <EmptyState image="search" :description="t('literacyReport.noReport')" />
+        <van-button
+          plain
+          type="primary"
+          size="small"
+          icon="replay"
+          :loading="stream.status.value === 'streaming' || stream.status.value === 'connecting'"
+          @click="regenerate"
+        >
+          {{ t('literacyReport.generate') }}
+        </van-button>
       </div>
 
       <!-- Regenerate button (bottom, only when a report exists or stream completed) -->

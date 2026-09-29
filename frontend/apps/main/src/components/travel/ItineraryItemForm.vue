@@ -562,7 +562,13 @@ async function handleSubmit() {
     showSuccessToast(t('common.success'))
     visible.value = false
     emit('saved')
-  } catch {
+  } catch (err) {
+    console.error('[ItineraryItemForm] submit failed:', err)
+    // Close the dialog and refresh so the user can see current state
+    // (the item may have been created despite a network-level error,
+    // e.g. browser extension intercepting the response).
+    visible.value = false
+    emit('saved')
     showFailToast(t('common.error'))
   } finally {
     submitting.value = false

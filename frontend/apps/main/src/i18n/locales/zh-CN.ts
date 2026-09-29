@@ -3809,6 +3809,7 @@ export default {
     history: '历史报告',
     loadFailed: '加载失败，请重试',
     retry: '重试',
+    generate: '生成周报',
     regenerate: '重新生成',
     generating: '正在生成周报…',
     generateFailed: '周报生成失败',
