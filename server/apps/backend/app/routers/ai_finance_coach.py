@@ -7,6 +7,7 @@
 
 import json
 
+import httpx
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
@@ -14,15 +15,12 @@ from sqlalchemy.orm import Session
 from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.database import SessionLocal, get_db
 from apps.backend.app.errors import AppError, ErrorCode
-from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.bridge_consumer import (
-    consume_task_stream,
-    get_shared_bridge,
     trigger_and_stream,
 )
 from apps.backend.app.services.chat_session import ChatSessionService
@@ -73,7 +71,9 @@ async def trigger_finance_coach(
     if not force:
         cached = await latest_by_skill(db, current_user.family_id, "finance-coach")
         if (
-            await is_cache_fresh(cached, "finance-coach", family_id=current_user.family_id)
+            await is_cache_fresh(
+                cached, "finance-coach", family_id=current_user.family_id
+            )
             and cached is not None
         ):
             return JSONResponse(
@@ -97,35 +97,16 @@ async def trigger_finance_coach(
     if not existing:
         _check_ai_enabled(db, current_user.family_id)
     if existing:
-        # Already running — resume via bridge consumer ONLY.
-        # The original caller's run is still active and pushing events to the
-        # bridge.  Starting a duplicate run would re-trigger the agent (500
-        # ConflictError) and the failing run's publish_end would kill the
-        # shared bridge stream for ALL subscribers.
+        # Already running — clear stale run_id (from auto-promote or previous
+        # attempt) so trigger_and_stream can set a fresh one.  If the agent is
+        # still running the old request, trigger_agent_run will return 409 and
+        # we fall back to a busy response (original lifecycle consumer will
+        # complete the task).
         task = existing
         session_id = str(task.session_id) if task.session_id else str(task.id)
-        session = (
-            db.query(AIChatSession)
-            .filter_by(id=session_id, family_id=current_user.family_id)
-            .first()
-        )
-        if not session:
-            raise AppError(ErrorCode.NOT_FOUND)
-
-        shared_bridge = get_shared_bridge()
-        last_event_id = request.headers.get("Last-Event-ID")
-        stream_gen = consume_task_stream(
-            task_id=str(task.id),
-            family_id=current_user.family_id,
-            last_event_id=last_event_id,
-            run_id=None,
-            bridge=shared_bridge,
-        )
-        return StreamingResponse(
-            tracked_sse_stream(str(task.id), stream_gen),
-            media_type="text/event-stream",
-            headers={"X-Accel-Buffering": "no"},
-        )
+        if task.run_id:
+            task.run_id = None
+            db.commit()
     else:
         # No running task - create new session and task
         session = await ChatSessionService.create_session(
@@ -235,6 +216,26 @@ async def trigger_finance_coach(
             on_result=_persist_coach_result,
         )
     except Exception as e:
+        # 409 from agent = another run is already active for this thread.
+        # Don't fail the task — the existing run (and its lifecycle consumer)
+        # will complete it.  Original caller's lifecycle consumer is still
+        # subscribed to the bridge and will persist the result on completion.
+        if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 409:
+            logger.info(
+                "[finance-coach] agent busy (409) task=%s — existing run still active",
+                task_id,
+            )
+
+            async def _busy_stream():
+                yield (f"event: custom\ndata: {json.dumps({'type': 'coach.busy'})}\n\n")
+                yield "event: end\ndata: null\n\n"
+
+            return StreamingResponse(
+                tracked_sse_stream(task_id, _busy_stream()),
+                media_type="text/event-stream",
+                headers={"X-Accel-Buffering": "no"},
+            )
+
         logger.warning(
             "[finance-coach] trigger failed task=%s err=%s", task_id, e, exc_info=True
         )

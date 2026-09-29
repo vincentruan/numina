@@ -73,18 +73,22 @@ def test_generate_force_bypasses_cache(client, auth_headers, db_session):
     upsert_skill_result(db_session, family_id, "finance-coach", {"suggestions": []})
     db_session.commit()
 
-    async def _fake_stream(*args, **kwargs):
-        yield "event: custom\ndata: {}\n\n"
-        yield "event: end\ndata: null\n\n"
-
     class _FakeSession:
         id = "test-session-123"
+
+    async def _fake_trigger_and_stream(**kwargs):
+        from fastapi.responses import StreamingResponse
+
+        async def _gen():
+            yield "event: custom\ndata: {}\n\n"
+            yield "event: end\ndata: null\n\n"
+
+        return StreamingResponse(_gen(), media_type="text/event-stream")
 
     with patch("apps.backend.app.routers.ai_finance_coach.check_circuit_blocked", return_value=None), \
          patch("apps.backend.app.routers.ai_finance_coach.AITaskService") as task_svc, \
          patch("apps.backend.app.routers.ai_finance_coach.ChatSessionService") as sess_svc, \
-         patch("apps.backend.app.routers.ai_finance_coach.AgentClient") as agent_cls, \
-         patch("apps.backend.app.routers.ai_finance_coach.consume_task_stream", side_effect=_fake_stream):
+         patch("apps.backend.app.routers.ai_finance_coach.trigger_and_stream", side_effect=_fake_trigger_and_stream):
         task_svc.get_running_task.return_value = None
         task_svc.get_any_running_task.return_value = None
         task_svc.create_task.return_value = _make_fake_task()
@@ -93,16 +97,6 @@ def test_generate_force_bypasses_cache(client, auth_headers, db_session):
             return _FakeSession()
 
         sess_svc.create_session = _fake_create_session
-        agent_instance = agent_cls.return_value
-
-        async def _fake_post(*a, **kw):
-            class _R:
-                status_code = 200
-                text = "ok"
-                headers = {"Content-Location": "/internal/gateway/runs/finance-coach/t/run-123"}
-            return _R()
-
-        agent_instance.post = _fake_post
         resp = client.post(
             "/api/v1/ai/finance-coach/generate?force=true", headers=auth_headers
         )
