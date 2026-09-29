@@ -4,7 +4,7 @@
 # 参考 DeerFlow 的 Makefile 组织方式，针对 numina 的 uv + pnpm 双 workspace 结构裁剪：
 #   - 服务端：server/ 单 uv workspace，含 backend / agent / scheduler_worker 三个 app
 #   - 前端：frontend/ pnpm workspace，含 main / child 两个 app
-#   - Docker：docker-compose.yml (默认) / docker-compose.production.yml / docker-compose.dev.yml
+#   - Docker：docker-compose.yml (标准) / docker-compose.dev.yml (开发) / docker-compose.production.yml (GHCR)
 #
 # 约定：
 #   - 所有 dev-* 目标会阻塞终端（热重载服务），需手动运行，不要由自动化 agent 启动。
@@ -75,7 +75,7 @@ help:
 	@echo "  make setup         - 交互式初始化 (生成密钥 + .env + 数据目录 + 邀请码)"
 	@echo "  make setup-keys    - 仅生成所有安全密钥 (SECRET_KEY, 加密密钥等)"
 	@echo "  make setup-env     - 生成 .env 配置文件 (从模板)"
-	@echo "  make setup-env-db  - 切换数据库配置 (交互式选择 SQLite/PostgreSQL 模板)"
+	@echo "  make setup-env-db  - 切换部署模式 (production PostgreSQL / dev SQLite)"
 	@echo "  make setup-data    - 创建数据目录 (.numina/data/{db,uploads})"
 	@echo "  make setup-db      - 初始化数据库 (默认 SQLite; 可选 NUMINA_DB=mysql|postgres)"
 	@echo "  make setup-db-mysql     - 启动 MySQL 容器并初始化"
@@ -118,21 +118,27 @@ help:
 	@echo "  make migrate-revision m=msg - 生成新迁移 (autogenerate)"
 	@echo "  make migrate-down           - 回退一步"
 	@echo ""
-	@echo "Docker (默认 docker-compose.yml，访问 http://localhost):"
-	@echo "  make up            - 构建并启动全部服务"
-	@echo "  make down          - 停止并移除容器"
-	@echo "  make build-docker  - 仅构建镜像 (不启动)"
-	@echo "  make pull          - 拉取外部镜像 (nginx / mysql / postgres)"
-	@echo "  make ps            - 查看容器状态"
-	@echo "  make restart       - 重启全部服务"
-	@echo "  make logs          - 跟踪全部日志"
-	@echo "  make logs-backend  - 跟踪后端日志"
-	@echo "  make logs-agent    - 跟踪 agent 日志"
-	@echo "  make logs-worker   - 跟踪 worker 日志"
-	@echo "  make logs-frontend - 跟踪前端日志"
-	@echo "  make shell         - 进入 backend 容器 shell"
-	@echo "  make up-prod       - 使用 docker-compose.production.yml 启动"
-	@echo "  make down-prod     - 停止 production 容器"
+	@echo "Docker 部署:"
+	@echo "  标准 (docker-compose.yml, PostgreSQL + Redis):"
+	@echo "    make up            - 构建并启动全部服务"
+	@echo "    make down          - 停止并移除容器"
+	@echo "  开发 (docker-compose.dev.yml, SQLite, 无 Redis):"
+	@echo "    make up-dev        - 开发模式启动 (快速验证)"
+	@echo "    make down-dev      - 停止开发容器"
+	@echo "  通用:"
+	@echo "    make build-docker  - 仅构建镜像 (不启动)"
+	@echo "    make pull          - 拉取外部镜像 (nginx / postgres / redis)"
+	@echo "    make ps            - 查看容器状态"
+	@echo "    make restart       - 重启全部服务"
+	@echo "    make logs          - 跟踪全部日志"
+	@echo "    make logs-backend  - 跟踪后端日志"
+	@echo "    make logs-agent    - 跟踪 agent 日志"
+	@echo "    make logs-worker   - 跟踪 worker 日志"
+	@echo "    make logs-frontend - 跟踪前端日志"
+	@echo "    make shell         - 进入 backend 容器 shell"
+	@echo "  生产 (docker-compose.production.yml, GHCR 镜像):"
+	@echo "    make up-prod       - 拉取 GHCR 镜像并启动"
+	@echo "    make down-prod     - 停止 production 容器"
 	@echo ""
 	@echo "本地编译镜像 (CI 额度不足时替代方案):"
 	@echo "  make build-local   - 本地编译全部 Docker 镜像 (可指定 DOCKER_PLATFORM=linux/amd64)"
@@ -248,65 +254,43 @@ _validate-env:
 		echo "✓ .env 配置完整"; \
 	fi
 
-# ── DB 模式切换 ──────────────────────────────────────────
-# 自动检测当前 .env 的 DB 模式，交互式选择新模板
-# 用法: make setup-env-db [NUMINA_DB_MODE=docker-pgsql-host]
+# ── 部署模式切换 ──────────────────────────────────────────
+# 自动检测当前 .env 的部署模式, 交互式选择新模式
+# 用法: make setup-env-db [NUMINA_DB_MODE=production|dev]
 #
 # 模式列表:
-#   dev-sqlite          本地开发 + SQLite
-#   dev-pgsql-local     本地开发 + 本地 PostgreSQL (localhost)
-#   dev-pgsql-remote    本地开发 + 远程 PostgreSQL
-#   docker-sqlite       Docker 部署 + SQLite
-#   docker-pgsql-docker Docker 部署 + PostgreSQL 容器 (compose 网络)
-#   docker-pgsql-host   Docker 部署 + 宿主机/远程 PostgreSQL
+#   production    标准部署 (PostgreSQL + 可选 Redis)
+#   dev           开发部署 (SQLite, 无 Redis)
 
 setup-env-db:
 	@CURRENT_MODE=$$( \
 		if [ -f .env ]; then \
 			DB_URL=$$(grep '^DATABASE_URL=' .env 2>/dev/null | head -1 | cut -d= -f2-); \
-			if echo "$$DB_URL" | grep -q 'sqlite'; then \
-				if echo "$$DB_URL" | grep -q '/app/'; then echo "docker-sqlite"; \
-				else echo "dev-sqlite"; fi; \
-			elif echo "$$DB_URL" | grep -q 'numina-postgres'; then \
-				echo "docker-pgsql-docker"; \
-			elif echo "$$DB_URL" | grep -q 'host.docker.internal'; then \
-				echo "docker-pgsql-host"; \
-			elif echo "$$DB_URL" | grep -q 'localhost'; then \
-				echo "dev-pgsql-local"; \
-			else \
-				echo "dev-pgsql-remote"; \
-			fi; \
+			if echo "$$DB_URL" | grep -q 'sqlite'; then echo "dev"; \
+			else echo "production"; fi; \
 		else echo "none"; fi \
 	); \
 	echo ""; \
 	echo "═══════════════════════════════════════════════"; \
-	echo "  Numina 数据库配置切换"; \
+	echo "  Numina 部署模式切换"; \
 	echo "═══════════════════════════════════════════════"; \
 	echo ""; \
 	echo "当前模式: $$CURRENT_MODE"; \
 	echo ""; \
 	echo "可用模板:"; \
-	echo "  1) dev-sqlite          — 本地开发 + SQLite (最简)"; \
-	echo "  2) dev-pgsql-local     — 本地开发 + 本地 PostgreSQL"; \
-	echo "  3) dev-pgsql-remote    — 本地开发 + 远程 PostgreSQL"; \
-	echo "  4) docker-sqlite       — Docker 部署 + SQLite"; \
-	echo "  5) docker-pgsql-docker — Docker 部署 + PostgreSQL 容器"; \
-	echo "  6) docker-pgsql-host   — Docker 部署 + 宿主机 PostgreSQL"; \
-	echo "  7) 保持当前 ($$CURRENT_MODE)"; \
+	echo "  1) production — 标准部署 (PostgreSQL + 可选 Redis)"; \
+	echo "  2) dev        — 开发部署 (SQLite, 无 Redis)"; \
+	echo "  3) 保持当前 ($$CURRENT_MODE)"; \
 	echo ""; \
 	if [ -n "$(NUMINA_DB_MODE)" ]; then \
 		CHOSEN="$(NUMINA_DB_MODE)"; \
 		echo "使用 NUMINA_DB_MODE=$$CHOSEN"; \
 	else \
-		read -p "选择 [1-7] (默认 7): " NUM; \
-		NUM=$${NUM:-7}; \
+		read -p "选择 [1-3] (默认 3): " NUM; \
+		NUM=$${NUM:-3}; \
 		case "$$NUM" in \
-			1) CHOSEN="dev-sqlite" ;; \
-			2) CHOSEN="dev-pgsql-local" ;; \
-			3) CHOSEN="dev-pgsql-remote" ;; \
-			4) CHOSEN="docker-sqlite" ;; \
-			5) CHOSEN="docker-pgsql-docker" ;; \
-			6) CHOSEN="docker-pgsql-host" ;; \
+			1) CHOSEN="production" ;; \
+			2) CHOSEN="dev" ;; \
 			*) CHOSEN="$$CURRENT_MODE" ;; \
 		esac; \
 	fi; \
@@ -325,22 +309,18 @@ setup-env-db:
 	echo "✓ 根 .env 已切换为: $$CHOSEN"; \
 	echo ""; \
 	\
-	# server/.env 处理 (仅本地开发模式需要)
+	# server/.env 处理 (dev 模式需要同步)
 	case "$$CHOSEN" in \
-		dev-*) \
-			SERVER_TEMPLATE=""; \
-			case "$$CHOSEN" in \
-				dev-sqlite) SERVER_TEMPLATE=".env.examples/server.env.dev-sqlite" ;; \
-				dev-pgsql-local|dev-pgsql-remote) SERVER_TEMPLATE=".env.examples/server.env.dev-pgsql" ;; \
-			esac; \
-			if [ -n "$$SERVER_TEMPLATE" ] && [ -f "$$SERVER_TEMPLATE" ]; then \
+		dev) \
+			SERVER_TEMPLATE=".env.examples/server.env.dev"; \
+			if [ -f "$$SERVER_TEMPLATE" ]; then \
 				if [ -f server/.env ]; then cp server/.env server/.env.bak; fi; \
 				cp "$$SERVER_TEMPLATE" server/.env; \
 				echo "✓ server/.env 已切换为对应模板"; \
 			fi; \
 			;; \
-		docker-*) \
-			echo "ℹ Docker 模式无需 server/.env (容器使用根 .env)"; \
+		production) \
+			echo "ℹ 标准部署模式: 容器使用根 .env, 本地开发请另配 server/.env"; \
 			;; \
 	esac; \
 	echo ""; \
@@ -812,13 +792,12 @@ deploy-local: build-local
 	@echo "  FRONTEND_MAIN_IMAGE=$(LOCAL_IMAGE_PREFIX)/frontend-main:$(LOCAL_IMAGE_TAG)"
 	@echo "  FRONTEND_CHILD_IMAGE=$(LOCAL_IMAGE_PREFIX)/frontend-child:$(LOCAL_IMAGE_TAG)"
 
-# PostgreSQL compose (docker-compose.yml + docker-compose.postgres.yml)
-# Requires --profile postgres to activate the postgres service defined in docker-compose.yml
-up-postgres:
-	@$(COMPOSE) --profile postgres -f docker-compose.yml -f docker-compose.postgres.yml up -d --build
+# Dev compose (docker-compose.dev.yml) — SQLite, 无 Redis
+up-dev:
+	@$(COMPOSE) -f docker-compose.dev.yml up -d --build
 
-down-postgres:
-	@$(COMPOSE) --profile postgres -f docker-compose.yml -f docker-compose.postgres.yml down
+down-dev:
+	@$(COMPOSE) -f docker-compose.dev.yml down
 
 # ══════════════════════════════════════════════════════════
 # 部署
@@ -887,20 +866,21 @@ deploy-images: setup-data setup-env
 	@echo ""
 
 deploy-dev: setup-data
-	@echo "开发模式部署..."
+	@echo "开发模式部署 (docker-compose.dev.yml, SQLite)..."
 	@if [ ! -f .env ]; then \
-		$(PYTHON) scripts/generate_env.py --dev --domain $(NUMINA_DOMAIN); \
+		cp .env.examples/.env-dev .env; \
+		echo "✓ 已从模板创建 .env (dev 模式)"; \
 	fi
-	@$(COMPOSE) down --remove-orphans 2>/dev/null || true
-	@$(COMPOSE) up -d --build
+	@$(COMPOSE) -f docker-compose.dev.yml down --remove-orphans 2>/dev/null || true
+	@$(COMPOSE) -f docker-compose.dev.yml up -d --build
 	@echo "等待服务启动..."
 	@for i in $$(seq 1 30); do \
-		if $(COMPOSE) ps backend 2>/dev/null | grep -q "healthy"; then break; fi; \
+		if $(COMPOSE) -f docker-compose.dev.yml ps backend 2>/dev/null | grep -q "healthy"; then break; fi; \
 		sleep 2; \
 	done
 	@echo "初始化种子数据..."
 	@cd $(SERVER_DIR) && TEST_DATABASE_URL="sqlite:///$$(pwd)/../$(DATA_DIR)/db/numina.db" $(UV) run python ../tests/data/seed_data.py --force || echo "⚠ 种子数据初始化失败"
-	@$(COMPOSE) restart backend
+	@$(COMPOSE) -f docker-compose.dev.yml restart backend
 	@echo ""
 	@echo "========================================"
 	@echo "   Numina 开发模式部署完成"

@@ -175,6 +175,8 @@ services:
       frontend-child:
         condition: service_started
 
+  # Redis — StreamBridge 事件分发 + 共享缓存, AI 能力依赖此服务
+  # 如需关闭: 注释本服务 + 各服务中 REDIS_URL/CACHE_BACKEND/STREAM_BRIDGE_TYPE
   redis:
     image: redis:7-alpine
     container_name: numina-redis

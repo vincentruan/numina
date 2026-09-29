@@ -1,3 +1,22 @@
+# ============================================================================
+# Numina Dev Docker Compose — 开发/测试部署
+# ============================================================================
+# 用途: 快速本地验证, 无需外部 PostgreSQL / Redis
+#
+# 用法:
+#   docker compose -f docker-compose.dev.yml up -d --build
+#   docker compose -f docker-compose.dev.yml down
+#
+# 特点:
+#   • SQLite 数据库 (零配置, 数据存储在 .numina/data/db/)
+#   • 无 Redis (内存 StreamBridge + 内存缓存)
+#   • CAPTCHA 默认关闭 (DISABLE_CAPTCHA=true)
+#   • 安全密钥使用默认值 (仅用于开发, 生产环境必须替换!)
+#
+# 注意: 如需本地开发热重载 (make dev-all), 不使用此文件,
+#       而是在宿主机直接运行 Python/Node 进程
+# ============================================================================
+
 services:
   backend:
     build:
@@ -7,37 +26,30 @@ services:
     restart: unless-stopped
     ports:
       - "${BACKEND_PORT:-28000}:8000"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
-      - ./server:/app  # hot-reload source mount
-      - backend-venv:/app/.venv  # preserve build-time deps (host mount hides /app/.venv)
       - ./system-config.yaml:/app/system-config.yaml:ro
-    env_file:
-      - .env
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      - DATABASE_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina
-      - SECRET_KEY=${SECRET_KEY:-}
-      - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
+      - NUMINA_PROJECT_ROOT=/app
+      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY:-dev-altcha-key}
+      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-dGV2LWFlcy1rZXktY2hhbmdlLWluLXByb2Q=}
+      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:-dGV2LXN0b3JhZ2Uta2V5LWNoYW5nZS1pbi1wcm9k}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DISABLE_CAPTCHA=${DISABLE_CAPTCHA:-true}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:28080","http://localhost:80"]}
-      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - AGENT_BASE_URL=http://numina-agent:8001
-      - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/.numina/data/workspace}
-      - NUMINA_PROJECT_ROOT=/app
-    command: >
-      sh -c "uv sync --extra backend &&
-             uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir apps/backend"
+      - BACKEND_BASE_URL=http://numina-backend:8000
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 10s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 15s
 
   agent:
     build:
@@ -51,24 +63,21 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
-      - ./server:/app  # hot-reload source mount (excludes vendor via .dockerignore)
-      - agent-venv:/app/.venv  # preserve build-time deps (host mount hides /app/.venv)
       - ./system-config.yaml:/app/system-config.yaml:ro
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      - SECRET_KEY=${SECRET_KEY:-}
+      - NUMINA_PROJECT_ROOT=/app
+      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-dGV2LWFlcy1rZXktY2hhbmdlLWluLXByb2Q=}
+      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:-dGV2LXN0b3JhZ2Uta2V5LWNoYW5nZS1pbi1wcm9k}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DISABLE_CAPTCHA=${DISABLE_CAPTCHA:-true}
       - BACKEND_BASE_URL=http://numina-backend:8000
-      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - NUMINA_PROJECT_ROOT=/app
-      - DATABASE_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina
-      - DEERFLOW_DB_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina_deerflow
-    command: >
-      sh -c "uv sync --extra agent &&
-             uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir apps/agent"
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - AI_MODEL=${AI_MODEL:-placeholder}
+      - AI_API_KEY=${AI_API_KEY:-placeholder}
     depends_on:
       backend:
         condition: service_healthy
@@ -87,27 +96,19 @@ services:
     restart: unless-stopped
     ports:
       - "${WORKER_PORT:-28002}:8002"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
-      - ./server:/app  # hot-reload source mount
-      - worker-venv:/app/.venv  # preserve build-time deps (host mount hides /app/.venv)
       - ./system-config.yaml:/app/system-config.yaml:ro
-    env_file:
-      - .env
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      - DATABASE_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina
-      - SECRET_KEY=${SECRET_KEY:-}
-      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
+      - NUMINA_PROJECT_ROOT=/app
+      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-dGV2LWFlcy1rZXktY2hhbmdlLWluLXByb2Q=}
+      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:-dGV2LXN0b3JhZ2Uta2V5LWNoYW5nZS1pbi1wcm9k}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}
-      - NUMINA_PROJECT_ROOT=/app
-    command: >
-      sh -c "uv sync --extra backend &&
-             uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --port 8002 --reload --reload-dir apps/scheduler_worker"
     depends_on:
       backend:
         condition: service_healthy
@@ -116,70 +117,38 @@ services:
       interval: 10s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 15s
 
   frontend-main:
-    build: !reset null
-    image: node:20-alpine
+    build:
+      context: .
+      dockerfile: frontend/apps/main/Dockerfile
     container_name: numina-frontend-main
     restart: unless-stopped
-    working_dir: /app/frontend/apps/main
-    volumes:
-      - ./frontend:/app/frontend
-      - frontend_root_node_modules:/app/frontend/node_modules
-      - frontend_main_node_modules:/app/frontend/apps/main/node_modules
-      - frontend_auth_node_modules:/app/frontend/packages/auth/node_modules
-      - ./frontend/packages:/app/frontend/packages
-    environment:
-      - VITE_API_BASE_URL=http://localhost/api
-      - HUSKY=0
-    command: >
-      sh -c "npm install -g husky &&
-             cd /app/frontend/packages/auth &&
-             npm install --ignore-scripts &&
-             cd /app/frontend/apps/main &&
-             cp package.json /tmp/package.json.orig &&
-             trap 'cp /tmp/package.json.orig package.json' EXIT &&
-             sed -i 's|\"workspace:\\*\"|\"file:../../packages/auth\"|g' package.json &&
-             npm install --ignore-scripts &&
-             cp /tmp/package.json.orig package.json &&
-             trap - EXIT &&
-             npx vite --host 0.0.0.0 --port 25173"
+    expose:
+      - "80"
 
   frontend-child:
-    build: !reset null
-    image: node:20-alpine
+    build:
+      context: .
+      dockerfile: frontend/apps/child/Dockerfile
     container_name: numina-frontend-child
     restart: unless-stopped
-    working_dir: /app/frontend/apps/child
-    volumes:
-      - ./frontend:/app/frontend
-      - frontend_root_node_modules:/app/frontend/node_modules
-      - frontend_child_node_modules:/app/frontend/apps/child/node_modules
-      - frontend_auth_node_modules:/app/frontend/packages/auth/node_modules
-      - ./frontend/packages:/app/frontend/packages
-    environment:
-      - VITE_API_BASE_URL=http://localhost/api
-      - HUSKY=0
-    command: >
-      sh -c "npm install -g husky &&
-             cd /app/frontend/packages/auth &&
-             npm install --ignore-scripts &&
-             cd /app/frontend/apps/child &&
-             cp package.json /tmp/package.json.orig &&
-             trap 'cp /tmp/package.json.orig package.json' EXIT &&
-             sed -i 's|\"workspace:\\*\"|\"file:../../packages/auth\"|g' package.json &&
-             npm install --ignore-scripts &&
-             cp /tmp/package.json.orig package.json &&
-             trap - EXIT &&
-             npx vite --host 0.0.0.0 --port 25174"
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   nginx:
     image: nginx:alpine
     container_name: numina-nginx
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "${NGINX_HTTP_PORT:-80}:80"
     volumes:
       - ./nginx.dev.conf:/etc/nginx/conf.d/default.conf:ro
       - ./site:/usr/share/nginx/site:ro
@@ -188,28 +157,4 @@ services:
       - frontend-main
       - frontend-child
 
-  # Redis service for StreamBridge event buffering (多实例部署时启用: --profile redis)
-  redis:
-    image: redis:7-alpine
-    container_name: numina-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    profiles:
-      - redis
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  frontend_root_node_modules:
-  frontend_main_node_modules:
-  frontend_child_node_modules:
-  frontend_auth_node_modules:
-  redis_data:
-  backend-venv:
-  agent-venv:
-  worker-venv:
+# SQLite 数据通过 NUMINA_DATA_DIR bind mount 挂载, 无需 named volume
