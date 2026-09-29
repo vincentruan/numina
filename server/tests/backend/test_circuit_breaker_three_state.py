@@ -213,7 +213,7 @@ class TestProviderListWithCircuitMetadata:
     """Tests for /internal/ai/config returning circuit metadata."""
 
     def test_open_provider_excluded_from_list(self, client, db):
-        """Open providers (without recovery match) should not appear in list."""
+        """When ALL providers are open, the last-resort one is returned for recovery probe."""
         _seed_provider(
             db,
             family_id=1,
@@ -229,8 +229,10 @@ class TestProviderListWithCircuitMetadata:
 
         assert resp.status_code == 200
         data = resp.json().get("data", resp.json())
-        assert data["ai_enabled"] is False
-        assert data["providers"] == []
+        # Last-resort: single open provider returned for recovery probe
+        assert data["ai_enabled"] is True
+        assert len(data["providers"]) == 1
+        assert data["providers"][0]["circuit_state"] == "open"
 
     def test_closed_provider_included_with_metadata(self, client, db):
         """Closed providers should appear with circuit metadata."""

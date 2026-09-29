@@ -182,6 +182,13 @@ def build_model_entry(ai_provider: dict[str, Any]) -> dict[str, Any]:
     # ``api_key`` works for Gemini too — no special-casing needed.
     entry["api_key"] = api_key
 
+    # Gemini: ChatGoogleGenerativeAI defaults to max_retries=6, which causes
+    # the google-genai SDK's tenacity retry to waste ~40 seconds on 429/503
+    # before raising.  Cap at 1 (single attempt, no retry) so our circuit
+    # breaker middleware handles failover quickly.
+    if provider == "gemini":
+        entry["max_retries"] = 1
+
     if base_url and provider != "gemini":
         entry["base_url"] = base_url
 

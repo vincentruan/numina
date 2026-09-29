@@ -106,14 +106,16 @@ def _select_stream_run_provider(
     if not providers:
         return None
 
-    # Split into half_open candidates and normal (closed) providers.
+    # Split into half_open candidates, normal (closed) providers, and open
+    # (last-resort from backend when all providers are open).
     half_open: list[dict] = []
     closed: list[dict] = []
+    open_fallback: list[dict] = []
     for p in providers:
         state = p.get("circuit_state", "closed")
         if state == "open":
-            continue  # backend already filters these, but be defensive
-        if state == "half_open":
+            open_fallback.append(p)  # last-resort from backend
+        elif state == "half_open":
             half_open.append(p)
         else:
             closed.append(p)
@@ -136,6 +138,18 @@ def _select_stream_run_provider(
             best.get("config_id"),
         )
         return best
+
+    # Last resort: backend returned an open provider because no other option
+    # exists (single-provider family).  Attempt a recovery probe rather than
+    # failing immediately — the provider may have recovered since last failure.
+    if open_fallback:
+        chosen = open_fallback[0]
+        logger.warning(
+            "[orchestrator] _select_stream_run_provider: all providers open, "
+            "probing last-resort config_id=%s for recovery",
+            chosen.get("config_id"),
+        )
+        return chosen
 
     return None
 

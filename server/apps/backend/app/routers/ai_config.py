@@ -129,7 +129,27 @@ def get_active_configs_with_recovery(
         elif cfg.circuit_state == "half_open":
             adapter.evaluate_half_open_window(db)
 
-    return [c for c in configs if c.circuit_state != "open"]
+    result = [c for c in configs if c.circuit_state != "open"]
+
+    # Last-resort: when ALL providers are open (none recovered), return the
+    # one with the oldest failure so the agent can probe it.  Without this,
+    # a single-provider family gets "未配置 AI 供应商" until recovery triggers.
+    if not result and configs:
+        last_resort = min(
+            configs,
+            key=lambda c: c.last_failure_at or datetime.min,
+        )
+        logger.warning(
+            "All %d AI providers for family %d are open; returning last-resort "
+            "config_id=%s (last_failure_at=%s) for recovery probe",
+            len(configs),
+            family_id,
+            last_resort.id,
+            last_resort.last_failure_at,
+        )
+        result = [last_resort]
+
+    return result
 
 
 def _deserialize_capabilities(cap_str: str | None) -> list[str]:

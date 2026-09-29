@@ -451,9 +451,19 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
         ]
     ):
         return "permanent_auth"
-    # Quota/billing exhaustion is a provider-account issue (user must top up
-    # or switch providers) — treat as permanent_account so the circuit opens
-    # immediately instead of waiting for the transient failure threshold.
+    if error_code == 429:
+        # 429 is always a transient rate-limit error, even when the message
+        # contains "quota exceeded" or "resource_exhausted".  Free-tier daily
+        # quotas (e.g. Gemini) and per-minute rate limits reset automatically,
+        # so treating them as permanent_account would open the circuit with no
+        # auto-recovery — leaving the user stuck until manual intervention.
+        # The circuit breaker's transient_failure_threshold (5) provides
+        # protection against repeated quota exhaustion.
+        return "transient_rate_limit"
+    # Quota/billing exhaustion on non-429 codes is a provider-account issue
+    # (user must top up or switch providers) — treat as permanent_account so
+    # the circuit opens immediately instead of waiting for the transient
+    # failure threshold.
     if error_message:
         msg_lower = error_message.lower()
         if any(
@@ -493,24 +503,6 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
         ]
     ):
         return "permanent_account"
-    if error_code == 429:
-        # 429 with quota/billing keywords is permanent (free-tier exhausted,
-        # plan limit), not a transient rate-limit.  Check keywords first so
-        # "Quota exceeded" → permanent_account even when error_code is 429.
-        if error_message:
-            msg_lower = error_message.lower()
-            if any(
-                kw in msg_lower
-                for kw in [
-                    "quota exceeded",
-                    "quota exhausted",
-                    "resource_exhausted",
-                    "rate limit exceeded",
-                    "limit reached",
-                ]
-            ):
-                return "permanent_account"
-        return "transient_rate_limit"
     if error_code in (500, 502, 503, 504):
         return "transient_server"
     if error_code == 0 or error_code == -1:  # Timeout or connection error
