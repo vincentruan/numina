@@ -84,6 +84,8 @@ agent = [
     "cryptography>=42.0.0",
     # Config
     "pyyaml>=6.0.3",
+    # Cache (Redis)
+    "redis>=5.0.0",
     # DeerFlow harness (workspace member — installed from apps/agent/vendor/deerflow-harness)
     "deerflow-harness",
 ]
@@ -92,6 +94,8 @@ worker = [
     "cryptography>=44.0.0",
     # Postgres driver for DATABASE_URL
     "psycopg[binary]>=3.2.0",
+    # Cache (Redis)
+    "redis>=5.0.0",
 ]
 
 [dependency-groups]

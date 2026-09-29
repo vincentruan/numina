@@ -80,6 +80,7 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql://numina:numinapass@172.17.0.1:5432/numina_prod}
       - DEERFLOW_DB_URL=${DEERFLOW_DB_URL:-postgresql://numina:numinapass@172.17.0.1:5432/numina_prod_deerflow}
       - REDIS_URL=${REDIS_URL:-redis://numina-redis:6379/0}
+      - CACHE_BACKEND=${CACHE_BACKEND:-redis}
       - DB_POOL_SIZE=${AGENT_DB_POOL_SIZE:-10}
       - DB_MAX_OVERFLOW=${AGENT_DB_MAX_OVERFLOW:-5}
     depends_on:

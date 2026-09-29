@@ -2845,6 +2845,7 @@ agent = [
     { name = "openai" },
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pyyaml" },
+    { name = "redis" },
 ]
 backend = [
     { name = "altcha" },
@@ -2866,6 +2867,7 @@ backend = [
 worker = [
     { name = "cryptography" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "redis" },
 ]
 
 [package.dev-dependencies]
@@ -2929,7 +2931,9 @@ requires-dist = [
     { name = "pywebpush", specifier = ">=2.0.0" },
     { name = "pyyaml", marker = "extra == 'agent'", specifier = ">=6.0.3" },
     { name = "pyyaml", marker = "extra == 'backend'", specifier = ">=6.0.0" },
+    { name = "redis", marker = "extra == 'agent'", specifier = ">=5.0.0" },
     { name = "redis", marker = "extra == 'backend'", specifier = ">=5.0.0" },
+    { name = "redis", marker = "extra == 'worker'", specifier = ">=5.0.0" },
     { name = "short-io-api-client", specifier = ">=1.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.36" },
     { name = "user-agents", marker = "extra == 'backend'", specifier = ">=2.2.0" },
