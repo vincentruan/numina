@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getFinanceCoach } from '@/api/ai'
+import { streamFinanceCoach, type FinanceCoachStreamHandle } from '@/api/ai'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import type { FinanceSuggestion } from '@/types'
@@ -26,6 +26,7 @@ const refreshing = ref(false)
 const expanded = ref<string[]>([])
 const cancelling = ref(false)
 const generatedAt = ref<string | null>(null)
+let streamHandle: FinanceCoachStreamHandle | null = null
 
 const count = computed(() => suggestions.value.length)
 
@@ -53,63 +54,83 @@ const resumeHandle = useTaskResume('coach', {
 })
 
 async function load(force = false, _retryCount = 0) {
+  // Abort any previous stream before starting a new one
+  streamHandle?.abort()
+  streamHandle = null
+
   try {
     refreshing.value = force
     loading.value = true
     // Clear stale taskId from any previous task
     resumeHandle.taskId.value = null
 
-    const resp = await getFinanceCoach(force)
-
-    // 202 queued: backend created a task but another is running.
-    // Set taskId so the cancel button shows, then poll until the task
-    // reaches a terminal state. Once done, reload from cache.
-    if (resp.status === 'queued' && resp.task_id) {
-      resumeHandle.taskId.value = resp.task_id
-      const task = await pollTask(resp.task_id, 30_000)
-      if (task?.status === 'completed') {
-        // Task completed (and Bug-1 fix ensures verification passes) —
-        // reload from cache to display the fresh suggestions.
-        await load(false, _retryCount)
-      } else if (task?.status === 'interrupted' && _retryCount < 1) {
-        // Zombie / orphan-recovered task — auto-retry with force=true
-        // to bypass cache and clear the stuck state. Only one retry
-        // to avoid infinite loops if the agent keeps failing.
-        await load(true, _retryCount + 1)
-      } else if (task?.status === 'failed' || task?.status === 'timeout') {
-        // Surface the error so the retry button is visible with a message.
-        resumeHandle.status.value = 'failed'
-        resumeHandle.task.value = task
-      }
-      return
-    }
-
-    // Advice baseline gate (spec §7.1): schema-validate before display.
-    // target_id is optional — when absent the backend has sanitised a
-    // hallucinated ID; the suggestion text is still shown and the CTA
-    // navigates to the list tab for target_type (assets/liabilities/wishes).
-    const valid = (resp.report?.suggestions || []).filter(
-      (s) =>
-        s &&
-        s.id &&
-        ['high', 'medium', 'low'].includes(s.severity) &&
-        s.title &&
-        s.action &&
-        s.target_type &&
-        s.cta_label,
+    streamHandle = await streamFinanceCoach(
+      {
+        onDone: (suggestionsRaw) => {
+          // Advice baseline gate (spec §7.1): schema-validate before display.
+          // target_id is optional — when absent the backend has sanitised a
+          // hallucinated ID; the suggestion text is still shown and the CTA
+          // navigates to the list tab for target_type.
+          const valid = (suggestionsRaw || []).filter(
+            (s) =>
+              s &&
+              s.id &&
+              ['high', 'medium', 'low'].includes(s.severity) &&
+              s.title &&
+              s.action &&
+              s.target_type &&
+              s.cta_label,
+          )
+          if (valid.length === 0) {
+            visible.value = false
+          } else {
+            suggestions.value = valid.slice(0, 3)
+            visible.value = true
+          }
+          resumeHandle.taskId.value = null
+          loading.value = false
+          loaded.value = true
+          refreshing.value = false
+        },
+        onError: () => {
+          visible.value = false // silent hide on failure (spec §7.2)
+          resumeHandle.taskId.value = null
+          loading.value = false
+          loaded.value = true
+          refreshing.value = false
+        },
+        onTaskId: (taskId) => {
+          resumeHandle.taskId.value = taskId
+        },
+        onQueued: async (info) => {
+          resumeHandle.taskId.value = info.taskId
+          const task = await pollTask(info.taskId, 30_000)
+          if (task?.status === 'completed') {
+            // Task completed — reload from cache to display the fresh suggestions.
+            await load(false, _retryCount)
+          } else if (task?.status === 'interrupted' && _retryCount < 1) {
+            // Zombie / orphan-recovered task — auto-retry with force=true.
+            await load(true, _retryCount + 1)
+          } else if (task?.status === 'failed' || task?.status === 'timeout') {
+            resumeHandle.status.value = 'failed'
+            resumeHandle.task.value = task
+            loading.value = false
+            loaded.value = true
+            refreshing.value = false
+          }
+        },
+        onBlocked: () => {
+          visible.value = false
+          loading.value = false
+          loaded.value = true
+          refreshing.value = false
+        },
+      },
+      force,
     )
-    if (valid.length === 0) {
-      visible.value = false
-      return
-    }
-    suggestions.value = valid.slice(0, 3)
-    visible.value = true
-    generatedAt.value = resp.generated_at || null
-    resumeHandle.taskId.value = null
   } catch {
     visible.value = false // silent hide on failure (spec §7.2)
     resumeHandle.taskId.value = null
-  } finally {
     loading.value = false
     loaded.value = true
     refreshing.value = false
@@ -226,10 +247,14 @@ onActivated(async () => {
 // Dashboard is KeepAlive-cached — disconnect on deactivate, cleanup on unmount.
 onDeactivated(() => {
   resumeHandle.disconnect()
+  streamHandle?.abort()
+  streamHandle = null
 })
 
 onUnmounted(() => {
   resumeHandle.cleanup()
+  streamHandle?.abort()
+  streamHandle = null
 })
 </script>
 

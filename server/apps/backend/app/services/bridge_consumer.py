@@ -46,10 +46,11 @@ async def trigger_agent_run(
 ) -> dict[str, Any]:
     """Trigger an agent run and return run_id for Redis subscription.
 
-    Unlike the removed pump function, this does NOT consume
-    HTTP SSE.  The agent writes events directly to Redis StreamBridge.
-    Backend subscribes to the same Redis Stream via ``bridge.subscribe()``.
-    The actual subscribe happens in the caller via ``consume_task_stream()``.
+    Uses a streaming POST so that only the response headers are read — the
+    agent's SSE body is **not** consumed here.  Events flow via Redis
+    StreamBridge (see ``consume_task_stream``).  The httpx connection closes
+    immediately after extracting ``Content-Location``, freeing the agent's
+    ``sse_consumer`` to exit its loop promptly.
 
     Args:
         agent_client: ``AgentClient`` instance (injects auth headers).
@@ -63,16 +64,32 @@ async def trigger_agent_run(
         dict with 'run_id' (extracted from Content-Location header) and
         'content_location' (raw header value for DB persistence).
     """
-    resp = await agent_client.post(agent_url, json=json_body, headers=headers or {})
-    resp.raise_for_status()
+    # Streaming POST: read only response headers, do NOT consume the SSE body.
+    # The agent's SSE consumer writes events to Redis; we subscribe separately
+    # via consume_task_stream().  Closing the HTTP connection immediately
+    # avoids tying up the agent's connection pool for the entire run duration.
+    async with agent_client.stream(
+        "POST", agent_url, json=json_body, headers=headers or {}
+    ) as resp:
+        if resp.status_code >= 400:
+            body_snippet = ""
+            with contextlib.suppress(Exception):
+                body_snippet = (await resp.aread())[:500].decode(errors="replace")
+            logger.error(
+                "[trigger_agent_run] agent returned %s task=%s body=%s",
+                resp.status_code,
+                task_id,
+                body_snippet,
+            )
+            resp.raise_for_status()
 
-    # Extract run_id from Content-Location header
-    content_location = resp.headers.get("Content-Location", "")
-    run_id = (
-        content_location.rstrip("/").rsplit("/", 1)[-1]
-        if "/" in content_location
-        else ""
-    )
+        # Extract run_id from Content-Location header
+        content_location = resp.headers.get("Content-Location", "")
+        run_id = (
+            content_location.rstrip("/").rsplit("/", 1)[-1]
+            if "/" in content_location
+            else ""
+        )
 
     logger.info(
         "[trigger_agent_run] task=%s run_id=%s",

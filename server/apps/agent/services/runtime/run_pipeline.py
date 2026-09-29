@@ -897,18 +897,45 @@ class RunPipeline:
         display_order so the next provider in line is tried next.
         """
         if not self._providers or len(self._providers) <= 1:
+            # Diagnostic: log when only 0-1 providers are available so we can
+            # trace why fallback didn't kick in (e.g. backend filtered out
+            # open-circuit providers before the agent saw them).
+            all_ids = [
+                (p.get("config_id"), p.get("circuit_state", "closed"))
+                for p in (self._providers or [])
+            ]
+            logger.warning(
+                "[%s] run=%s _fallback_candidates: only %d provider(s) in list; "
+                "all_providers=%s",
+                self.app_name,
+                self.run_id,
+                len(self._providers or []),
+                all_ids,
+            )
             return [self.selected_provider] if self.selected_provider else []
 
         current_id = (
             self.selected_provider.get("config_id") if self.selected_provider else None
         )
         candidates: list[dict[str, Any]] = []
+        skipped_open: list[str] = []
         for p in self._providers:
             if p.get("circuit_state") == "open":
+                skipped_open.append(str(p.get("config_id")))
                 continue
             if p.get("config_id") == current_id:
                 continue
             candidates.append(p)
+
+        if skipped_open:
+            logger.info(
+                "[%s] run=%s _fallback_candidates: skipped %d open-circuit "
+                "provider(s): config_ids=%s",
+                self.app_name,
+                self.run_id,
+                len(skipped_open),
+                skipped_open,
+            )
 
         if not self.selected_provider:
             return candidates
