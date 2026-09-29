@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import shutil
 import tempfile
@@ -17,8 +16,9 @@ from apps.backend.app.reconcile.types import (
     ResourceStatus,
     ResourceType,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Marker comment placed in managed files to indicate they are system-managed
 MANAGED_MARKER = "# managed-by: numina-reconcile"

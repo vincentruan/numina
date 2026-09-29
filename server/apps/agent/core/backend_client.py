@@ -9,15 +9,15 @@ backend 端点验证这两个 header，强制以 family_id 为边界过滤数据
 ⚠️ 租户隔离原则：所有操作必须绑定 family_id，禁止跨家庭数据访问。
 """
 
-import logging
 import re
 from typing import Any, cast
 
 import httpx
 
 from apps.agent.app.config import settings
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Backend uses numeric Snowflake family IDs. Older agent tests and golden fixtures
 # still use fam-* IDs, so accept both formats while rejecting path/control input.

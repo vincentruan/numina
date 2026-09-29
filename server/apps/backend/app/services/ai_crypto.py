@@ -1,10 +1,10 @@
 """AI API Key 加密/解密工具（Fernet AES-256）。"""
 
-import logging
 
 from apps.backend.app.config import settings
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _get_fernet():

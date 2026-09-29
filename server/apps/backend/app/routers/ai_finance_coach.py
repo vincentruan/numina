@@ -6,7 +6,6 @@
 """
 
 import json
-import logging
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -36,9 +35,10 @@ from apps.backend.app.services.finance_coach_snapshot import (
     build_family_finance_snapshot,
 )
 from apps.backend.app.services.subscriber_registry import tracked_sse_stream
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/ai/finance-coach", tags=["ai-finance-coach"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # skill_id for AITask tracking (matches VALID_SKILL_IDS in ai_tasks.py)
 SKILL_ID = "finance-coach"

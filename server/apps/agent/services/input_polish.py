@@ -8,7 +8,6 @@ Qwen3 空内容（见 ``qwen3-enable-thinking-empty-content`` 经验文档）。
 
 from __future__ import annotations
 
-import logging
 import re
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -17,8 +16,9 @@ from apps.agent.services.runtime.run_extras import (
     _create_lightweight_llm,
     _extract_text_from_content_blocks,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _MAX_INPUT_CHARS = 4000
 _MAX_OUTPUT_TOKENS = 400

@@ -5,17 +5,17 @@ this router selects a provider from the family's AI config (circuit-breaker-
 aware) and delegates to ``topic_translate.translate_topic()``.
 """
 
-import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from apps.agent.core.backend_client import BackendClient
 from apps.agent.services.topic_translate import translate_topic
+from packages.core.logging import get_logger
 from packages.security.service_auth.agent_token_verify import verify_service_token
 
 router = APIRouter(prefix="/translate", tags=["translate"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TranslateTopicRequest(BaseModel):

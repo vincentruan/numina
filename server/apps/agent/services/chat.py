@@ -12,12 +12,12 @@
 """
 
 import json
-import logging
 
 from apps.agent.core.backend_client import BackendClient
 from apps.agent.core.llm import LLMClient
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 INTENT_PROMPT = """你是家庭资产管理助手。用户提问如下：
 

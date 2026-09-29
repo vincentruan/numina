@@ -5,7 +5,6 @@ POST /api/v1/ai/literacy-report/generate/events  — SSE streaming (U14 bridge c
 """
 
 import json
-import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -32,10 +31,11 @@ from apps.backend.app.services.literacy_report_service import (
     get_report_status,
 )
 from apps.backend.app.services.subscriber_registry import tracked_sse_stream
+from packages.core.logging import get_logger
 from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/ai/literacy-report", tags=["ai-literacy-report"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # skill_id for AITask tracking (matches VALID_SKILL_IDS in ai_tasks.py)
 SKILL_ID = "literacy-weekly-report"

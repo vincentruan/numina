@@ -4,11 +4,12 @@ This module was removed but is still referenced by agent_dispatch.py.
 Provides no-op implementations to maintain backward compatibility.
 """
 
-import logging
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class SessionJournal:

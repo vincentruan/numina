@@ -16,7 +16,6 @@ Deletion test: removing this module would force every runner to re-implement
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from collections.abc import Callable
 from typing import Any
@@ -37,10 +36,11 @@ from apps.agent.services.message_classifier import (
 )
 from apps.agent.services.orchestrator import _select_stream_run_provider
 from apps.agent.services.pii_redactor import pii_redactor
+from packages.core.logging import get_logger
 
 from .gc import schedule_run_cleanup
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ── Agent soul sync (DeerFlow SOUL.md bridge) ────────────────────────────────

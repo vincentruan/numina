@@ -1,7 +1,6 @@
 """MCP server 管理路由（per-family）。"""
 
 import json
-import logging
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -14,10 +13,11 @@ from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.base import SnowflakeBase
 from apps.backend.app.services.ai_crypto import decrypt_api_key, encrypt_api_key
+from packages.core.logging import get_logger
 from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/ai/mcp", tags=["ai-mcp"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 ALLOWED_TRANSPORTS = {"sse", "stdio"}
 

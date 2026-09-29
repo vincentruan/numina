@@ -24,12 +24,12 @@ Three-tier priority via ``_resolve_max_tokens``:
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+from packages.core.logging import get_logger
 from packages.core.system_config import get_max_tokens_default
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ── Provider class mapping ──────────────────────────────────────────

@@ -46,7 +46,6 @@ is a Numina value-add on top of DeerFlow's 240s default and is emitted by
 
 import atexit
 import contextlib
-import logging
 import os
 import re
 import shutil
@@ -61,9 +60,10 @@ from deerflow.config.app_config import reload_app_config
 from apps.agent.services.deerflow_adapter.numina_deerflow_client import (
     NuminaDeerFlowClient,
 )
+from packages.core.logging import get_logger
 from packages.core.model_entry import build_model_entry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _inject_memory(

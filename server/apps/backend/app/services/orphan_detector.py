@@ -15,9 +15,10 @@ Registered as a FastAPI lifespan background task in app/main.py.
 from __future__ import annotations
 
 import asyncio
-import logging
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Scan interval in seconds
 SCAN_INTERVAL_SECONDS = 120

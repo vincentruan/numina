@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
 
 from fastapi import Request
@@ -12,8 +11,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from apps.backend.app.errors.codes import ERROR_META, ErrorCode
 from apps.backend.app.errors.exceptions import AppError
 from apps.backend.app.services.storage.base import StorageError
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _LOCALES_DIR = Path(__file__).parent / "errors" / "locales"
 

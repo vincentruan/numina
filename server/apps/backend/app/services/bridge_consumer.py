@@ -16,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import logging
 import os
 from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Any
@@ -24,11 +23,12 @@ from typing import Any
 from fastapi.responses import StreamingResponse
 
 from apps.backend.app.services.ai_task_service import AITaskService
+from packages.core.logging import get_logger
 from packages.db.session import SessionLocal
 
 from .subscriber_registry import tracked_sse_stream
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Agent trigger (POST → run_id extraction)

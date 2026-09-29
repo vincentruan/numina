@@ -1,13 +1,13 @@
 """AI 任务状态服务 — 管理长任务的生命周期。"""
 
-import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from packages.core.logging import get_logger
 from packages.db.models.ai_task import AITask
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 TASK_TIMEOUT_MINUTES = 30
 QUEUED_TIMEOUT_MINUTES = 240  # 4 hours — queued tasks waiting longer are stale
@@ -419,10 +419,6 @@ class AITaskService:
         Returns the run_id if successfully extracted and persisted, None otherwise.
         Callers pass the result to bridge_consumer to avoid a second DB lookup race.
         """
-        import logging
-
-        logger = logging.getLogger(__name__)
-
         run_id = extract_run_id_from_content_location(content_location)
         if not run_id:
             return None

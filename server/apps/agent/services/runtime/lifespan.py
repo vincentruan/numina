@@ -14,16 +14,17 @@ Manages the lifecycle of:
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 from typing import Any
 
 from deerflow.runtime import RunManager, StreamBridge
 from fastapi import FastAPI, HTTPException, Request
 
+from packages.core.logging import get_logger
+
 from .gc import drain_inflight_runs, reconcile_orphaned_runs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def init_runtime(app: FastAPI) -> None:

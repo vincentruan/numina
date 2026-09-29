@@ -24,7 +24,6 @@ async def _check_rate_limit(ip: str, key_prefix: str, limit: int) -> None:
     """Generic per-IP rate limiter using the rate-limit cache backend."""
     try:
         from packages.core.cache import get_cache
-        from packages.core.cache.keys import RATE_LIMIT
 
         cache = get_cache()
         key = f"{key_prefix}:{ip}"

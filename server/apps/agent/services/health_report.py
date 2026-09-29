@@ -7,7 +7,6 @@
 4. 返回固定结构的报告 JSON
 """
 
-import logging
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -15,8 +14,9 @@ from apps.agent.core.backend_client import BackendClient
 from apps.agent.core.desensitize import desensitize_liabilities
 from apps.agent.core.llm import LLMClient
 from apps.agent.schemas.context import RedactedContext
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _async_noop() -> None:

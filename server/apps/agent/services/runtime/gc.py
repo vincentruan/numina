@@ -12,14 +12,15 @@ wrapping DeerFlow's RunManager built-in methods.
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 from datetime import UTC, datetime
 from typing import Any, cast
 
 from deerflow.runtime import RunManager, RunStatus
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 async def drain_inflight_runs(run_manager: RunManager, *, timeout: float | None = None) -> None:

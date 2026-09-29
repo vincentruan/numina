@@ -1,6 +1,5 @@
 """ASR (speech-to-text) provider configuration & transcription endpoints."""
 
-import logging
 import os
 import tempfile
 from datetime import UTC, datetime
@@ -37,8 +36,9 @@ from apps.backend.app.services.circuit_breaker.adapters.asr import (
     ASRAdapter,
     get_first_usable_config,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/asr", tags=["asr"])
 

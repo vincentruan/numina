@@ -13,7 +13,6 @@ events (reasoning_delta, messages, custom, end) to the frontend and persists
 the result to cache after the stream completes.
 """
 import json
-import logging
 import re
 import uuid
 from collections.abc import AsyncGenerator
@@ -25,8 +24,9 @@ from apps.backend.app.services.finance_coach_cache import (
     SKILL_TTL,
     upsert_skill_result,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 SKILL_ID = "dashboard-narrative"
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import abc
-import logging
 import os
 import socket
 import time
@@ -11,7 +10,9 @@ import time
 from sqlalchemy import Connection, text
 from sqlalchemy.engine import Engine
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 LOCK_TABLE = "_reconcile_lock"
 LOCK_TIMEOUT_SECONDS = 60

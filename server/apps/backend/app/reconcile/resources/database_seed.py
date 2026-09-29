@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -14,8 +13,9 @@ from apps.backend.app.reconcile.types import (
     ResourceResult,
     ResourceType,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DatabaseSeedResource(Resource):

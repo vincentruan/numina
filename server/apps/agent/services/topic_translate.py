@@ -6,11 +6,11 @@ configured AI provider (multi-provider, circuit-breaker-aware via router layer).
 """
 
 import json
-import logging
 
 from apps.agent.core.llm import LLMClient
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _MAX_DESCRIPTION_CHARS = 3000
 _MAX_EVIDENCE_ITEMS = 10

@@ -5,14 +5,15 @@ Rejects new task creation requests during shutdown with 503 + Retry-After header
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ShutdownGuardMiddleware(BaseHTTPMiddleware):

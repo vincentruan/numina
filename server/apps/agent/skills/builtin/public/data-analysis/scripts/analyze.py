@@ -15,8 +15,10 @@ import subprocess
 import sys
 import tempfile
 
+from packages.core.logging import get_logger
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 try:
     import duckdb
@@ -73,7 +75,7 @@ def load_table_map(files_hash: str) -> dict[str, str] | None:
     if not os.path.exists(path):
         return None
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return None

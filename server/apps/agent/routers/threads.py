@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 import shutil
 import uuid
 from collections.abc import Callable
@@ -41,6 +40,7 @@ from apps.agent.services.goal_store import (
 from apps.agent.services.runtime.lifespan import get_run_manager
 from apps.agent.services.runtime.run_extras import _is_fallback_title
 from apps.agent.services.session_store import AiSessionRepository
+from packages.core.logging import get_logger
 
 
 def serialize_channel_values_for_api(values: dict[str, Any]) -> dict[str, Any]:
@@ -58,7 +58,7 @@ def serialize_channel_values_for_api(values: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["threads"])
 
 # Metadata keys that the server controls; clients are not allowed to set them.

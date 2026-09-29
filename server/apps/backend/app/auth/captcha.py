@@ -9,12 +9,12 @@ from apps.backend.app.config import settings
 from apps.backend.app.core.logging_config import get_logger
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
-from packages.core.cache import get_cache
-from packages.core.cache.keys import CAPTCHA
 from apps.backend.app.services.security_log import (
     SecurityEventType,
     _log_security_event,
 )
+from packages.core.cache import get_cache
+from packages.core.cache.keys import CAPTCHA
 
 logger = get_logger("captcha")
 

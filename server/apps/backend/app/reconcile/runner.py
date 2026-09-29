@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import enum
-import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -14,6 +13,7 @@ from apps.backend.app.reconcile.types import (
     ResourceResult,
     ResourceStatus,
 )
+from packages.core.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Engine
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from apps.backend.app.reconcile.base import Resource
     from apps.backend.app.reconcile.lock import LockProvider
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RunMode(enum.StrEnum):

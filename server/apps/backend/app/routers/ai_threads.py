@@ -4,7 +4,6 @@
 注入当前用户的家庭身份信息（X-Family-Id），然后代理给后端的 Agent。
 """
 
-import logging
 
 import httpx
 from fastapi import APIRouter, Depends, Request, Response
@@ -13,8 +12,9 @@ from fastapi.responses import StreamingResponse
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.models.user import User
 from apps.backend.app.services.agent_client import AgentClient
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

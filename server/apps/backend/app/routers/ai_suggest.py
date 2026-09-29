@@ -1,6 +1,5 @@
 """AI 资产录入建议端点 — 代理转发给 agent 服务。"""
 
-import logging
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -11,9 +10,10 @@ from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.services.agent_client import AgentClient
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/ai/suggest", tags=["ai-suggest"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AssetSuggestRequest(BaseModel):

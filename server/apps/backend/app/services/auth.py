@@ -15,7 +15,6 @@ Rate Limiting Trade-offs:
 See design.md for detailed trade-off analysis.
 """
 
-import logging
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -43,8 +42,9 @@ from apps.backend.app.services.security_log import (
     SecurityEventType,
     _log_security_event,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Login rate limiting: {username: (fail_count, first_fail_time)}
 _login_attempts: dict[str, tuple[int, float]] = {}

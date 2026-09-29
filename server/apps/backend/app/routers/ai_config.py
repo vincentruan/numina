@@ -1,7 +1,6 @@
 """AI 配置管理路由。"""
 
 import json
-import logging
 import threading
 from datetime import UTC, datetime
 
@@ -41,10 +40,11 @@ from apps.backend.app.services.circuit_breaker.adapters.ai_provider import (
     AIProviderAdapter,
 )
 from apps.backend.app.services.security_log import _log_security_event
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/ai", tags=["ai-config"])
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _invalidate_agent_cache(family_id: int) -> None:

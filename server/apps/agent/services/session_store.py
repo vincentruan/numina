@@ -9,9 +9,9 @@ DeerFlow's own checkpointer tables remain in the local DeerFlow DB.
 
 from __future__ import annotations
 
-import logging
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AiSessionRepository:

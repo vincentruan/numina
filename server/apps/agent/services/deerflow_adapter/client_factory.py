@@ -1,12 +1,12 @@
 """DeerFlowClient factory — singleton per process."""
 
-import logging
 
 from apps.agent.services.deerflow_adapter.numina_deerflow_client import (
     NuminaDeerFlowClient,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _client = None
 

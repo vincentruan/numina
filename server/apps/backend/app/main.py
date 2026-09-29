@@ -1,6 +1,5 @@
 import asyncio
 import contextlib
-import logging
 import os
 import secrets
 import time
@@ -171,6 +170,7 @@ from apps.backend.app.services.db_migrate import run_schema_migration
 from apps.backend.app.services.exchange_rate import ExchangeRateService
 from apps.backend.app.services.snapshot import auto_generate_daily_snapshots
 from apps.backend.app.services.storage.base import StorageError
+from packages.core.logging import get_logger
 from packages.db.exchange_rate_adapter import ExchangeRateAdapter
 from packages.db.models.expense_category import ExpenseCategory
 from packages.db.models.expense_entry import ExpenseEntry
@@ -185,7 +185,7 @@ from packages.db.models.split_group import (
 )
 from packages.db.models.trip import Trip
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _wait_for_database(max_retries: int = 10, base_delay: float = 1.0) -> None:

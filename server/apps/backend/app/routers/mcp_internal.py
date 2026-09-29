@@ -1,5 +1,4 @@
 """Internal MCP SSE endpoint — agent → backend tool calls for family data."""
-import logging
 
 from fastapi import APIRouter, Header, Request
 from starlette.responses import Response
@@ -7,10 +6,11 @@ from starlette.responses import Response
 from apps.backend.app.config import settings
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.services.mcp_session import MCPSession
+from packages.core.logging import get_logger
 from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/internal/mcp", tags=["internal-mcp"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Module-level shared transport — handles session routing internally.
 # Both the SSE GET and messages POST endpoints must share the same instance

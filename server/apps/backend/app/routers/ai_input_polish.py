@@ -15,7 +15,6 @@ agent，使其通过 ``verify_family_token``。同时仍由 backend 的
 ``require_adult`` + ``require_ai_enabled`` 做前置鉴权。
 """
 
-import logging
 
 import httpx
 from fastapi import APIRouter, Cookie, Depends, Request
@@ -27,9 +26,10 @@ from apps.backend.app.auth.deps import ACCESS_TOKEN_COOKIE, require_adult
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.services.agent_client import AgentClient
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/api", tags=["ai-input-polish"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class InputPolishRequest(BaseModel):

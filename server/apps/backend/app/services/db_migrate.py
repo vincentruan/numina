@@ -6,7 +6,6 @@ Provides automatic schema migration with:
 - Full table/column/index alignment
 """
 
-import logging
 import time
 from typing import Any
 
@@ -14,8 +13,9 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from apps.backend.app.database import Base
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Lock configuration
 LOCK_TABLE_NAME = "_schema_migration_lock"

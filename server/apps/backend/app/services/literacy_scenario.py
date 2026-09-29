@@ -10,13 +10,13 @@ Idempotent: at most one ``LiteracyScenario`` per (child_id, week_start).
 from __future__ import annotations
 
 import json
-import logging
 from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from packages.core.logging import get_logger
 from packages.db.models.literacy_badge import LiteracyBadge, LiteracyBadgeDefinition
 from packages.db.models.literacy_scenario import (
     LiteracyScenario,
@@ -24,7 +24,7 @@ from packages.db.models.literacy_scenario import (
 )
 from packages.db.models.user import User
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 ALL_DIMENSIONS = ["earning", "choosing", "waiting", "caring"]
 

@@ -2,10 +2,11 @@
 
 import contextlib
 import json
-import logging
 from typing import Any, cast
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 IMPORT_PARSE_PROMPT = """你是一个金融文档解析助手。
 从以下文本中提取持仓/资产信息，输出严格 JSON，不输出任何解释文字。

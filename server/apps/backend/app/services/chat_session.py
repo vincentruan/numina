@@ -5,14 +5,14 @@
 旧的 JSONL 读写路径（append_message / read_messages / fork_session）已移除。
 """
 
-import logging
 
 from sqlalchemy.orm import Session
 
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.utils.snowflake import next_id
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChatSessionService:

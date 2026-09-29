@@ -9,7 +9,6 @@ forwards everything else verbatim.
 
 import asyncio
 import json
-import logging
 import re
 import urllib.parse
 import uuid
@@ -46,10 +45,11 @@ from apps.backend.app.services.bridge_consumer import (
 )
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.storage.service import StorageService
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/ai/chat", tags=["ai-chat"])
 sessions_router = APIRouter(prefix="/ai", tags=["ai-sessions"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ── SSE Constants ──────────────────────────────────────────────────────────────
 

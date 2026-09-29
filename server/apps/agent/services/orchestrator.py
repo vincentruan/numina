@@ -10,12 +10,13 @@ provider-selection / circuit-breaker helpers they share.
 """
 
 import asyncio
-import logging
 import random
 from collections.abc import Coroutine
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _select_model(providers: list[dict], task_type: str) -> tuple[dict, str, list[str]]:

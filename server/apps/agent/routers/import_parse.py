@@ -13,7 +13,6 @@ items}`` 同步 JSON（前端契约不变）。
 """
 
 import asyncio
-import logging
 import uuid
 from types import SimpleNamespace
 from typing import Any
@@ -23,10 +22,11 @@ from pydantic import BaseModel
 
 from apps.agent.app.config import settings
 from apps.agent.services.runtime.worker import _run_import_parse_agent
+from packages.core.logging import get_logger
 from packages.security.service_auth.agent_token_verify import verify_service_token
 
 router = APIRouter(prefix="/import", tags=["import"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # 解析结果为空时的兜底返回（与 import_parse_service 旧契约一致）。
 _EMPTY_RESULT: dict[str, Any] = {"source": "", "report_date": None, "items": []}

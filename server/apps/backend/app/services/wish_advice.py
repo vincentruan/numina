@@ -17,7 +17,6 @@ live stream).
 """
 import hashlib
 import json
-import logging
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -27,8 +26,9 @@ from sqlalchemy.orm import Session
 from apps.backend.app.models.user import User
 from apps.backend.app.models.wish import Wish
 from apps.backend.app.services.agent_client import AgentClient
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def wish_fingerprint(wishes: list[Wish]) -> str:

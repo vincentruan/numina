@@ -7,7 +7,6 @@
 
 import contextlib
 import json
-import logging
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -34,10 +33,11 @@ from apps.backend.app.services.bridge_consumer import trigger_and_stream
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.finance_coach_cache import SKILL_TTL
 from apps.backend.app.services.subscriber_registry import tracked_sse_stream
+from packages.core.logging import get_logger
 from packages.core.path_manager import PathManager
 
 router = APIRouter(prefix="/ai/report", tags=["ai-report"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _check_ai_enabled(db: Session, family_id: int) -> None:

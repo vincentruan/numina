@@ -17,7 +17,6 @@ DeerFlow builds its own compaction middleware via ``_create_compaction_middlewar
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from deerflow.runtime.context_compaction import (
@@ -27,7 +26,9 @@ from deerflow.runtime.context_compaction import (
     compact_thread_context,
 )
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 async def compact_thread(

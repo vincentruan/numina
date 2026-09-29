@@ -3,7 +3,6 @@ import base64
 import hashlib
 import hmac
 import json
-import logging
 import smtplib
 import time
 from email.mime.text import MIMEText
@@ -11,7 +10,9 @@ from pathlib import Path
 
 import httpx
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 

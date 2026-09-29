@@ -1,6 +1,5 @@
 """Unified HTTP client for communicating with the Agent microservice."""
 
-import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -8,9 +7,10 @@ from typing import Any
 import httpx
 
 from apps.backend.app.config import settings
+from packages.core.logging import get_logger
 from packages.security.service_auth.agent_jwt import create_agent_token
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class AgentClient:
     """A wrapper around httpx.AsyncClient that injects Numina tenant isolation headers.

@@ -10,7 +10,6 @@ Skill catalog 命名空间约定：
 
 """
 
-import logging
 import re
 from pathlib import Path
 
@@ -35,9 +34,10 @@ from apps.backend.app.services.skill_downloader import (
     SkillDownloadError,
 )
 from apps.backend.app.services.skill_parser import parse_skill_frontmatter
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/ai/skills", tags=["ai-skills"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Reserved namespace — not skills, but blocked from custom skill_id collisions.
 # - ``chat`` 是 AI 问答智能体的纯 LLM 对话内部能力（``agent.skills=["chat"]`` 由

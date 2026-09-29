@@ -1,6 +1,5 @@
 """AI 功能相关的 FastAPI dependencies。"""
 
-import logging
 
 import jwt
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -15,8 +14,9 @@ from apps.backend.app.models.ai_provider_config import AIProviderConfig
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.services.audit_log import write_audit_log
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def require_ai_enabled(

@@ -19,7 +19,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-
 _VALID_REPORT = {
     "overall_score": 88,
     "indicators": [

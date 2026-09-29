@@ -10,7 +10,6 @@
 import csv
 import hashlib
 import io
-import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -33,9 +32,10 @@ from apps.backend.app.models.draft_import import DraftImport
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.user import User
 from apps.backend.app.services.agent_client import AgentClient
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/import", tags=["import"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # R1 / KTD5: split file size limits by type.
 _MAX_IMAGE_BYTES = 25 * 1024 * 1024  # 25 MB for images (phone photos can be 5-15 MB)

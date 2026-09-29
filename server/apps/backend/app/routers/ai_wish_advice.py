@@ -5,7 +5,6 @@ Cache key: family_id:wish_advice:{fingerprint}, TTL 8h, wish-change invalidated.
 Output schema (NOT finance_coach's suggestions[]): {primary_wish_id, reason,
 suggested_monthly, redistribution: [{wish_id, suggested_amount, note}]}.
 """
-import logging
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -22,9 +21,10 @@ from apps.backend.app.services.finance_coach_cache import (
     latest_by_skill,
     upsert_skill_result,
 )
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/ai/wish-advice", tags=["ai-wish-advice"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.post("/generate")

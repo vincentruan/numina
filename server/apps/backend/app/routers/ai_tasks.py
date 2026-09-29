@@ -13,7 +13,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
@@ -27,8 +26,9 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.base import SnowflakeBase
 from apps.backend.app.services.ai_task_service import AITaskService
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/ai/tasks", tags=["ai-tasks"])
 
 VALID_SKILL_IDS = {

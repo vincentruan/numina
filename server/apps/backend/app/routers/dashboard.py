@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -43,9 +42,10 @@ from apps.backend.app.services.bridge_consumer import (
 )
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.subscriber_registry import tracked_sse_stream
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/overview", response_model=OverviewResponse)

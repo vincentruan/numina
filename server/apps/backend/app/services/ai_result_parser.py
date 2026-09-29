@@ -11,7 +11,6 @@ Strategy:
 
 import asyncio
 import json
-import logging
 import re
 from typing import Any
 
@@ -19,8 +18,9 @@ from json_repair import repair_json
 from sqlalchemy.orm import Session
 
 from apps.backend.app.services.ai_crypto import decrypt_api_key
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 LLM_FALLBACK_MAX_TOKENS = 800
 LLM_FALLBACK_TEMPERATURE = 0.1

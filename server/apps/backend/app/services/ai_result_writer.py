@@ -5,7 +5,6 @@ Each skill has its own writer function with replace strategy:
 - Bulk insert new structured records
 """
 
-import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -14,8 +13,9 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.models.ai_report import AIReport
 from apps.backend.app.utils.snowflake import next_id
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def write_report_results(

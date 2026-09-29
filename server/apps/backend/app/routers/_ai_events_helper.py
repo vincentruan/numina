@@ -11,7 +11,6 @@ circuit breaker is open.
 """
 
 import json
-import logging
 
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -19,8 +18,9 @@ from sqlalchemy.orm import Session
 from apps.backend.app.services.ai_extraction_circuit_service import (
     AIExtractionCircuitService,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _error_event(code: str, message: str | None = None) -> bytes:

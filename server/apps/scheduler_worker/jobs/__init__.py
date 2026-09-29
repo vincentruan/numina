@@ -345,10 +345,7 @@ def literacy_report_weekly_job() -> None:
 
 async def notification_digest_job() -> None:
     """Send daily digest notifications for channels with digest_mode='daily'."""
-    import logging
-
     from packages.db.session import SessionLocal  # noqa: PLC0415
-    logger = logging.getLogger(__name__)
     db = SessionLocal()
     try:
         from apps.backend.app.services.notification.dispatcher import (

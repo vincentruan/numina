@@ -19,9 +19,9 @@ asset-report runs.
 
 from __future__ import annotations
 
-import logging
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def normalize_indicator_data_items(items: list) -> list[dict]:

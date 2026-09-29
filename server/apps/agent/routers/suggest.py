@@ -5,17 +5,17 @@ U6 (Resolved-10): suggest 重构为轻量 LLM 单次调用，不再走 ``orchest
 （内部用 ``_create_lightweight_llm`` + ``llm.ainvoke``，与 title 生成同形态）。
 """
 
-import logging
 
 from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel
 
 from apps.agent.core.backend_client import BackendClient
 from apps.agent.services.asset_suggest import _SUGGEST_DEFAULTS, suggest_asset_fields
+from packages.core.logging import get_logger
 from packages.security.service_auth.agent_token_verify import verify_service_token
 
 router = APIRouter(prefix="/suggest", tags=["suggest"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AssetSuggestRequest(BaseModel):

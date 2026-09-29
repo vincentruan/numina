@@ -1,6 +1,5 @@
 # backend/app/services/notification/dispatcher.py
 import asyncio
-import logging
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func
@@ -25,6 +24,7 @@ from apps.backend.app.services.notification.sender import (
 )
 from apps.backend.app.services.storage.config_crypto import decrypt_config
 from apps.backend.app.utils.snowflake import next_id
+from packages.core.logging import get_logger
 from packages.core.settings import settings
 from packages.db.models.notification_channel_config import (
     NotificationChannelConfig,
@@ -32,7 +32,7 @@ from packages.db.models.notification_channel_config import (
 from packages.db.models.notification_config import NotificationConfig
 from packages.db.models.push_subscription import PushSubscription
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def ensure_reminder(db: Session, data: dict) -> Reminder | None:

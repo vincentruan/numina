@@ -7,20 +7,18 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from apps.agent.services.runtime.run_extras import (
-    _generate_title_via_llm,
     _is_fallback_title,
     _should_generate_title,
     _text_fallback_title,
     strip_language_prefix,
     sync_title_from_checkpoint,
 )
-
 
 # ── Simulate the exact data flow from AI Hub → worker → title sync ──
 

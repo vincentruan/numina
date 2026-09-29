@@ -3,14 +3,14 @@
 供 backend 调用，通知 agent 清理家庭的 DeerFlowAdapter 缓存。
 """
 
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from apps.agent.services.deerflow_adapter.adapter import invalidate_family_adapter_cache
+from packages.core.logging import get_logger
 from packages.security.service_auth.agent_token_verify import verify_service_token
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/internal/cache", tags=["internal"])
 

@@ -12,13 +12,14 @@ the parent ``LocalSandboxProvider`` picks this up automatically through its
 from __future__ import annotations
 
 import contextvars
-import logging
 import threading
 from types import SimpleNamespace
 
 from deerflow.sandbox.local.local_sandbox_provider import LocalSandboxProvider
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Coroutine-safe family_id context

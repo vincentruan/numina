@@ -8,19 +8,19 @@ Idempotent: at most one report per (child_id, week_start).
 """
 from __future__ import annotations
 
-import logging
 from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from packages.core.logging import get_logger
 from packages.db.models.literacy_badge import LiteracyBadge, LiteracyBadgeDefinition
 from packages.db.models.literacy_report import LiteracyWeeklyReport
 from packages.db.models.literacy_scenario import LiteracyScenario
 from packages.db.models.user import User
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

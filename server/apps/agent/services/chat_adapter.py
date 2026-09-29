@@ -8,7 +8,6 @@ Responsibilities:
 Does NOT handle:
 - Auth, policy, audit, journal, PII (orchestrator's responsibility)
 """
-import logging
 import re
 from collections.abc import AsyncGenerator
 from pathlib import Path
@@ -23,8 +22,9 @@ from apps.agent.services.deerflow_adapter.adapter import (
 from apps.agent.services.deerflow_adapter.adapter import (
     create_family_adapter as _create_family_adapter,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_\-]+$")
 _PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts" / "chat"

@@ -5,7 +5,6 @@
 """
 
 import json
-import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 
@@ -30,6 +29,7 @@ from apps.backend.app.schemas.ai_task import (
     TaskHeartbeatRequest,
     TaskProgressRequest,
 )
+from packages.core.logging import get_logger
 
 if TYPE_CHECKING:
     from apps.backend.app.models.ai_chat_session import AIChatSession
@@ -736,10 +736,6 @@ def internal_update_session_summary(
     family_id: str = Depends(verify_agent_token),
     db: Session = Depends(get_db),
 ):
-    import logging
-
-    logger = logging.getLogger(__name__)
-
     logger.info(
         "[backend] update_session_summary session=%s title=%s summary=%s status=%s model=%s",
         session_id,
@@ -802,16 +798,12 @@ def internal_persist_report(
     validation failure returns an error so the worker marks the run as error
     rather than persisting unvalidated data.
     """
-    import logging
-
     from apps.backend.app.services.ai_result_parser import (
         _contains_markdown_table,
         _validate_json,
         _validate_report_data_items,
     )
     from apps.backend.app.services.ai_result_writer import write_report_results
-
-    logger = logging.getLogger(__name__)
 
     report_json = body.report_json
     if not (
@@ -948,7 +940,7 @@ def internal_get_user(
 
 # ── System-level internal auth (no X-Family-Id) ──────────────────────────────
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def verify_system_token(
