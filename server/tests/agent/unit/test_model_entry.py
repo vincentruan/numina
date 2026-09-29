@@ -47,8 +47,8 @@ class TestProviderClassMapping:
             "model_1_capabilities": ["text_generation"],
         })
         assert entry["use"] == "langchain_google_genai:ChatGoogleGenerativeAI"
-        assert entry["gemini_api_key"] == "AIza-test"
-        assert "api_key" not in entry
+        assert entry["api_key"] == "AIza-test"
+        assert "gemini_api_key" not in entry
         assert "base_url" not in entry
         assert entry["supports_thinking"] is False
 

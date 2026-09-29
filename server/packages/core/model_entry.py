@@ -177,12 +177,10 @@ def build_model_entry(ai_provider: dict[str, Any]) -> dict[str, Any]:
         "supports_vision": vision_supported,
     }
 
-    # Gemini uses gemini_api_key (ChatGoogleGenerativeAI constructor param);
-    # all other providers use the generic api_key.
-    if provider == "gemini":
-        entry["gemini_api_key"] = api_key
-    else:
-        entry["api_key"] = api_key
+    # All providers use the generic api_key.  ChatGoogleGenerativeAI exposes
+    # ``validation_alias="api_key"`` (field name: ``google_api_key``), so
+    # ``api_key`` works for Gemini too — no special-casing needed.
+    entry["api_key"] = api_key
 
     if base_url and provider != "gemini":
         entry["base_url"] = base_url

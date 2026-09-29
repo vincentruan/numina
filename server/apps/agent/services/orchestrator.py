@@ -119,20 +119,23 @@ def _select_stream_run_provider(
             closed.append(p)
 
     # 10% chance to probe a half_open provider (recovery test).
+    # When multiple half_open providers exist, pick the one with the lowest
+    # failure_count (most likely to recover) rather than always the first.
     if half_open and _should_route_to_half_open():
-        return half_open[0]
+        return _pick_best_half_open(half_open)
 
     # Prefer a closed provider; fall back to a half_open one when no closed
     # provider is available — better to probe than to fail the run outright.
     if closed:
         return closed[0]
     if half_open:
+        best = _pick_best_half_open(half_open)
         logger.info(
             "[orchestrator] _select_stream_run_provider: no closed provider available, "
             "probing half_open provider config_id=%s",
-            half_open[0].get("config_id"),
+            best.get("config_id"),
         )
-        return half_open[0]
+        return best
 
     return None
 
@@ -153,6 +156,19 @@ def _should_route_to_half_open() -> bool:
     before invoking this function.
     """
     return random.random() < 0.1
+
+
+def _pick_best_half_open(candidates: list[dict]) -> dict:
+    """Pick the most promising half_open provider for a recovery probe.
+
+    Strategy: prefer the candidate with the lowest ``failure_count`` — it has
+    failed the least and is most likely to recover.  Ties are broken by
+    ``display_order`` (first in list wins).  This avoids always probing the
+    same provider when multiple are in half_open state.
+    """
+    if len(candidates) <= 1:
+        return candidates[0]
+    return min(candidates, key=lambda p: (p.get("failure_count", 0), p.get("display_order", 0)))
 
 
 def _select_provider_with_retry(

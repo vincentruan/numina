@@ -262,6 +262,8 @@ def internal_get_ai_config(
                 "circuit_state": cfg.circuit_state,
                 "circuit_reason": cfg.circuit_reason,
                 "recovery_schedule": cfg.recovery_schedule,
+                "failure_count": cfg.failure_count or 0,
+                "display_order": cfg.display_order or 0,
             }
         )
 

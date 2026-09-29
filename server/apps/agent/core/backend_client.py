@@ -443,7 +443,12 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
         return "permanent_account"
     if error_message and any(
         keyword in error_message.lower()
-        for keyword in ["invalid key", "invalid api key", "api key expired"]
+        for keyword in [
+            "invalid key",
+            "invalid api key",
+            "api key expired",
+            "api key required",  # Pydantic ValidationError when key is missing
+        ]
     ):
         return "permanent_auth"
     # Quota/billing exhaustion is a provider-account issue (user must top up
@@ -489,6 +494,22 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
     ):
         return "permanent_account"
     if error_code == 429:
+        # 429 with quota/billing keywords is permanent (free-tier exhausted,
+        # plan limit), not a transient rate-limit.  Check keywords first so
+        # "Quota exceeded" → permanent_account even when error_code is 429.
+        if error_message:
+            msg_lower = error_message.lower()
+            if any(
+                kw in msg_lower
+                for kw in [
+                    "quota exceeded",
+                    "quota exhausted",
+                    "resource_exhausted",
+                    "rate limit exceeded",
+                    "limit reached",
+                ]
+            ):
+                return "permanent_account"
         return "transient_rate_limit"
     if error_code in (500, 502, 503, 504):
         return "transient_server"
