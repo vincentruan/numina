@@ -1,14 +1,14 @@
 """Zone-based recommendation service — simplified Phase 1 zone logic."""
 
-import logging
 from datetime import date
 
 from sqlalchemy.orm import Session
 
+from packages.core.logging import get_logger
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.topic import LearningTopic
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Age group ordering for zone determination
 AGE_GROUP_ORDER = {"low": 0, "mid": 1, "high": 2}

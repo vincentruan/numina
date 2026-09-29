@@ -4,7 +4,6 @@ Reads fall back to registry defaults when no DB row exists.
 Hot-path reads use a 5-minute LRU cache to avoid per-request DB hits.
 """
 import json
-import logging
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -20,8 +19,9 @@ from apps.backend.app.services.config_registry import (
     validate_value,
 )
 from apps.backend.app.utils.snowflake import next_id
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # --- Internal helpers ---

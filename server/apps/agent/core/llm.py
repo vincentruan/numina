@@ -1,10 +1,11 @@
 """统一 LLM 调用封装（Anthropic / OpenAI）。"""
 
-import logging
 from collections.abc import Iterator
 from typing import Any, cast
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _is_unsupported_response_format_error(exc: Exception) -> bool:

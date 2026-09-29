@@ -55,7 +55,7 @@ def setup_all_jobs() -> None:
         max_instances=1,
         coalesce=True,
     )
-    logger.info(f"文件同步任务已配置（每 {settings.FILE_SYNC_INTERVAL_MINUTES} 分钟）")
+    logger.info("文件同步任务已配置（每 %s 分钟）", settings.FILE_SYNC_INTERVAL_MINUTES)
 
     # Job 3: Audit log purge — daily at 03:00
     scheduler.add_job(

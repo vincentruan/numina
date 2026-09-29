@@ -13,7 +13,6 @@ unless ``force=True`` is passed.
 from __future__ import annotations
 
 import json
-import logging
 import uuid
 from datetime import date, timedelta
 
@@ -27,10 +26,11 @@ from apps.backend.app.services.literacy_report import (
     _get_age_group,
     _sunday_of,
 )
+from packages.core.logging import get_logger
 from packages.db.models.literacy_report import LiteracyWeeklyReport
 from packages.db.models.user import User
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

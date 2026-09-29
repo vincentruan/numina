@@ -11,16 +11,16 @@ by the backend's ``verify_agent_token`` dependency.
 
 from __future__ import annotations
 
-import logging
 from typing import NamedTuple
 
 import jwt
 from fastapi import Header, HTTPException, Request
 from jwt.exceptions import ExpiredSignatureError, PyJWTError
 
+from packages.core.logging import get_logger
 from packages.core.settings import settings as _core_settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 ALGORITHM = "HS256"
 

@@ -16,7 +16,6 @@ fully functional, just without auto-continuation.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
 
 from apps.agent.schemas.context import FamilyContext
@@ -37,8 +36,9 @@ from apps.agent.services.goal_store import (
     write_thread_goal,
 )
 from apps.agent.services.pii_redactor import pii_redactor
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _get_shared_checkpointer_for_goal() -> Any:

@@ -15,7 +15,6 @@ XML 风格分隔符包裹，system prompt 显式指示视为不可信数据。
 
 from __future__ import annotations
 
-import logging
 import re
 from typing import Any
 
@@ -25,8 +24,9 @@ from apps.agent.services.runtime.run_extras import (
     _create_lightweight_llm,
     _extract_text_from_content_blocks,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Safe defaults returned when the LLM call or JSON parse fails (mirrors the
 # pre-U6 fallback so a suggest failure never blocks asset entry).
@@ -153,8 +153,8 @@ async def suggest_asset_fields(
             return dict(_SUGGEST_DEFAULTS)
 
         return _normalize_suggest_result(data)
-    except Exception as e:
-        logger.warning("[asset_suggest] LLM 调用或解析失败: %s", e)
+    except Exception:
+        logger.warning('[asset_suggest] LLM 调用或解析失败', exc_info=True)
         return dict(_SUGGEST_DEFAULTS)
 
 

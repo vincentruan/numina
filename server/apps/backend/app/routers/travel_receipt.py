@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -20,8 +19,9 @@ from apps.backend.app.services.security_log import (
     _log_security_event,
 )
 from apps.backend.app.services.storage.service import StorageService
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/import", tags=["travel"])
 

@@ -14,10 +14,11 @@ is actively reading). Currently this module ships as tracking scaffolding only.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import AsyncGenerator, AsyncIterator
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class SubscriberRegistry:

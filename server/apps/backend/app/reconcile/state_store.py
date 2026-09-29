@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -12,8 +11,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.schema import Table
 
 from apps.backend.app.database import Base
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ReconcileState(Base):

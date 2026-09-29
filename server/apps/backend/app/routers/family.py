@@ -1,4 +1,3 @@
-import logging
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
@@ -34,10 +33,11 @@ from apps.backend.app.schemas.family import (
 from apps.backend.app.services import coin_transactions as coin_service
 from apps.backend.app.services import family as family_service
 from apps.backend.app.services.snapshot import generate_snapshots
+from packages.core.logging import get_logger
 from packages.core.roles import UserRole
 from packages.db.models.family import Family
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/family", tags=["family"])
 
@@ -340,7 +340,7 @@ async def create_share_link(
             ),
         )
     except Exception as exc:
-        logger.warning("short.io API call failed: %s", exc)
+        logger.warning('short.io API call failed', exc_info=True)
         raise AppError(ErrorCode.SHARE_LINK_CREATION_FAILED) from exc
 
     if result is None:

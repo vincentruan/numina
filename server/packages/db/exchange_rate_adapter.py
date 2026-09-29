@@ -73,9 +73,7 @@ class ExchangeRateAdapter:
         fetched_at = datetime.fromisoformat(data["fetched_at"])
         return (rate, fetched_at)
 
-    def populate_cache(
-        self, currency: str, rate: float, fetched_at: datetime
-    ) -> None:
+    def populate_cache(self, currency: str, rate: float, fetched_at: datetime) -> None:
         """Write a rate into the unified Cache (4h TTL).
 
         Used by the domain service to promote DB-looked-up rates into the
@@ -98,8 +96,8 @@ class ExchangeRateAdapter:
         """
         try:
             rates = self.fetch_rates()
-        except Exception as e:
-            logger.exception(f"汇率获取失败: {e}")
+        except Exception:
+            logger.exception("汇率获取失败")
             return False
 
         fetched_at = datetime.now(UTC)
@@ -140,5 +138,5 @@ class ExchangeRateAdapter:
             db.rollback()
             raise
 
-        logger.info(f"汇率更新完成，共 {len(rates)} 种货币")
+        logger.info("汇率更新完成，共 %s 种货币", len(rates))
         return True

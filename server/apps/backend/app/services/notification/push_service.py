@@ -5,11 +5,12 @@ fulfilled, milestone earned) that bypass the reminder/dispatcher system because
 they are not scheduled reminders.
 """
 
-import logging
 
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def send_family_interaction_push(

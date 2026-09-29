@@ -36,6 +36,7 @@ def init_cache(
         if not redis_url:
             raise RuntimeError("CACHE_BACKEND=redis requires REDIS_URL")
         import redis.asyncio as aioredis
+
         from packages.core.cache.redis import RedisCache
         client = aioredis.from_url(redis_url, decode_responses=True, max_connections=10)
         _instance = RedisCache(client, prefix=prefix)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import shutil
 import tempfile
@@ -17,8 +16,9 @@ from apps.backend.app.reconcile.types import (
     ResourceStatus,
     ResourceType,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Marker comment placed in managed files to indicate they are system-managed
 MANAGED_MARKER = "# managed-by: numina-reconcile"
@@ -127,9 +127,9 @@ class FileResource(Resource):
             backup_path = self._path.with_suffix(self._path.suffix + ".bak")
             try:
                 shutil.copy2(str(self._path), str(backup_path))
-                logger.info(f"Backed up {self._path} → {backup_path}")
-            except OSError as e:
-                logger.warning(f"Could not backup {self._path}: {e}")
+                logger.info("Backed up %s → %s", self._path, backup_path)
+            except OSError:
+                logger.warning('Could not backup %s', self._path, exc_info=True)
 
         # Prepend managed marker if applicable
         if self._add_managed_marker and not desired_content.startswith(MANAGED_MARKER.encode()):

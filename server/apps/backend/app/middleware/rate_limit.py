@@ -17,7 +17,6 @@ Trade-offs:
 """
 
 import ipaddress
-import logging
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -29,8 +28,9 @@ from apps.backend.app.services.security_log import (
     SecurityEventType,
     _log_security_event,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _is_ip_in_trusted_list(ip_str: str, trusted_ips: list[str]) -> bool:

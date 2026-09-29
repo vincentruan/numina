@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import logging
-
 from sqlalchemy.orm import Session
 
+from packages.core.logging import get_logger
 from packages.db.models.learning.topic import LearningTopic
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def validate_badge_subjects(badge_subjects: set[str], db: Session) -> list[str]:

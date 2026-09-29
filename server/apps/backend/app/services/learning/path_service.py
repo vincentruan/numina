@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from collections import deque
 from datetime import UTC, date, datetime
@@ -10,12 +9,13 @@ from datetime import UTC, date, datetime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from packages.core.logging import get_logger
 from packages.db.models.child_economy.coin_transaction import CoinTransaction
 from packages.db.models.learning.assignment import LearningAssignment
 from packages.db.models.learning.path import LearningPath, LearningPathItem
 from packages.db.models.learning.topic import LearningDependency, LearningTopic
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def sort_topics_by_prerequisites(

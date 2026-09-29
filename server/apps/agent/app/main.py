@@ -1,6 +1,5 @@
 """Numina AI Agent 微服务入口。"""
 
-import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,6 +24,9 @@ from apps.agent.routers import runs_stream as runs_stream_router
 from apps.agent.routers import suggest as suggest_router
 from apps.agent.routers import threads as threads_router
 from apps.agent.routers import translate as translate_router
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 _original_create_mcp_http_client = _httpx_utils.create_mcp_http_client
 
@@ -35,9 +37,6 @@ def _patched_create_mcp_http_client(
     auth: httpx.Auth | None = None,
 ) -> httpx.AsyncClient:
     """Patched factory that uses trust_env=False to avoid proxy issues."""
-    import logging
-
-    logger = logging.getLogger(__name__)
     logger.debug("[mcp_patch] creating httpx client with trust_env=False")
     return httpx.AsyncClient(
         headers=headers or {},
@@ -72,8 +71,8 @@ try:
     from apps.agent.services.deerflow_adapter import (
         memory_config_bridge,
     )
-except Exception as e:
-    logging.getLogger(__name__).warning("memory_config_bridge install failed: %s", e)
+except Exception:
+    logger.warning('memory_config_bridge install failed', exc_info=True)
 
 
 @asynccontextmanager
@@ -205,9 +204,7 @@ async def lifespan(app: FastAPI):
                 sqlite_dir=str(Path(db_path).parent),
             )
     except Exception as _e:
-        import logging
-
-        logging.getLogger(__name__).warning("DeerFlow engine init failed: %s", _e)
+        logger.warning("DeerFlow engine init failed: %s", _e)
 
     # Initialize AsyncSqliteSaver checkpointer for LangGraph conversation persistence.
     # Must be done in async context (lifespan) so the async context manager is entered properly.
@@ -218,9 +215,7 @@ async def lifespan(app: FastAPI):
 
         await async_init_checkpointer()
     except Exception as _e:
-        import logging
-
-        logging.getLogger(__name__).warning("AsyncSqliteSaver init failed: %s", _e)
+        logger.warning("AsyncSqliteSaver init failed: %s", _e)
 
     # Apply DeerFlow sync-tool compatibility patch: the pinned harness (rev
     # 4538c322) predates upstream fix 3599b570, so the built-in ``task`` tool
@@ -234,9 +229,7 @@ async def lifespan(app: FastAPI):
 
         apply_sync_tool_patches()
     except Exception as _e:
-        import logging
-
-        logging.getLogger(__name__).warning("sync_tool_patch failed: %s", _e)
+        logger.warning("sync_tool_patch failed: %s", _e)
 
     # [Copied from DeerFlow Reference] — initialise runtime (StreamBridge + RunManager)
     # [Integrated with Numina Multi-Tenant] — shared singletons for all families
@@ -258,8 +251,7 @@ async def lifespan(app: FastAPI):
             The actual shutdown logic runs in lifespan's shutdown phase.
             This handler just sets the flag so routers can reject new tasks.
             """
-            import logging
-            logging.getLogger(__name__).info("[SIGTERM] Received SIGTERM, marking shutdown state")
+            logger.info("[SIGTERM] Received SIGTERM, marking shutdown state")
             from apps.agent.services.runtime.shutdown_state import mark_shutting_down
             mark_shutting_down()
 

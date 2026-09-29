@@ -1,14 +1,14 @@
 """Child learning stats service — XP, level, streak management."""
 
-import logging
 from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from packages.core.logging import get_logger
 from packages.db.models.learning.stats import ChildLearningStats
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Level thresholds: (level, cumulative_xp_required)
 LEVEL_THRESHOLDS = [

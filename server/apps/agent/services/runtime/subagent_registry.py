@@ -14,7 +14,6 @@ forking the class, so this wrapper maintains a parallel index mapping
 
 from __future__ import annotations
 
-import logging
 import threading
 from typing import Any
 
@@ -22,7 +21,9 @@ from deerflow.subagents.executor import (
     get_background_task_result,
 )
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Parallel index: task_id -> family_id
 _family_task_index: dict[str, str] = {}

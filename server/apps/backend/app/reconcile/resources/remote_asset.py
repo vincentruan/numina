@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import tempfile
 from pathlib import Path
@@ -14,8 +13,9 @@ from apps.backend.app.reconcile.types import (
     ResourceResult,
     ResourceType,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RemoteAssetResource(Resource):

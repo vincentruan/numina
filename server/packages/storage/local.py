@@ -55,7 +55,7 @@ class LocalStorageBackend(StorageBackend):
         try:
             os.remove(file_path)
         except FileNotFoundError:
-            logger.warning(f"本地文件不存在，跳过删除: {file_path}")
+            logger.warning("本地文件不存在，跳过删除: %s", file_path)
 
     def get_url(self, remote_path: str) -> str:
         """Return root-relative URL served by the StaticFiles mount."""

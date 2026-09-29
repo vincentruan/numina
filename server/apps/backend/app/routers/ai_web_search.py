@@ -1,6 +1,5 @@
 """Web Search Provider CRUD router."""
 
-import logging
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -32,9 +31,10 @@ from apps.backend.app.services.web_search_provider_registry import (
     get_provider_template,
     list_provider_templates,
 )
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/ai/web-search", tags=["ai-web-search"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _get_provider_or_404(provider_id: int, family_id: int, db: Session) -> FamilyWebSearchProvider:

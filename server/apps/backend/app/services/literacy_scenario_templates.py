@@ -14,15 +14,15 @@ Provides two entry points:
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from packages.core.logging import get_logger
 from packages.db.models.literacy_scenario import LiteracyScenarioTemplate
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 

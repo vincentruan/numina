@@ -47,7 +47,6 @@ snapshot is never replayed for family B's update.
 from __future__ import annotations
 
 import importlib
-import logging
 import threading
 from typing import Any
 
@@ -58,6 +57,8 @@ from deerflow.config.app_config import (
     pop_current_app_config,
     push_current_app_config,
 )
+
+from packages.core.logging import get_logger
 
 # DeerFlow rev >=10890e10 (#4122 pluggable memory abstraction) moved the
 # deermem backend's queue/updater classes out of the top-level
@@ -77,7 +78,7 @@ except ImportError:  # legacy harness (pre-#4122)
     from deerflow.agents.memory import queue as _queue_mod  # type: ignore
     from deerflow.agents.memory import updater as _updater_mod  # type: ignore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # (thread_id, user_id, agent_name) → family AppConfig snapshot captured at
 # enqueue time, replayed on the background timer thread.

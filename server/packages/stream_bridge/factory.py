@@ -6,14 +6,14 @@ Reads configuration and returns the appropriate StreamBridge implementation
 
 from __future__ import annotations
 
-import logging
+from packages.core.logging import get_logger
 
 from .base import StreamBridge
 from .config import StreamBridgeConfig
 from .memory import MemoryStreamBridge
 from .redis import NuminaRedisStreamBridge
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def make_stream_bridge(config: StreamBridgeConfig | None = None) -> StreamBridge:

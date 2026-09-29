@@ -18,17 +18,17 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
+from packages.core.logging import get_logger
 from packages.db.models.literacy_badge import LiteracyBadge, LiteracyBadgeDefinition
 from packages.db.models.literacy_scenario import LiteracyScenario
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Dimensions and which triggers evaluate them.
 ALL_DIMENSIONS = ("earning", "choosing", "waiting", "caring")

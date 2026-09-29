@@ -18,10 +18,11 @@ swallow their own errors - a failure here must never break the stream.
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Titles that start with this were produced by the sync ``after_model`` fallback
 # using the raw ``[SKILL:chat]`` prompt wrapper - they are NOT real summaries and
@@ -174,7 +175,7 @@ async def generate_suggestions(ai_response: str, user_message: str, ai_config: d
             failure_reasons.extend(errors[:2])
         except Exception as e:
             failure_reasons.append(f"LLM 调用失败: {type(e).__name__}")
-            logger.warning("[run_extras] Failed to generate suggestions (attempt %d): %s", attempt + 1, e)
+            logger.warning('[run_extras] Failed to generate suggestions (attempt %d)', attempt + 1, exc_info=True)
 
     logger.warning("[run_extras] Suggestions failed after %d attempts: %s", max_attempts, failure_reasons[:3])
     return []
@@ -486,8 +487,8 @@ async def _generate_title_via_llm(
         response = await llm.ainvoke([system])
         title = _parse_title_content(response.content)
         return title[:_TITLE_MAX_CHARS] if title else None
-    except Exception as e:
-        logger.warning("[run_extras] LLM title generation failed: %s", e)
+    except Exception:
+        logger.warning('[run_extras] LLM title generation failed', exc_info=True)
         return None
 
 
@@ -638,6 +639,6 @@ async def sync_title_from_checkpoint(
             return title
         logger.info("[run_extras][title] FINAL: generated_title empty, returning None")
         return None
-    except Exception as e:
-        logger.warning("[run_extras] Failed to sync title for thread %s: %s", thread_id, e)
+    except Exception:
+        logger.warning('[run_extras] Failed to sync title for thread %s', thread_id, exc_info=True)
         return None

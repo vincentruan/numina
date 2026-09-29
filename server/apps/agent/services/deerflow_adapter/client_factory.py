@@ -1,12 +1,12 @@
 """DeerFlowClient factory — singleton per process."""
 
-import logging
 
 from apps.agent.services.deerflow_adapter.numina_deerflow_client import (
     NuminaDeerFlowClient,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _client = None
 
@@ -19,7 +19,7 @@ def get_deerflow_client(config_path: str):
 
     try:
         _client = NuminaDeerFlowClient(config_path=config_path)
-        logger.info(f"NuminaDeerFlowClient initialized with config: {config_path}")
+        logger.info("NuminaDeerFlowClient initialized with config: %s", config_path)
         return _client
     except Exception as e:
         raise RuntimeError(

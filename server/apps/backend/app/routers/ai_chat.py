@@ -9,7 +9,6 @@ forwards everything else verbatim.
 
 import asyncio
 import json
-import logging
 import re
 import urllib.parse
 import uuid
@@ -46,10 +45,11 @@ from apps.backend.app.services.bridge_consumer import (
 )
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.storage.service import StorageService
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/ai/chat", tags=["ai-chat"])
 sessions_router = APIRouter(prefix="/ai", tags=["ai-sessions"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ── SSE Constants ──────────────────────────────────────────────────────────────
 
@@ -224,7 +224,7 @@ async def chat(
     except httpx.TimeoutException:
         raise AppError(ErrorCode.AI_SERVICE_TIMEOUT) from None
     except Exception as e:
-        logger.error("调用 agent chat 失败: %s", type(e).__name__)
+        logger.exception("调用 agent chat 失败")
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
 
     return {
@@ -315,7 +315,7 @@ async def chat_stream(
             headers={"X-Thread-Id": str(session_id)},
         )
     except Exception as e:
-        logger.error("[chat-stream] trigger failed: %s", type(e).__name__)
+        logger.exception("[chat-stream] trigger failed")
         if ai_task_id is not None:
             try:
                 _fdb = SessionLocal()
@@ -358,7 +358,9 @@ async def chat_stream(
 
     # Start lease heartbeat (defence-in-depth for long-running tasks)
     _hb_stop = asyncio.Event()
-    _hb_task = asyncio.create_task(_lease_heartbeat(str(ai_task_id) if ai_task_id else "", _family_id, _hb_stop))
+    _hb_task = asyncio.create_task(
+        _lease_heartbeat(str(ai_task_id) if ai_task_id else "", _family_id, _hb_stop)
+    )
 
     # Lifecycle consumer handles task completion (replaces manual complete/fail).
     # Spawned immediately — the agent runs with on_disconnect=continue, so even

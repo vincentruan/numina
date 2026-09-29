@@ -10,7 +10,6 @@
 import csv
 import hashlib
 import io
-import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -33,9 +32,10 @@ from apps.backend.app.models.draft_import import DraftImport
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.user import User
 from apps.backend.app.services.agent_client import AgentClient
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/import", tags=["import"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # R1 / KTD5: split file size limits by type.
 _MAX_IMAGE_BYTES = 25 * 1024 * 1024  # 25 MB for images (phone photos can be 5-15 MB)
@@ -63,6 +63,7 @@ _ROLLBACK_WINDOW_DAYS = 30
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _detect_format(filename: str | None, content_type: str | None) -> str:
     """Detect file format from content-type with extension fallback.
@@ -133,10 +134,20 @@ def _save_image_to_sandbox(
 
     Returns the virtual path for agent's view_image tool.
     """
-    data_root = Path(settings.DATA_ROOT).expanduser() if hasattr(settings, "DATA_ROOT") else Path.home() / ".numina" / "data"
+    data_root = (
+        Path(settings.DATA_ROOT).expanduser()
+        if hasattr(settings, "DATA_ROOT")
+        else Path.home() / ".numina" / "data"
+    )
     uploads_dir = (
-        data_root / "workspaces" / "users" / str(family_id)
-        / "threads" / thread_id / "user-data" / "uploads"
+        data_root
+        / "workspaces"
+        / "users"
+        / str(family_id)
+        / "threads"
+        / thread_id
+        / "user-data"
+        / "uploads"
     )
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
@@ -159,6 +170,7 @@ def _extract_excel_to_text(data: bytes, fmt: str) -> str:
         text_data = data.decode("utf-8-sig", errors="replace")
         reader = csv.DictReader(io.StringIO(text_data))
         import itertools
+
         rows = list(itertools.islice(reader, 200))
     else:
         import openpyxl
@@ -171,7 +183,10 @@ def _extract_excel_to_text(data: bytes, fmt: str) -> str:
             rows_list = list(ws.iter_rows(values_only=True))
             if not rows_list:
                 return ""
-            headers = [str(c) if c is not None else f"col_{i}" for i, c in enumerate(rows_list[0])]
+            headers = [
+                str(c) if c is not None else f"col_{i}"
+                for i, c in enumerate(rows_list[0])
+            ]
             rows = []
             for row in rows_list[1:]:
                 rows.append(dict(zip(headers, row, strict=False)))
@@ -182,6 +197,7 @@ def _extract_excel_to_text(data: bytes, fmt: str) -> str:
         return ""
 
     import json
+
     lines = [json.dumps(row, ensure_ascii=False, default=str) for row in rows[:200]]
     return "\n".join(lines)
 
@@ -212,10 +228,20 @@ def _render_pdf_pages_to_sandbox(
     data: bytes, family_id: str, thread_id: str
 ) -> list[str]:
     """渲染 PDF 每页为 PNG，落 family-scoped 沙箱 uploads 目录。"""
-    data_root = Path(settings.DATA_ROOT).expanduser() if hasattr(settings, "DATA_ROOT") else Path.home() / ".numina" / "data"
+    data_root = (
+        Path(settings.DATA_ROOT).expanduser()
+        if hasattr(settings, "DATA_ROOT")
+        else Path.home() / ".numina" / "data"
+    )
     uploads_dir = (
-        data_root / "workspaces" / "users" / str(family_id)
-        / "threads" / thread_id / "user-data" / "uploads"
+        data_root
+        / "workspaces"
+        / "users"
+        / str(family_id)
+        / "threads"
+        / thread_id
+        / "user-data"
+        / "uploads"
     )
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
@@ -226,7 +252,9 @@ def _render_pdf_pages_to_sandbox(
             if doc.page_count > _MAX_RENDERED_PAGES:
                 logger.warning(
                     "[parse] PDF has %d pages, rendering only first %d family=%s",
-                    doc.page_count, _MAX_RENDERED_PAGES, family_id,
+                    doc.page_count,
+                    _MAX_RENDERED_PAGES,
+                    family_id,
                 )
             for i in range(page_count):
                 page = doc[i]
@@ -235,13 +263,21 @@ def _render_pdf_pages_to_sandbox(
                 pix.save(str(uploads_dir / filename))
                 virtual_paths.append(f"/mnt/user-data/uploads/{filename}")
     except Exception as e:
-        logger.error("[parse] PDF page render failed family=%s err=%s", family_id, e, exc_info=True)
+        logger.error(
+            "[parse] PDF page render failed family=%s err=%s",
+            family_id,
+            e,
+            exc_info=True,
+        )
         return []
     return virtual_paths
 
 
 async def _call_agent_parse(
-    text: str, family_id: str, thread_id: str | None = None, image_paths: list[str] | None = None
+    text: str,
+    family_id: str,
+    thread_id: str | None = None,
+    image_paths: list[str] | None = None,
 ) -> dict:
     """调用 Agent 微服务解析文本/图片，返回原始 dict。"""
     agent_client = AgentClient(family_id, timeout=120.0)
@@ -289,6 +325,7 @@ def _resolve_category_id(category_hint: str, db: Session) -> str | None:
 # Schemas
 # ---------------------------------------------------------------------------
 
+
 class ImportPreviewItem(BaseModel):
     temp_id: str
     name: str
@@ -300,7 +337,9 @@ class ImportPreviewItem(BaseModel):
     currency: str = "CNY"
     quantity: float | None = None
     notes: str | None = None
-    source_platform: str | None = None  # Shopping receipt: platform name (闲鱼/淘宝 etc.)
+    source_platform: str | None = (
+        None  # Shopping receipt: platform name (闲鱼/淘宝 etc.)
+    )
     purchase_date: str | None = None  # Shopping receipt: purchase date YYYY-MM-DD
     matched_asset_id: str | None = None
     matched_asset_name: str | None = None
@@ -380,6 +419,7 @@ class HistoryItem(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.post("/parse", response_model=ImportPreview)
 async def parse_file(
     file: UploadFile = File(...),
@@ -446,7 +486,7 @@ async def parse_file(
     except httpx.TimeoutException as e:
         raise AppError(ErrorCode.IMPORT_AGENT_TIMEOUT) from e
     except Exception as e:
-        logger.error("Agent parse failed: %s", e)
+        logger.exception("Agent parse failed")
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
 
     raw_items: list[dict] = agent_result.get("items", [])
@@ -454,7 +494,9 @@ async def parse_file(
     # Build preview items with target_model + confidence.
     preview_items: list[ImportPreviewItem] = []
     for raw_item in raw_items:
-        item_name = raw_item.get("name") or raw_item.get("code") or raw_item.get("asset_name")
+        item_name = (
+            raw_item.get("name") or raw_item.get("code") or raw_item.get("asset_name")
+        )
         if not item_name:
             continue
 
@@ -467,7 +509,11 @@ async def parse_file(
         asset_type = raw_item.get("asset_type", "financial")
 
         # For physical assets from receipts: use purchase_price as value signal.
-        effective_value = current_value if asset_type != "physical" else (purchase_price or current_value)
+        effective_value = (
+            current_value
+            if asset_type != "physical"
+            else (purchase_price or current_value)
+        )
 
         # Asset matching (only for target_model=asset).
         matched_asset_id = None
@@ -484,31 +530,34 @@ async def parse_file(
             if effective_value is None:
                 warning = "amount_not_recognized"
 
-        preview_items.append(ImportPreviewItem(
-            temp_id=f"tmp_{uuid.uuid4().hex[:8]}",
-            name=item_name,
-            target_model=target_model,
-            asset_type=asset_type,
-            category_hint=raw_item.get("category_hint", ""),
-            current_value=current_value,
-            purchase_price=purchase_price,
-            currency=raw_item.get("currency", "CNY"),
-            quantity=raw_item.get("quantity"),
-            notes=raw_item.get("notes"),
-            source_platform=source_platform,
-            purchase_date=purchase_date,
-            matched_asset_id=matched_asset_id,
-            matched_asset_name=matched_asset_name,
-            action=action,
-            warning=warning,
-            confidence=confidence,
-            # Liability fields (R6).
-            original_amount=raw_item.get("original_amount"),
-            remaining_amount=raw_item.get("remaining_amount"),
-            monthly_payment=raw_item.get("monthly_payment"),
-            interest_rate=raw_item.get("interest_rate"),
-            liability_category=raw_item.get("category") or raw_item.get("liability_category"),
-        ))
+        preview_items.append(
+            ImportPreviewItem(
+                temp_id=f"tmp_{uuid.uuid4().hex[:8]}",
+                name=item_name,
+                target_model=target_model,
+                asset_type=asset_type,
+                category_hint=raw_item.get("category_hint", ""),
+                current_value=current_value,
+                purchase_price=purchase_price,
+                currency=raw_item.get("currency", "CNY"),
+                quantity=raw_item.get("quantity"),
+                notes=raw_item.get("notes"),
+                source_platform=source_platform,
+                purchase_date=purchase_date,
+                matched_asset_id=matched_asset_id,
+                matched_asset_name=matched_asset_name,
+                action=action,
+                warning=warning,
+                confidence=confidence,
+                # Liability fields (R6).
+                original_amount=raw_item.get("original_amount"),
+                remaining_amount=raw_item.get("remaining_amount"),
+                monthly_payment=raw_item.get("monthly_payment"),
+                interest_rate=raw_item.get("interest_rate"),
+                liability_category=raw_item.get("category")
+                or raw_item.get("liability_category"),
+            )
+        )
 
     # R7a: zero items → return with guidance message (not an error).
     message = None
@@ -564,10 +613,18 @@ def confirm_import(
     stats = {"updated": 0, "created": 0, "skipped": 0}
 
     # Split items by target_model and action.
-    asset_creates = [i for i in req.items if i.target_model == "asset" and i.action == "create"]
-    liability_creates = [i for i in req.items if i.target_model == "liability" and i.action == "create"]
+    asset_creates = [
+        i for i in req.items if i.target_model == "asset" and i.action == "create"
+    ]
+    liability_creates = [
+        i for i in req.items if i.target_model == "liability" and i.action == "create"
+    ]
     # Only asset updates are supported (liability matching is not implemented in /parse).
-    updates = [i for i in req.items if i.target_model == "asset" and i.action == "update" and i.matched_asset_id]
+    updates = [
+        i
+        for i in req.items
+        if i.target_model == "asset" and i.action == "update" and i.matched_asset_id
+    ]
 
     # --- Asset updates (direct DB write) ---
     for item in updates:
@@ -581,22 +638,33 @@ def confirm_import(
             .first()
         )
         if asset:
-            asset.current_value = Decimal(str(item.current_value)) if item.current_value is not None else None
+            asset.current_value = (
+                Decimal(str(item.current_value))
+                if item.current_value is not None
+                else None
+            )
             if item.currency:
                 asset.currency = item.currency
             if item.notes:
                 asset.notes = item.notes
             stats["updated"] += 1
-            result_items.append(ConfirmResultItem(
-                temp_id=item.temp_id, status="updated",
-                id=str(asset.id), name=asset.name,
-            ))
+            result_items.append(
+                ConfirmResultItem(
+                    temp_id=item.temp_id,
+                    status="updated",
+                    id=str(asset.id),
+                    name=asset.name,
+                )
+            )
         else:
             stats["skipped"] += 1
-            result_items.append(ConfirmResultItem(
-                temp_id=item.temp_id, status="error",
-                error="资产记录不存在",
-            ))
+            result_items.append(
+                ConfirmResultItem(
+                    temp_id=item.temp_id,
+                    status="error",
+                    error="资产记录不存在",
+                )
+            )
 
     # --- Asset creates (direct DB write via _resolve_category_id) ---
     created_asset_ids: list[str] = []
@@ -605,14 +673,21 @@ def confirm_import(
             category_id = _resolve_category_id(item.category_hint, db)
             if category_id is None:
                 stats["skipped"] += 1
-                result_items.append(ConfirmResultItem(
-                    temp_id=item.temp_id, status="skipped",
-                    error=f"未知分类: {item.category_hint}",
-                ))
+                result_items.append(
+                    ConfirmResultItem(
+                        temp_id=item.temp_id,
+                        status="skipped",
+                        error=f"未知分类: {item.category_hint}",
+                    )
+                )
                 continue
             # Determine effective value: physical assets use purchase_price,
             # financial assets use current_value.
-            effective_value = item.purchase_price if item.asset_type == "physical" else item.current_value
+            effective_value = (
+                item.purchase_price
+                if item.asset_type == "physical"
+                else item.current_value
+            )
             # Build notes: append source_platform for physical assets.
             notes_parts = []
             if item.notes:
@@ -624,6 +699,7 @@ def confirm_import(
             purchase_date = None
             if item.purchase_date:
                 from datetime import date as _date
+
                 try:
                     purchase_date = _date.fromisoformat(item.purchase_date)
                 except (ValueError, TypeError):
@@ -646,16 +722,23 @@ def confirm_import(
             db.flush()
             created_asset_ids.append(str(new_asset.id))
             stats["created"] += 1
-            result_items.append(ConfirmResultItem(
-                temp_id=item.temp_id, status="created",
-                id=str(new_asset.id), name=new_asset.name,
-            ))
+            result_items.append(
+                ConfirmResultItem(
+                    temp_id=item.temp_id,
+                    status="created",
+                    id=str(new_asset.id),
+                    name=new_asset.name,
+                )
+            )
         except Exception as e:
             stats["skipped"] += 1
-            result_items.append(ConfirmResultItem(
-                temp_id=item.temp_id, status="error",
-                error=str(e),
-            ))
+            result_items.append(
+                ConfirmResultItem(
+                    temp_id=item.temp_id,
+                    status="error",
+                    error=str(e),
+                )
+            )
 
     # --- Liability creates (direct DB write) ---
     created_liability_ids: list[str] = []
@@ -666,9 +749,15 @@ def confirm_import(
                 family_id=current_user.family_id,
                 category=item.liability_category or "other",
                 name=item.name,
-                original_amount=Decimal(str(item.original_amount)) if item.original_amount is not None else Decimal("0"),
-                remaining_amount=Decimal(str(item.remaining_amount)) if item.remaining_amount is not None else Decimal("0"),
-                monthly_payment=Decimal(str(item.monthly_payment)) if item.monthly_payment is not None else None,
+                original_amount=Decimal(str(item.original_amount))
+                if item.original_amount is not None
+                else Decimal("0"),
+                remaining_amount=Decimal(str(item.remaining_amount))
+                if item.remaining_amount is not None
+                else Decimal("0"),
+                monthly_payment=Decimal(str(item.monthly_payment))
+                if item.monthly_payment is not None
+                else None,
                 interest_rate=item.interest_rate,
                 currency=item.currency,
                 notes=item.notes,
@@ -677,16 +766,23 @@ def confirm_import(
             db.flush()
             created_liability_ids.append(str(new_liability.id))
             stats["created"] += 1
-            result_items.append(ConfirmResultItem(
-                temp_id=item.temp_id, status="created",
-                id=str(new_liability.id), name=new_liability.name,
-            ))
+            result_items.append(
+                ConfirmResultItem(
+                    temp_id=item.temp_id,
+                    status="created",
+                    id=str(new_liability.id),
+                    name=new_liability.name,
+                )
+            )
         except Exception as e:
             stats["skipped"] += 1
-            result_items.append(ConfirmResultItem(
-                temp_id=item.temp_id, status="error",
-                error=str(e),
-            ))
+            result_items.append(
+                ConfirmResultItem(
+                    temp_id=item.temp_id,
+                    status="error",
+                    error=str(e),
+                )
+            )
 
     db.commit()
 
@@ -697,10 +793,14 @@ def confirm_import(
         except ValueError:
             draft_id_int = None
         if draft_id_int is not None:
-            draft = db.query(DraftImport).filter(
-                DraftImport.id == draft_id_int,
-                DraftImport.family_id == current_user.family_id,
-            ).first()
+            draft = (
+                db.query(DraftImport)
+                .filter(
+                    DraftImport.id == draft_id_int,
+                    DraftImport.family_id == current_user.family_id,
+                )
+                .first()
+            )
             if draft:
                 draft.status = "committed"
                 all_ids = created_asset_ids + created_liability_ids
@@ -724,7 +824,9 @@ async def confirm_import_via_agent(
     from apps.backend.app.database import SessionLocal
 
     updated = 0
-    update_items = [item for item in req.items if item.action == "update" and item.matched_asset_id]
+    update_items = [
+        item for item in req.items if item.action == "update" and item.matched_asset_id
+    ]
     if update_items:
         with SessionLocal() as db:
             for item in update_items:
@@ -737,7 +839,11 @@ async def confirm_import_via_agent(
                     .first()
                 )
                 if asset:
-                    asset.current_value = Decimal(str(item.current_value)) if item.current_value is not None else None
+                    asset.current_value = (
+                        Decimal(str(item.current_value))
+                        if item.current_value is not None
+                        else None
+                    )
                     if item.currency:
                         asset.currency = item.currency
                     if item.notes:
@@ -779,7 +885,7 @@ async def confirm_import_via_agent(
         except httpx.TimeoutException as e:
             raise AppError(ErrorCode.IMPORT_AGENT_TIMEOUT) from e
         except Exception as e:
-            logger.error("Agent confirm-via-agent failed: %s", e)
+            logger.exception("Agent confirm-via-agent failed")
             raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
 
     return {
@@ -815,15 +921,17 @@ def import_history(
             and d.created_at is not None
             and d.created_at.replace(tzinfo=UTC) > cutoff
         )
-        items.append(HistoryItem(
-            id=str(d.id),
-            source_filename=d.source_filename,
-            source_format=d.source_format,
-            status=d.status,
-            item_count=len(parsed),
-            created_at=d.created_at.isoformat() if d.created_at else "",
-            can_rollback=can_rollback,
-        ))
+        items.append(
+            HistoryItem(
+                id=str(d.id),
+                source_filename=d.source_filename,
+                source_format=d.source_format,
+                status=d.status,
+                item_count=len(parsed),
+                created_at=d.created_at.isoformat() if d.created_at else "",
+                can_rollback=can_rollback,
+            )
+        )
     return items
 
 
@@ -868,10 +976,14 @@ def rollback_import(
     # Check for cross-references (R22): linked_asset_id on liabilities.
     for rid in record_ids:
         # Check if this asset is referenced by any liability.
-        linked = db.query(Liability).filter(
-            Liability.linked_asset_id == rid,
-            Liability.is_archived.is_(False),
-        ).first()
+        linked = (
+            db.query(Liability)
+            .filter(
+                Liability.linked_asset_id == rid,
+                Liability.is_archived.is_(False),
+            )
+            .first()
+        )
         if linked:
             raise AppError(ErrorCode.IMPORT_ROLLBACK_REFERENCED)
 

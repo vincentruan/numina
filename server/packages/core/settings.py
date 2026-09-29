@@ -201,7 +201,7 @@ class Settings(BaseSettings):
 
         # Always log the chosen backend for early visibility
         dialect = "sqlite" if is_sqlite else (url.split("://")[0] if "://" in url else "unknown")
-        logger.info(f"Database backend: {dialect} ({self.ENVIRONMENT})")
+        logger.info("Database backend: %s (%s)", dialect, self.ENVIRONMENT)
 
         return self
 

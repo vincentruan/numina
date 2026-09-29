@@ -1,7 +1,6 @@
 """POST /test/model — stateless model capability test endpoint."""
 
 import asyncio
-import logging
 
 from fastapi import APIRouter, Depends
 
@@ -12,10 +11,11 @@ from apps.agent.services.model_tester import (
     test_vision,
     test_vision_ocr,
 )
+from packages.core.logging import get_logger
 from packages.security.service_auth.agent_token_verify import verify_service_token
 
 router = APIRouter(prefix="/test", tags=["model-test"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.post("/model", response_model=ModelTestResult)

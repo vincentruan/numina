@@ -5,7 +5,6 @@ Each skill has its own writer function with replace strategy:
 - Bulk insert new structured records
 """
 
-import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -14,8 +13,9 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.models.ai_report import AIReport
 from apps.backend.app.utils.snowflake import next_id
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def write_report_results(
@@ -57,11 +57,11 @@ def write_report_results(
         )
         db.add(report)
         db.commit()
-        logger.info(f"[report] wrote report for family {family_id}")
+        logger.info("[report] wrote report for family %s", family_id)
         return 1
-    except Exception as e:
+    except Exception:
         db.rollback()
-        logger.error(f"[report] failed to write report for family {family_id}: {e}")
+        logger.exception("[report] failed to write report for family %s", family_id)
         raise
 
 
@@ -90,7 +90,7 @@ def write_skill_results(
 
     writer = writers.get(skill_id)
     if not writer:
-        logger.warning(f"[{skill_id}] no writer registered, skipping")
+        logger.warning("[%s] no writer registered, skipping", skill_id)
         return 0
 
     return writer(family_id, results, db)

@@ -11,15 +11,15 @@ async engine.
 from __future__ import annotations
 
 import json
-import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Table DDL — run_records store mirrors DeerFlow's RunRecord semantics.
 # Token columns default to 0 for SQLite; PostgreSQL uses COALESCE-safe types.

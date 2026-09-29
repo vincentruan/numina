@@ -11,7 +11,6 @@ Strategy:
 
 import asyncio
 import json
-import logging
 import re
 from typing import Any
 
@@ -19,8 +18,9 @@ from json_repair import repair_json
 from sqlalchemy.orm import Session
 
 from apps.backend.app.services.ai_crypto import decrypt_api_key
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 LLM_FALLBACK_MAX_TOKENS = 800
 LLM_FALLBACK_TEMPERATURE = 0.1
@@ -521,7 +521,7 @@ async def _llm_fallback_extract(
     config = configs[0]
     api_key = decrypt_api_key(config.api_key_encrypted or "")
     if not api_key:
-        logger.warning(f"[{skill_id}] LLM fallback: could not decrypt API key")
+        logger.warning("[%s] LLM fallback: could not decrypt API key", skill_id)
         return None, "api_key_error"
 
     # Use higher retry count for asset-report skill (Phase 2 retry loop)

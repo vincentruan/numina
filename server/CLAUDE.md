@@ -119,6 +119,19 @@ All `scheduler.add_job()` calls must include `max_instances=1`, `coalesce=True`,
 
 All quality commands and `uvicorn` must be invoked from `server/`, not from individual module directories.
 
+### Logging
+
+1. **Use `get_logger`** — `from packages.core.logging import get_logger; logger = get_logger(__name__)`. Never call `logging.getLogger()` directly for module loggers.
+2. **Log levels by semantics** — DEBUG (dev detail), INFO (important events), WARNING (recoverable anomaly), ERROR (operation failed), CRITICAL (system failure).
+3. **Parameterized logging** — `logger.info("msg: %s", val)`. Never f-strings in log calls.
+4. **Preserve traceback** — In `except` blocks: `logger.exception("context: %s", detail)` or `logger.warning("context: %s", detail, exc_info=True)`. Never `logger.error("msg: %s", e)`.
+5. **Relevant context only** — Log `task_id`, `family_id`, `duration_ms`, `status` when the event needs them. Do not over-log.
+6. **No sensitive data** — Never log passwords, tokens, API keys, or Authorization headers.
+7. **Control volume** — In high-frequency paths (loops, streaming, polling), use DEBUG level or sampling.
+8. **Rotation managed by `setup_logging()`** — `RotatingFileHandler` (size) or `TimedRotatingFileHandler` (time) based on `LOG_ROTATION_MODE`. Do not add custom file handlers.
+9. **Docker services** — Log to stdout + file; rotation is managed by the Python handler.
+10. **No `print()` in server code** — CLI scripts (`scripts/`, `reconcile/__main__.py`) may use `print()`.
+
 ## Links
 
 - Root [`CLAUDE.md`](../CLAUDE.md) — behavioral guidelines, project overview

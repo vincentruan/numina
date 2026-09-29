@@ -13,7 +13,6 @@ events (reasoning_delta, messages, custom, end) to the frontend and persists
 the result to cache after the stream completes.
 """
 import json
-import logging
 import re
 import uuid
 from collections.abc import AsyncGenerator
@@ -25,8 +24,9 @@ from apps.backend.app.services.finance_coach_cache import (
     SKILL_TTL,
     upsert_skill_result,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 SKILL_ID = "dashboard-narrative"
 
@@ -241,8 +241,8 @@ async def generate_narrative(user: User, context: dict) -> dict:
             user_id=str(user.id),
             context=context,
         )
-    except Exception as exc:
-        logger.warning("[dashboard-narrative] agent dispatch failed: %s", type(exc).__name__)
+    except Exception:
+        logger.warning('[dashboard-narrative] agent dispatch failed', exc_info=True)
         # Graceful degradation (R2/F3): return empty, not 500
         return {"narrative": None, "first_sentence": "", "thinking": "", "generated_at": None}
 
@@ -271,8 +271,8 @@ async def generate_narrative(user: User, context: dict) -> dict:
             generated_at = (
                 row.generated_at.isoformat() if row.generated_at else None
             )
-    except Exception as exc:
-        logger.warning("[dashboard-narrative] cache persist failed: %s", exc)
+    except Exception:
+        logger.warning('[dashboard-narrative] cache persist failed', exc_info=True)
         # Still return the narrative even if persist failed
         generated_at = datetime.now(UTC).isoformat()
 
@@ -448,5 +448,5 @@ def _persist_narrative_result(family_id: str, collected_sse: bytes) -> None:
         with SessionLocal() as db:
             upsert_skill_result(db, family_id, SKILL_ID, full_payload)
             db.commit()
-    except Exception as exc:
-        logger.warning("[dashboard-narrative] persist result failed err=%s", exc)
+    except Exception:
+        logger.warning('[dashboard-narrative] persist result failed err=', exc_info=True)

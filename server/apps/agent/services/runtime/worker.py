@@ -14,7 +14,6 @@ adapter caching, PII redaction, and audit logging while gaining the
 from __future__ import annotations
 
 import asyncio
-import logging
 import re
 import shutil
 from collections.abc import Callable
@@ -26,6 +25,7 @@ from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 
 from apps.agent.core.backend_client import BackendClient
 from packages.core import get_path_manager
+from packages.core.logging import get_logger
 
 from .goal_continuation import (
     _get_shared_checkpointer_for_goal,
@@ -58,7 +58,7 @@ from .run_extras import (
 from .run_pipeline import _track_task
 from .sandbox_provider import reset_family_sandbox_context, set_family_sandbox_context
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Config-driven generic runner for simple single-run apps
@@ -451,8 +451,8 @@ async def _set_session_title(thread_id: str, family_id: str, title_prefix: str) 
         logger.info(
             "[_set_session_title] Set title '%s' for thread %s", title, thread_id
         )
-    except Exception as e:
-        logger.warning("[_set_session_title] Failed for thread %s: %s", thread_id, e)
+    except Exception:
+        logger.warning('[_set_session_title] Failed for thread %s', thread_id, exc_info=True)
 
 
 def _persist_session_status(

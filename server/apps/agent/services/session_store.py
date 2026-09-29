@@ -9,9 +9,9 @@ DeerFlow's own checkpointer tables remain in the local DeerFlow DB.
 
 from __future__ import annotations
 
-import logging
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AiSessionRepository:
@@ -46,8 +46,8 @@ class AiSessionRepository:
                 source=source,
                 parent_thread_id=parent_thread_id,
             )
-        except Exception as e:
-            logger.warning("session upsert failed for %s: %s", session_id, e)
+        except Exception:
+            logger.warning('session upsert failed for %s', session_id, exc_info=True)
 
     async def get_title(self, *, session_id: str, family_id: str) -> str | None:
         """Return the existing title for a session, or None if not set."""
@@ -55,16 +55,16 @@ class AiSessionRepository:
             session = await self._client.get_session(session_id)
             if session:
                 return session.get("title")
-        except Exception as e:
-            logger.warning("session get_title failed for %s: %s", session_id, e)
+        except Exception:
+            logger.warning('session get_title failed for %s', session_id, exc_info=True)
         return None
 
     async def get_session(self, session_id: str, family_id: str | None = None) -> dict | None:
         """Return session metadata dict, or None if not found or on error."""
         try:
             return await self._client.get_session(session_id)
-        except Exception as e:
-            logger.warning("session get failed for %s: %s", session_id, e)
+        except Exception:
+            logger.warning('session get failed for %s', session_id, exc_info=True)
             return None
 
     async def list_sessions(
@@ -90,8 +90,8 @@ class AiSessionRepository:
                 sort_order=sort_order,
                 source=source,
             )
-        except Exception as e:
-            logger.warning("session list failed for family %s: %s", family_id, e)
+        except Exception:
+            logger.warning('session list failed for family %s', family_id, exc_info=True)
             return [], 0
 
     async def update_summary(
@@ -112,8 +112,8 @@ class AiSessionRepository:
                 status=status,
                 title=title,
             )
-        except Exception as e:
-            logger.warning("session summary update failed for %s: %s", session_id, e)
+        except Exception:
+            logger.warning('session summary update failed for %s', session_id, exc_info=True)
 
     async def update_session(
         self,
@@ -129,8 +129,8 @@ class AiSessionRepository:
                 title=title,
                 is_pinned=is_pinned,
             )
-        except Exception as e:
-            logger.warning("session update failed for %s: %s", session_id, e)
+        except Exception:
+            logger.warning('session update failed for %s', session_id, exc_info=True)
 
     async def delete_session(self, *, session_id: str, family_id: str) -> bool:
         """Delete a session row via backend.
@@ -140,6 +140,6 @@ class AiSessionRepository:
         """
         try:
             return await self._client.delete_session(session_id)
-        except Exception as e:
-            logger.warning("session delete failed for %s: %s", session_id, e)
+        except Exception:
+            logger.warning('session delete failed for %s', session_id, exc_info=True)
             return False

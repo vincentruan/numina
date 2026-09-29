@@ -63,8 +63,8 @@ def write_audit_log(
                 own_db.commit()
             finally:
                 own_db.close()
-    except Exception as exc:
-        logger.warning(f"[audit_log] failed to write event={event_type}: {exc}")
+    except Exception:
+        logger.warning('[audit_log] failed to write event=%s', event_type, exc_info=True)
 
 
 def purge_old_audit_logs(retention_days: int = 90) -> int:
@@ -96,6 +96,6 @@ def purge_old_audit_logs(retention_days: int = 90) -> int:
             db.close()
 
         return count
-    except Exception as exc:
-        logger.warning(f"[audit_log] purge failed: {exc}")
+    except Exception:
+        logger.warning('[audit_log] purge failed', exc_info=True)
         return 0

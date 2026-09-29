@@ -4,11 +4,12 @@ Production: seeds a configurable set of initial codes (from INIT_INVITATION_CODE
 Non-production: additionally seeds fixed CI codes for E2E testing.
 """
 
-import logging
 
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 CI_INVITATION_CODES = [
     "CI0001",
@@ -57,4 +58,4 @@ def bootstrap_invitation_codes(db: Session) -> None:
 
     if inserted:
         db.commit()
-        logger.info(f"已初始化 {inserted} 个邀请码")
+        logger.info("已初始化 %s 个邀请码", inserted)

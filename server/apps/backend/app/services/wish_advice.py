@@ -17,7 +17,6 @@ live stream).
 """
 import hashlib
 import json
-import logging
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -27,8 +26,9 @@ from sqlalchemy.orm import Session
 from apps.backend.app.models.user import User
 from apps.backend.app.models.wish import Wish
 from apps.backend.app.services.agent_client import AgentClient
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def wish_fingerprint(wishes: list[Wish]) -> str:
@@ -175,8 +175,8 @@ async def generate_advice(db: Session, user: User) -> tuple[dict | None, str]:
                 return None, fp
             advice = await _extract_wish_advice_result(resp)
         return validate_advice(advice), fp
-    except Exception as exc:
-        logger.warning("[wish-advice] generate failed err=%s", type(exc).__name__)
+    except Exception:
+        logger.warning('[wish-advice] generate failed err=', exc_info=True)
         return None, fp
 
 
@@ -193,8 +193,8 @@ async def _extract_wish_advice_result(resp: Any) -> dict | None:
     try:
         async for chunk in resp.aiter_text():
             text += chunk
-    except Exception as exc:
-        logger.warning("[wish-advice] stream read failed err=%s", type(exc).__name__)
+    except Exception:
+        logger.warning('[wish-advice] stream read failed err=', exc_info=True)
         return None
 
     for block in text.split("\n\n"):

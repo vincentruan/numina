@@ -9,7 +9,6 @@ import asyncio
 import contextlib
 import contextvars
 import json
-import logging
 import os
 import threading
 import traceback
@@ -32,8 +31,9 @@ from apps.agent.services.message_classifier import (
     extract_tool_calls,
     resolve_tool_metadata,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

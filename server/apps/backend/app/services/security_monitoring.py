@@ -177,8 +177,8 @@ class SecurityMonitor:
         for handler in self.alert_handlers:
             try:
                 await handler(alert_data)
-            except Exception as e:
-                logger.error(f"Alert handler failed: {e}")
+            except Exception:
+                logger.exception("Alert handler failed")
 
     def _get_recommendation(self, event: SecurityEvent) -> str:
         """根据事件类型生成处置建议"""
@@ -222,7 +222,9 @@ class SecurityMonitor:
         # Scan recent events for IPs with violations
         rate_key = f"{SEC_EVENT}:{ThreatType.RATE_LIMIT_EXCEEDED.value}"
         rate_events = await cache.lrange(rate_key, 0, 99)
-        unique_violation_ips = {e.get("ip", "") for e in rate_events if isinstance(e, dict)}
+        unique_violation_ips = {
+            e.get("ip", "") for e in rate_events if isinstance(e, dict)
+        }
         for ip in unique_violation_ips:
             cnt_key = f"{SEC_COUNTER}:rate_violations:{ip}"
             val = await cache.get(cnt_key)

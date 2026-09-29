@@ -15,8 +15,6 @@ agent，使其通过 ``verify_family_token``。同时仍由 backend 的
 ``require_adult`` + ``require_ai_enabled`` 做前置鉴权。
 """
 
-import logging
-
 import httpx
 from fastapi import APIRouter, Cookie, Depends, Request
 from fastapi.responses import JSONResponse
@@ -27,9 +25,10 @@ from apps.backend.app.auth.deps import ACCESS_TOKEN_COOKIE, require_adult
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.services.agent_client import AgentClient
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/api", tags=["ai-input-polish"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class InputPolishRequest(BaseModel):
@@ -68,7 +67,9 @@ async def input_polish(
         forward_headers["Cookie"] = f"{ACCESS_TOKEN_COOKIE}={jwt_token}"
 
     try:
-        agent_client = AgentClient(current_user.family_id, current_user.id, timeout=45.0)
+        agent_client = AgentClient(
+            current_user.family_id, current_user.id, timeout=45.0
+        )
         resp = await agent_client.post(
             "/input-polish",
             json=body.model_dump(),
@@ -78,6 +79,6 @@ async def input_polish(
         return JSONResponse(content=resp.json())
     except httpx.TimeoutException:
         raise AppError(ErrorCode.AI_SERVICE_TIMEOUT) from None
-    except Exception as e:
-        logger.error(f"调用 agent input-polish 失败: {e}")
+    except Exception:
+        logger.exception("调用 agent input-polish 失败")
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from None

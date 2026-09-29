@@ -16,12 +16,13 @@ Usage:
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from deerflow.client import DeerFlowClient
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class NuminaDeerFlowClient(DeerFlowClient):

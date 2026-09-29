@@ -3,7 +3,11 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from apps.backend.app.schemas.base import SnowflakeBase, coerce_money_str, coerce_to_decimal
+from apps.backend.app.schemas.base import (
+    SnowflakeBase,
+    coerce_money_str,
+    coerce_to_decimal,
+)
 
 # Backward-compatible aliases — existing references use the underscore prefix
 _coerce_to_decimal = coerce_to_decimal

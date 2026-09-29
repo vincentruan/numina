@@ -3,7 +3,6 @@ import base64
 import hashlib
 import hmac
 import json
-import logging
 import smtplib
 import time
 from email.mime.text import MIMEText
@@ -11,7 +10,9 @@ from pathlib import Path
 
 import httpx
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
@@ -103,8 +104,8 @@ class NotificationSender:
                 )
                 resp.raise_for_status()
                 return True
-        except Exception as e:
-            logger.warning("Telegram 发送失败: %s", e)
+        except Exception:
+            logger.warning('Telegram 发送失败', exc_info=True)
             return False
 
     @staticmethod
@@ -128,8 +129,8 @@ class NotificationSender:
                 server.login(smtp_user, smtp_password)
                 server.sendmail(smtp_from, [to], msg.as_string())
             return True
-        except Exception as e:
-            logger.warning("邮件发送失败: %s", e)
+        except Exception:
+            logger.warning('邮件发送失败', exc_info=True)
             return False
 
     @staticmethod
@@ -160,8 +161,8 @@ class NotificationSender:
                     logger.warning("飞书发送业务失败: %s", body)
                     return False
                 return True
-        except Exception as e:
-            logger.warning("飞书发送失败: %s", e)
+        except Exception:
+            logger.warning('飞书发送失败', exc_info=True)
             return False
 
     @staticmethod
@@ -189,5 +190,5 @@ class NotificationSender:
         except WebPushException as exc:
             if exc.response and exc.response.status_code == 410:
                 return "gone"
-            logger.warning("Web Push 发送失败: %s", exc)
+            logger.warning('Web Push 发送失败', exc_info=True)
             return False

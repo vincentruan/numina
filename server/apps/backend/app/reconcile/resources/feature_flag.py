@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 
 from sqlalchemy.orm import Session
@@ -14,8 +13,9 @@ from apps.backend.app.reconcile.types import (
     ResourceStatus,
     ResourceType,
 )
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # In-memory feature flag registry (runtime state)
 _feature_flags: dict[str, bool] = {}
@@ -36,14 +36,14 @@ def disable_feature(flag_name: str, reason: str) -> None:
     """Disable a feature flag with a reason."""
     _feature_flags[flag_name] = False
     _disabled_reasons[flag_name] = reason
-    logger.warning(f"Feature '{flag_name}' disabled: {reason}")
+    logger.warning("Feature '%s' disabled: %s", flag_name, reason)
 
 
 def enable_feature(flag_name: str) -> None:
     """Re-enable a previously disabled feature."""
     _feature_flags[flag_name] = True
     _disabled_reasons.pop(flag_name, None)
-    logger.info(f"Feature '{flag_name}' re-enabled")
+    logger.info("Feature '%s' re-enabled", flag_name)
 
 
 def get_all_flags() -> dict[str, dict]:

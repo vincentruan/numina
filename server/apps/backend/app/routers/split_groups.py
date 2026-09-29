@@ -13,12 +13,12 @@ from apps.backend.app.schemas.split_group import (
 )
 from apps.backend.app.services import settlement as settlement_service
 from apps.backend.app.services import split_group as split_group_service
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/trips/{trip_id}/split", tags=["travel"])
 
-import logging
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.post("", response_model=SplitGroupResponse, status_code=201)
@@ -237,8 +237,8 @@ async def create_share_link(
     from short_io_api_client.api.link_management import post_links
     from short_io_api_client.models import PostLinksBody
 
-    from packages.core.settings import settings
     from apps.backend.app.errors import AppError, ErrorCode
+    from packages.core.settings import settings
 
     if not settings.SHORTIO_API_KEY or not settings.SHORTIO_DOMAIN:
         raise AppError(ErrorCode.SHARE_LINK_NOT_CONFIGURED)
@@ -276,7 +276,7 @@ async def create_share_link(
             ),
         )
     except Exception as exc:
-        logger.warning("short.io API call failed: %s", exc)
+        logger.warning('short.io API call failed', exc_info=True)
         raise AppError(ErrorCode.SHARE_LINK_CREATION_FAILED) from exc
 
     if result is None:

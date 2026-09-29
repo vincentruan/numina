@@ -10,10 +10,11 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
-import logging
 import re
 from collections.abc import AsyncIterator, Mapping
 from typing import Any
+
+from packages.core.logging import get_logger
 
 try:
     from redis.asyncio import Redis
@@ -35,7 +36,7 @@ from .base import (
     StreamItem,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 _KIND_EVENT = "event"
 _KIND_END = "end"
 _REDIS_STREAM_ID_RE = re.compile(r"\d+(-\d+)?")

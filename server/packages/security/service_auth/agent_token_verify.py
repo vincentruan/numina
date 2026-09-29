@@ -6,15 +6,14 @@ Accepts JWT tokens created by ``create_agent_token()`` in ``agent_jwt.py``.
 
 from __future__ import annotations
 
-import logging
-
 import jwt
 from fastapi import Header, HTTPException
 from jwt.exceptions import PyJWTError
 
+from packages.core.logging import get_logger
 from packages.core.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 ALGORITHM = "HS256"
 

@@ -22,7 +22,6 @@ Loader behaviour:
 
 from __future__ import annotations
 
-import logging
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -30,7 +29,9 @@ from typing import Any
 
 import yaml
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 _CONFIG_FILENAME = "system-config.yaml"
 _LOCAL_OVERRIDE_FILENAME = "system-config.local.yaml"

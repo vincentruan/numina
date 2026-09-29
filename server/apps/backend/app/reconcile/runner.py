@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import enum
-import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -14,6 +13,7 @@ from apps.backend.app.reconcile.types import (
     ResourceResult,
     ResourceStatus,
 )
+from packages.core.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Engine
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from apps.backend.app.reconcile.base import Resource
     from apps.backend.app.reconcile.lock import LockProvider
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RunMode(enum.StrEnum):
@@ -64,7 +64,10 @@ class DesiredStateRunner:
         lock_name = "reconcile_main"
         locked = False
 
-        if self._mode not in (RunMode.CHECK_ONLY, RunMode.VERIFY, RunMode.DRY_RUN) and self._lock_provider:
+        if (
+            self._mode not in (RunMode.CHECK_ONLY, RunMode.VERIFY, RunMode.DRY_RUN)
+            and self._lock_provider
+        ):
             locked = self._lock_provider.acquire(lock_name)
             if not locked:
                 logger.warning(
@@ -92,13 +95,13 @@ class DesiredStateRunner:
 
     def _reconcile_one(self, resource: Resource) -> ResourceResult:
         """Run the check → apply → verify cycle for a single resource."""
-        logger.info(f"[reconcile] checking: {resource.name}")
+        logger.info("[reconcile] checking: %s", resource.name)
 
         # --- CHECK ---
         try:
             result = resource.check(self._db)
         except Exception as e:
-            logger.error(f"[reconcile] check failed for {resource.name}: {e}")
+            logger.exception("[reconcile] check failed for %s", resource.name)
             # Rollback to ensure session is clean for subsequent resources
             with contextlib.suppress(Exception):
                 self._db.rollback()
@@ -110,7 +113,7 @@ class DesiredStateRunner:
         result.checked_at = datetime.now(UTC)
 
         if result.status == ResourceStatus.VERIFIED:
-            logger.debug(f"[reconcile] {resource.name}: already at desired state")
+            logger.debug("[reconcile] %s: already at desired state", resource.name)
             return result
 
         if result.status == ResourceStatus.FAILED:
@@ -127,13 +130,13 @@ class DesiredStateRunner:
 
         # --- APPLY ---
         if result.status == ResourceStatus.DRIFTED:
-            logger.info(f"[reconcile] applying: {resource.name}")
+            logger.info("[reconcile] applying: %s", resource.name)
             try:
                 result = resource.apply(self._db)
                 result.applied_at = datetime.now(UTC)
                 result.changed = True
             except Exception as e:
-                logger.error(f"[reconcile] apply failed for {resource.name}: {e}")
+                logger.exception("[reconcile] apply failed for %s", resource.name)
                 with contextlib.suppress(Exception):
                     self._db.rollback()
                 return resource._failed(
@@ -151,7 +154,7 @@ class DesiredStateRunner:
             verify_result.changed = result.changed
             return verify_result
         except Exception as e:
-            logger.error(f"[reconcile] verify failed for {resource.name}: {e}")
+            logger.exception("[reconcile] verify failed for %s", resource.name)
             return resource._failed(error=f"Verify error: {e}")
 
     def _persist_result(self, result: ResourceResult) -> None:
@@ -170,8 +173,10 @@ class DesiredStateRunner:
                 applied_at=result.applied_at,
                 verified_at=result.verified_at,
             )
-        except Exception as e:
-            logger.warning(f"Failed to persist state for {result.resource_name}: {e}")
+        except Exception:
+            logger.warning(
+                "Failed to persist state for %s", result.resource_name, exc_info=True
+            )
 
     def _finalize_report(self, report: ReconcileReport) -> None:
         """Compute summary fields from individual results."""
@@ -197,4 +202,6 @@ class DesiredStateRunner:
                 f"Reconciliation completed with {report.warnings} warning(s)"
             )
         else:
-            logger.info("Reconciliation completed successfully — all resources verified")
+            logger.info(
+                "Reconciliation completed successfully — all resources verified"
+            )

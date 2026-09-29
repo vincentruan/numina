@@ -20,11 +20,11 @@ file and revert ``model_entry.py`` routing to stock ``ChatAnthropic``.
 
 from __future__ import annotations
 
-import logging
-
 from langchain_anthropic import ChatAnthropic
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class PatchedChatAnthropic(ChatAnthropic):

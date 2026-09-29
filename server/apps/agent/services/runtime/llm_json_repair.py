@@ -34,12 +34,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from collections.abc import Awaitable, Callable
+
+from packages.core.logging import get_logger
 
 from .asset_report_middleware import parse_report_json
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Re-export parse_report_json for callers that want a single import point.
 __all__ = [

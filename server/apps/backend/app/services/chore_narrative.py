@@ -5,12 +5,12 @@ Falls back to a fixed template on timeout or any error.
 Skips AI entirely if the family has no active AIProviderConfig.
 """
 
-import logging
 
 from apps.backend.app.models.family import Family
 from apps.backend.app.services.agent_client import AgentClient
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _fallback_narrative(chore_name: str, coins: int, multiplier: float = 1.0) -> tuple[str, str]:

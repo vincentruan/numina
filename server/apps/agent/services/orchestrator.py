@@ -10,12 +10,13 @@ provider-selection / circuit-breaker helpers they share.
 """
 
 import asyncio
-import logging
 import random
 from collections.abc import Coroutine
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _select_model(providers: list[dict], task_type: str) -> tuple[dict, str, list[str]]:
@@ -182,7 +183,9 @@ def _pick_best_half_open(candidates: list[dict]) -> dict:
     """
     if len(candidates) <= 1:
         return candidates[0]
-    return min(candidates, key=lambda p: (p.get("failure_count", 0), p.get("display_order", 0)))
+    return min(
+        candidates, key=lambda p: (p.get("failure_count", 0), p.get("display_order", 0))
+    )
 
 
 def _select_provider_with_retry(

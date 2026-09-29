@@ -15,7 +15,6 @@ When an exchange rate is missing the original amount is returned unchanged
 the frontend) can warn the user.
 """
 import json
-import logging
 import re
 from decimal import Decimal
 from typing import Any
@@ -27,11 +26,12 @@ from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.rental_contract import RentalContract
 from apps.backend.app.models.user import User
 from apps.backend.app.models.wish import Wish
+from packages.core.logging import get_logger
 from packages.db.models.expense_entry import ExpenseEntry
 from packages.db.models.trip import Trip
 from packages.domain.exchange_rate.service import ExchangeRateService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 MAX_CONTEXT_LEN = 4000  # chars — cap to bound the first user turn.
 

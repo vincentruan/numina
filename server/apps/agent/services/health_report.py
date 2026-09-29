@@ -7,7 +7,6 @@
 4. 返回固定结构的报告 JSON
 """
 
-import logging
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -15,12 +14,14 @@ from apps.agent.core.backend_client import BackendClient
 from apps.agent.core.desensitize import desensitize_liabilities
 from apps.agent.core.llm import LLMClient
 from apps.agent.schemas.context import RedactedContext
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _async_noop() -> None:
     """No-op async function for health-report's publish_retry_event (no SSE)."""
+
 
 REPORT_PROMPT_TEMPLATE = """你是一位专业的家庭财务顾问。以下是一个家庭的资产状况数据（已脱敏），请根据数据生成一份结构化的家庭资产体检报告。
 
@@ -69,7 +70,9 @@ narrative 格式要求：
 - 使用观察性语言：「观察到」「数据显示」，严禁提供投资建议"""
 
 
-def _build_data_summary(overview: dict, allocation: dict, trend: dict, low_usage: list, liabilities: list) -> str:
+def _build_data_summary(
+    overview: dict, allocation: dict, trend: dict, low_usage: list, liabilities: list
+) -> str:
     lines = []
 
     # Net worth
@@ -77,7 +80,9 @@ def _build_data_summary(overview: dict, allocation: dict, trend: dict, low_usage
     total_assets = overview.get("total_assets", 0)
     total_liabilities = overview.get("total_liabilities", 0)
     mom_change = overview.get("mom_change_pct", 0)
-    lines.append(f"净资产：{net_worth:,.0f}（资产{total_assets:,.0f} - 负债{total_liabilities:,.0f}），月环比{mom_change:+.1f}%")
+    lines.append(
+        f"净资产：{net_worth:,.0f}（资产{total_assets:,.0f} - 负债{total_liabilities:,.0f}），月环比{mom_change:+.1f}%"
+    )
 
     # Allocation
     alloc_items = allocation.get("items", [])
@@ -103,8 +108,12 @@ def _build_data_summary(overview: dict, allocation: dict, trend: dict, low_usage
     # Liabilities
     desensitized_liabilities = desensitize_liabilities(liabilities)
     if desensitized_liabilities:
-        total_remaining = sum(li.get("remaining_amount_range_mid", 0) for li in desensitized_liabilities)
-        lines.append(f"活跃负债：{len(desensitized_liabilities)}笔，估算总余额约{total_remaining:,.0f}")
+        total_remaining = sum(
+            li.get("remaining_amount_range_mid", 0) for li in desensitized_liabilities
+        )
+        lines.append(
+            f"活跃负债：{len(desensitized_liabilities)}笔，估算总余额约{total_remaining:,.0f}"
+        )
     else:
         lines.append("活跃负债：无")
 
@@ -151,11 +160,13 @@ async def generate_health_report(
             trend = await client.get_dashboard_trend(period="year")
             low_usage = await client.get_dashboard_low_usage()
             liabilities = await client.get_liabilities()
-        except Exception as e:
-            logger.error(f"[health_report] 拉取数据失败 family={family_id}: {e}")
+        except Exception:
+            logger.exception("[health_report] 拉取数据失败 family=%s", family_id)
             raise
 
-    data_summary = _build_data_summary(overview, allocation, trend, low_usage, liabilities)
+    data_summary = _build_data_summary(
+        overview, allocation, trend, low_usage, liabilities
+    )
     data_completeness = _compute_data_completeness(overview, allocation, trend)
 
     prompt = REPORT_PROMPT_TEMPLATE.format(data_summary=data_summary)
@@ -172,7 +183,7 @@ async def generate_health_report(
         if report_data is None:
             raise ValueError("LLM 响应无法解析为 JSON")
     except Exception as e:
-        logger.error(f"[health_report] LLM 解析失败 family={family_id}: {e}")
+        logger.exception("[health_report] LLM 解析失败 family=%s", family_id)
         raise ValueError(f"LLM 响应解析失败: {e}") from e
 
     # Validate→repair cycle (shared infrastructure)
@@ -210,13 +221,19 @@ async def generate_health_report(
     # Final fallback: standalone LLM extraction
     if report_data is not None and validate_health_report_json(report_data):
         fallback = await extract_json_via_llm(
-            raw, _HEALTH_REPORT_REPAIR_PROMPT, _provider,
+            raw,
+            _HEALTH_REPORT_REPAIR_PROMPT,
+            _provider,
         )
         if fallback is not None and not validate_health_report_json(fallback):
             report_data = fallback
 
     if report_data is None or validate_health_report_json(report_data):
-        errors = validate_health_report_json(report_data) if report_data else ["无法解析报告 JSON"]
+        errors = (
+            validate_health_report_json(report_data)
+            if report_data
+            else ["无法解析报告 JSON"]
+        )
         logger.error(
             "[health_report] validation failed after %d retries + fallback "
             "family=%s errors=%s",
@@ -229,9 +246,14 @@ async def generate_health_report(
     # Clamp overall_score to valid range regardless of LLM compliance with the prompt formula.
     if "overall_score" in report_data:
         try:
-            report_data["overall_score"] = max(20, min(100, int(float(str(report_data["overall_score"])))))
+            report_data["overall_score"] = max(
+                20, min(100, int(float(str(report_data["overall_score"]))))
+            )
         except (TypeError, ValueError):
-            logger.warning(f"[health_report] overall_score 无法转换为整数，使用默认值 60: {report_data['overall_score']!r}")
+            logger.warning(
+                "[health_report] overall_score 无法转换为整数，使用默认值 60: %r",
+                report_data["overall_score"],
+            )
             report_data["overall_score"] = 60
 
     report_data["generated_at"] = datetime.now(UTC).isoformat()

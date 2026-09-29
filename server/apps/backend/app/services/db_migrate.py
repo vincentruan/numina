@@ -6,7 +6,6 @@ Provides automatic schema migration with:
 - Full table/column/index alignment
 """
 
-import logging
 import time
 from typing import Any
 
@@ -14,8 +13,9 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from apps.backend.app.database import Base
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Lock configuration
 LOCK_TABLE_NAME = "_schema_migration_lock"
@@ -104,7 +104,7 @@ def ensure_lock_table(engine: Engine) -> None:
     if LOCK_TABLE_NAME in existing:
         return
 
-    logger.info(f"Creating migration lock table: {LOCK_TABLE_NAME}")
+    logger.info("Creating migration lock table: %s", LOCK_TABLE_NAME)
 
     with engine.begin() as conn:
         if db_type == "sqlite":
@@ -222,7 +222,7 @@ def acquire_migration_lock(engine: Engine) -> bool:
         if try_acquire():
             # Double-check we actually hold it
             if double_check(holder_id):
-                logger.info(f"Migration lock acquired by {holder_id}")
+                logger.info("Migration lock acquired by %s", holder_id)
                 return True
             # Race condition - someone else got it
             logger.info("Lock acquisition race detected, retrying...")
@@ -230,7 +230,7 @@ def acquire_migration_lock(engine: Engine) -> bool:
         wait_time = int(wait_time + LOCK_CHECK_INTERVAL)
         time.sleep(LOCK_CHECK_INTERVAL)
 
-    logger.error(f"Failed to acquire migration lock after {wait_time:.1f}s")
+    logger.error("Failed to acquire migration lock after %.1fs", wait_time)
     return False
 
 
@@ -254,9 +254,11 @@ def release_migration_lock(engine: Engine) -> None:
                 text(f"DELETE FROM {LOCK_TABLE_NAME} WHERE lock_id = :lock_id"),
                 {"lock_id": lock_id},
             )
-            logger.info(f"Migration lock released by {holder_id}")
+            logger.info("Migration lock released by %s", holder_id)
         elif row:
-            logger.warning(f"Lock held by {row[0]}, not releasing (we are {holder_id})")
+            logger.warning(
+                "Lock held by %s, not releasing (we are %s)", row[0], holder_id
+            )
 
 
 def get_expected_columns_from_model(table_name: str) -> dict[str, Any]:
@@ -436,7 +438,11 @@ def add_column(
     # type-appropriate fallback so legacy DBs can be upgraded in place.
     # (Columns with a real server_default are already handled above.)
     if db_type == "sqlite" and not column_info["nullable"] and not default_clause:
-        if "BOOLEAN" in type_sql.upper() or "INTEGER" in type_sql.upper() or any(t in type_sql.upper() for t in ("REAL", "NUMERIC", "FLOAT")):
+        if (
+            "BOOLEAN" in type_sql.upper()
+            or "INTEGER" in type_sql.upper()
+            or any(t in type_sql.upper() for t in ("REAL", "NUMERIC", "FLOAT"))
+        ):
             default_clause = "DEFAULT 0"
         else:  # TEXT and other string types
             default_clause = "DEFAULT ''"
@@ -444,7 +450,7 @@ def add_column(
     sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {type_sql} {nullable_clause} {default_clause}"
     sql = sql.strip()
 
-    logger.info(f"Adding column: {table_name}.{column_name} ({type_sql})")
+    logger.info("Adding column: %s.%s (%s)", table_name, column_name, type_sql)
 
     with engine.begin() as conn:
         conn.execute(text(sql))
@@ -462,7 +468,7 @@ def add_index(
     sql = f"CREATE {unique} INDEX {index_name} ON {table_name} ({columns_str})"
     sql = sql.strip()
 
-    logger.info(f"Adding index: {index_name} on {table_name} ({columns_str})")
+    logger.info("Adding index: %s on %s (%s)", index_name, table_name, columns_str)
 
     with engine.begin() as conn:
         conn.execute(text(sql))
@@ -471,13 +477,13 @@ def add_index(
 def create_table(engine: Engine, table_name: str) -> None:
     """Create a missing table."""
     if table_name not in Base.metadata.tables:
-        logger.warning(f"Table {table_name} not found in models, skipping")
+        logger.warning("Table %s not found in models, skipping", table_name)
         return
 
     table = Base.metadata.tables[table_name]
 
     # Use SQLAlchemy's built-in create for this table only
-    logger.info(f"Creating missing table: {table_name}")
+    logger.info("Creating missing table: %s", table_name)
 
     with engine.begin() as conn:
         table.create(conn)
@@ -506,7 +512,7 @@ def align_schema(engine: Engine) -> dict[str, Any]:
                 create_table(engine, table_name)
                 summary["tables_created"].append(table_name)
             except Exception as e:
-                logger.error(f"Failed to create table {table_name}: {e}")
+                logger.exception("Failed to create table %s", table_name)
                 summary["errors"].append(f"table:{table_name}:{str(e)}")
                 continue
 
@@ -527,7 +533,7 @@ def align_schema(engine: Engine) -> dict[str, Any]:
                     add_column(engine, table_name, col_name, col_info)
                     summary["columns_added"].append(f"{table_name}.{col_name}")
                 except Exception as e:
-                    logger.error(f"Failed to add column {table_name}.{col_name}: {e}")
+                    logger.exception("Failed to add column %s.%s", table_name, col_name)
                     summary["errors"].append(f"column:{table_name}.{col_name}:{str(e)}")
 
     # 3. Add missing indexes
@@ -544,7 +550,7 @@ def align_schema(engine: Engine) -> dict[str, Any]:
                     add_index(engine, table_name, idx_name, idx_info)
                     summary["indexes_added"].append(f"{table_name}.{idx_name}")
                 except Exception as e:
-                    logger.error(f"Failed to add index {table_name}.{idx_name}: {e}")
+                    logger.exception("Failed to add index %s.%s", table_name, idx_name)
                     summary["errors"].append(f"index:{table_name}.{idx_name}:{str(e)}")
 
     return summary
@@ -558,7 +564,7 @@ def run_schema_migration(engine: Engine) -> dict[str, Any]:
     Returns a summary of migration results.
     """
     db_type = get_db_type(engine)
-    logger.info(f"Starting schema migration check (database: {db_type})")
+    logger.info("Starting schema migration check (database: %s)", db_type)
 
     # Try to acquire lock
     if not acquire_migration_lock(engine):
@@ -587,7 +593,7 @@ def run_schema_migration(engine: Engine) -> dict[str, Any]:
 
         missing = expected - existing
         if missing:
-            logger.warning(f"After waiting, still missing tables: {missing}")
+            logger.warning("After waiting, still missing tables: %s", missing)
             # Try migration anyway (lock might have expired)
             if acquire_migration_lock(engine):
                 summary = align_schema(engine)

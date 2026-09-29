@@ -12,13 +12,12 @@ In memory mode, each process has its own cache.
 
 from __future__ import annotations
 
-import logging
-
 from apps.agent.core.backend_client import BackendClient
 from packages.core.cache import get_cache
 from packages.core.cache.keys import AGENT_REG
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Sentinel stored in cache to distinguish "agent not found" from "key not cached".
 _NOT_FOUND_SENTINEL = "__AGENT_NOT_FOUND__"

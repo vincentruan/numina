@@ -11,7 +11,6 @@ rate is missing the original amount is returned unchanged and a
 ``rate_missing`` flag is set so the AI can warn the user.
 """
 
-import logging
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -20,9 +19,10 @@ from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.user import User
 from apps.backend.app.models.wish import Wish
+from packages.core.logging import get_logger
 from packages.domain.exchange_rate.service import ExchangeRateService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _money(v: Any) -> float:

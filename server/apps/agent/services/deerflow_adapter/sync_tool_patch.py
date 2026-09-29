@@ -52,10 +52,11 @@ Call :func:`apply_sync_tool_patches` once from the agent lifespan startup.
 from __future__ import annotations
 
 import inspect
-import logging
 import shutil
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 _patched = False
 

@@ -2,10 +2,11 @@
 
 import contextlib
 import json
-import logging
 from typing import Any, cast
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 IMPORT_PARSE_PROMPT = """你是一个金融文档解析助手。
 从以下文本中提取持仓/资产信息，输出严格 JSON，不输出任何解释文字。
@@ -55,5 +56,5 @@ async def parse_holdings_from_text(text: str, llm) -> dict:
             cleaned = "\n".join(lines[1:-1]) if len(lines) > 2 else cleaned
         return cast("dict[str, Any]", json.loads(cleaned))
 
-    logger.warning(f"[import_parse] LLM returned non-JSON: {raw[:200]}")
+    logger.warning("[import_parse] LLM returned non-JSON: %s", raw[:200])
     return {"source": "", "report_date": None, "items": []}

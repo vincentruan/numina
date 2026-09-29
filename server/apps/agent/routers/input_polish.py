@@ -6,7 +6,6 @@
 ``_create_lightweight_llm`` + ``llm.ainvoke``，与 ``suggest`` / title 同形态）。
 """
 
-import logging
 
 from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
@@ -14,9 +13,10 @@ from pydantic import BaseModel, Field
 from apps.agent.app.auth.jwt_verify import VerifiedFamily, verify_family_token
 from apps.agent.core.backend_client import BackendClient
 from apps.agent.services.input_polish import polish_draft
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/input-polish", tags=["input-polish"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class InputPolishRequest(BaseModel):

@@ -3,7 +3,6 @@
 GET   /api/v1/user/config  — read all settings
 PATCH /api/v1/user/config  — update settings
 """
-import logging
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -16,9 +15,10 @@ from apps.backend.app.services.config_service import (
     get_all_user_settings,
     update_user_settings,
 )
+from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/user/config", tags=["user-config"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("", response_model=UserConfigResponse)

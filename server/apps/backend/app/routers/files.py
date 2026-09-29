@@ -33,7 +33,7 @@ def _safe_relative_path(local_path: str, upload_dir: str) -> str:
     resolved = Path(local_path).resolve()
     base = Path(upload_dir).resolve()
     if not str(resolved).startswith(str(base)):
-        logger.error(f"路径越界检测: {local_path!r} 不在 {upload_dir!r} 内")
+        logger.error("路径越界检测: %r 不在 %r 内", local_path, upload_dir)
         raise AppError(ErrorCode.FILE_PATH_INVALID)
     return str(resolved.relative_to(base))
 
@@ -68,8 +68,8 @@ async def delete_file(
         await local_backend.delete(remote_path)
     except HTTPException:
         raise
-    except Exception as e:
-        logger.warning(f"本地文件删除失败: {e}")
+    except Exception:
+        logger.warning('本地文件删除失败', exc_info=True)
 
     # Delete from all synced remote backends
     locations = (
@@ -92,7 +92,7 @@ async def delete_file(
                 loc.sync_status = "failed"
                 loc.last_error = "无法解密存储后端配置"
         except Exception as e:
-            logger.warning(f"远程文件删除失败 [{backend_row.id}]: {e}")
+            logger.warning('远程文件删除失败 [%s]', backend_row.id, exc_info=True)
             loc.sync_status = "failed"
             loc.last_error = str(e)
 

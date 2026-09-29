@@ -1,6 +1,5 @@
 """Service layer for chore templates and instances."""
 
-import logging
 from datetime import UTC, date, datetime, timedelta
 from typing import cast
 
@@ -19,8 +18,9 @@ from apps.backend.app.models.coin_transaction import CoinTransaction
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.chore import ChoreTemplateCreate, ChoreTemplateUpdate
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Template CRUD

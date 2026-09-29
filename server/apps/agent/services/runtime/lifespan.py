@@ -14,16 +14,17 @@ Manages the lifecycle of:
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 from typing import Any
 
 from deerflow.runtime import RunManager, StreamBridge
 from fastapi import FastAPI, HTTPException, Request
 
+from packages.core.logging import get_logger
+
 from .gc import drain_inflight_runs, reconcile_orphaned_runs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def init_runtime(app: FastAPI) -> None:
@@ -74,7 +75,9 @@ def _create_persistent_run_store() -> Any | None:
 
         session_factory = get_session_factory()
         if session_factory is None:
-            logger.info("[runtime] DeerFlow session factory unavailable; using in-memory RunStore")
+            logger.info(
+                "[runtime] DeerFlow session factory unavailable; using in-memory RunStore"
+            )
             return None
         return NuminaSqlRunStore(session_factory)
     except Exception:
@@ -154,7 +157,7 @@ async def get_stream_bridge(request: Request) -> StreamBridge:
             await client.ping()
             await client.aclose()
         except Exception as e:
-            logger.error("Redis unavailable for StreamBridge (%s)", e)
+            logger.exception("Redis unavailable for StreamBridge")
             raise HTTPException(
                 status_code=503,
                 detail="Stream bridge unavailable: Redis connection failed",

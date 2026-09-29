@@ -1,6 +1,5 @@
 """Itinerary item service — CRUD with expense ledger integration."""
 
-import logging
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -12,13 +11,14 @@ from apps.backend.app.schemas.itinerary_item import (
     ItineraryItemUpdate,
 )
 from apps.backend.app.services import expense_ledger
+from packages.core.logging import get_logger
 from packages.db.models.expense_category import ExpenseCategory
 from packages.db.models.expense_entry import ExpenseEntry
 from packages.db.models.itinerary_item import ItineraryItem
 from packages.db.models.itinerary_item_type import ItineraryItemType
 from packages.db.models.trip import Trip
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Map itinerary item types to system expense category names.
 # Custom items map to "杂项" (miscellaneous).

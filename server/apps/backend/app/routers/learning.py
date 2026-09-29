@@ -9,7 +9,6 @@ in ``learning_family.py`` and ``learning_child.py`` respectively.
 """
 
 import json
-import logging
 
 import httpx
 from fastapi import APIRouter, Depends, Query
@@ -27,9 +26,10 @@ from apps.backend.app.schemas.learning import (
 )
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.learning import topic_service
+from packages.core.logging import get_logger
 from packages.db.models.learning.topic import LearningTopic
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/learning", tags=["learning"])
 

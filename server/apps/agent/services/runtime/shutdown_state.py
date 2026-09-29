@@ -5,10 +5,11 @@ Tracks whether the agent is shutting down to reject new tasks and drain in-fligh
 
 from __future__ import annotations
 
-import logging
 from typing import ClassVar
 
-logger = logging.getLogger(__name__)
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ShutdownState:

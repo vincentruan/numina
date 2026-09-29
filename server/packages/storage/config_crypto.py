@@ -39,8 +39,8 @@ def decrypt_config(config_text: str | None) -> dict | None:
         f = Fernet(_fernet_key())
         decrypted = f.decrypt(config_text.encode())
         return json.loads(decrypted)  # type: ignore[no-any-return]
-    except Exception as e:
-        logger.warning(f"存储后端配置解密失败: {e}")
+    except Exception:
+        logger.warning('存储后端配置解密失败', exc_info=True)
         return None
 
 

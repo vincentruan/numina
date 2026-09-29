@@ -3,14 +3,14 @@
 供 backend 调用，通知 agent 清理家庭的 DeerFlowAdapter 缓存。
 """
 
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from apps.agent.services.deerflow_adapter.adapter import invalidate_family_adapter_cache
+from packages.core.logging import get_logger
 from packages.security.service_auth.agent_token_verify import verify_service_token
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/internal/cache", tags=["internal"])
 
@@ -36,5 +36,5 @@ def invalidate_cache(
     if family_id != token_family:
         raise HTTPException(status_code=403, detail="family_id mismatch")
     invalidate_family_adapter_cache(family_id)
-    logger.info(f"[agent/cache] invalidated adapter cache for family={family_id}")
+    logger.info("[agent/cache] invalidated adapter cache for family=%s", family_id)
     return {"success": True, "family_id": family_id}

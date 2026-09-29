@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session
 from apps.backend.app.models.bonus_draw import BonusDraw
 from apps.backend.app.models.challenge_grant import ChallengeGrant
 from apps.backend.app.utils.snowflake import next_id
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 _audit_logger = logging.getLogger("audit.challenges")
 
 

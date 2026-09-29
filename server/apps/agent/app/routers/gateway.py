@@ -9,7 +9,6 @@
 所有端点使用 X-Agent-Token 认证（与 backend 共享同一 token）。
 """
 
-import logging
 import re
 from types import SimpleNamespace
 from typing import Any
@@ -28,9 +27,10 @@ from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
 from apps.agent.services.deerflow_adapter.exceptions import DeerFlowTimeoutError
 from apps.agent.services.runtime.lifespan import get_run_manager, get_stream_bridge
 from apps.agent.services.runtime.sse_gateway import sse_consumer, start_run
+from packages.core.logging import get_logger
 from packages.security.service_auth.agent_token_verify import verify_service_token
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/internal/gateway", tags=["internal"])
 
@@ -74,10 +74,10 @@ def list_models(
         resp.raise_for_status()
         return dict(resp.json())
     except httpx.HTTPStatusError as e:
-        logger.error("[gateway] list_models upstream error: %s", e)
+        logger.exception("[gateway] list_models upstream error")
         raise HTTPException(status_code=e.response.status_code, detail=str(e)) from e
     except httpx.RequestError as e:
-        logger.error("[gateway] list_models request failed: %s", e)
+        logger.exception("[gateway] list_models request failed")
         raise HTTPException(status_code=502, detail=f"Gateway unreachable: {e}") from e
 
 
@@ -301,9 +301,7 @@ async def trigger_asset_report_run(
 
     async def sse_generator():
         bridge = await get_stream_bridge(request)
-        async for frame in sse_consumer(
-            bridge, record, request, run_mgr
-        ):
+        async for frame in sse_consumer(bridge, record, request, run_mgr):
             yield frame
 
     return StreamingResponse(
@@ -375,9 +373,7 @@ async def trigger_finance_coach_run(
 
     async def sse_generator():
         bridge = await get_stream_bridge(request)
-        async for frame in sse_consumer(
-            bridge, record, request, run_mgr
-        ):
+        async for frame in sse_consumer(bridge, record, request, run_mgr):
             yield frame
 
     return StreamingResponse(
@@ -452,9 +448,7 @@ async def trigger_chat_run(
 
     async def sse_generator():
         bridge = await get_stream_bridge(request)
-        async for frame in sse_consumer(
-            bridge, record, request, run_mgr
-        ):
+        async for frame in sse_consumer(bridge, record, request, run_mgr):
             yield frame
 
     return StreamingResponse(
@@ -525,9 +519,7 @@ async def trigger_wish_advice_run(
 
     async def sse_generator():
         bridge = await get_stream_bridge(request)
-        async for frame in sse_consumer(
-            bridge, record, request, run_mgr
-        ):
+        async for frame in sse_consumer(bridge, record, request, run_mgr):
             yield frame
 
     return StreamingResponse(
@@ -595,9 +587,7 @@ async def trigger_dashboard_narrative_run(
 
     async def sse_generator():
         bridge = await get_stream_bridge(request)
-        async for frame in sse_consumer(
-            bridge, record, request, run_mgr
-        ):
+        async for frame in sse_consumer(bridge, record, request, run_mgr):
             yield frame
 
     return StreamingResponse(
@@ -652,9 +642,7 @@ async def trigger_literacy_weekly_report_run(
 
     async def sse_generator():
         bridge = await get_stream_bridge(request)
-        async for frame in sse_consumer(
-            bridge, record, request, run_mgr
-        ):
+        async for frame in sse_consumer(bridge, record, request, run_mgr):
             yield frame
 
     return StreamingResponse(
@@ -715,9 +703,7 @@ async def trigger_learning_tutor_run(
 
     async def sse_generator():
         bridge = await get_stream_bridge(request)
-        async for frame in sse_consumer(
-            bridge, record, request, run_mgr
-        ):
+        async for frame in sse_consumer(bridge, record, request, run_mgr):
             yield frame
 
     return StreamingResponse(

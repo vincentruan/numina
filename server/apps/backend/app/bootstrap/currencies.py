@@ -35,4 +35,4 @@ def bootstrap_currencies(db: Session) -> None:
         cur = Currency(is_favorite=True, **cur_data)
         db.add(cur)
     db.commit()
-    logger.info(f"已初始化 {len(FAVORITE_CURRENCIES)} 个常用货币")
+    logger.info("已初始化 %s 个常用货币", len(FAVORITE_CURRENCIES))

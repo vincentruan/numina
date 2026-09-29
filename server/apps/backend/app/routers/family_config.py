@@ -4,7 +4,6 @@ GET   /api/v1/family/config             — read all settings (any adult)
 PATCH /api/v1/family/config             — update settings (owner only)
 GET   /api/v1/family/config/definitions — get setting metadata (any adult)
 """
-import logging
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -24,10 +23,11 @@ from apps.backend.app.services.config_service import (
     get_all_family_settings,
     update_family_settings,
 )
+from packages.core.logging import get_logger
 from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/family/config", tags=["family-config"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("", response_model=FamilyConfigResponse)

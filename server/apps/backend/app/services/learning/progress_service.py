@@ -1,12 +1,12 @@
 """Progress service — state machine + spaced repetition for learning progress."""
 
-import logging
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
+from packages.core.logging import get_logger
 from packages.db.models.child_economy.coin_transaction import CoinTransaction
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import (
@@ -15,7 +15,7 @@ from packages.db.models.learning.session import (
 )
 from packages.db.models.learning.topic import LearningDependency, LearningTopic
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Age group ordering for difficulty comparison
 AGE_GROUP_ORDER = {"low": 0, "mid": 1, "high": 2}
@@ -293,8 +293,8 @@ def approve_parent_review(
 
     try:
         stats_service.award_xp(db, progress.child_id, family_id, xp_amount=20)
-    except Exception as e:
-        logger.warning("XP award failed on parent review for child %s: %s", progress.child_id, e)
+    except Exception:
+        logger.warning('XP award failed on parent review for child %s', progress.child_id, exc_info=True)
 
     return progress
 

@@ -15,8 +15,9 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.models.child_milestone import ChildMilestone
 from apps.backend.app.services.coin_transactions import get_total_earned
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 _audit_logger = logging.getLogger("audit.milestones")
 
 # Milestone types that can only trigger once per child (lifetime)

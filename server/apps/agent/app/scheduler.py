@@ -83,14 +83,14 @@
 """
 
 import asyncio
-import logging
 import random
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from apps.agent.core import backend_client
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
 

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import re
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
+
+from packages.core.logging import get_logger
 
 from .base import (
     END_SENTINEL,
@@ -19,7 +20,7 @@ from .base import (
     StreamItem,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 _MEMORY_STREAM_ID_RE = re.compile(r"\d+-(\d+)")
 
 

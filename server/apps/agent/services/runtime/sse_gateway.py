@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from typing import Any
 
 from deerflow.runtime import (
@@ -25,12 +24,13 @@ from deerflow.runtime import (
 )
 from fastapi import HTTPException, Request
 
+from packages.core.logging import get_logger
 from packages.stream_bridge import StreamGap
 
 from .lifespan import get_run_manager, get_stream_bridge
 from .worker import run_agent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

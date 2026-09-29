@@ -6,7 +6,6 @@ Tenant + caller isolation via __slots__:
 """
 
 import json
-import logging
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -19,8 +18,9 @@ from sqlalchemy.orm import Session
 from apps.backend.app.database import SessionLocal
 from apps.backend.app.errors import AppError
 from apps.backend.app.models.user import User
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _parse_date(value: Any) -> date | None:

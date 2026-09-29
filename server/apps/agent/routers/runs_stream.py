@@ -14,7 +14,6 @@ this file provides the new SSE protocol.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any, Literal
 
 from deerflow.runtime import CancelOutcome, RunManager
@@ -25,8 +24,9 @@ from pydantic import BaseModel, Field
 from apps.agent.app.auth.jwt_verify import VerifiedFamily, verify_family_token
 from apps.agent.services.runtime.lifespan import get_run_manager, get_stream_bridge
 from apps.agent.services.runtime.sse_gateway import sse_consumer, start_run
+from packages.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["runs"])
 
 
