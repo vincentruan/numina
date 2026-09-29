@@ -50,7 +50,7 @@ async def translate_topic_endpoint(
     try:
         return await translate_topic(topic_dict, selected)
     except ValueError as e:
-        logger.warning("Translation failed: %s", e)
+        logger.warning('Translation failed: %s', exc_info=True)
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception:
         logger.exception("Translation LLM call failed")

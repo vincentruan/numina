@@ -36,5 +36,5 @@ def invalidate_cache(
     if family_id != token_family:
         raise HTTPException(status_code=403, detail="family_id mismatch")
     invalidate_family_adapter_cache(family_id)
-    logger.info(f"[agent/cache] invalidated adapter cache for family={family_id}")
+    logger.info("[agent/cache] invalidated adapter cache for family=%s", family_id)
     return {"success": True, "family_id": family_id}

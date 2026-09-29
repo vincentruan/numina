@@ -78,6 +78,6 @@ async def input_polish(
         return JSONResponse(content=resp.json())
     except httpx.TimeoutException:
         raise AppError(ErrorCode.AI_SERVICE_TIMEOUT) from None
-    except Exception as e:
-        logger.error(f"调用 agent input-polish 失败: {e}")
+    except Exception:
+        logger.exception('调用 agent input-polish 失败: %s')
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from None

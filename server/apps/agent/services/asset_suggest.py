@@ -153,8 +153,8 @@ async def suggest_asset_fields(
             return dict(_SUGGEST_DEFAULTS)
 
         return _normalize_suggest_result(data)
-    except Exception as e:
-        logger.warning("[asset_suggest] LLM 调用或解析失败: %s", e)
+    except Exception:
+        logger.warning('[asset_suggest] LLM 调用或解析失败: %s', exc_info=True)
         return dict(_SUGGEST_DEFAULTS)
 
 

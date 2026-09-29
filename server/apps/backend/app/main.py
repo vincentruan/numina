@@ -208,7 +208,7 @@ def _wait_for_database(max_retries: int = 10, base_delay: float = 1.0) -> None:
             return
         except OperationalError:
             if attempt == max_retries:
-                logger.error(f"数据库连接失败，已重试 {max_retries} 次，放弃启动")
+                logger.error("数据库连接失败，已重试 %s 次，放弃启动", max_retries)
                 raise
             delay = min(base_delay * (2 ** (attempt - 1)), 30)
             logger.warning(
@@ -276,13 +276,13 @@ async def lifespan(app: FastAPI):
     logger.info("执行数据库结构对齐检查...")
     migration_summary = run_schema_migration(engine)
     if migration_summary.get("tables_created"):
-        logger.info(f"新建表: {migration_summary['tables_created']}")
+        logger.info("新建表: %s", migration_summary['tables_created'])
     if migration_summary.get("columns_added"):
-        logger.info(f"新增字段: {migration_summary['columns_added']}")
+        logger.info("新增字段: %s", migration_summary['columns_added'])
     if migration_summary.get("indexes_added"):
-        logger.info(f"新增索引: {migration_summary['indexes_added']}")
+        logger.info("新增索引: %s", migration_summary['indexes_added'])
     if migration_summary.get("errors"):
-        logger.warning(f"迁移错误: {migration_summary['errors']}")
+        logger.warning("迁移错误: %s", migration_summary['errors'])
     if not any(
         [
             migration_summary.get("tables_created"),
@@ -346,8 +346,8 @@ async def lifespan(app: FastAPI):
         # Auto-generate daily snapshots for all families
         try:
             auto_generate_daily_snapshots(db)
-        except Exception as e:
-            logger.warning(f"自动快照生成失败: {e}")
+        except Exception:
+            logger.warning('自动快照生成失败: %s', exc_info=True)
         # Fetch exchange rates immediately if none exist
         # Skip in CI to avoid slow external API calls during bootstrap
         if not os.environ.get("SKIP_INITIAL_EXCHANGE_RATE_FETCH"):
@@ -359,8 +359,8 @@ async def lifespan(app: FastAPI):
                     logger.info("首次启动，立即获取汇率数据...")
                     adapter = ExchangeRateAdapter()
                     adapter.fetch_and_store_rates(db)
-            except Exception as e:
-                logger.warning(f"初始汇率获取失败: {e}")
+            except Exception:
+                logger.warning('初始汇率获取失败: %s', exc_info=True)
     finally:
         db.close()
 

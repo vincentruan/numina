@@ -92,13 +92,13 @@ class DesiredStateRunner:
 
     def _reconcile_one(self, resource: Resource) -> ResourceResult:
         """Run the check → apply → verify cycle for a single resource."""
-        logger.info(f"[reconcile] checking: {resource.name}")
+        logger.info("[reconcile] checking: %s", resource.name)
 
         # --- CHECK ---
         try:
             result = resource.check(self._db)
         except Exception as e:
-            logger.error(f"[reconcile] check failed for {resource.name}: {e}")
+            logger.exception('[reconcile] check failed for %s: %s', resource.name)
             # Rollback to ensure session is clean for subsequent resources
             with contextlib.suppress(Exception):
                 self._db.rollback()
@@ -110,7 +110,7 @@ class DesiredStateRunner:
         result.checked_at = datetime.now(UTC)
 
         if result.status == ResourceStatus.VERIFIED:
-            logger.debug(f"[reconcile] {resource.name}: already at desired state")
+            logger.debug("[reconcile] %s: already at desired state", resource.name)
             return result
 
         if result.status == ResourceStatus.FAILED:
@@ -127,13 +127,13 @@ class DesiredStateRunner:
 
         # --- APPLY ---
         if result.status == ResourceStatus.DRIFTED:
-            logger.info(f"[reconcile] applying: {resource.name}")
+            logger.info("[reconcile] applying: %s", resource.name)
             try:
                 result = resource.apply(self._db)
                 result.applied_at = datetime.now(UTC)
                 result.changed = True
             except Exception as e:
-                logger.error(f"[reconcile] apply failed for {resource.name}: {e}")
+                logger.exception('[reconcile] apply failed for %s: %s', resource.name)
                 with contextlib.suppress(Exception):
                     self._db.rollback()
                 return resource._failed(
@@ -151,7 +151,7 @@ class DesiredStateRunner:
             verify_result.changed = result.changed
             return verify_result
         except Exception as e:
-            logger.error(f"[reconcile] verify failed for {resource.name}: {e}")
+            logger.exception('[reconcile] verify failed for %s: %s', resource.name)
             return resource._failed(error=f"Verify error: {e}")
 
     def _persist_result(self, result: ResourceResult) -> None:
@@ -170,8 +170,8 @@ class DesiredStateRunner:
                 applied_at=result.applied_at,
                 verified_at=result.verified_at,
             )
-        except Exception as e:
-            logger.warning(f"Failed to persist state for {result.resource_name}: {e}")
+        except Exception:
+            logger.warning('Failed to persist state for %s: %s', result.resource_name, exc_info=True)
 
     def _finalize_report(self, report: ReconcileReport) -> None:
         """Compute summary fields from individual results."""

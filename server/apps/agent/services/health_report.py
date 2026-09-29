@@ -151,8 +151,8 @@ async def generate_health_report(
             trend = await client.get_dashboard_trend(period="year")
             low_usage = await client.get_dashboard_low_usage()
             liabilities = await client.get_liabilities()
-        except Exception as e:
-            logger.error(f"[health_report] 拉取数据失败 family={family_id}: {e}")
+        except Exception:
+            logger.exception('[health_report] 拉取数据失败 family=%s: %s', family_id)
             raise
 
     data_summary = _build_data_summary(overview, allocation, trend, low_usage, liabilities)
@@ -172,7 +172,7 @@ async def generate_health_report(
         if report_data is None:
             raise ValueError("LLM 响应无法解析为 JSON")
     except Exception as e:
-        logger.error(f"[health_report] LLM 解析失败 family={family_id}: {e}")
+        logger.exception('[health_report] LLM 解析失败 family=%s: %s', family_id)
         raise ValueError(f"LLM 响应解析失败: {e}") from e
 
     # Validate→repair cycle (shared infrastructure)
@@ -231,7 +231,7 @@ async def generate_health_report(
         try:
             report_data["overall_score"] = max(20, min(100, int(float(str(report_data["overall_score"])))))
         except (TypeError, ValueError):
-            logger.warning(f"[health_report] overall_score 无法转换为整数，使用默认值 60: {report_data['overall_score']!r}")
+            logger.warning("[health_report] overall_score 无法转换为整数，使用默认值 60: %r", report_data['overall_score'])
             report_data["overall_score"] = 60
 
     report_data["generated_at"] = datetime.now(UTC).isoformat()

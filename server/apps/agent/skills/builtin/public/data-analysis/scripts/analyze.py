@@ -100,7 +100,7 @@ def load_files(con: duckdb.DuckDBPyConnection, files: list[str]) -> dict[str, st
 
     for file_path in files:
         if not os.path.exists(file_path):
-            logger.error(f"File not found: {file_path}")
+            logger.error("File not found: %s", file_path)
             continue
 
         ext = os.path.splitext(file_path)[1].lower()
@@ -110,7 +110,7 @@ def load_files(con: duckdb.DuckDBPyConnection, files: list[str]) -> dict[str, st
         elif ext == ".csv":
             _load_csv(con, file_path, table_map)
         else:
-            logger.warning(f"Unsupported file format: {ext} ({file_path})")
+            logger.warning("Unsupported file format: %s (%s)", ext, file_path)
 
     return table_map
 
@@ -153,8 +153,8 @@ def _load_excel(
             logger.info(
                 f"  Loaded sheet '{sheet_name}' -> table '{table_name}' ({row_count} rows)"
             )
-        except Exception as e:
-            logger.warning(f"  Failed to load sheet '{sheet_name}': {e}")
+        except Exception:
+            logger.warning("  Failed to load sheet '%s': %s", sheet_name, exc_info=True)
 
 
 def _load_csv(
@@ -183,8 +183,8 @@ def _load_csv(
         logger.info(
             f"  Loaded CSV '{base_name}' -> table '{table_name}' ({row_count} rows)"
         )
-    except Exception as e:
-        logger.warning(f"  Failed to load CSV '{base_name}': {e}")
+    except Exception:
+        logger.warning("  Failed to load CSV '%s': %s", base_name, exc_info=True)
 
 
 def action_inspect(con: duckdb.DuckDBPyConnection, table_map: dict[str, str]) -> str:
@@ -526,7 +526,7 @@ def main():
 
     if cached_table_map and os.path.exists(db_path):
         # Cache hit: connect to existing DB
-        logger.info(f"Cache hit! Using cached database: {db_path}")
+        logger.info("Cache hit! Using cached database: %s", db_path)
         con = duckdb.connect(db_path, read_only=True)
         table_map = cached_table_map
         logger.info(
@@ -551,7 +551,7 @@ def main():
         logger.info(
             f"\nLoaded {len(table_map)} table(s): {', '.join(table_map.keys())}"
         )
-        logger.info(f"Cached database saved to: {db_path}")
+        logger.info("Cached database saved to: %s", db_path)
 
     # Perform action
     if args.action == "inspect":

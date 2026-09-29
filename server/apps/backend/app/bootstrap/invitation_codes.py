@@ -58,4 +58,4 @@ def bootstrap_invitation_codes(db: Session) -> None:
 
     if inserted:
         db.commit()
-        logger.info(f"已初始化 {inserted} 个邀请码")
+        logger.info("已初始化 %s 个邀请码", inserted)

@@ -41,13 +41,13 @@ async def answer_question(question: str, family_id: str, llm: LLMClient) -> str:
 
     # Step 1: Intent classification
     intent = await _classify_intent(question, llm)
-    logger.info(f"[chat] intent={intent} family={family_id}")
+    logger.info("[chat] intent=%s family=%s", intent, family_id)
 
     # Step 2: Fetch relevant data
     try:
         data = await _fetch_data_for_intent(intent, client)
-    except Exception as e:
-        logger.error(f"[chat] 数据获取失败: {e}")
+    except Exception:
+        logger.exception('[chat] 数据获取失败: %s')
         return "抱歉，暂时无法获取数据，请稍后再试。"
 
     if intent == "unknown":
@@ -60,8 +60,8 @@ async def answer_question(question: str, family_id: str, llm: LLMClient) -> str:
             data=json.dumps(data, ensure_ascii=False, default=str),
         )
         return (await llm.complete(prompt, max_tokens=200)).strip()
-    except Exception as e:
-        logger.error(f"[chat] LLM 回答生成失败: {e}")
+    except Exception:
+        logger.exception('[chat] LLM 回答生成失败: %s')
         return "抱歉，AI 服务暂时不可用，请稍后再试。"
 
 

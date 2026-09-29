@@ -567,7 +567,7 @@ async def consume_task_stream(
                 yield f"event: {event_type}\n{id_line}data: {json.dumps(event_data, default=str)}\n\n"
 
     except Exception as e:
-        logger.error(f"Error consuming task stream {task_id}: {e}", exc_info=True)
+        logger.error("Error consuming task stream %s: %s", task_id, e, exc_info=True)
         safe_msg = _map_to_safe_message(e)
         yield f"event: error\ndata: {json.dumps({'error': safe_msg})}\n\n"
 

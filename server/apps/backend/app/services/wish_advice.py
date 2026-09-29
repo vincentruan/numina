@@ -175,8 +175,8 @@ async def generate_advice(db: Session, user: User) -> tuple[dict | None, str]:
                 return None, fp
             advice = await _extract_wish_advice_result(resp)
         return validate_advice(advice), fp
-    except Exception as exc:
-        logger.warning("[wish-advice] generate failed err=%s", type(exc).__name__)
+    except Exception:
+        logger.warning("[wish-advice] generate failed err=%s", exc_info=True)
         return None, fp
 
 
@@ -193,8 +193,8 @@ async def _extract_wish_advice_result(resp: Any) -> dict | None:
     try:
         async for chunk in resp.aiter_text():
             text += chunk
-    except Exception as exc:
-        logger.warning("[wish-advice] stream read failed err=%s", type(exc).__name__)
+    except Exception:
+        logger.warning("[wish-advice] stream read failed err=%s", exc_info=True)
         return None
 
     for block in text.split("\n\n"):

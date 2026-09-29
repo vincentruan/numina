@@ -61,8 +61,8 @@ class MCPSSEResponse(Response):
             async with transport.connect_sse(scope, receive, send) as (read_stream, write_stream):
                 init_opts = self.session.server.create_initialization_options()
                 await self.session.server.run(read_stream, write_stream, init_opts)
-        except Exception as e:
-            logger.error("[mcp_sse] family=%s connection error: %s", self.family_id, e)
+        except Exception:
+            logger.exception('[mcp_sse] family=%s connection error: %s', self.family_id)
 
 
 class MCPMessageResponse(Response):

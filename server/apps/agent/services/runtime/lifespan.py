@@ -155,7 +155,7 @@ async def get_stream_bridge(request: Request) -> StreamBridge:
             await client.ping()
             await client.aclose()
         except Exception as e:
-            logger.error("Redis unavailable for StreamBridge (%s)", e)
+            logger.exception('Redis unavailable for StreamBridge (%s)')
             raise HTTPException(
                 status_code=503,
                 detail="Stream bridge unavailable: Redis connection failed",

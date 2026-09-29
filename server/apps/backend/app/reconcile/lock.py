@@ -60,8 +60,8 @@ class PostgresAdvisoryLock(LockProvider):
                 {"ns": self._LOCK_NAMESPACE, "id": lock_id},
             )
             return True
-        except Exception as e:
-            logger.warning(f"Failed to acquire advisory lock '{lock_name}': {e}")
+        except Exception:
+            logger.warning("Failed to acquire advisory lock '%s': %s", lock_name, exc_info=True)
             conn.close()
             self._conn = None
             return False
@@ -173,7 +173,7 @@ class TableBasedLock(LockProvider):
 
             time.sleep(LOCK_CHECK_INTERVAL)
 
-        logger.error(f"Timed out waiting for lock '{lock_name}' after {timeout}s")
+        logger.error("Timed out waiting for lock '%s' after %ss", lock_name, timeout)
         return False
 
     def release(self, lock_name: str) -> None:

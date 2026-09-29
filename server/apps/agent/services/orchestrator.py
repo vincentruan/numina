@@ -267,7 +267,7 @@ def _fire_and_forget(coro: Coroutine[Any, Any, Any]) -> None:
     def _log_exception(t: asyncio.Task) -> None:
         exc = t.exception()
         if exc:
-            logger.warning("fire-and-forget task failed: %s", exc)
+            logger.warning("fire-and-forget task failed", exc_info=exc)
 
     task.add_done_callback(_log_exception)
 

@@ -56,5 +56,5 @@ async def parse_holdings_from_text(text: str, llm) -> dict:
             cleaned = "\n".join(lines[1:-1]) if len(lines) > 2 else cleaned
         return cast("dict[str, Any]", json.loads(cleaned))
 
-    logger.warning(f"[import_parse] LLM returned non-JSON: {raw[:200]}")
+    logger.warning("[import_parse] LLM returned non-JSON: %s", raw[:200])
     return {"source": "", "report_date": None, "items": []}

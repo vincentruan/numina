@@ -42,7 +42,7 @@ async def drain_inflight_runs(run_manager: RunManager, *, timeout: float | None 
     if timeout is None:
         timeout = float(os.getenv("RUN_DRAIN_TIMEOUT_SECONDS", "60.0"))
 
-    logger.info(f"[drain_inflight_runs] Starting graceful shutdown drain (timeout={timeout}s)")
+    logger.info("[drain_inflight_runs] Starting graceful shutdown drain (timeout=%ss)", timeout)
 
     if not hasattr(run_manager, "shutdown"):
         logger.debug("RunManager.shutdown not available in this DeerFlow version (no-op drain)")
@@ -109,15 +109,15 @@ async def drain_inflight_runs(run_manager: RunManager, *, timeout: float | None 
                                     task.completed_at = datetime.now(UTC)
                                     task.error_message = f"服务关停，任务未完成（超时 {timeout}s）"
                                     db.commit()
-                                    logger.info(f"[drain_inflight_runs] Marked task {task.id} as interrupted")
+                                    logger.info("[drain_inflight_runs] Marked task %s as interrupted", task.id)
                             else:
-                                logger.warning(f"[drain_inflight_runs] Run {run.run_id} has no family_id in metadata, skipping")
+                                logger.warning("[drain_inflight_runs] Run %s has no family_id in metadata, skipping", run.run_id)
                         finally:
                             db.close()
-                    except Exception as e:
-                        logger.error(f"[drain_inflight_runs] Failed to mark task interrupted: {e}")
-        except Exception as e:
-            logger.error(f"[drain_inflight_runs] Failed to list/check runs: {e}")
+                    except Exception:
+                        logger.exception('[drain_inflight_runs] Failed to mark task interrupted: %s')
+        except Exception:
+            logger.exception('[drain_inflight_runs] Failed to list/check runs: %s')
 
 
 async def reconcile_orphaned_runs(
@@ -252,8 +252,8 @@ async def reconcile_orphaned_runs(
         finally:
             db.close()
 
-    except Exception as e:
-        logger.error(f"[reconcile_orphaned_runs] Failed to reconcile orphaned runs: {e}")
+    except Exception:
+        logger.exception('[reconcile_orphaned_runs] Failed to reconcile orphaned runs: %s')
 
     return recovered
 

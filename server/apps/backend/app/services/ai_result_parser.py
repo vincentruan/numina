@@ -521,7 +521,7 @@ async def _llm_fallback_extract(
     config = configs[0]
     api_key = decrypt_api_key(config.api_key_encrypted or "")
     if not api_key:
-        logger.warning(f"[{skill_id}] LLM fallback: could not decrypt API key")
+        logger.warning("[%s] LLM fallback: could not decrypt API key", skill_id)
         return None, "api_key_error"
 
     # Use higher retry count for asset-report skill (Phase 2 retry loop)

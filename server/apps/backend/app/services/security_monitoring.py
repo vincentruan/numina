@@ -177,8 +177,8 @@ class SecurityMonitor:
         for handler in self.alert_handlers:
             try:
                 await handler(alert_data)
-            except Exception as e:
-                logger.error(f"Alert handler failed: {e}")
+            except Exception:
+                logger.exception('Alert handler failed: %s')
 
     def _get_recommendation(self, event: SecurityEvent) -> str:
         """根据事件类型生成处置建议"""

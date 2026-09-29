@@ -51,7 +51,7 @@ class ExchangeRateService:
             .first()
         )
         if row is None:
-            logger.warning(f"汇率数据不存在: {target_currency}")
+            logger.warning("汇率数据不存在: %s", target_currency)
             return (None, None)
 
         # Update adapter cache so subsequent calls use it

@@ -19,8 +19,8 @@ def _get_fernet():
             if isinstance(settings.AI_ENCRYPTION_KEY, str)
             else settings.AI_ENCRYPTION_KEY
         )
-    except Exception as e:
-        logger.warning(f"Fernet 初始化失败: {e}")
+    except Exception:
+        logger.warning('Fernet 初始化失败: %s', exc_info=True)
         return None
 
 
@@ -39,8 +39,8 @@ def decrypt_api_key(encrypted: str) -> str | None:
         return None
     try:
         return str(fernet.decrypt(encrypted.encode()).decode())
-    except Exception as e:
-        logger.error(f"API Key 解密失败: {e}")
+    except Exception:
+        logger.exception('API Key 解密失败: %s')
         return None
 
 

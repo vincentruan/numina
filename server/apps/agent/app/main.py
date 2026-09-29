@@ -71,8 +71,8 @@ try:
     from apps.agent.services.deerflow_adapter import (
         memory_config_bridge,
     )
-except Exception as e:
-    logger.warning("memory_config_bridge install failed: %s", e)
+except Exception:
+    logger.warning('memory_config_bridge install failed: %s', exc_info=True)
 
 
 @asynccontextmanager

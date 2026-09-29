@@ -81,8 +81,8 @@ def _load_presentation() -> dict[str, dict]:
         if not isinstance(data, dict):
             raise ValueError("顶层结构必须是映射")
         return data
-    except Exception as e:
-        logger.warning(f"categories.yaml 解析失败: {e}，使用内置默认值")
+    except Exception:
+        logger.warning('categories.yaml 解析失败: %s，使用内置默认值', exc_info=True)
         return _FALLBACK_PRESENTATION
 
 

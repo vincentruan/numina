@@ -105,5 +105,5 @@ async def verify_captcha(
         raise
     except Exception as e:
         # Fail-closed: if cache unavailable, reject request
-        logger.error(f"Captcha cache error: {e}")
+        logger.exception('Captcha cache error: %s')
         raise AppError(ErrorCode.CAPTCHA_SERVICE_UNAVAILABLE) from e

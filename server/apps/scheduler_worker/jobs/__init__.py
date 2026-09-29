@@ -113,7 +113,7 @@ async def file_sync_job() -> None:
                     loc.sync_status = "failed"
                     loc.last_error = f"路径越界，拒绝访问: {cached_file.local_path}"
                     db.commit()
-                    logger.warning(f"文件同步路径越界: {cached_file.id} -> {cached_file.local_path}")
+                    logger.warning("文件同步路径越界: %s -> %s", cached_file.id, cached_file.local_path)
                     continue
 
                 try:
@@ -136,21 +136,21 @@ async def file_sync_job() -> None:
                     if loc.retry_count >= 3:
                         loc.sync_status = "failed"
                     db.commit()
-                    logger.warning(f"文件同步超时: {cached_file.id}")
+                    logger.warning("文件同步超时: %s", cached_file.id)
                 except FileNotFoundError:
                     loc.retry_count += 1
                     loc.last_error = f"本地文件不存在: {cached_file.local_path}"
                     if loc.retry_count >= 3:
                         loc.sync_status = "failed"
                     db.commit()
-                    logger.warning(f"文件同步本地文件不存在: {cached_file.id}")
+                    logger.warning("文件同步本地文件不存在: %s", cached_file.id)
                 except StorageError as e:
                     loc.retry_count += 1
                     loc.last_error = str(e)
                     if loc.retry_count >= 3:
                         loc.sync_status = "failed"
                     db.commit()
-                    logger.warning(f"文件同步失败: {cached_file.id}: {e}")
+                    logger.warning('文件同步失败: %s: %s', cached_file.id, exc_info=True)
                 except Exception as e:
                     loc.retry_count += 1
                     loc.last_error = str(e)
@@ -193,7 +193,7 @@ def revoked_token_cleanup_job() -> None:
     try:
         deleted = cleanup_expired_revoked_tokens(db)
         if deleted > 0:
-            logger.info(f"清理过期撤销记录: {deleted} 条")
+            logger.info("清理过期撤销记录: %s 条", deleted)
     except Exception as e:
         logger.exception(f"撤销记录清理失败: {e}")
     finally:
@@ -214,7 +214,7 @@ def device_session_cleanup_job() -> None:
         expired = cleanup_expired_device_sessions(db)
         purged = delete_old_revoked_sessions(db)
         if expired > 0 or purged > 0:
-            logger.info(f"设备会话清理: 过期 {expired} 条，删除 {purged} 条")
+            logger.info("设备会话清理: 过期 %s 条，删除 %s 条", expired, purged)
     except Exception as e:
         logger.exception(f"设备会话清理失败: {e}")
     finally:
@@ -279,7 +279,7 @@ async def auto_report_job() -> None:
                 f"跳过 {data.get('skipped', 0)} 个"
             )
         else:
-            logger.warning(f"自动报告生成请求失败: status={resp.status_code}")
+            logger.warning("自动报告生成请求失败: status=%s", resp.status_code)
     except Exception as e:
         logger.exception(f"自动报告生成任务异常: {e}")
 
@@ -334,7 +334,7 @@ def literacy_report_weekly_job() -> None:
             return count
 
         count = asyncio.run(_generate_all())
-        logger.info(f"识字周报生成完成: {count}/{len(children)} 位儿童")
+        logger.info("识字周报生成完成: %s/%s 位儿童", count, len(children))
     except Exception as e:
         logger.exception(f"识字周报定时任务异常: {e}")
     finally:

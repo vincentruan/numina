@@ -446,7 +446,7 @@ async def parse_file(
     except httpx.TimeoutException as e:
         raise AppError(ErrorCode.IMPORT_AGENT_TIMEOUT) from e
     except Exception as e:
-        logger.error("Agent parse failed: %s", e)
+        logger.exception('Agent parse failed: %s')
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
 
     raw_items: list[dict] = agent_result.get("items", [])
@@ -779,7 +779,7 @@ async def confirm_import_via_agent(
         except httpx.TimeoutException as e:
             raise AppError(ErrorCode.IMPORT_AGENT_TIMEOUT) from e
         except Exception as e:
-            logger.error("Agent confirm-via-agent failed: %s", e)
+            logger.exception('Agent confirm-via-agent failed: %s')
             raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
 
     return {

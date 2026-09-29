@@ -80,10 +80,10 @@ async def _proxy_to_agent(
                             sse_buffer.append(line)
 
                         if await request.is_disconnected():
-                            logger.info(f"LangGraph proxy stream client disconnected path={path}")
+                            logger.info("LangGraph proxy stream client disconnected path=%s", path)
                             break
-            except Exception as e:
-                logger.error(f"LangGraph proxy stream error on {path}: {e}")
+            except Exception:
+                logger.exception('LangGraph proxy stream error on %s: %s', path)
                 yield b""
 
         return StreamingResponse(
@@ -113,10 +113,10 @@ async def _proxy_to_agent(
                     media_type=resp.headers.get("content-type"),
                 )
         except httpx.TimeoutException:
-            logger.error(f"LangGraph proxy timeout on {path}")
+            logger.error("LangGraph proxy timeout on %s", path)
             return Response(content="Gateway Timeout", status_code=504)
-        except Exception as e:
-            logger.error(f"LangGraph proxy error on {path}: {e}")
+        except Exception:
+            logger.exception('LangGraph proxy error on %s: %s', path)
             return Response(content="Internal Server Error", status_code=500)
 
 

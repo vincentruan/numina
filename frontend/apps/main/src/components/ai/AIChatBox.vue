@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch, computed, ref } from 'vue'
+import { onMounted, onUnmounted, onActivated, watch, computed, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { showFailToast, showSuccessToast, showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -261,6 +261,12 @@ async function checkChatTask() {
     if (task.status === 'running' || task.status === 'queued' || task.status === 'post_processing') {
       chatTaskStatus.value = 'running'
       chatTaskError.value = null
+      // Reflect running state in the UI: isLoading=true disables the input box
+      // and shows the streaming indicator / running banner. Without this, after
+      // abortLocalStream (page-leave) sets isLoading=false, the input would
+      // appear ready for new input while the agent is still running in the
+      // background — misleading the user into thinking they can send a message.
+      chat.isLoading.value = true
       startChatTaskPolling()
     } else if (task.status === 'completed') {
       chatTaskStatus.value = 'completed'
@@ -489,6 +495,33 @@ onUnmounted(() => {
   stopChatTaskPolling()
 })
 
+// U19 fix: re-check for running background tasks on page re-entry.
+// When the user navigates away during streaming, onUnmounted aborts the local
+// SSE and sets isLoading=false, but the agent continues in the background.
+// Without this hook, re-entering the page would show:
+// - Input box in "ready" state (isLoading stayed false)
+// - No task polling (checkChatTask never re-runs)
+// - Stale title (ensureThreadInSessions not called)
+onActivated(async () => {
+  if (!store.activeThreadId) return
+  await ensureFamilyLoaded()
+  // Re-check AITask status — if a background task is still running, we need
+  // to reflect that in the UI (isLoading=true, show running banner).
+  await checkChatTask()
+  // If a task is running, set isLoading so the input box shows the correct
+  // state and the running banner is visible.
+  if (chatTaskStatus.value === 'running') {
+    chat.isLoading.value = true
+  }
+  // If the task completed while we were away, reload history and refresh title.
+  if (chatTaskStatus.value === 'completed') {
+    await Promise.all([
+      chat.loadHistory(store.activeThreadId),
+      ensureThreadInSessions(store.activeThreadId, true),
+    ])
+  }
+})
+
 // When handleStartChat creates a new thread and calls setActiveThread, the
 // activeThreadId watcher below fires loadHistory → cancelStream. If this runs
 // after sendMessage has started its stream, cancelStream aborts the in-flight
@@ -697,6 +730,14 @@ function handleStop() {
 }
 
 async function handleRetry() {
+  // Guard: do not retry while a background AITask is running — the agent is
+  // still producing output and a retry would create a competing SSE run on
+  // the same thread, causing duplicate messages and title-generation failures
+  // (the title middleware requires exactly 1 user message at the head).
+  if (chatTaskStatus.value === 'running') {
+    showToast({ message: t('aiChat.chatTaskRunning'), icon: 'warning-o' })
+    return
+  }
   if (store.activeThreadId) {
     try {
       await chat.retry(store.activeThreadId)

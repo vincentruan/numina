@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
 
     setup_all_jobs()
     scheduler.start()
-    logger.info(f"APScheduler started with {len(scheduler.get_jobs())} jobs")
+    logger.info("APScheduler started with %s jobs", len(scheduler.get_jobs()))
 
     yield
 

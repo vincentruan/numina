@@ -293,8 +293,8 @@ def approve_parent_review(
 
     try:
         stats_service.award_xp(db, progress.child_id, family_id, xp_amount=20)
-    except Exception as e:
-        logger.warning("XP award failed on parent review for child %s: %s", progress.child_id, e)
+    except Exception:
+        logger.warning('XP award failed on parent review for child %s: %s', progress.child_id, exc_info=True)
 
     return progress
 

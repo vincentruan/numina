@@ -74,10 +74,10 @@ def list_models(
         resp.raise_for_status()
         return dict(resp.json())
     except httpx.HTTPStatusError as e:
-        logger.error("[gateway] list_models upstream error: %s", e)
+        logger.exception('[gateway] list_models upstream error: %s')
         raise HTTPException(status_code=e.response.status_code, detail=str(e)) from e
     except httpx.RequestError as e:
-        logger.error("[gateway] list_models request failed: %s", e)
+        logger.exception('[gateway] list_models request failed: %s')
         raise HTTPException(status_code=502, detail=f"Gateway unreachable: {e}") from e
 
 

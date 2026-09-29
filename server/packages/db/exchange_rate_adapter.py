@@ -140,5 +140,5 @@ class ExchangeRateAdapter:
             db.rollback()
             raise
 
-        logger.info(f"汇率更新完成，共 {len(rates)} 种货币")
+        logger.info("汇率更新完成，共 %s 种货币", len(rates))
         return True

@@ -224,7 +224,7 @@ async def chat(
     except httpx.TimeoutException:
         raise AppError(ErrorCode.AI_SERVICE_TIMEOUT) from None
     except Exception as e:
-        logger.error("调用 agent chat 失败: %s", type(e).__name__)
+        logger.exception("调用 agent chat 失败: %s")
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
 
     return {
@@ -315,7 +315,7 @@ async def chat_stream(
             headers={"X-Thread-Id": str(session_id)},
         )
     except Exception as e:
-        logger.error("[chat-stream] trigger failed: %s", type(e).__name__)
+        logger.exception("[chat-stream] trigger failed: %s")
         if ai_task_id is not None:
             try:
                 _fdb = SessionLocal()

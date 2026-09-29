@@ -19,7 +19,7 @@ def get_deerflow_client(config_path: str):
 
     try:
         _client = NuminaDeerFlowClient(config_path=config_path)
-        logger.info(f"NuminaDeerFlowClient initialized with config: {config_path}")
+        logger.info("NuminaDeerFlowClient initialized with config: %s", config_path)
         return _client
     except Exception as e:
         raise RuntimeError(
