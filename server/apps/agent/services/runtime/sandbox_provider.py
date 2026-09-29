@@ -197,6 +197,32 @@ class NuminaLocalSandboxProvider(LocalSandboxProvider):
        mapped uploads/ to a different family's path).
     """
 
+    @property
+    def supports_agent_skill_isolation(self) -> bool:
+        """Override to bypass DeerFlow's ``uses_local_sandbox_provider`` check.
+
+        DeerFlow's ``is_host_bash_allowed()`` calls ``uses_local_sandbox_provider()``
+        which only matches class names ending with ``:LocalSandboxProvider``.
+        Since this subclass is named ``NuminaLocalSandboxProvider``, it is not
+        recognized as a local provider — causing ``is_host_bash_allowed()`` to
+        return ``True`` (non-local providers assumed to allow bash), which in
+        turn makes the parent's ``supports_agent_skill_isolation`` return
+        ``False``.  The ``SandboxMiddleware`` then raises a
+        ``SandboxRuntimeError`` when ``available_skills`` is set (custom skills
+        enabled for the family), breaking the chat path.
+
+        The fix reads ``sandbox.allow_host_bash`` directly from the config,
+        matching the parent class's semantics without the class-name check.
+        """
+        try:
+            from deerflow.config import get_app_config
+
+            config = get_app_config()
+            sandbox_cfg = getattr(config, "sandbox", None)
+            return not bool(getattr(sandbox_cfg, "allow_host_bash", False))
+        except Exception:
+            return False
+
     def acquire(
         self, thread_id: str | None = None, *, user_id: str | None = None
     ) -> str:
