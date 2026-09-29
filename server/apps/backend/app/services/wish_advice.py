@@ -191,8 +191,8 @@ async def _extract_wish_advice_result(resp: Any) -> dict | None:
     """
     text = ""
     try:
-        async for line in resp.aiter_lines():
-            text += line + "\n"
+        async for chunk in resp.aiter_text():
+            text += chunk
     except Exception as exc:
         logger.warning("[wish-advice] stream read failed err=%s", type(exc).__name__)
         return None
