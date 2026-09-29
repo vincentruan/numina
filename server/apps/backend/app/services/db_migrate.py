@@ -256,7 +256,9 @@ def release_migration_lock(engine: Engine) -> None:
             )
             logger.info("Migration lock released by %s", holder_id)
         elif row:
-            logger.warning("Lock held by %s, not releasing (we are %s)", row[0], holder_id)
+            logger.warning(
+                "Lock held by %s, not releasing (we are %s)", row[0], holder_id
+            )
 
 
 def get_expected_columns_from_model(table_name: str) -> dict[str, Any]:
@@ -436,7 +438,11 @@ def add_column(
     # type-appropriate fallback so legacy DBs can be upgraded in place.
     # (Columns with a real server_default are already handled above.)
     if db_type == "sqlite" and not column_info["nullable"] and not default_clause:
-        if "BOOLEAN" in type_sql.upper() or "INTEGER" in type_sql.upper() or any(t in type_sql.upper() for t in ("REAL", "NUMERIC", "FLOAT")):
+        if (
+            "BOOLEAN" in type_sql.upper()
+            or "INTEGER" in type_sql.upper()
+            or any(t in type_sql.upper() for t in ("REAL", "NUMERIC", "FLOAT"))
+        ):
             default_clause = "DEFAULT 0"
         else:  # TEXT and other string types
             default_clause = "DEFAULT ''"
@@ -506,7 +512,7 @@ def align_schema(engine: Engine) -> dict[str, Any]:
                 create_table(engine, table_name)
                 summary["tables_created"].append(table_name)
             except Exception as e:
-                logger.exception('Failed to create table %s: %s', table_name)
+                logger.exception("Failed to create table %s", table_name)
                 summary["errors"].append(f"table:{table_name}:{str(e)}")
                 continue
 
@@ -527,7 +533,7 @@ def align_schema(engine: Engine) -> dict[str, Any]:
                     add_column(engine, table_name, col_name, col_info)
                     summary["columns_added"].append(f"{table_name}.{col_name}")
                 except Exception as e:
-                    logger.exception('Failed to add column %s.%s: %s', table_name, col_name)
+                    logger.exception("Failed to add column %s.%s", table_name, col_name)
                     summary["errors"].append(f"column:{table_name}.{col_name}:{str(e)}")
 
     # 3. Add missing indexes
@@ -544,7 +550,7 @@ def align_schema(engine: Engine) -> dict[str, Any]:
                     add_index(engine, table_name, idx_name, idx_info)
                     summary["indexes_added"].append(f"{table_name}.{idx_name}")
                 except Exception as e:
-                    logger.exception('Failed to add index %s.%s: %s', table_name, idx_name)
+                    logger.exception("Failed to add index %s.%s", table_name, idx_name)
                     summary["errors"].append(f"index:{table_name}.{idx_name}:{str(e)}")
 
     return summary

@@ -1,6 +1,5 @@
 """AI API Key 加密/解密工具（Fernet AES-256）。"""
 
-
 from apps.backend.app.config import settings
 from packages.core.logging import get_logger
 
@@ -20,7 +19,7 @@ def _get_fernet():
             else settings.AI_ENCRYPTION_KEY
         )
     except Exception:
-        logger.warning('Fernet 初始化失败', exc_info=True)
+        logger.warning("Fernet 初始化失败", exc_info=True)
         return None
 
 
@@ -40,7 +39,7 @@ def decrypt_api_key(encrypted: str) -> str | None:
     try:
         return str(fernet.decrypt(encrypted.encode()).decode())
     except Exception:
-        logger.exception('API Key 解密失败: %s')
+        logger.exception("API Key 解密失败")
         return None
 
 

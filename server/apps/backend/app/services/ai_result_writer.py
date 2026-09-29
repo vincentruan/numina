@@ -61,7 +61,7 @@ def write_report_results(
         return 1
     except Exception:
         db.rollback()
-        logger.exception('[report] failed to write report for family %s: %s', family_id)
+        logger.exception("[report] failed to write report for family %s", family_id)
         raise
 
 

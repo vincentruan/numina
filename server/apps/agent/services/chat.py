@@ -47,7 +47,7 @@ async def answer_question(question: str, family_id: str, llm: LLMClient) -> str:
     try:
         data = await _fetch_data_for_intent(intent, client)
     except Exception:
-        logger.exception('[chat] 数据获取失败: %s')
+        logger.exception("[chat] 数据获取失败")
         return "抱歉，暂时无法获取数据，请稍后再试。"
 
     if intent == "unknown":
@@ -61,7 +61,7 @@ async def answer_question(question: str, family_id: str, llm: LLMClient) -> str:
         )
         return (await llm.complete(prompt, max_tokens=200)).strip()
     except Exception:
-        logger.exception('[chat] LLM 回答生成失败: %s')
+        logger.exception("[chat] LLM 回答生成失败")
         return "抱歉，AI 服务暂时不可用，请稍后再试。"
 
 
@@ -70,9 +70,15 @@ async def _classify_intent(question: str, llm: LLMClient) -> str:
         prompt = INTENT_PROMPT.format(question=question)
         raw = (await llm.complete(prompt, max_tokens=30)).strip().lower()
         valid = {
-            "net_worth_query", "asset_count_query", "liability_query",
-            "allocation_query", "trend_query", "daily_cost_query",
-            "low_usage_query", "expiring_query", "unknown",
+            "net_worth_query",
+            "asset_count_query",
+            "liability_query",
+            "allocation_query",
+            "trend_query",
+            "daily_cost_query",
+            "low_usage_query",
+            "expiring_query",
+            "unknown",
         }
         for intent in valid:
             if intent in raw:

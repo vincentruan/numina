@@ -23,7 +23,9 @@ from packages.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-async def drain_inflight_runs(run_manager: RunManager, *, timeout: float | None = None) -> None:
+async def drain_inflight_runs(
+    run_manager: RunManager, *, timeout: float | None = None
+) -> None:
     """Graceful shutdown drain of in-flight runs.
 
     U7: Implements 3-phase graceful shutdown:
@@ -42,10 +44,14 @@ async def drain_inflight_runs(run_manager: RunManager, *, timeout: float | None 
     if timeout is None:
         timeout = float(os.getenv("RUN_DRAIN_TIMEOUT_SECONDS", "60.0"))
 
-    logger.info("[drain_inflight_runs] Starting graceful shutdown drain (timeout=%ss)", timeout)
+    logger.info(
+        "[drain_inflight_runs] Starting graceful shutdown drain (timeout=%ss)", timeout
+    )
 
     if not hasattr(run_manager, "shutdown"):
-        logger.debug("RunManager.shutdown not available in this DeerFlow version (no-op drain)")
+        logger.debug(
+            "RunManager.shutdown not available in this DeerFlow version (no-op drain)"
+        )
         return
 
     # Phase 1: Drain with bounded timeout
@@ -104,20 +110,34 @@ async def drain_inflight_runs(run_manager: RunManager, *, timeout: float | None 
                                     )
                                     .first()
                                 )
-                                if task and task.status in ("running", "post_processing", "queued"):
+                                if task and task.status in (
+                                    "running",
+                                    "post_processing",
+                                    "queued",
+                                ):
                                     task.status = "interrupted"
                                     task.completed_at = datetime.now(UTC)
-                                    task.error_message = f"服务关停，任务未完成（超时 {timeout}s）"
+                                    task.error_message = (
+                                        f"服务关停，任务未完成（超时 {timeout}s）"
+                                    )
                                     db.commit()
-                                    logger.info("[drain_inflight_runs] Marked task %s as interrupted", task.id)
+                                    logger.info(
+                                        "[drain_inflight_runs] Marked task %s as interrupted",
+                                        task.id,
+                                    )
                             else:
-                                logger.warning("[drain_inflight_runs] Run %s has no family_id in metadata, skipping", run.run_id)
+                                logger.warning(
+                                    "[drain_inflight_runs] Run %s has no family_id in metadata, skipping",
+                                    run.run_id,
+                                )
                         finally:
                             db.close()
                     except Exception:
-                        logger.exception('[drain_inflight_runs] Failed to mark task interrupted: %s')
+                        logger.exception(
+                            "[drain_inflight_runs] Failed to mark task interrupted"
+                        )
         except Exception:
-            logger.exception('[drain_inflight_runs] Failed to list/check runs: %s')
+            logger.exception("[drain_inflight_runs] Failed to list/check runs")
 
 
 async def reconcile_orphaned_runs(
@@ -145,7 +165,10 @@ async def reconcile_orphaned_runs(
     versions. Fall back gracefully when the method is missing.
     """
     if hasattr(run_manager, "reconcile_orphaned_inflight_runs"):
-        return cast("list[dict[str, Any]]", await run_manager.reconcile_orphaned_inflight_runs(error=error))
+        return cast(
+            "list[dict[str, Any]]",
+            await run_manager.reconcile_orphaned_inflight_runs(error=error),
+        )
 
     # U8: AITask-based orphan recovery
     # NOTE: Uses raw SQLAlchemy against the AITask model (packages/db) instead of
@@ -230,13 +253,15 @@ async def reconcile_orphaned_runs(
                     f"(lease expired at {task.lease_expires_at}, now={now})"
                 )
 
-                recovered.append({
-                    "task_id": str(task.id),
-                    "run_id": task.run_id,
-                    "family_id": str(task.family_id),
-                    "skill_id": task.skill_id,
-                    "stop_reason": "orphan_recovered",
-                })
+                recovered.append(
+                    {
+                        "task_id": str(task.id),
+                        "run_id": task.run_id,
+                        "family_id": str(task.family_id),
+                        "skill_id": task.skill_id,
+                        "stop_reason": "orphan_recovered",
+                    }
+                )
 
                 # U8: The backend-owned buffer manages stream lifecycle.
                 # The agent no longer publishes end markers — the backend's
@@ -253,7 +278,7 @@ async def reconcile_orphaned_runs(
             db.close()
 
     except Exception:
-        logger.exception('[reconcile_orphaned_runs] Failed to reconcile orphaned runs: %s')
+        logger.exception("[reconcile_orphaned_runs] Failed to reconcile orphaned runs")
 
     return recovered
 

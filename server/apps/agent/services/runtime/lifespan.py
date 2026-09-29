@@ -75,7 +75,9 @@ def _create_persistent_run_store() -> Any | None:
 
         session_factory = get_session_factory()
         if session_factory is None:
-            logger.info("[runtime] DeerFlow session factory unavailable; using in-memory RunStore")
+            logger.info(
+                "[runtime] DeerFlow session factory unavailable; using in-memory RunStore"
+            )
             return None
         return NuminaSqlRunStore(session_factory)
     except Exception:
@@ -155,7 +157,7 @@ async def get_stream_bridge(request: Request) -> StreamBridge:
             await client.ping()
             await client.aclose()
         except Exception as e:
-            logger.exception('Redis unavailable for StreamBridge (%s)')
+            logger.exception("Redis unavailable for StreamBridge")
             raise HTTPException(
                 status_code=503,
                 detail="Stream bridge unavailable: Redis connection failed",

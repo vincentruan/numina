@@ -183,7 +183,7 @@ class TestRunPipelineEnter:
 
             # The pipeline now proceeds past provider selection (last-resort
             # probe) but fails at adapter creation with incomplete mock data.
-            with pytest.raises((RuntimeError, TypeError, Exception)):
+            with pytest.raises((RuntimeError, TypeError)):
                 async with RunPipeline(
                     app_name="finance-coach",
                     family_id="fam-1",

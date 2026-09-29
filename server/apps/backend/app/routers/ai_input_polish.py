@@ -15,7 +15,6 @@ agent，使其通过 ``verify_family_token``。同时仍由 backend 的
 ``require_adult`` + ``require_ai_enabled`` 做前置鉴权。
 """
 
-
 import httpx
 from fastapi import APIRouter, Cookie, Depends, Request
 from fastapi.responses import JSONResponse
@@ -68,7 +67,9 @@ async def input_polish(
         forward_headers["Cookie"] = f"{ACCESS_TOKEN_COOKIE}={jwt_token}"
 
     try:
-        agent_client = AgentClient(current_user.family_id, current_user.id, timeout=45.0)
+        agent_client = AgentClient(
+            current_user.family_id, current_user.id, timeout=45.0
+        )
         resp = await agent_client.post(
             "/input-polish",
             json=body.model_dump(),
@@ -79,5 +80,5 @@ async def input_polish(
     except httpx.TimeoutException:
         raise AppError(ErrorCode.AI_SERVICE_TIMEOUT) from None
     except Exception:
-        logger.exception('调用 agent input-polish 失败: %s')
+        logger.exception("调用 agent input-polish 失败")
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from None

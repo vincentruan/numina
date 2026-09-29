@@ -1110,8 +1110,8 @@ async def auto_generate_reports(
 
             triggered += 1
             logger.info("[auto-report] triggered family=%s task=%s", fid, task.id)
-        except Exception as e:
-            logger.exception(f"[auto-report] failed for family={fid}: {e}")
+        except Exception:
+            logger.exception("[auto-report] failed for family=%s", fid)
             skipped += 1
 
     return {"triggered": triggered, "skipped": skipped}
@@ -1301,7 +1301,9 @@ def internal_task_complete(
                     .filter(AIChatSession.id == task.session_id)
                     .first()
                 )
-                task_title = (session and (session.title or session.original_title)) or task_type
+                task_title = (
+                    session and (session.title or session.original_title)
+                ) or task_type
         else:
             task_title = task_title[:100]  # truncate to avoid oversized payload
 

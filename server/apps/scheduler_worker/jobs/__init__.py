@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 
 # ── Job 1: Exchange rate fetch ────────────────────────────────────────────────
 
+
 def fetch_rates_job() -> None:
     """Fetch and store latest exchange rates from exchangerate-api.com."""
     from packages.db.exchange_rate_adapter import ExchangeRateAdapter
@@ -29,13 +30,14 @@ def fetch_rates_job() -> None:
         success = adapter.fetch_and_store_rates(db)
         if success:
             logger.info("定时汇率更新成功")
-    except Exception as e:
-        logger.exception(f"定时汇率更新失败: {e}")
+    except Exception:
+        logger.exception("定时汇率更新失败")
     finally:
         db.close()
 
 
 # ── Job 2: File sync ──────────────────────────────────────────────────────────
+
 
 async def file_sync_job() -> None:
     """Sync pending file_remote_locations to each family's remote backend."""
@@ -52,11 +54,7 @@ async def file_sync_job() -> None:
 
     db = SessionLocal()
     try:
-        active_backends = (
-            db.query(StorageBackendModel)
-            .filter_by(is_active=True)
-            .all()
-        )
+        active_backends = db.query(StorageBackendModel).filter_by(is_active=True).all()
         if not active_backends:
             return
 
@@ -113,12 +111,18 @@ async def file_sync_job() -> None:
                     loc.sync_status = "failed"
                     loc.last_error = f"路径越界，拒绝访问: {cached_file.local_path}"
                     db.commit()
-                    logger.warning("文件同步路径越界: %s -> %s", cached_file.id, cached_file.local_path)
+                    logger.warning(
+                        "文件同步路径越界: %s -> %s",
+                        cached_file.id,
+                        cached_file.local_path,
+                    )
                     continue
 
                 try:
                     filename = Path(cached_file.local_path).name
-                    content = await asyncio.to_thread(_read_file, cached_file.local_path)
+                    content = await asyncio.to_thread(
+                        _read_file, cached_file.local_path
+                    )
 
                     remote_path = await asyncio.wait_for(
                         backend.save(content, filename, cached_file.date_dir),
@@ -150,14 +154,14 @@ async def file_sync_job() -> None:
                     if loc.retry_count >= 3:
                         loc.sync_status = "failed"
                     db.commit()
-                    logger.warning('文件同步失败: %s', cached_file.id, exc_info=True)
+                    logger.warning("文件同步失败: %s", cached_file.id, exc_info=True)
                 except Exception as e:
                     loc.retry_count += 1
                     loc.last_error = str(e)
                     if loc.retry_count >= 3:
                         loc.sync_status = "failed"
                     db.commit()
-                    logger.exception(f"文件同步异常: {cached_file.id}: {e}")
+                    logger.exception("文件同步异常: %s", cached_file.id)
 
             if any_synced:
                 backend_row.last_synced_at = datetime.now(UTC)
@@ -166,13 +170,14 @@ async def file_sync_job() -> None:
             lo, hi = backend.write_delay_range
             await asyncio.sleep(random.uniform(lo, hi))
 
-    except Exception as e:
-        logger.exception(f"文件同步任务异常: {e}")
+    except Exception:
+        logger.exception("文件同步任务异常")
     finally:
         db.close()
 
 
 # ── Job 3: Audit log purge ────────────────────────────────────────────────────
+
 
 def audit_log_purge_job() -> None:
     """Purge security audit log entries older than 90 days."""
@@ -182,6 +187,7 @@ def audit_log_purge_job() -> None:
 
 
 # ── Job 4: Revoked token cleanup ──────────────────────────────────────────────
+
 
 def revoked_token_cleanup_job() -> None:
     """Purge expired revoked token records."""
@@ -194,13 +200,14 @@ def revoked_token_cleanup_job() -> None:
         deleted = cleanup_expired_revoked_tokens(db)
         if deleted > 0:
             logger.info("清理过期撤销记录: %s 条", deleted)
-    except Exception as e:
-        logger.exception(f"撤销记录清理失败: {e}")
+    except Exception:
+        logger.exception("撤销记录清理失败")
     finally:
         db.close()
 
 
 # ── Job 5: Device session cleanup ────────────────────────────────────────────
+
 
 def device_session_cleanup_job() -> None:
     """Expire stale DeviceSessions and purge old revoked ones."""
@@ -215,13 +222,14 @@ def device_session_cleanup_job() -> None:
         purged = delete_old_revoked_sessions(db)
         if expired > 0 or purged > 0:
             logger.info("设备会话清理: 过期 %s 条，删除 %s 条", expired, purged)
-    except Exception as e:
-        logger.exception(f"设备会话清理失败: {e}")
+    except Exception:
+        logger.exception("设备会话清理失败")
     finally:
         db.close()
 
 
 # ── Job 6: Reminder / notification checks ────────────────────────────────────
+
 
 def reminder_job() -> None:
     """Run daily notification/reminder checks."""
@@ -233,13 +241,14 @@ def reminder_job() -> None:
     try:
         run_scheduled_checks(db)
         logger.info("智能提醒定时检测完成")
-    except Exception as e:
-        logger.exception(f"智能提醒定时检测失败: {e}")
+    except Exception:
+        logger.exception("智能提醒定时检测失败")
     finally:
         db.close()
 
 
 # ── Job 7: Daily snapshot ─────────────────────────────────────────────────────
+
 
 def snapshot_job() -> None:
     """Generate daily asset snapshots for all families."""
@@ -251,13 +260,14 @@ def snapshot_job() -> None:
     try:
         auto_generate_daily_snapshots(db)
         logger.info("每日快照生成完成")
-    except Exception as e:
-        logger.exception(f"每日快照生成失败: {e}")
+    except Exception:
+        logger.exception("每日快照生成失败")
     finally:
         db.close()
 
 
 # ── Job 8: Auto report generation ─────────────────────────────────────────────
+
 
 async def auto_report_job() -> None:
     """Trigger report generation for eligible families (daily 8:35)."""
@@ -266,6 +276,7 @@ async def auto_report_job() -> None:
     try:
         async with httpx.AsyncClient(timeout=60.0, trust_env=False) as client:
             from packages.security.service_auth.agent_jwt import create_system_token
+
             resp = await client.post(
                 f"{settings.BACKEND_BASE_URL}/api/v1/internal/ai/auto-generate-reports",
                 headers={
@@ -280,8 +291,8 @@ async def auto_report_job() -> None:
             )
         else:
             logger.warning("自动报告生成请求失败: status=%s", resp.status_code)
-    except Exception as e:
-        logger.exception(f"自动报告生成任务异常: {e}")
+    except Exception:
+        logger.exception("自动报告生成任务异常")
 
 
 def _read_file(local_path: str) -> bytes:
@@ -290,6 +301,7 @@ def _read_file(local_path: str) -> bytes:
 
 
 # ── Job 9: Weekly literacy report generation ──────────────────────────────
+
 
 def literacy_report_weekly_job() -> None:
     """Generate weekly literacy reports for all children in all families."""
@@ -305,9 +317,7 @@ def literacy_report_weekly_job() -> None:
         week_start = today - timedelta(days=days_since_sunday)
 
         children = (
-            db.query(User)
-            .filter(User.role == "child", User.is_active.is_(True))
-            .all()
+            db.query(User).filter(User.role == "child", User.is_active.is_(True)).all()
         )
 
         if not children:
@@ -328,24 +338,24 @@ def literacy_report_weekly_job() -> None:
                     await generate_weekly_report(db, child, week_start)
                     count += 1
                 except Exception as e:
-                    logger.warning(
-                        f"识字周报生成失败 (child_id={child.id}): {e}"
-                    )
+                    logger.warning(f"识字周报生成失败 (child_id={child.id}): {e}")
             return count
 
         count = asyncio.run(_generate_all())
         logger.info("识字周报生成完成: %s/%s 位儿童", count, len(children))
-    except Exception as e:
-        logger.exception(f"识字周报定时任务异常: {e}")
+    except Exception:
+        logger.exception("识字周报定时任务异常")
     finally:
         db.close()
 
 
 # ── Job 10: Daily notification digest ─────────────────────────────────────────
 
+
 async def notification_digest_job() -> None:
     """Send daily digest notifications for channels with digest_mode='daily'."""
     from packages.db.session import SessionLocal  # noqa: PLC0415
+
     db = SessionLocal()
     try:
         from apps.backend.app.services.notification.dispatcher import (
@@ -363,16 +373,17 @@ async def notification_digest_job() -> None:
         for channel in channels:
             try:
                 await _dispatch_digest(db, channel)
-            except Exception as e:
-                logger.exception(f"Digest send failed for channel {channel.id}: {e}")
+            except Exception:
+                logger.exception("Digest send failed for channel %s", channel.id)
         logger.info("Notification digest job completed")
-    except Exception as e:
-        logger.exception(f"Notification digest job failed: {e}")
+    except Exception:
+        logger.exception("Notification digest job failed")
     finally:
         db.close()
 
 
 # ── Job 11: Travel trip auto-transitions (R5) ────────────────────────────────
+
 
 def travel_transition_job() -> None:
     """Auto-transition trip statuses based on dates and send notifications.
@@ -454,7 +465,7 @@ def travel_transition_job() -> None:
             len(today_departures),
             len(unsettled_trips),
         )
-    except Exception as e:
-        logger.exception(f"Travel transition job failed: {e}")
+    except Exception:
+        logger.exception("Travel transition job failed")
     finally:
         db.close()

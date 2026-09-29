@@ -1,6 +1,5 @@
 """AI 资产录入建议端点 — 代理转发给 agent 服务。"""
 
-
 import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, field_validator
@@ -45,7 +44,9 @@ async def suggest_asset_fields(
 ):
     """调用 agent 服务，返回资产字段 AI 建议。"""
     try:
-        agent_client = AgentClient(current_user.family_id, current_user.id, timeout=45.0)
+        agent_client = AgentClient(
+            current_user.family_id, current_user.id, timeout=45.0
+        )
         resp = await agent_client.post(
             "/suggest/asset",
             json=body.model_dump(),
@@ -55,5 +56,5 @@ async def suggest_asset_fields(
     except httpx.TimeoutException:
         raise AppError(ErrorCode.AI_SERVICE_TIMEOUT) from None
     except Exception as e:
-        logger.exception('调用 agent suggest 失败: %s')
+        logger.exception("调用 agent suggest 失败")
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e

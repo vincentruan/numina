@@ -4,7 +4,6 @@
 注入当前用户的家庭身份信息（X-Family-Id），然后代理给后端的 Agent。
 """
 
-
 import httpx
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
@@ -54,7 +53,10 @@ async def _proxy_to_agent(
     target_path = f"/api/threads/{path}" if path else "/api/threads"
 
     # 如果是流式请求 (比如 events/stream)
-    if (path and "stream" in path) or request.headers.get("accept", "") == "text/event-stream":
+    if (path and "stream" in path) or request.headers.get(
+        "accept", ""
+    ) == "text/event-stream":
+
         async def _simple_stream():
             try:
                 async with agent_client.stream(
@@ -80,10 +82,13 @@ async def _proxy_to_agent(
                             sse_buffer.append(line)
 
                         if await request.is_disconnected():
-                            logger.info("LangGraph proxy stream client disconnected path=%s", path)
+                            logger.info(
+                                "LangGraph proxy stream client disconnected path=%s",
+                                path,
+                            )
                             break
             except Exception:
-                logger.exception('LangGraph proxy stream error on %s: %s', path)
+                logger.exception("LangGraph proxy stream error on %s", path)
                 yield b""
 
         return StreamingResponse(
@@ -109,19 +114,31 @@ async def _proxy_to_agent(
                 return Response(
                     content=resp.content,
                     status_code=resp.status_code,
-                    headers={k: v for k, v in resp.headers.items() if k.lower() not in ("content-length", "content-encoding", "transfer-encoding", "connection")},
+                    headers={
+                        k: v
+                        for k, v in resp.headers.items()
+                        if k.lower()
+                        not in (
+                            "content-length",
+                            "content-encoding",
+                            "transfer-encoding",
+                            "connection",
+                        )
+                    },
                     media_type=resp.headers.get("content-type"),
                 )
         except httpx.TimeoutException:
             logger.error("LangGraph proxy timeout on %s", path)
             return Response(content="Gateway Timeout", status_code=504)
         except Exception:
-            logger.exception('LangGraph proxy error on %s: %s', path)
+            logger.exception("LangGraph proxy error on %s", path)
             return Response(content="Internal Server Error", status_code=500)
 
 
 # 拦截 /api/threads 根路径 (如 POST /api/threads 创建线程)
-@router.api_route("", methods=["GET", "POST", "PUT", "DELETE", "PATCH"], response_model=None)
+@router.api_route(
+    "", methods=["GET", "POST", "PUT", "DELETE", "PATCH"], response_model=None
+)
 async def proxy_langgraph_root(
     request: Request,
     current_user: User = Depends(require_adult),
@@ -131,7 +148,11 @@ async def proxy_langgraph_root(
 
 
 # 拦截所有对 /api/threads/{path} 的 HTTP 方法
-@router.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"], response_model=None)
+@router.api_route(
+    "/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    response_model=None,
+)
 async def proxy_langgraph_request(
     path: str,
     request: Request,

@@ -40,9 +40,13 @@ def _verify_agent_token(token: str | None) -> None:
     try:
         payload = pyjwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
     except pyjwt.ExpiredSignatureError:
-        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, "agent token expired") from None
+        raise AppError(
+            ErrorCode.AUTH_INVALID_CREDENTIALS, "agent token expired"
+        ) from None
     except PyJWTError:
-        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, "invalid agent token") from None
+        raise AppError(
+            ErrorCode.AUTH_INVALID_CREDENTIALS, "invalid agent token"
+        ) from None
     if payload.get("type") != "agent":
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, "invalid token type")
 
@@ -58,11 +62,14 @@ class MCPSSEResponse(Response):
     async def __call__(self, scope, receive, send):
         transport = _get_transport()
         try:
-            async with transport.connect_sse(scope, receive, send) as (read_stream, write_stream):
+            async with transport.connect_sse(scope, receive, send) as (
+                read_stream,
+                write_stream,
+            ):
                 init_opts = self.session.server.create_initialization_options()
                 await self.session.server.run(read_stream, write_stream, init_opts)
         except Exception:
-            logger.exception('[mcp_sse] family=%s connection error: %s', self.family_id)
+            logger.exception("[mcp_sse] family=%s connection error", self.family_id)
 
 
 class MCPMessageResponse(Response):
@@ -96,25 +103,30 @@ async def mcp_sse(
         if not user:
             logger.warning(
                 "[mcp_sse] caller not found: family=%s caller_user_id=%s",
-                family_id, x_caller_user_id,
+                family_id,
+                x_caller_user_id,
             )
             raise AppError(ErrorCode.FORBIDDEN, "caller invalid")
         if not user.is_active:
             logger.warning(
                 "[mcp_sse] caller inactive: family=%s caller_user_id=%s",
-                family_id, x_caller_user_id,
+                family_id,
+                x_caller_user_id,
             )
             raise AppError(ErrorCode.FORBIDDEN, "caller invalid")
         if str(user.family_id) != str(family_id):
             logger.warning(
                 "[mcp_sse] caller cross-family: family=%s caller_user_id=%s actual_family=%s",
-                family_id, x_caller_user_id, user.family_id,
+                family_id,
+                x_caller_user_id,
+                user.family_id,
             )
             raise AppError(ErrorCode.FORBIDDEN, "caller invalid")
         if user.role == UserRole.CHILD:
             logger.warning(
                 "[mcp_sse] child caller rejected: family=%s caller_user_id=%s",
-                family_id, x_caller_user_id,
+                family_id,
+                x_caller_user_id,
             )
             raise AppError(ErrorCode.FORBIDDEN, "caller invalid")
 

@@ -43,7 +43,10 @@ async def verify_captcha(
         return
 
     # Allow seed/test scripts to bypass captcha with a pre-shared secret
-    if settings.SEED_SECRET and request.headers.get("X-Seed-Secret") == settings.SEED_SECRET:
+    if (
+        settings.SEED_SECRET
+        and request.headers.get("X-Seed-Secret") == settings.SEED_SECRET
+    ):
         return
 
     # Extract altcha field from request body
@@ -76,7 +79,9 @@ async def verify_captcha(
     # Verify the solution
     from altcha import verify_solution
 
-    verified, err = verify_solution(altcha, settings.ALTCHA_HMAC_KEY, check_expires=True)
+    verified, err = verify_solution(
+        altcha, settings.ALTCHA_HMAC_KEY, check_expires=True
+    )
 
     if not verified:
         _log_security_event(
@@ -105,5 +110,5 @@ async def verify_captcha(
         raise
     except Exception as e:
         # Fail-closed: if cache unavailable, reject request
-        logger.exception('Captcha cache error: %s')
+        logger.exception("Captcha cache error")
         raise AppError(ErrorCode.CAPTCHA_SERVICE_UNAVAILABLE) from e

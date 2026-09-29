@@ -183,7 +183,9 @@ def _pick_best_half_open(candidates: list[dict]) -> dict:
     """
     if len(candidates) <= 1:
         return candidates[0]
-    return min(candidates, key=lambda p: (p.get("failure_count", 0), p.get("display_order", 0)))
+    return min(
+        candidates, key=lambda p: (p.get("failure_count", 0), p.get("display_order", 0))
+    )
 
 
 def _select_provider_with_retry(
@@ -267,7 +269,7 @@ def _fire_and_forget(coro: Coroutine[Any, Any, Any]) -> None:
     def _log_exception(t: asyncio.Task) -> None:
         exc = t.exception()
         if exc:
-            logger.warning("fire-and-forget task failed", exc_info=exc)
+            logger.warning("fire-and-forget task failed: %s", exc)
 
     task.add_done_callback(_log_exception)
 

@@ -64,7 +64,10 @@ class DesiredStateRunner:
         lock_name = "reconcile_main"
         locked = False
 
-        if self._mode not in (RunMode.CHECK_ONLY, RunMode.VERIFY, RunMode.DRY_RUN) and self._lock_provider:
+        if (
+            self._mode not in (RunMode.CHECK_ONLY, RunMode.VERIFY, RunMode.DRY_RUN)
+            and self._lock_provider
+        ):
             locked = self._lock_provider.acquire(lock_name)
             if not locked:
                 logger.warning(
@@ -98,7 +101,7 @@ class DesiredStateRunner:
         try:
             result = resource.check(self._db)
         except Exception as e:
-            logger.exception('[reconcile] check failed for %s: %s', resource.name)
+            logger.exception("[reconcile] check failed for %s", resource.name)
             # Rollback to ensure session is clean for subsequent resources
             with contextlib.suppress(Exception):
                 self._db.rollback()
@@ -133,7 +136,7 @@ class DesiredStateRunner:
                 result.applied_at = datetime.now(UTC)
                 result.changed = True
             except Exception as e:
-                logger.exception('[reconcile] apply failed for %s: %s', resource.name)
+                logger.exception("[reconcile] apply failed for %s", resource.name)
                 with contextlib.suppress(Exception):
                     self._db.rollback()
                 return resource._failed(
@@ -151,7 +154,7 @@ class DesiredStateRunner:
             verify_result.changed = result.changed
             return verify_result
         except Exception as e:
-            logger.exception('[reconcile] verify failed for %s: %s', resource.name)
+            logger.exception("[reconcile] verify failed for %s", resource.name)
             return resource._failed(error=f"Verify error: {e}")
 
     def _persist_result(self, result: ResourceResult) -> None:
@@ -171,7 +174,9 @@ class DesiredStateRunner:
                 verified_at=result.verified_at,
             )
         except Exception:
-            logger.warning('Failed to persist state for %s', result.resource_name, exc_info=True)
+            logger.warning(
+                "Failed to persist state for %s", result.resource_name, exc_info=True
+            )
 
     def _finalize_report(self, report: ReconcileReport) -> None:
         """Compute summary fields from individual results."""
@@ -197,4 +202,6 @@ class DesiredStateRunner:
                 f"Reconciliation completed with {report.warnings} warning(s)"
             )
         else:
-            logger.info("Reconciliation completed successfully — all resources verified")
+            logger.info(
+                "Reconciliation completed successfully — all resources verified"
+            )
