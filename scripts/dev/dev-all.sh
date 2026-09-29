@@ -1,11 +1,28 @@
 #!/usr/bin/env bash
-# scripts/dev/dev-all.sh — Launch all Numina dev servers with split-pane logs
+# scripts/dev/dev-all.sh — Launch all Numina dev servers
 #
-# Priority:
+# Usage:
+#   make dev-all                              # default: tmux, console only
+#   make dev-all MODE=tmux                    # tmux split panes (default)
+#   make dev-all MODE=term                    # separate terminal windows
+#   make dev-all MODE=bg                      # all background, shell redirect
+#   make dev-all LOG=1                        # Python services → log files
+#   make dev-all MODE=bg LOG=1               # background + log files
+#   DEV_MODE=bg DEV_LOG=1 make dev-all        # env-var form
+#
+# Parameters:
+#   MODE  — tmux (default) | term | bg
+#   LOG   — 0 (default, console only) | 1 (Python services → server/.dev-logs/)
+#
+# Priority (auto-detect when MODE not set):
 #   1. tmux  → single session, 5 panes in 3+2 layout
 #   2. GUI terminal (macOS Terminal/iTerm2, Linux x-terminal-emulator)
 #              → 5 separate terminal windows
-#   3. Background + log files (last resort, no live view)
+#   3. Background + shell stdout redirect (last resort)
+#
+# When LOG=1, Python services (backend/agent/worker) write logs to
+# server/.dev-logs/<service>.log via the existing setup_logging() component.
+# Frontend processes (vite) always log to stdout regardless of LOG.
 #
 # Layout (tmux, 上三下二):
 #   ┌──────────┬──────────┬──────────┐
@@ -23,6 +40,57 @@ SERVER_DIR="server"
 MAIN_APP="frontend/apps/main"
 CHILD_APP="frontend/apps/child"
 PORTS=(8000 8001 8002 5173 5174)
+
+# ── parameter parsing ────────────────────────────────────────────────
+# Accept both env vars (MODE=, LOG=) and positional args ($1, $2).
+# Env vars take precedence.
+
+MODE="${DEV_MODE:-${MODE:-}}"
+LOG="${DEV_LOG:-${LOG:-0}}"
+
+case "${1:-}" in
+    tmux|term|bg) MODE="${1}" ;;
+esac
+case "${2:-}" in
+    0|1) LOG="${2}" ;;
+esac
+
+# Default mode: tmux if available, else term, else bg
+if [ -z "$MODE" ]; then
+    if command -v tmux >/dev/null 2>&1; then
+        MODE="tmux"
+    elif command -v osascript >/dev/null 2>&1 || command -v gnome-terminal >/dev/null 2>&1; then
+        MODE="term"
+    else
+        MODE="bg"
+    fi
+fi
+
+# Validate
+case "$MODE" in
+    tmux|term|bg) ;;
+    *) echo "✗ 未知 MODE: $MODE (可选: tmux | term | bg)"; exit 1 ;;
+esac
+case "$LOG" in
+    0|1) ;;
+    *) echo "✗ 未知 LOG: $LOG (可选: 0 | 1)"; exit 1 ;;
+esac
+
+# ── log directory setup ──────────────────────────────────────────────
+
+LOG_DIR_ABS=""
+if [ "$LOG" = "1" ]; then
+    LOG_DIR_ABS="$(cd "$SERVER_DIR" && pwd)/.dev-logs"
+    mkdir -p "$LOG_DIR_ABS"
+fi
+
+# Build the DEV_LOG_DIR env value for Python services.
+# "0" → console only; path → file logging; unset → default behavior.
+if [ "$LOG" = "1" ]; then
+    DEV_LOG_DIR_VALUE="$LOG_DIR_ABS"
+else
+    DEV_LOG_DIR_VALUE="0"
+fi
 
 # ── helpers ──────────────────────────────────────────────────────────
 
@@ -45,6 +113,17 @@ check_ports() {
         return 1
     fi
     return 0
+}
+
+# Python command prefix with DEV_LOG_DIR for file logging
+py_env_prefix() {
+    echo "DEV_LOG_DIR=$DEV_LOG_DIR_VALUE"
+}
+
+log_info() {
+    if [ "$LOG" = "1" ]; then
+        echo "  📝 Python 日志 → $LOG_DIR_ABS/{backend,agent,worker}.log"
+    fi
 }
 
 # ── tmux mode ────────────────────────────────────────────────────────
@@ -87,22 +166,11 @@ launch_tmux() {
     tmux split-window -v -l "60%" -t "$base"
 
     # Step 2: split top (-h) into 3 columns
-    #   -l 67% → new right 67%, base keeps left 33%
     tmux split-window -h -l "67%" -t "$base"
-    #   -l 50% of right → center 33.5%, right keeps 33.5%
     tmux split-window -h -l "50%" -t "$(tmux list-panes -t "$target" -F '#{pane_id} #{pane_left}' | sort -k2 -n | tail -1 | awk '{print $1}')"
 
     # Step 3: split bottom (-h) into 2 equal columns
     tmux split-window -h -l "50%" -t "$(tmux list-panes -t "$target" -F '#{pane_id} #{pane_top}' | sort -k2 -n | tail -1 | awk '{print $1}')"
-
-    # ── Final layout ─────────────────────────────────────────────────
-    #   ┌──────────┬──────────┬──────────┐
-    #   │ backend  │  agent   │  worker  │
-    #   │ p_left   │ p_center │ p_right  │
-    #   ├───────────┴────┬─────┴──────────┤
-    #   │   frontend     │     child      │
-    #   │   p_bot        │     p_br       │
-    #   └────────────────┴────────────────┘
 
     # Session / window options
     local tw="$target"
@@ -114,39 +182,32 @@ launch_tmux() {
         '#{?pane_active,#[fg=green bold]#{pane_title},#[fg=default]#{pane_title}}'
 
     # ── Send commands to each pane (position-based) ──────────────────
-    # Query pane positions and assign services by (left, top) coordinates.
     local pane_info
     pane_info="$(tmux list-panes -t "$target" -F '#{pane_id} #{pane_left} #{pane_top}')"
 
-    # Top-left: min top, min left → backend
     local p_backend; p_backend="$(echo "$pane_info" | sort -k3,3n -k2,2n | head -1 | awk '{print $1}')"
-    # Top-right: min top, max left → worker
     local p_worker; p_worker="$(echo "$pane_info" | sort -k3,3n -k2,2nr | head -1 | awk '{print $1}')"
-    # Top-center: min top, middle left → agent
     local p_agent; p_agent="$(echo "$pane_info" | sort -k3,3n -k2,2n | sed -n '2p' | awk '{print $1}')"
-
-    # Bottom-left: max top, min left → frontend
     local p_frontend; p_frontend="$(echo "$pane_info" | sort -k3,3nr -k2,2n | head -1 | awk '{print $1}')"
-    # Bottom-right: max top, max left → child
     local p_child; p_child="$(echo "$pane_info" | sort -k3,3nr -k2,2nr | head -1 | awk '{print $1}')"
 
     # Top-left — backend :8000
     tmux select-pane -t "$p_backend" -T "backend :8000"
     tmux send-keys -t "$p_backend" \
         "echo '═══ backend :8000 ═══'" Enter \
-        "cd '$server_dir' && uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000" Enter
+        "cd '$server_dir' && $(py_env_prefix) uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000" Enter
 
     # Top-center — agent :8001
     tmux select-pane -t "$p_agent" -T "agent :8001"
     tmux send-keys -t "$p_agent" \
         "echo '═══ agent :8001 ═══'" Enter \
-        "cd '$server_dir' && uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001" Enter
+        "cd '$server_dir' && $(py_env_prefix) uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001" Enter
 
     # Top-right — worker :8002
     tmux select-pane -t "$p_worker" -T "worker :8002"
     tmux send-keys -t "$p_worker" \
         "echo '═══ worker :8002 ═══'" Enter \
-        "cd '$server_dir' && uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002" Enter
+        "cd '$server_dir' && $(py_env_prefix) uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002" Enter
 
     # Bottom-left — frontend :5173
     tmux select-pane -t "$p_frontend" -T "frontend :5173"
@@ -164,14 +225,11 @@ launch_tmux() {
     tmux select-pane -t "$p_backend"
 
     # ── Attach / keep-alive ─────────────────────────────────────────
-    # When already inside tmux, the window was just created — return immediately.
-    # Don't block (the old `sleep 3600 & wait` pattern kept `make dev-all`
-    # hanging; cleanup-on-signal was unreliable because the trap missed SIGHUP/EXIT).
-    # When NOT inside tmux, attach to the standalone session (blocks until detach).
     if [ -n "${TMUX:-}" ]; then
         tmux select-window -t "$tw"
         echo "[numina-dev] 在 tmux window 中运行。"
         echo "  停止: make stop-dev-all"
+        log_info
     else
         exec tmux attach-session -t "$SESSION"
     fi
@@ -205,7 +263,6 @@ run_in_terminal() {
             fi
             ;;
         *)
-            # Windows (Git Bash / MSYS) — try start
             if command -v start >/dev/null 2>&1; then
                 start "$name" bash -c "cd '$dir' && echo '═══ $name :$port ═══' && $cmd" >/dev/null 2>&1
             else
@@ -217,18 +274,20 @@ run_in_terminal() {
 }
 
 launch_terminals() {
-    echo "无 tmux，启动 5 个独立终端窗口..."
+    echo "启动 5 个独立终端窗口 (MODE=term)..."
 
-    local server_abs
+    local server_abs main_abs child_abs
     server_abs="$(cd "$SERVER_DIR" && pwd)"
-    local main_abs child_abs
     main_abs="$(cd "$MAIN_APP" && pwd)"
     child_abs="$(cd "$CHILD_APP" && pwd)"
 
+    local dev_log_env=""
+    [ "$LOG" = "1" ] && dev_log_env="DEV_LOG_DIR=$DEV_LOG_DIR_VALUE "
+
     local services=(
-        "backend|8000|$server_abs|uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000"
-        "agent|8001|$server_abs|uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001"
-        "worker|8002|$server_abs|uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002"
+        "backend|8000|$server_abs|${dev_log_env}uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000"
+        "agent|8001|$server_abs|${dev_log_env}uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001"
+        "worker|8002|$server_abs|${dev_log_env}uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002"
         "frontend|5173|$main_abs|pnpm dev --host 0.0.0.0"
         "child|5174|$child_abs|pnpm dev --host 0.0.0.0"
     )
@@ -247,33 +306,51 @@ launch_terminals() {
     echo ""
     echo "5 个服务已启动 (终端窗口)。"
     echo "  停止: make stop-dev-all"
+    log_info
 }
 
-# ── background fallback ─────────────────────────────────────────────
+# ── background mode ──────────────────────────────────────────────────
 
 launch_background() {
-    echo "无 tmux 且无法打开 GUI 终端，启动后台进程 (日志写入 server/.dev-logs/)..."
-    mkdir -p "$SERVER_DIR/.dev-logs"
+    echo "启动 5 个后台进程 (MODE=bg)..."
+
+    local server_abs main_abs child_abs
+    server_abs="$(cd "$SERVER_DIR" && pwd)"
+    main_abs="$(cd "$MAIN_APP" && pwd)"
+    child_abs="$(cd "$CHILD_APP" && pwd)"
+
+    mkdir -p "$server_abs/.dev-logs"
 
     local services=(
-        "backend|8000|$SERVER_ABS|uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000"
-        "agent|8001|$SERVER_ABS|uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001"
-        "worker|8002|$SERVER_ABS|uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002"
-        "frontend|5173|$MAIN_ABS|pnpm dev --host 0.0.0.0"
-        "child|5174|$CHILD_ABS|pnpm dev --host 0.0.0.0"
+        "backend|8000|$server_abs|uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000"
+        "agent|8001|$server_abs|uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001"
+        "worker|8002|$server_abs|uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002"
+        "frontend|5173|$main_abs|pnpm dev --host 0.0.0.0"
+        "child|5174|$child_abs|pnpm dev --host 0.0.0.0"
     )
 
     local pids=()
     for svc in "${services[@]}"; do
         IFS='|' read -r name port dir cmd <<< "$svc"
-        (cd "$dir" && exec $cmd) >> "$SERVER_DIR/.dev-logs/$name.log" 2>&1 &
+        local log_file="$server_abs/.dev-logs/$name.log"
+        # Python services get DEV_LOG_DIR; frontend always stdout → file
+        local env_prefix=""
+        case "$name" in
+            backend|agent|worker) env_prefix="DEV_LOG_DIR=$DEV_LOG_DIR_VALUE " ;;
+        esac
+        (cd "$dir" && eval "export $env_prefix && exec $cmd") >> "$log_file" 2>&1 &
         pids+=($!)
-        echo "  ✓ $name :$port (PID $!) → $SERVER_DIR/.dev-logs/$name.log"
+        echo "  ✓ $name :$port (PID $!) → $log_file"
     done
 
     echo ""
     echo "全部后台启动。查看日志:"
-    echo "  tail -f $SERVER_DIR/.dev-logs/{backend,agent,worker,frontend,child}.log"
+    if [ "$LOG" = "1" ]; then
+        echo "  Python 服务日志 (via setup_logging): $LOG_DIR_ABS/{backend,agent,worker}.log"
+        echo "  Shell stdout/stderr: $server_abs/.dev-logs/{backend,agent,worker,frontend,child}.log"
+    else
+        echo "  tail -f $server_abs/.dev-logs/{backend,agent,worker,frontend,child}.log"
+    fi
     echo ""
     echo "停止: make stop-dev-all"
 
@@ -285,20 +362,17 @@ launch_background() {
 # ── main ─────────────────────────────────────────────────────────────
 
 main() {
+    echo "═══ Numina dev-all ═══"
+    echo "  MODE=$MODE  LOG=$LOG"
+
     check_deps
     check_ports || exit 1
 
-    if command -v tmux >/dev/null 2>&1; then
-        launch_tmux
-    elif command -v osascript >/dev/null 2>&1 || command -v gnome-terminal >/dev/null 2>&1; then
-        launch_terminals
-    else
-        # Pre-resolve absolute paths for background mode
-        SERVER_ABS="$(cd "$SERVER_DIR" && pwd)"
-        MAIN_ABS="$(cd "$MAIN_APP" && pwd)"
-        CHILD_ABS="$(cd "$CHILD_APP" && pwd)"
-        launch_background
-    fi
+    case "$MODE" in
+        tmux) launch_tmux ;;
+        term) launch_terminals ;;
+        bg)   launch_background ;;
+    esac
 }
 
 main "$@"

@@ -7,6 +7,7 @@ Start:
     cd server && uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --port 8002
 """
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
@@ -20,9 +21,14 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start scheduler on startup, shut it down on exit."""
+    # DEV_LOG_DIR override: "0" → console only, path → file logging to that dir
+    _dev_log = os.environ.get("DEV_LOG_DIR")
+    _effective_log_dir: str | None = (
+        None if _dev_log == "0" else (_dev_log if _dev_log else settings.LOG_DIR)
+    )
     setup_logging(
         log_level=settings.LOG_LEVEL,
-        log_dir=settings.LOG_DIR,
+        log_dir=_effective_log_dir,
     )
     logger.info("scheduler_worker starting up")
 

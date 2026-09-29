@@ -90,7 +90,10 @@ help:
 	@echo "  make dev-worker    - 调度 worker :8002"
 	@echo "  make dev-frontend  - 主端 (成人) :5173"
 	@echo "  make dev-child     - 子端       :5174"
-	@echo "  make dev-all       - 同时启动以上 5 个 dev server (tmux 分屏 / 多终端窗口)"
+	@echo "  make dev-all       - 同时启动以上 5 个 dev server"
+	@echo "    MODE=tmux|term|bg  启动方式 (默认 tmux; term=多终端窗口; bg=后台)"
+	@echo "    LOG=0|1            Python 服务日志写入 server/.dev-logs/ (默认 0)"
+	@echo "    示例: make dev-all MODE=bg LOG=1"
 	@echo "  make stop-dev-all  - 停止以上全部 dev server (按端口查找并终止)"
 	@echo ""
 	@echo "编译 / 构建:"
@@ -437,7 +440,7 @@ dev-child: install
 	@cd $(CHILD_APP) && $(PNPM) dev --host 0.0.0.0
 
 dev-all:
-	@bash scripts/dev/dev-all.sh
+	@MODE="$(MODE)" LOG="$(LOG)" bash scripts/dev/dev-all.sh
 
 stop-dev-all:
 	@echo "停止全部 dev server (端口 8000/8001/8002/5173/5174)..."

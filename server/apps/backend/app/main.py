@@ -225,9 +225,14 @@ async def lifespan(app: FastAPI):
     init_snowflake()
 
     # Initialize unified logging configuration
+    # DEV_LOG_DIR override: "0" → console only, path → file logging to that dir
+    _dev_log = os.environ.get("DEV_LOG_DIR")
+    _effective_log_dir: str | None = (
+        None if _dev_log == "0" else (_dev_log if _dev_log else settings.LOG_DIR)
+    )
     setup_logging(
         log_level=settings.LOG_LEVEL,
-        log_dir=settings.LOG_DIR,
+        log_dir=_effective_log_dir,
         log_format=settings.LOG_FORMAT,
         max_bytes=settings.LOG_MAX_BYTES,
         backup_count=settings.LOG_BACKUP_COUNT,

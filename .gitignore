@@ -93,6 +93,7 @@ auto-imports.d.ts
 
 # Logs
 logs/
+.dev-logs/
 *.log
 npm-debug.log*
 yarn-debug.log*

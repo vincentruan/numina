@@ -17,16 +17,21 @@ from pathlib import Path
 
 def setup_logging(
     log_level: str = "INFO",
-    log_dir: str = "logs",
+    log_dir: str | None = None,
     log_format: str | None = None,
     max_bytes: int = 10 * 1024 * 1024,  # 10MB
     backup_count: int = 10,
     rotation_mode: str = "size",  # "size" or "time"
     retention_days: int = 30,
 ) -> None:
-    """Setup unified logging configuration for the application."""
-    log_path = Path(log_dir)
-    log_path.mkdir(parents=True, exist_ok=True)
+    """Setup unified logging configuration for the application.
+
+    Args:
+        log_dir: Directory for log files. When ``None``, only a console handler
+            is attached — no log files are created. Pass a path (typically
+            ``settings.LOG_DIR``) to enable rotating file output.
+    """
+    log_level_upper = log_level.upper()
 
     if log_format is None:
         log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -34,15 +39,40 @@ def setup_logging(
     formatter = logging.Formatter(log_format)
 
     root_logger = logging.getLogger()
-    root_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+    root_logger.setLevel(getattr(logging, log_level_upper, logging.INFO))
 
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+    console_handler.setLevel(getattr(logging, log_level_upper, logging.INFO))
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
+
+    if log_dir is not None:
+        _add_file_handlers(
+            log_dir,
+            formatter,
+            log_level_upper,
+            max_bytes,
+            backup_count,
+            rotation_mode,
+            retention_days,
+        )
+
+
+def _add_file_handlers(
+    log_dir: str,
+    formatter: logging.Formatter,
+    log_level_upper: str,
+    max_bytes: int,
+    backup_count: int,
+    rotation_mode: str,
+    retention_days: int,
+) -> None:
+    """Add rotating file handlers for app + security loggers."""
+    log_path = Path(log_dir)
+    log_path.mkdir(parents=True, exist_ok=True)
 
     app_log_file = log_path / "app.log"
 
@@ -60,9 +90,9 @@ def setup_logging(
             backupCount=backup_count,
             encoding="utf-8",
         )
-    file_handler.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+    file_handler.setLevel(getattr(logging, log_level_upper, logging.INFO))
     file_handler.setFormatter(formatter)
-    root_logger.addHandler(file_handler)
+    logging.getLogger().addHandler(file_handler)
 
     _setup_security_logger(log_path, formatter, max_bytes, backup_count, rotation_mode)
 
@@ -119,7 +149,9 @@ def cleanup_old_logs(log_dir: Path, retention_days: int) -> int:
     deleted_count = 0
 
     for log_file in log_dir.glob("**/*"):
-        if log_file.is_file() and (log_file.suffix in (".log", ".gz") or ".log." in log_file.name):
+        if log_file.is_file() and (
+            log_file.suffix in (".log", ".gz") or ".log." in log_file.name
+        ):
             file_mtime = datetime.fromtimestamp(log_file.stat().st_mtime, tz=UTC)
 
             if file_mtime < cutoff_date:
@@ -141,12 +173,20 @@ def archive_old_logs(log_dir: Path, compress_after_days: int = 7) -> int:
     compressed_count = 0
 
     for log_file in log_dir.glob("**/*.log.[0-9]*"):
-        if log_file.is_file() and not log_file.with_suffix(log_file.suffix + ".gz").exists():
+        if (
+            log_file.is_file()
+            and not log_file.with_suffix(log_file.suffix + ".gz").exists()
+        ):
             file_mtime = datetime.fromtimestamp(log_file.stat().st_mtime, tz=UTC)
 
             if file_mtime < cutoff_date:
                 try:
-                    with open(log_file, "rb") as f_in, gzip.open(log_file.with_suffix(log_file.suffix + ".gz"), "wb") as f_out:
+                    with (
+                        open(log_file, "rb") as f_in,
+                        gzip.open(
+                            log_file.with_suffix(log_file.suffix + ".gz"), "wb"
+                        ) as f_out,
+                    ):
                         shutil.copyfileobj(f_in, f_out)
 
                     log_file.unlink()
