@@ -8,7 +8,7 @@ Outputs a single JSON object to stdout.
 Usage:
     python collect.py --window-minutes 60
 
-Requires: .claude/deploy.env sourced in the calling shell.
+Requires: .claude/skills/production-ops-patrol/deploy.env sourced in the calling shell.
 All commands are READ-ONLY on the production server (no mutations).
 """
 
