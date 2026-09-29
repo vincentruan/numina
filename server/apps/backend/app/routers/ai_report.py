@@ -10,6 +10,7 @@ import json
 import logging
 from datetime import UTC, datetime, timedelta
 
+import httpx
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, field_serializer
@@ -293,6 +294,28 @@ async def trigger_generate_events(
             thread_id=session_id,
         )
     except Exception as e:
+        # 409 from agent = another run is already active for this thread.
+        # Don't fail the task — the existing run will complete it.
+        if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 409:
+            logger.info(
+                "[asset-report] agent busy (409) task=%s — "
+                "existing run still active, switching to poll mode",
+                task_id,
+            )
+
+            async def _busy_stream():
+                yield (
+                    f"event: custom\ndata: "
+                    f"{json.dumps({'type': 'report.busy'})}\n\n"
+                )
+                yield "event: end\ndata: null\n\n"
+
+            return StreamingResponse(
+                tracked_sse_stream(task_id, _busy_stream()),
+                media_type="text/event-stream",
+                headers={"X-Accel-Buffering": "no"},
+            )
+
         logger.warning(
             "[asset-report] trigger failed task=%s err=%s", task_id, e, exc_info=True
         )

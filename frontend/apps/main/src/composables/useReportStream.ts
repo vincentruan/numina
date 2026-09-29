@@ -20,6 +20,7 @@
  * accumulation) and useAIReportStream's 401-refresh + cookie-refresh auth.
  */
 import { ref, type Ref } from 'vue'
+import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { refreshTokenIfNeeded } from '@/api'
 import { getAITask } from '@/api/ai'
@@ -392,6 +393,11 @@ export function useReportStream(): UseReportStreamReturn {
       step2Status.value = 'finish'
       // step3 (json-repair 落库) begins.
       step3Status.value = 'process'
+    } else if (data.type === 'report.busy') {
+      // Another run is already active on the agent — don't show error,
+      // just complete gracefully so the user can refresh to see the result.
+      setTerminalStatus('completed')
+      showToast({ message: t('aiHub.alreadyGenerating'), icon: 'warning-o' })
     }
   }
 

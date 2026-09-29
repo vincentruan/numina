@@ -16,8 +16,9 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
+from deerflow.runtime.runs.manager import ConflictError
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from apps.agent.app.config import settings
@@ -275,14 +276,27 @@ async def trigger_asset_report_run(
         multitask_strategy="reject",
     )
 
-    record = await start_run(
-        run_body,
-        thread_id,
-        request,
-        body.family_id,
-        body.user_id,
-        internal=True,
-    )
+    try:
+        record = await start_run(
+            run_body,
+            thread_id,
+            request,
+            body.family_id,
+            body.user_id,
+            internal=True,
+        )
+    except ConflictError:
+        logger.warning(
+            "[gateway] asset-report ConflictError thread=%s — "
+            "another run is already active",
+            thread_id,
+        )
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": f"Thread {thread_id} already has an active run",
+            },
+        )
     run_mgr = get_run_manager(request)
 
     async def sse_generator():
