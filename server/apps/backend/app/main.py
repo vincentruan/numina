@@ -238,6 +238,7 @@ async def lifespan(app: FastAPI):
         backup_count=settings.LOG_BACKUP_COUNT,
         rotation_mode=settings.LOG_ROTATION_MODE,
         retention_days=settings.LOG_RETENTION_DAYS,
+        service_name="backend",
     )
     logger.info("统一日志配置已初始化")
 

@@ -23,6 +23,7 @@ def setup_logging(
     backup_count: int = 10,
     rotation_mode: str = "size",  # "size" or "time"
     retention_days: int = 30,
+    service_name: str = "",
 ) -> None:
     """Setup unified logging configuration for the application.
 
@@ -30,6 +31,9 @@ def setup_logging(
         log_dir: Directory for log files. When ``None``, only a console handler
             is attached — no log files are created. Pass a path (typically
             ``settings.LOG_DIR``) to enable rotating file output.
+        service_name: Optional service identifier (e.g. ``"backend"``,
+            ``"agent"``). When set, log files are prefixed: ``{service_name}-app.log``.
+            Keeps logs separate when multiple services share one directory.
     """
     log_level_upper = log_level.upper()
 
@@ -58,6 +62,7 @@ def setup_logging(
             backup_count,
             rotation_mode,
             retention_days,
+            service_name=service_name,
         )
 
 
@@ -69,12 +74,14 @@ def _add_file_handlers(
     backup_count: int,
     rotation_mode: str,
     retention_days: int,
+    service_name: str = "",
 ) -> None:
     """Add rotating file handlers for app + security loggers."""
     log_path = Path(log_dir)
     log_path.mkdir(parents=True, exist_ok=True)
 
-    app_log_file = log_path / "app.log"
+    prefix = f"{service_name}-" if service_name else ""
+    app_log_file = log_path / f"{prefix}app.log"
 
     if rotation_mode == "time":
         file_handler: logging.Handler = TimedRotatingFileHandler(
@@ -94,7 +101,14 @@ def _add_file_handlers(
     file_handler.setFormatter(formatter)
     logging.getLogger().addHandler(file_handler)
 
-    _setup_security_logger(log_path, formatter, max_bytes, backup_count, rotation_mode)
+    _setup_security_logger(
+        log_path,
+        formatter,
+        max_bytes,
+        backup_count,
+        rotation_mode,
+        service_name=service_name,
+    )
 
     cleanup_old_logs(log_path, retention_days)
 
@@ -105,6 +119,7 @@ def _setup_security_logger(
     max_bytes: int,
     backup_count: int,
     rotation_mode: str,
+    service_name: str = "",
 ) -> None:
     """Setup security logger with dedicated log file."""
     security_logger = logging.getLogger("security")
@@ -113,7 +128,8 @@ def _setup_security_logger(
     for handler in security_logger.handlers[:]:
         security_logger.removeHandler(handler)
 
-    security_log_file = log_path / "security.log"
+    prefix = f"{service_name}-" if service_name else ""
+    security_log_file = log_path / f"{prefix}security.log"
 
     if rotation_mode == "time":
         security_handler: logging.Handler = TimedRotatingFileHandler(

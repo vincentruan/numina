@@ -32,4 +32,5 @@ def setup_logging(
         log_level=log_level,
         log_dir=log_dir,
         log_format=_AGENT_LOG_FORMAT,
+        service_name="agent",
     )

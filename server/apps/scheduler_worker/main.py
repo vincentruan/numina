@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
     setup_logging(
         log_level=settings.LOG_LEVEL,
         log_dir=_effective_log_dir,
+        service_name="scheduler_worker",
     )
     logger.info("scheduler_worker starting up")
 
