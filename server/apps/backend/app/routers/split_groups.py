@@ -276,7 +276,7 @@ async def create_share_link(
             ),
         )
     except Exception as exc:
-        logger.warning('short.io API call failed: %s', exc_info=True)
+        logger.warning('short.io API call failed', exc_info=True)
         raise AppError(ErrorCode.SHARE_LINK_CREATION_FAILED) from exc
 
     if result is None:

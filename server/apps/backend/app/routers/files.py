@@ -69,7 +69,7 @@ async def delete_file(
     except HTTPException:
         raise
     except Exception:
-        logger.warning('本地文件删除失败: %s', exc_info=True)
+        logger.warning('本地文件删除失败', exc_info=True)
 
     # Delete from all synced remote backends
     locations = (
@@ -92,7 +92,7 @@ async def delete_file(
                 loc.sync_status = "failed"
                 loc.last_error = "无法解密存储后端配置"
         except Exception as e:
-            logger.warning('远程文件删除失败 [%s]: %s', backend_row.id, exc_info=True)
+            logger.warning('远程文件删除失败 [%s]', backend_row.id, exc_info=True)
             loc.sync_status = "failed"
             loc.last_error = str(e)
 

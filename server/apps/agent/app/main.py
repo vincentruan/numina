@@ -72,7 +72,7 @@ try:
         memory_config_bridge,
     )
 except Exception:
-    logger.warning('memory_config_bridge install failed: %s', exc_info=True)
+    logger.warning('memory_config_bridge install failed', exc_info=True)
 
 
 @asynccontextmanager

@@ -150,7 +150,7 @@ async def file_sync_job() -> None:
                     if loc.retry_count >= 3:
                         loc.sync_status = "failed"
                     db.commit()
-                    logger.warning('文件同步失败: %s: %s', cached_file.id, exc_info=True)
+                    logger.warning('文件同步失败:', cached_file.id, exc_info=True)
                 except Exception as e:
                     loc.retry_count += 1
                     loc.last_error = str(e)

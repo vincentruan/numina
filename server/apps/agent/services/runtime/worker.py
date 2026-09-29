@@ -452,7 +452,7 @@ async def _set_session_title(thread_id: str, family_id: str, title_prefix: str) 
             "[_set_session_title] Set title '%s' for thread %s", title, thread_id
         )
     except Exception:
-        logger.warning('[_set_session_title] Failed for thread %s: %s', thread_id, exc_info=True)
+        logger.warning('[_set_session_title] Failed for thread', thread_id, exc_info=True)
 
 
 def _persist_session_status(

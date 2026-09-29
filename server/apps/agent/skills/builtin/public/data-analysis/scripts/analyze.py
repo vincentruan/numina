@@ -154,7 +154,7 @@ def _load_excel(
                 f"  Loaded sheet '{sheet_name}' -> table '{table_name}' ({row_count} rows)"
             )
         except Exception:
-            logger.warning("  Failed to load sheet '%s': %s", sheet_name, exc_info=True)
+            logger.warning("  Failed to load sheet '%s'", sheet_name, exc_info=True)
 
 
 def _load_csv(
@@ -184,7 +184,7 @@ def _load_csv(
             f"  Loaded CSV '{base_name}' -> table '{table_name}' ({row_count} rows)"
         )
     except Exception:
-        logger.warning("  Failed to load CSV '%s': %s", base_name, exc_info=True)
+        logger.warning("  Failed to load CSV '%s'", base_name, exc_info=True)
 
 
 def action_inspect(con: duckdb.DuckDBPyConnection, table_map: dict[str, str]) -> str:

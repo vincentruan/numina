@@ -69,7 +69,7 @@ class ChatAdapter:
             if override:
                 return override
         except Exception:
-            logger.warning('[chat_adapter] fetch family prompt failed family=%s: %s', family_id, exc_info=True)
+            logger.warning('[chat_adapter] fetch family prompt failed family=%s', family_id, exc_info=True)
         return self._load_default_prompt()
 
     async def stream(

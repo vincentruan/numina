@@ -347,7 +347,7 @@ async def lifespan(app: FastAPI):
         try:
             auto_generate_daily_snapshots(db)
         except Exception:
-            logger.warning('自动快照生成失败: %s', exc_info=True)
+            logger.warning('自动快照生成失败', exc_info=True)
         # Fetch exchange rates immediately if none exist
         # Skip in CI to avoid slow external API calls during bootstrap
         if not os.environ.get("SKIP_INITIAL_EXCHANGE_RATE_FETCH"):
@@ -360,7 +360,7 @@ async def lifespan(app: FastAPI):
                     adapter = ExchangeRateAdapter()
                     adapter.fetch_and_store_rates(db)
             except Exception:
-                logger.warning('初始汇率获取失败: %s', exc_info=True)
+                logger.warning('初始汇率获取失败', exc_info=True)
     finally:
         db.close()
 

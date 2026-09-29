@@ -344,7 +344,7 @@ async def test_asr_config(
                 latency_ms=latency_ms,
             ))
         except Exception as e:
-            logger.warning('ASR test failed for lang=%s config=%s: %s', lang, cfg.id, exc_info=True)
+            logger.warning('ASR test failed for lang=%s config=', lang, cfg.id, exc_info=True)
             lang_results.append(ASRLangTestResult(
                 language=lang,
                 reference=reference,
@@ -463,7 +463,7 @@ async def transcribe_audio(
 
         return ASRTranscribeResponse(text=text)
     except Exception as e:
-        logger.warning('ASR transcribe failed for family %s: %s', current_user.family_id, exc_info=True)
+        logger.warning('ASR transcribe failed for family', current_user.family_id, exc_info=True)
         ASRAdapter(cfg.id).record_failure(db)
         raise AppError(
             ErrorCode.VALIDATION_ERROR,

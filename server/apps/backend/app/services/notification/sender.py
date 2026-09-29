@@ -105,7 +105,7 @@ class NotificationSender:
                 resp.raise_for_status()
                 return True
         except Exception:
-            logger.warning('Telegram 发送失败: %s', exc_info=True)
+            logger.warning('Telegram 发送失败', exc_info=True)
             return False
 
     @staticmethod
@@ -130,7 +130,7 @@ class NotificationSender:
                 server.sendmail(smtp_from, [to], msg.as_string())
             return True
         except Exception:
-            logger.warning('邮件发送失败: %s', exc_info=True)
+            logger.warning('邮件发送失败', exc_info=True)
             return False
 
     @staticmethod
@@ -162,7 +162,7 @@ class NotificationSender:
                     return False
                 return True
         except Exception:
-            logger.warning('飞书发送失败: %s', exc_info=True)
+            logger.warning('飞书发送失败', exc_info=True)
             return False
 
     @staticmethod
@@ -190,5 +190,5 @@ class NotificationSender:
         except WebPushException as exc:
             if exc.response and exc.response.status_code == 410:
                 return "gone"
-            logger.warning('Web Push 发送失败: %s', exc_info=True)
+            logger.warning('Web Push 发送失败', exc_info=True)
             return False

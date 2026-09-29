@@ -61,7 +61,7 @@ class PostgresAdvisoryLock(LockProvider):
             )
             return True
         except Exception:
-            logger.warning("Failed to acquire advisory lock '%s': %s", lock_name, exc_info=True)
+            logger.warning("Failed to acquire advisory lock '%s'", lock_name, exc_info=True)
             conn.close()
             self._conn = None
             return False

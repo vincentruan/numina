@@ -171,7 +171,7 @@ class DesiredStateRunner:
                 verified_at=result.verified_at,
             )
         except Exception:
-            logger.warning('Failed to persist state for %s: %s', result.resource_name, exc_info=True)
+            logger.warning('Failed to persist state for', result.resource_name, exc_info=True)
 
     def _finalize_report(self, report: ReconcileReport) -> None:
         """Compute summary fields from individual results."""

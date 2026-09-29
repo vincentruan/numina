@@ -40,7 +40,7 @@ def decrypt_config(config_text: str | None) -> dict | None:
         decrypted = f.decrypt(config_text.encode())
         return json.loads(decrypted)  # type: ignore[no-any-return]
     except Exception:
-        logger.warning('存储后端配置解密失败: %s', exc_info=True)
+        logger.warning('存储后端配置解密失败', exc_info=True)
         return None
 
 

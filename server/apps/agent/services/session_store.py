@@ -47,7 +47,7 @@ class AiSessionRepository:
                 parent_thread_id=parent_thread_id,
             )
         except Exception:
-            logger.warning('session upsert failed for %s: %s', session_id, exc_info=True)
+            logger.warning('session upsert failed for', session_id, exc_info=True)
 
     async def get_title(self, *, session_id: str, family_id: str) -> str | None:
         """Return the existing title for a session, or None if not set."""
@@ -56,7 +56,7 @@ class AiSessionRepository:
             if session:
                 return session.get("title")
         except Exception:
-            logger.warning('session get_title failed for %s: %s', session_id, exc_info=True)
+            logger.warning('session get_title failed for', session_id, exc_info=True)
         return None
 
     async def get_session(self, session_id: str, family_id: str | None = None) -> dict | None:
@@ -64,7 +64,7 @@ class AiSessionRepository:
         try:
             return await self._client.get_session(session_id)
         except Exception:
-            logger.warning('session get failed for %s: %s', session_id, exc_info=True)
+            logger.warning('session get failed for', session_id, exc_info=True)
             return None
 
     async def list_sessions(
@@ -91,7 +91,7 @@ class AiSessionRepository:
                 source=source,
             )
         except Exception:
-            logger.warning('session list failed for family %s: %s', family_id, exc_info=True)
+            logger.warning('session list failed for family', family_id, exc_info=True)
             return [], 0
 
     async def update_summary(
@@ -113,7 +113,7 @@ class AiSessionRepository:
                 title=title,
             )
         except Exception:
-            logger.warning('session summary update failed for %s: %s', session_id, exc_info=True)
+            logger.warning('session summary update failed for', session_id, exc_info=True)
 
     async def update_session(
         self,
@@ -130,7 +130,7 @@ class AiSessionRepository:
                 is_pinned=is_pinned,
             )
         except Exception:
-            logger.warning('session update failed for %s: %s', session_id, exc_info=True)
+            logger.warning('session update failed for', session_id, exc_info=True)
 
     async def delete_session(self, *, session_id: str, family_id: str) -> bool:
         """Delete a session row via backend.
@@ -141,5 +141,5 @@ class AiSessionRepository:
         try:
             return await self._client.delete_session(session_id)
         except Exception:
-            logger.warning('session delete failed for %s: %s', session_id, exc_info=True)
+            logger.warning('session delete failed for', session_id, exc_info=True)
             return False

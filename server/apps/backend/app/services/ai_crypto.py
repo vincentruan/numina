@@ -20,7 +20,7 @@ def _get_fernet():
             else settings.AI_ENCRYPTION_KEY
         )
     except Exception:
-        logger.warning('Fernet 初始化失败: %s', exc_info=True)
+        logger.warning('Fernet 初始化失败', exc_info=True)
         return None
 
 

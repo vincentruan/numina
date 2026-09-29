@@ -242,7 +242,7 @@ async def generate_narrative(user: User, context: dict) -> dict:
             context=context,
         )
     except Exception:
-        logger.warning("[dashboard-narrative] agent dispatch failed: %s", exc_info=True)
+        logger.warning('[dashboard-narrative] agent dispatch failed', exc_info=True)
         # Graceful degradation (R2/F3): return empty, not 500
         return {"narrative": None, "first_sentence": "", "thinking": "", "generated_at": None}
 
@@ -272,7 +272,7 @@ async def generate_narrative(user: User, context: dict) -> dict:
                 row.generated_at.isoformat() if row.generated_at else None
             )
     except Exception:
-        logger.warning('[dashboard-narrative] cache persist failed: %s', exc_info=True)
+        logger.warning('[dashboard-narrative] cache persist failed', exc_info=True)
         # Still return the narrative even if persist failed
         generated_at = datetime.now(UTC).isoformat()
 
@@ -449,4 +449,4 @@ def _persist_narrative_result(family_id: str, collected_sse: bytes) -> None:
             upsert_skill_result(db, family_id, SKILL_ID, full_payload)
             db.commit()
     except Exception:
-        logger.warning('[dashboard-narrative] persist result failed err=%s', exc_info=True)
+        logger.warning('[dashboard-narrative] persist result failed err=', exc_info=True)
