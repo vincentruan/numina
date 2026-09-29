@@ -129,7 +129,7 @@ class FileResource(Resource):
                 shutil.copy2(str(self._path), str(backup_path))
                 logger.info("Backed up %s → %s", self._path, backup_path)
             except OSError:
-                logger.warning('Could not backup', self._path, exc_info=True)
+                logger.warning('Could not backup %s', self._path, exc_info=True)
 
         # Prepend managed marker if applicable
         if self._add_managed_marker and not desired_content.startswith(MANAGED_MARKER.encode()):

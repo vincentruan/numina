@@ -640,5 +640,5 @@ async def sync_title_from_checkpoint(
         logger.info("[run_extras][title] FINAL: generated_title empty, returning None")
         return None
     except Exception:
-        logger.warning('[run_extras] Failed to sync title for thread', thread_id, exc_info=True)
+        logger.warning('[run_extras] Failed to sync title for thread %s', thread_id, exc_info=True)
         return None

@@ -64,7 +64,7 @@ def write_audit_log(
             finally:
                 own_db.close()
     except Exception:
-        logger.warning('[audit_log] failed to write event=', event_type, exc_info=True)
+        logger.warning('[audit_log] failed to write event=%s', event_type, exc_info=True)
 
 
 def purge_old_audit_logs(retention_days: int = 90) -> int:
