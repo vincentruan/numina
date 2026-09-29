@@ -540,22 +540,40 @@ class NuminaSqlRunStore:
                 )
             return bool(result.rowcount > 0)
 
-    async def claim_for_takeover(self, run_id: str, new_owner_worker_id: str) -> bool | None:
-        """Atomically claim an unowned/expired-lease run for takeover."""
+    async def claim_for_takeover(
+        self,
+        run_id: str,
+        *,
+        grace_seconds: int,
+        error: str,
+        stop_reason: str | None = None,
+    ) -> bool:
+        """Atomically mark an expired-lease active run as ``error``.
+
+        Only rows whose lease has expired past *grace_seconds* (or whose
+        lease is NULL — pre-ownership data) are updated.  Matches the
+        DeerFlow base-store contract.
+        """
         await self._ensure_table()
+        cutoff = (datetime.now(UTC) - timedelta(seconds=grace_seconds)).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         async with self._sf() as session:
             async with session.begin():
                 result = await session.execute(
                     text(
-                        "UPDATE run_records SET owner_worker_id=:owner, updated_at=:now "
+                        "UPDATE run_records "
+                        "SET status='error', error=:error, "
+                        "stop_reason=:stop_reason, updated_at=:now "
                         "WHERE run_id=:run_id "
-                        "AND (owner_worker_id IS NULL "
-                        "OR lease_expires_at IS NULL OR lease_expires_at < :now)"
+                        "AND status IN ('pending', 'running') "
+                        "AND (lease_expires_at IS NULL OR lease_expires_at < :cutoff)"
                     ),
                     {
-                        "owner": new_owner_worker_id,
-                        "now": datetime.now(UTC).isoformat(),
+                        "error": error,
+                        "stop_reason": stop_reason,
+                        "now": now_iso,
                         "run_id": run_id,
+                        "cutoff": cutoff,
                     },
                 )
             return bool(result.rowcount > 0)

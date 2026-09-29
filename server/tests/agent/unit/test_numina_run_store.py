@@ -153,11 +153,15 @@ class TestLeaseManagement:
     @pytest.mark.asyncio
     async def test_claim_for_takeover(self, store_and_factory):
         store = store_and_factory
+        # Create a running run with a NULL lease (pre-ownership) — eligible for takeover
         await store.put("run-1", thread_id="thread-1", status="running")
-        ok = await store.claim_for_takeover("run-1", new_owner_worker_id="worker-2")
+        ok = await store.claim_for_takeover(
+            "run-1", grace_seconds=10, error="worker presumed dead"
+        )
         assert ok is True
         result = await store.get("run-1")
-        assert result["owner_worker_id"] == "worker-2"
+        assert result["status"] == "error"
+        assert result["error"] == "worker presumed dead"
 
 
 class TestTokenAggregation:
