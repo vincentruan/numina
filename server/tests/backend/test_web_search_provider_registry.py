@@ -35,12 +35,3 @@ def test_list_provider_templates_returns_all():
 def test_ddg_search_does_not_require_api_key():
     tmpl = get_provider_template("ddg_search")
     assert tmpl["requires_api_key"] is False
-
-
-def test_reconcile_registry_returns_empty_when_all_present():
-    from apps.backend.app.services.web_search_provider_registry import (
-        reconcile_registry,
-    )
-    # Without deerflow.community installed, should return empty (graceful skip)
-    result = reconcile_registry()
-    assert isinstance(result, list)

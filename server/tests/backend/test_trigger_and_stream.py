@@ -130,39 +130,6 @@ class TestTriggerAndStream:
         call_kwargs = patched_helpers["lifecycle"].call_args.kwargs
         assert call_kwargs.get("on_result") is on_result
 
-    async def test_passes_thread_id_to_lifecycle(
-        self, mock_agent_client, patched_helpers
-    ):
-        from apps.backend.app.services.bridge_consumer import trigger_and_stream
-
-        await trigger_and_stream(
-            agent_client=mock_agent_client,
-            agent_url="/internal/gateway/runs/asset-report/session-1",
-            json_body={"family_id": "123"},
-            task_id="task-1",
-            family_id=123,
-            session_id="session-1",
-            thread_id="custom-thread-id",
-        )
-        call_kwargs = patched_helpers["lifecycle"].call_args.kwargs
-        assert call_kwargs.get("thread_id") == "custom-thread-id"
-
-    async def test_default_thread_id_is_session_id(
-        self, mock_agent_client, patched_helpers
-    ):
-        from apps.backend.app.services.bridge_consumer import trigger_and_stream
-
-        await trigger_and_stream(
-            agent_client=mock_agent_client,
-            agent_url="/internal/gateway/runs/asset-report/session-1",
-            json_body={"family_id": "123"},
-            task_id="task-1",
-            family_id=123,
-            session_id="session-1",
-        )
-        call_kwargs = patched_helpers["lifecycle"].call_args.kwargs
-        assert call_kwargs.get("thread_id") == "session-1"
-
     async def test_passes_last_event_id_to_consume(
         self, mock_agent_client, patched_helpers
     ):

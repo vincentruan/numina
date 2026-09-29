@@ -67,30 +67,3 @@ def list_provider_templates() -> list[dict[str, Any]]:
         {"provider_name": name, **meta}
         for name, meta in WEB_SEARCH_PROVIDER_REGISTRY.items()
     ]
-
-
-def reconcile_registry() -> list[str]:
-    """启动时校验：检查已知 provider 的模块是否可导入。
-    返回注册表中无法导入的 provider 名称列表（用于报警日志）。
-    """
-    import importlib
-    import logging
-
-    logger = logging.getLogger(__name__)
-    unavailable: list[str] = []
-
-    for name, meta in WEB_SEARCH_PROVIDER_REGISTRY.items():
-        provider_class = meta.get("provider_class", "")
-        module_path = provider_class.split(":")[0] if ":" in provider_class else ""
-        if module_path:
-            try:
-                importlib.import_module(module_path)
-            except ImportError:
-                logger.warning(
-                    "Web search provider '%s' module not importable: %s",
-                    name,
-                    module_path,
-                )
-                unavailable.append(name)
-
-    return unavailable

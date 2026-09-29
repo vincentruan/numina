@@ -403,7 +403,6 @@ def _spawn_lifecycle_consumer(
     on_result: Callable[[str, Any], Coroutine[Any, Any, None]] | None = None,
     *,
     bridge: Any | None = None,
-    thread_id: str | None = None,
 ) -> asyncio.Task[None]:
     """Spawn an independent background consumer for task lifecycle management.
 
@@ -416,8 +415,6 @@ def _spawn_lifecycle_consumer(
         run_id: Pre-resolved agent RunRecord UUID
         on_result: Optional async callback invoked for each ``custom`` event.
         bridge: Optional shared bridge.  When None, uses get_shared_bridge().
-        thread_id: DeerFlow thread UUID for event persistence. When provided,
-            events are persisted to DbRunEventStore for permanent logging.
 
     Returns:
         An ``asyncio.Task`` running the background consumer.
@@ -441,32 +438,6 @@ def _spawn_lifecycle_consumer(
             ):
                 event_type = event["event"]
                 event_data = event["data"]
-
-                # Event persistence (U4): write to DbRunEventStore if enabled.
-                # Non-fatal: failures are logged and skipped.
-                if (
-                    thread_id
-                    and run_id
-                    and event_type in ("messages", "custom", "end", "error")
-                ):
-                    try:
-                        from apps.backend.app.services.event_persistence import (
-                            persist_event,
-                        )
-
-                        await persist_event(
-                            thread_id=thread_id,
-                            run_id=run_id,
-                            event_type=event_type,
-                            event_data=event_data,
-                            family_id=family_id,
-                        )
-                    except Exception:
-                        logger.debug(
-                            "[lifecycle] event persistence failed (non-fatal) event=%s",
-                            event_type,
-                            exc_info=True,
-                        )
 
                 if event_type == "custom" and on_result is not None:
                     try:
@@ -659,7 +630,6 @@ async def trigger_and_stream(
     )
     if on_result is not None:
         lifecycle_kwargs["on_result"] = on_result
-    lifecycle_kwargs["thread_id"] = thread_id if thread_id is not None else session_id
     _spawn_lifecycle_consumer(**lifecycle_kwargs)
 
     # 5. SSE forwarder with cleanup

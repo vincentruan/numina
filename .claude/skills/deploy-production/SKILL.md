@@ -152,6 +152,8 @@ Production uses a **local Docker PostgreSQL** container (`numina-postgres-prod`)
 
 - **Agent** StreamBridge 硬编码 Redis（`get_stream_bridge()` in `lifespan.py`），无 memory 选项
 - **Backend** 默认 `STREAM_BRIDGE_TYPE=redis` + `CACHE_BACKEND=redis`（compose 默认值）
+- **Scheduler Worker** 默认 `CACHE_BACKEND=redis`（compose 默认值），与 backend/agent 共享同一 Redis 实例
+- **三个 Python 服务** 通过相同的 `REDIS_URL` 连接同一 Redis 实例（`redis://numina-redis:6379/0`）
 - **Redis 容器** (`numina-redis`) 在 `docker-compose.production.yml` 中定义，AOF 持久化
 - `REDIS_URL` 默认 `redis://numina-redis:6379/0`（Docker 内部网络）
 - Redis 是**必需组件**，缺少则 AI 功能完全不可用（agent 返回 503）
