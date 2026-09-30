@@ -75,6 +75,7 @@ class AiSessionRepository:
         sort_by: str = "updated_at",
         sort_order: str = "desc",
         source: str | None = None,
+        agent_id: str | None = None,
     ) -> tuple[list[dict], int]:
         """Return (sessions, total) for the family, or ([], 0) on error."""
         try:
@@ -89,6 +90,7 @@ class AiSessionRepository:
                 sort_by=sort_by,
                 sort_order=sort_order,
                 source=source,
+                agent_id=agent_id,
             )
         except Exception:
             logger.warning('session list failed for family %s', family_id, exc_info=True)

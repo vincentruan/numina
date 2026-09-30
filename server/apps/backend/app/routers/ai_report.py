@@ -227,6 +227,7 @@ async def trigger_generate_events(
             family_id=current_user.family_id,
             user_id=current_user.id,
             db=db,
+            source="asset-report",
         )
         any_running = AITaskService.get_any_running_task(current_user.family_id, db)
         if any_running and not force:

@@ -156,6 +156,7 @@ def _fresh_cached_report():
         {
             "report_json": {
                 "overall_score": 80,
+                "summary": "Test cached summary.",
                 "indicators": [
                     {"key": "a", "label": "A", "score": 4, "narrative": "ok"},
                     {"key": "b", "label": "B", "score": 4, "narrative": "ok"},

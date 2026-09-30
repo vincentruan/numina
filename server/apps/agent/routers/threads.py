@@ -129,6 +129,10 @@ class ThreadSearchRequest(BaseModel):
         default=None,
         description="Filter by session source (agent/skill type). Pass 'chat' for normal chat sessions (source IS NULL).",
     )
+    agent_id: str | None = Field(
+        default=None,
+        description="Filter by specific agent ID (for custom agents).",
+    )
 
 
 class ThreadStateResponse(BaseModel):
@@ -728,6 +732,7 @@ async def search_threads(
         sort_by=body.sortBy or "updated_at",
         sort_order=body.sortOrder or "desc",
         source=body.source,
+        agent_id=body.agent_id,
     )
 
     return [

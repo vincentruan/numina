@@ -164,13 +164,14 @@ def get_shared_bridge() -> Any:
     """
     global _shared_bridge
     if _shared_bridge is None:
+        from apps.backend.app.config import settings
         from packages.stream_bridge import make_stream_bridge
         from packages.stream_bridge.config import StreamBridgeConfig
 
         bridge_type = os.environ.get("STREAM_BRIDGE_TYPE", "redis")
         config = StreamBridgeConfig(
             type=bridge_type,
-            redis_url=os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+            redis_url=settings.REDIS_URL,
             queue_maxsize=256,
             stream_ttl_seconds=86400,
         )

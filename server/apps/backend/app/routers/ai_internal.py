@@ -1078,6 +1078,7 @@ async def auto_generate_reports(
                 family_id=fid,
                 user_id=owner.id,
                 db=db,
+                source="asset-report",
             )
             task = AITaskService.create_task(
                 family_id=fid,

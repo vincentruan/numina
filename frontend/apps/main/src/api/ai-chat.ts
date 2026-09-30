@@ -37,6 +37,8 @@ export interface ThreadSearchParams {
   filter?: Record<string, string>
   /** Filter by session source (agent/skill type). */
   source?: string
+  /** Filter by specific agent ID (for custom agents). */
+  agent_id?: string
 }
 
 export interface ThreadSearchResponse {

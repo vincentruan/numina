@@ -32,6 +32,9 @@ class AgentSettings(BaseSettings):
     # 加密（与 backend 共享同一个 Fernet key，用于解密 API Key）
     AI_ENCRYPTION_KEY: str = ""
 
+    # CORS
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8080", "http://127.0.0.1:8080"]
+
     # 日志
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = ""
@@ -82,8 +85,10 @@ class AgentSettings(BaseSettings):
     # DeerFlow Gateway API 地址（内部代理端点使用）
     DEERFLOW_GATEWAY_URL: str = "http://localhost:8001"
 
-    # StreamBridge Redis URL (cross-process event sharing with backend)
-    # Falls back to REDIS_URL, then redis://redis:6379/0
+    # Redis (shared with backend for StreamBridge cross-process event sharing)
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    # StreamBridge Redis URL override (empty → falls back to REDIS_URL)
     STREAM_BRIDGE_REDIS_URL: str = ""
 
     model_config = {

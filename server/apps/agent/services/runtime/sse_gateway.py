@@ -181,14 +181,14 @@ async def _terminal_record_stream_missing(
         return False
 
     # Check if stream exists and has events.
-    # The agent always uses MemoryStreamBridge (no Redis).  stream_exists()
-    # is a RedisStreamBridge method — for memory bridge we fall through to
-    # the terminal-status check below.
+    # Production always uses NuminaRedisStreamBridge (lazy-init in lifespan.py).
+    # stream_exists() checks the Redis key for this run_id.
     if hasattr(bridge, "stream_exists"):
         exists = await bridge.stream_exists(record.run_id)
         return not exists
 
-    # MemoryStreamBridge doesn't persist, so if record is terminal, stream is gone
+    # Fallback for non-Redis bridges (tests only): if record is terminal,
+    # the in-process stream is already gone.
     return True
 
 

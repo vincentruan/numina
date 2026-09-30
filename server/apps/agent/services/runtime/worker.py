@@ -735,7 +735,11 @@ async def _run_asset_report_agent(
                     try:
                         client = BackendClient(family_id=family_id)
                         await client.persist_report_result(
-                            report_json={"indicators": [], "overall_score": 0},
+                            report_json={
+                                "indicators": [],
+                                "overall_score": 0,
+                                "summary": "结构化报告解析失败，请查看 markdown 审计文件。",
+                            },
                             markdown_file_path=markdown_file_path,
                         )
                     except Exception:

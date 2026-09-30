@@ -4,7 +4,7 @@
 
     <!-- Three-step timeline (hidden once the report is available via cache) -->
     <ReportStepTimeline
-      v-if="isGenerating || stream.cached.value"
+      v-if="(isGenerating || hasStepProgress) && stream.status.value !== 'completed'"
       :step1-status="stream.step1Status.value"
       :step2-status="stream.step2Status.value"
       :step3-status="stream.step3Status.value"
@@ -349,12 +349,12 @@ async function loadMarkdownPreview() {
 const stream = useReportStream()
 
 // v3: useTaskResume for SSE reconnection on page re-entry
-const resumeHandle = useTaskResume('report', {
+const resumeHandle = useTaskResume('asset-report', {
   onStreamEvent: (event, data, eventId) => {
     stream.ingestEvent(event, data, eventId)
   },
   onComplete: async () => {
-    aiStore.clearBackgroundTask('report')
+    aiStore.clearBackgroundTask('asset-report')
     // Stream status was restored from sessionStorage as 'streaming' when
     // the user re-entered the page. If resume() found the task already
     // completed, the stream will never receive an end event to transition
@@ -380,7 +380,7 @@ const resumeHandle = useTaskResume('report', {
     await loadExistingReport()
   },
   onError: () => {
-    aiStore.clearBackgroundTask('report')
+    aiStore.clearBackgroundTask('asset-report')
   },
   // P0 fix: sync useReportStream status when SSE fails and polling activates
   onPollingFallback: () => {
@@ -393,6 +393,16 @@ const resumeHandle = useTaskResume('report', {
 // Whether a generation is in flight (streaming or connecting).
 const isGenerating = computed(() =>
   stream.status.value === 'connecting' || stream.status.value === 'streaming',
+)
+
+// Whether any step has meaningful progress (beyond default 'waiting').
+// Keeps the timeline visible briefly after completion so the user sees
+// the completed steps rather than them disappearing instantly when
+// the task completes between page-leave and page-reentry.
+const hasStepProgress = computed(() =>
+  stream.step1Status.value !== 'waiting' ||
+  stream.step2Status.value !== 'waiting' ||
+  stream.step3Status.value !== 'waiting',
 )
 
 // Elastic fallback: step1 markdown 落盘 succeeded (write_file tool_result
@@ -585,7 +595,7 @@ async function waitForServerTaskComplete(): Promise<void> {
   await new Promise(r => setTimeout(r, 1000))
   while (Date.now() - startTime < MAX_WAIT) {
     try {
-      const task = await getAITask('report')
+      const task = await getAITask('asset-report')
       if (task.status === 'idle' || task.status === 'completed' ||
           task.status === 'failed' || task.status === 'cancelled' ||
           task.status === 'timeout') {
@@ -608,12 +618,12 @@ async function registerRunningTask(): Promise<void> {
   // Already tracking this task — skip the redundant API round-trip.
   if (registeredTaskId && reportTaskId.value === registeredTaskId) return
   try {
-    const task = await getAITask('report')
+    const task = await getAITask('asset-report')
     if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
       reportTaskId.value = task.task_id
       registeredTaskId = task.task_id
       aiStore.registerBackgroundTask({
-        capability: 'report',
+        capability: 'asset-report',
         taskId: task.task_id,
         sessionId: task.session_id || '',
         startedAt: task.started_at || new Date().toISOString(),
@@ -671,7 +681,7 @@ async function onGenerate(force = false) {
       currentReport.value = null
       reportGeneratedAt.value = null
     }
-    aiStore.clearBackgroundTask('report')
+    aiStore.clearBackgroundTask('asset-report')
     reportTaskId.value = null
   } catch {
     // Network or connection error — clear stale report so the error state
@@ -689,7 +699,7 @@ async function onCancel() {
     await cancelTaskById(reportTaskId.value)
     // Stop the frontend SSE reader (keepRunning=false resets status).
     stream.abort(false)
-    aiStore.clearBackgroundTask('report')
+    aiStore.clearBackgroundTask('asset-report')
     reportTaskId.value = null
     showToast(t('aiTask.cancelled'))
   } catch {
@@ -752,7 +762,7 @@ onMounted(async () => {
     registeredTaskId = resumeHandle.taskId.value
     stream.markReconnecting()
     aiStore.registerBackgroundTask({
-      capability: 'report',
+      capability: 'asset-report',
       taskId: resumeHandle.taskId.value!,
       sessionId: resumeHandle.task.value.session_id || '',
       startedAt: resumeHandle.task.value.started_at || new Date().toISOString(),
@@ -771,7 +781,7 @@ onMounted(async () => {
       registeredTaskId = resumeHandle.taskId.value
       stream.markReconnecting()
       aiStore.registerBackgroundTask({
-        capability: 'report',
+        capability: 'asset-report',
         taskId: resumeHandle.taskId.value,
         sessionId: resumeHandle.task.value.session_id || '',
         startedAt: resumeHandle.task.value.started_at || new Date().toISOString(),
@@ -779,9 +789,11 @@ onMounted(async () => {
       })
     } else {
       // No running task found — generation likely completed or failed while
-      // the user was away. Clear stale stream state so the UI doesn't show
-      // a frozen "generating" timeline.
-      stream.reset()
+      // the user was away.  Try to load the finished report instead of
+      // aggressively resetting the restored step state.  The hasStepProgress
+      // computed keeps the timeline visible so the user can see the completed
+      // steps alongside the report.
+      await loadExistingReport()
     }
   }
 

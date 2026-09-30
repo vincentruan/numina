@@ -35,7 +35,7 @@ export interface AITask {
 /**
  * Get AI tasks for the current family, optionally filtered by skill_id and status.
  *
- * @param skillId - Optional skill_id filter (e.g., 'report', 'import', 'coach')
+ * @param skillId - Optional skill_id filter (e.g., 'asset-report', 'import-parse', 'finance-coach')
  * @param status - Optional status filter (e.g., 'running', 'completed')
  * @returns Array of AITask objects
  */

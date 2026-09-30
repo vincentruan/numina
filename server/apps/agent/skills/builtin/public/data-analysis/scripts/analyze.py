@@ -36,6 +36,27 @@ except ImportError:
 CACHE_DIR = os.path.join(tempfile.gettempdir(), ".data-analysis-cache")
 TABLE_MAP_SUFFIX = ".table_map.json"
 
+# Blocklist of DuckDB functions that can access the host filesystem.
+# These are disabled to prevent LLM-generated SQL from reading/writing
+# files outside the sandbox.
+_DANGEROUS_SQL_PATTERNS = re.compile(
+    r"\b(readfile|writefile|listfiles|copy\s*\(?\s*.*\s+to\s+['\"])",
+    re.IGNORECASE,
+)
+
+
+def _validate_sql_safety(sql: str) -> None:
+    """Reject SQL that uses DuckDB filesystem functions.
+
+    Raises ValueError if the SQL contains dangerous patterns.
+    """
+    if _DANGEROUS_SQL_PATTERNS.search(sql):
+        raise ValueError(
+            "SQL contains disallowed filesystem operations "
+            "(readfile, writefile, listfiles, COPY...TO). "
+            "Only data-analysis queries are permitted."
+        )
+
 
 def compute_files_hash(files: list[str]) -> str:
     """Compute a combined SHA256 hash of all input files for cache key."""
@@ -259,6 +280,13 @@ def action_query(
                 f'"{table_name}"',
                 modified_sql,
             )
+
+    # Validate SQL does not use filesystem functions
+    try:
+        _validate_sql_safety(modified_sql)
+    except ValueError as e:
+        print(f"Security error: {e}")
+        return f"Security error: {e}"
 
     try:
         result = con.execute(modified_sql)

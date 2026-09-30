@@ -1,4 +1,9 @@
-"""In-memory stream bridge backed by an in-process event log."""
+"""Test-only in-memory StreamBridge implementation.
+
+Moved from ``packages/stream_bridge/memory.py`` — exists solely so unit tests
+can exercise the StreamBridge protocol without a running Redis instance.
+Production always uses ``NuminaRedisStreamBridge`` (cross-process).
+"""
 
 from __future__ import annotations
 
@@ -10,8 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from packages.core.logging import get_logger
-
-from .base import (
+from packages.stream_bridge.base import (
     END_SENTINEL,
     HEARTBEAT_SENTINEL,
     StreamBridge,
@@ -33,7 +37,7 @@ class _RunStream:
 
 
 class MemoryStreamBridge(StreamBridge):
-    """Per-run in-memory event log implementation.
+    """Per-run in-memory event log for unit tests.
 
     Events are retained for a bounded time window per run so late subscribers
     and reconnecting clients can replay buffered events from ``Last-Event-ID``.

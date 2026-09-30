@@ -140,10 +140,10 @@ export function useTaskResume(
     if (!startedAt) return false
     // Per-skill timeouts matching backend SKILL_TIMEOUT_MINUTES (ai_task_service.py)
     const SKILL_TIMEOUT_MS: Record<string, number> = {
-      report: 10 * 60_000,
-      literacy: 10 * 60_000,
+      'asset-report': 10 * 60_000,
+      'literacy-weekly-report': 10 * 60_000,
       'dashboard-narrative': 5 * 60_000,
-      coach: 5 * 60_000,
+      'finance-coach': 5 * 60_000,
       'wish-advice': 5 * 60_000,
       'import-parse': 10 * 60_000,
     }

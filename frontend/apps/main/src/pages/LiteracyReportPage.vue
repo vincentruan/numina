@@ -35,7 +35,7 @@
           :disabled="!canGoPrev"
           @click="goPrev"
         />
-        <span class="week-label">{{ currentWeekStart ? formatWeekStart(currentWeekStart) : '' }}</span>
+        <span class="week-label">{{ currentWeekStart ? formatWeekRange(currentWeekStart) : '' }}</span>
         <van-button
           size="small"
           icon="arrow"
@@ -142,7 +142,7 @@ import { useTaskResume } from '@/composables/useTaskResume'
 
 defineOptions({ name: 'LiteracyReportPage' })
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 
 const loading = ref(true)
@@ -157,7 +157,7 @@ const reportLoading = ref(false)
 const stream = useLiteracyStream()
 
 // v3: useTaskResume replaces inline resumeIfRunning + useTaskPolling
-const resumeHandle = useTaskResume('literacy', {
+const resumeHandle = useTaskResume('literacy-weekly-report', {
   onComplete: async () => {
     if (selectedChildId.value) {
       await loadReport()
@@ -268,11 +268,17 @@ function goNext() {
   }
 }
 
-function formatWeekStart(weekStart: string): string {
+function formatWeekRange(weekStart: string): string {
   try {
-    const d = parseLocalDate(weekStart)
-    if (isNaN(d.getTime())) return weekStart
-    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+    const start = parseLocalDate(weekStart)
+    if (isNaN(start.getTime())) return weekStart
+    const end = new Date(start)
+    end.setDate(end.getDate() + 6)
+    const lang = locale.value
+    const opts: Intl.DateTimeFormatOptions = { month: '2-digit', day: '2-digit' }
+    const s = start.toLocaleDateString(lang, opts)
+    const e = end.toLocaleDateString(lang, opts)
+    return `${s} - ${e}`
   } catch {
     return weekStart
   }

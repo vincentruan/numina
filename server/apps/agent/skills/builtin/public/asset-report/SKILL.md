@@ -270,18 +270,20 @@ Call native `read_file(path: "/mnt/user-data/workspace/report_{timestamp}.md")` 
 
 ## Field Reference
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `overall_score` | integer(1-100) | Overall score. Formula: round((net_worth_health.score×0.30 + allocation_analysis.score×0.25 + liability_pressure.score×0.25 + asset_efficiency.score×0.20) × 20) |
-| `data_completeness_score` | integer(0-100) | Data entry completeness score |
-| `summary` | string(100-250 words) | Markdown summary, use `**bold**` to highlight key issues, ordered list for key recommendations |
-| `indicators` | array(3-8) | Flexible indicator array |
-| `indicators[].key` | string | Indicator identifier (snake_case) |
-| `indicators[].label` | string | Indicator display name (in user's language) |
-| `indicators[].score` | integer(1-5) | 1=very poor 2=poor 3=fair 4=good 5=excellent |
-| `indicators[].narrative` | string(150-350 chars) | Markdown analysis text, **NO tables**, use `**bold**` for key conclusions + `-` unordered lists |
-| `indicators[].suggestions` | array[string] | 2-3 suggestions, 15-40 chars each, use observational language |
-| `indicators[].data` | object | Optional data visualization fields. **MUST** use `items` array format: `{"items": [{"key", "zh", "en", "value"}]}`; `zh`/`en` are bilingual labels for frontend language selection. **Forbidden** to put array data (e.g. asset allocation list, liability details) in `narrative` field — must go in `data.items` |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `overall_score` | integer(1-100) | **YES** | Overall score. Formula: round((net_worth_health.score×0.30 + allocation_analysis.score×0.25 + liability_pressure.score×0.25 + asset_efficiency.score×0.20) × 20) |
+| `data_completeness_score` | integer(0-100) | **YES** | Data entry completeness score. Estimate based on how much family data was available vs what's typically needed. |
+| `summary` | string(100-250 words) | **YES** | Markdown summary, use `**bold**` to highlight key issues, ordered list for key recommendations. **MUST NOT be empty.** |
+| `indicators` | array(3-8) | **YES** | Flexible indicator array |
+| `indicators[].key` | string | **YES** | Indicator identifier (snake_case) |
+| `indicators[].label` | string | **YES** | Indicator display name (in user's language) |
+| `indicators[].score` | integer(1-5) | **YES** | 1=very poor 2=poor 3=fair 4=good 5=excellent |
+| `indicators[].narrative` | string(150-350 chars) | **YES** | Markdown analysis text, **NO tables**, use `**bold**` for key conclusions + `-` unordered lists |
+| `indicators[].suggestions` | array[string] | **YES** | 2-3 suggestions, 15-40 chars each, use observational language. **MUST NOT be empty.** |
+| `indicators[].data` | object | **YES** | Optional data visualization fields. **MUST** use `items` array format: `{"items": [{"key", "zh", "en", "value"}]}`; `zh`/`en` are bilingual labels for frontend language selection. **Forbidden** to put array data (e.g. asset allocation list, liability details) in `narrative` field — must go in `data.items` |
+
+**⚠️ Critical: `summary`, `data_completeness_score`, and per-indicator `suggestions` are REQUIRED fields.** The backend validates their presence — missing fields will cause the report to be rejected and require regeneration.
 
 ## Common Indicator Keys
 

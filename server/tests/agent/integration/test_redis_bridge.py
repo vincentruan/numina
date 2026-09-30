@@ -136,21 +136,3 @@ class TestLifespanConfigIntegration:
 
         settings = AgentSettings(STREAM_BRIDGE_REDIS_URL="redis://custom:6379/1")
         assert settings.STREAM_BRIDGE_REDIS_URL == "redis://custom:6379/1"
-
-    def test_memory_bridge_fallback_when_redis_unavailable(self):
-        """When Redis ping fails, bridge should fall back to memory."""
-        from packages.stream_bridge.config import StreamBridgeConfig
-        from packages.stream_bridge.factory import make_stream_bridge
-        from packages.stream_bridge.memory import MemoryStreamBridge
-
-        # Simulate the fallback logic from lifespan.py
-        # When Redis connection fails, the except block creates a memory bridge
-        bridge = None
-        try:
-            # Simulate Redis connection failure
-            raise ConnectionError("Simulated Redis failure")
-        except Exception:
-            config = StreamBridgeConfig(type="memory", queue_maxsize=256)
-            bridge = make_stream_bridge(config)
-
-        assert isinstance(bridge, MemoryStreamBridge)

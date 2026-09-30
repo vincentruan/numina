@@ -210,7 +210,7 @@ function renderMarkdown(content: string): string {
       .replace(/halle_think_start[\s\S]*?(?:halle_think_end|$)/g, '')
     const raw = md.render(stripped)
     const sanitized = DOMPurify.sanitize(raw, {
-      ADD_ATTR: ['class', 'style'],
+      ADD_ATTR: ['class'],
     })
     const withTables = extractTablesAndInjectAnchors(sanitized)
     return transformCitations(withTables)
@@ -239,7 +239,12 @@ function transformCitations(html: string): string {
       domain = new URL(url).hostname.replace(/^www\./i, '')
     } catch { /* keep url as domain */ }
     const displayText = cleanText || domain
-    return `<span class="citation-badge" data-url="${url}" title="${displayText} - ${url}">${displayText}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span>`
+    // HTML-escape URL to prevent attribute injection via DOMPurify-encoded entities.
+    // DOMPurify encodes " as &quot; in href; when re-injected into a new attribute,
+    // the browser decodes it back, breaking the attribute boundary.
+    const safeUrl = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const safeTitle = escapeHtml(`${displayText} - ${url}`)
+    return `<span class="citation-badge" data-url="${safeUrl}" title="${safeTitle}">${escapeHtml(displayText)}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span>`
   })
 }
 

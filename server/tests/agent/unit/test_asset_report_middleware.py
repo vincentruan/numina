@@ -1,6 +1,9 @@
 """Tests for asset_report_middleware — parse_report_json + llm_json_repair validators."""
 
-from apps.agent.services.runtime.asset_report_middleware import parse_report_json
+from apps.agent.services.runtime.asset_report_middleware import (
+    normalize_report_json,
+    parse_report_json,
+)
 from apps.agent.services.runtime.llm_json_repair import validate_report_json
 
 
@@ -84,3 +87,116 @@ class TestParseReportJson:
 
     def test_returns_none_on_garbage(self):
         assert parse_report_json("no json here at all") is None
+
+
+class TestNormalizeReportJsonSafetyNet:
+    """KTD-8 hardening: missing LLM fields get synthesized defaults so the
+    user always sees a meaningful report (summary, completeness, suggestions)."""
+
+    def test_missing_summary_synthesized_from_indicators(self):
+        data = {
+            "overall_score": 65,
+            "indicators": [
+                {
+                    "key": "net_worth_health",
+                    "label": "净资产健康",
+                    "score": 4,
+                    "narrative": "净资产状况良好，具备较好的财富基础。",
+                    "suggestions": ["增加流动性资产配置"],
+                    "data": {"items": [{"key": "net_worth", "zh": "净资产", "en": "Net Worth", "value": 4660000}]},
+                },
+            ],
+        }
+        result = normalize_report_json(data)
+        assert result["summary"]  # non-empty synthesized summary
+        assert "净资产健康" in result["summary"]
+
+    def test_existing_summary_not_overwritten(self):
+        data = {
+            "overall_score": 65,
+            "summary": "LLM 生成的原始摘要",
+            "indicators": [
+                {
+                    "key": "net_worth_health",
+                    "label": "净资产健康",
+                    "score": 4,
+                    "narrative": "ok",
+                    "data": {"items": [{"key": "net_worth", "zh": "净资产", "en": "Net Worth", "value": 100}]},
+                },
+            ],
+        }
+        result = normalize_report_json(data)
+        assert result["summary"] == "LLM 生成的原始摘要"
+
+    def test_missing_completeness_score_computed(self):
+        data = {
+            "overall_score": 65,
+            "indicators": [
+                {
+                    "key": "a",
+                    "label": "A",
+                    "score": 4,
+                    "narrative": "ok",
+                    "suggestions": ["s1"],
+                    "data": {"items": [{"key": "k", "zh": "中", "en": "En", "value": 1}]},
+                },
+                {
+                    "key": "b",
+                    "label": "B",
+                    "score": 3,
+                    "narrative": "ok",
+                    "suggestions": ["s2"],
+                    "data": {"items": [{"key": "k", "zh": "中", "en": "En", "value": 2}]},
+                },
+            ],
+        }
+        result = normalize_report_json(data)
+        score = result["data_completeness_score"]
+        # 2 indicators × 10 base + 30 suggestion coverage = 50.0
+        assert score == 50.0
+
+    def test_existing_completeness_score_not_overwritten(self):
+        data = {
+            "overall_score": 65,
+            "data_completeness_score": 92,
+            "indicators": [
+                {
+                    "key": "a",
+                    "label": "A",
+                    "score": 4,
+                    "narrative": "ok",
+                    "data": {"items": [{"key": "k", "zh": "中", "en": "En", "value": 1}]},
+                },
+            ],
+        }
+        result = normalize_report_json(data)
+        assert result["data_completeness_score"] == 92
+
+    def test_missing_suggestions_default_to_empty_list(self):
+        data = {
+            "overall_score": 65,
+            "indicators": [
+                {
+                    "key": "a",
+                    "label": "A",
+                    "score": 4,
+                    "narrative": "ok",
+                    "data": {"items": [{"key": "k", "zh": "中", "en": "En", "value": 1}]},
+                },
+            ],
+        }
+        result = normalize_report_json(data)
+        assert result["indicators"][0]["suggestions"] == []
+
+    def test_parse_report_json_applies_safety_net(self):
+        """End-to-end: JSON missing summary/completeness gets defaults after parse."""
+        text = (
+            '{"overall_score": 65, "indicators": [{"key": "a", "label": "A", "score": 4, '
+            '"narrative": "ok", "data": {"items": [{"key": "k", "zh": "中", "en": "En", "value": 1}]}}]}'
+        )
+        parsed = parse_report_json(text)
+        assert parsed is not None
+        assert parsed["summary"]
+        assert parsed["data_completeness_score"] is not None
+        # Must also pass the canonical validator afterwards
+        assert validate_report_json(parsed) == []

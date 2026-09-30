@@ -1,7 +1,7 @@
 """Factory for creating StreamBridge instances.
 
-Reads configuration and returns the appropriate StreamBridge implementation
-(MemoryStreamBridge for dev, NuminaRedisStreamBridge for production).
+Production always uses ``NuminaRedisStreamBridge`` (Redis Streams).
+A test-only ``MemoryStreamBridge`` lives under ``tests/agent/helpers/``.
 """
 
 from __future__ import annotations
@@ -10,47 +10,40 @@ from packages.core.logging import get_logger
 
 from .base import StreamBridge
 from .config import StreamBridgeConfig
-from .memory import MemoryStreamBridge
 from .redis import NuminaRedisStreamBridge
 
 logger = get_logger(__name__)
 
 
 def make_stream_bridge(config: StreamBridgeConfig | None = None) -> StreamBridge:
-    """Create a StreamBridge instance based on configuration.
+    """Create a NuminaRedisStreamBridge from configuration.
 
     Args:
-        config: Stream bridge configuration. If None, uses memory bridge.
+        config: Stream bridge configuration. If None, uses defaults
+            (redis://localhost:6379/0).
 
     Returns:
-        StreamBridge instance (MemoryStreamBridge or NuminaRedisStreamBridge).
+        NuminaRedisStreamBridge instance.
 
     Raises:
-        ValueError: If config.type is not "memory" or "redis".
+        ValueError: If config.type is not "redis".
     """
     if config is None:
-        logger.info("Creating in-memory StreamBridge (default)")
-        return MemoryStreamBridge()
+        config = StreamBridgeConfig()
 
-    if config.type == "memory":
-        logger.info("Creating in-memory StreamBridge (config)")
-        return MemoryStreamBridge(
-            queue_maxsize=config.queue_maxsize,
+    if config.type != "redis":
+        raise ValueError(
+            f"Unknown stream_bridge.type: {config.type!r}. "
+            f"Only 'redis' is supported in production."
         )
 
-    if config.type == "redis":
-        logger.info(
-            "Creating Redis StreamBridge (url=%s, ttl=%ds)",
-            config.redis_url,
-            config.stream_ttl_seconds,
-        )
-        return NuminaRedisStreamBridge(
-            redis_url=config.redis_url,
-            queue_maxsize=config.queue_maxsize,
-            stream_ttl_seconds=config.stream_ttl_seconds,
-        )
-
-    raise ValueError(
-        f"Unknown stream_bridge.type: {config.type!r}. "
-        f"Expected 'memory' or 'redis'."
+    logger.info(
+        "Creating Redis StreamBridge (url=%s, ttl=%ds)",
+        config.redis_url,
+        config.stream_ttl_seconds,
+    )
+    return NuminaRedisStreamBridge(
+        redis_url=config.redis_url,
+        queue_maxsize=config.queue_maxsize,
+        stream_ttl_seconds=config.stream_ttl_seconds,
     )

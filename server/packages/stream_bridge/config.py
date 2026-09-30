@@ -12,20 +12,19 @@ class StreamBridgeConfig(BaseModel):
     """Configuration for the StreamBridge implementation.
 
     Attributes:
-        type: Bridge type — "memory" for single-process dev, "redis" for
-            multi-worker Docker deployment.
-        redis_url: Redis connection URL (only used when type="redis").
+        type: Bridge type — always ``"redis"`` in production.
+        redis_url: Redis connection URL.
         queue_maxsize: Max events retained per stream (default 256).
         stream_ttl_seconds: Stream TTL in seconds (default 86400 = 24h).
     """
 
     type: str = Field(
-        default="memory",
-        description="Bridge type: 'memory' or 'redis'",
+        default="redis",
+        description="Bridge type: only 'redis' is supported in production",
     )
     redis_url: str = Field(
         default="redis://localhost:6379/0",
-        description="Redis URL (used when type='redis')",
+        description="Redis URL",
     )
     queue_maxsize: int = Field(
         default=256,

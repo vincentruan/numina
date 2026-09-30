@@ -293,11 +293,7 @@ app = FastAPI(
 # CORS middleware for frontend → agent calls (suggestions endpoint)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["POST", "OPTIONS"],
     allow_headers=["X-Family-Id", "X-Agent-Token", "X-User-Id", "Content-Type"],

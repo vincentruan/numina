@@ -45,6 +45,7 @@ class TestUnwrapAgentEnvelope:
             "code": "OK",
             "data": {
                 "overall_score": 70,
+                "summary": "Nested data summary.",
                 "indicators": [
                     {"key": "test", "label": "Test", "score": 3, "narrative": "Test narrative"}
                 ],
@@ -112,6 +113,7 @@ class TestUnwrapAgentEnvelope:
             "data": {
                 "report": {
                     "overall_score": 60,
+                    "summary": "Envelope summary.",
                     "indicators": [
                         {"key": "test", "label": "Test", "score": 3, "narrative": "Test"}
                     ],
@@ -125,6 +127,7 @@ class TestUnwrapAgentEnvelope:
         """Validation works with direct format data."""
         direct = {
             "overall_score": 50,
+            "summary": "Direct summary.",
             "indicators": [
                 {"key": "test", "label": "Test", "score": 2, "narrative": "Test"}
             ],
@@ -148,6 +151,7 @@ class TestUnwrapAgentEnvelope:
             "code": "OK",
             "data": {
                 "overall_score": 65,
+                "summary": "Direct data summary.",
                 "indicators": [
                     {"key": "test", "label": "Test", "score": 4, "narrative": "Test"}
                 ],

@@ -14,7 +14,6 @@ Manages the lifecycle of:
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import Any
 
 from deerflow.runtime import RunManager, StreamBridge
@@ -143,11 +142,10 @@ async def get_stream_bridge(request: Request) -> StreamBridge:
         from packages.stream_bridge import make_stream_bridge
         from packages.stream_bridge.config import StreamBridgeConfig
 
-        # Priority: STREAM_BRIDGE_REDIS_URL > REDIS_URL > Docker default
+        # Priority: STREAM_BRIDGE_REDIS_URL > REDIS_URL (both from settings/.env)
         redis_url = (
             settings.STREAM_BRIDGE_REDIS_URL
-            or os.environ.get("REDIS_URL", "")
-            or "redis://redis:6379/0"
+            or settings.REDIS_URL
         )
 
         try:

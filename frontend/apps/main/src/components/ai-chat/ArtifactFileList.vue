@@ -60,7 +60,7 @@ function getDownloadUrl(artifact: Artifact): string {
 
 // 打开下载链接（Vue template 中 window 需要通过函数访问）
 function openDownloadUrl(artifact: Artifact) {
-  window.open(getDownloadUrl(artifact), '_blank')
+  window.open(getDownloadUrl(artifact), '_blank', 'noopener,noreferrer')
 }
 </script>
 

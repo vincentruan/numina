@@ -22,7 +22,7 @@ function makeTask(overrides: Partial<AITask> = {}): AITask {
   return {
     id: '123',
     family_id: '1',
-    skill_id: 'narrative',
+    skill_id: 'dashboard-narrative',
     status: 'running',
     started_at: new Date().toISOString(), // default to "now" — fresh task, not stale
     ...overrides,
@@ -49,7 +49,7 @@ describe('useTaskResume — retry flow (T20)', () => {
   })
 
   it('waitForTask finds a running task and clears triggerFailed', async () => {
-    const resume = useTaskResume('narrative')
+    const resume = useTaskResume('dashboard-narrative')
     // Task appears on the 2nd attempt
     mockGetAITasks
       .mockResolvedValueOnce([]) // attempt 1 (500ms)
@@ -67,7 +67,7 @@ describe('useTaskResume — retry flow (T20)', () => {
   })
 
   it('waitForTask sets triggerFailed=true after exhausting all retries', async () => {
-    const resume = useTaskResume('narrative')
+    const resume = useTaskResume('dashboard-narrative')
     mockGetAITasks.mockResolvedValue([]) // never finds a task
 
     const promise = resume.waitForTask()
@@ -84,7 +84,7 @@ describe('useTaskResume — retry flow (T20)', () => {
   })
 
   it('retryTrigger reuses a late-appearing running task', async () => {
-    const resume = useTaskResume('narrative')
+    const resume = useTaskResume('dashboard-narrative')
     resume.triggerFailed.value = true
 
     mockGetAITasks.mockResolvedValueOnce([makeTask({ id: 'task-late', status: 'running' })])
@@ -98,7 +98,7 @@ describe('useTaskResume — retry flow (T20)', () => {
   })
 
   it('retryTrigger reuses a completed task without SSE', async () => {
-    const resume = useTaskResume('narrative')
+    const resume = useTaskResume('dashboard-narrative')
     resume.triggerFailed.value = true
 
     mockGetAITasks.mockResolvedValueOnce([makeTask({ id: 'task-done', status: 'completed' })])
@@ -111,7 +111,7 @@ describe('useTaskResume — retry flow (T20)', () => {
   })
 
   it('retryTrigger returns false when no reusable task (caller re-triggers)', async () => {
-    const resume = useTaskResume('narrative')
+    const resume = useTaskResume('dashboard-narrative')
     resume.triggerFailed.value = true
 
     mockGetAITasks.mockResolvedValueOnce([])
@@ -140,7 +140,7 @@ describe('useTaskResume — resume() SSE path', () => {
 
   it('resume() finds a running task and starts SSE', async () => {
     const onComplete = vi.fn()
-    const resume = useTaskResume('narrative', { onComplete })
+    const resume = useTaskResume('dashboard-narrative', { onComplete })
 
     mockGetAITasks.mockResolvedValueOnce([makeTask({ id: 'task-running', status: 'running' })])
 
@@ -158,7 +158,7 @@ describe('useTaskResume — resume() SSE path', () => {
 
   it('resume() finds a completed task and calls onComplete', async () => {
     const onComplete = vi.fn()
-    const resume = useTaskResume('narrative', { onComplete })
+    const resume = useTaskResume('dashboard-narrative', { onComplete })
 
     mockGetAITasks.mockResolvedValueOnce([makeTask({ id: 'task-done', status: 'completed' })])
 
@@ -171,7 +171,7 @@ describe('useTaskResume — resume() SSE path', () => {
   })
 
   it('resume() returns false when no running task', async () => {
-    const resume = useTaskResume('narrative')
+    const resume = useTaskResume('dashboard-narrative')
 
     mockGetAITasks.mockResolvedValueOnce([])
 
@@ -183,7 +183,7 @@ describe('useTaskResume — resume() SSE path', () => {
   })
 
   it('disconnect() aborts SSE stream and stops polling but preserves state', async () => {
-    const resume = useTaskResume('narrative')
+    const resume = useTaskResume('dashboard-narrative')
     const mockAbort = vi.fn()
 
     mockGetAITasks.mockResolvedValueOnce([makeTask({ id: 'task-1', status: 'running' })])
@@ -201,7 +201,7 @@ describe('useTaskResume — resume() SSE path', () => {
   })
 
   it('cleanup() aborts SSE stream, stops polling, AND resets state', async () => {
-    const resume = useTaskResume('narrative')
+    const resume = useTaskResume('dashboard-narrative')
     const mockAbort = vi.fn()
 
     mockGetAITasks.mockResolvedValueOnce([makeTask({ id: 'task-1', status: 'running' })])

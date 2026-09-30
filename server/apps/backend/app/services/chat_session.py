@@ -24,6 +24,7 @@ class ChatSessionService:
         user_id: int,
         db: Session,
         agent_id: int | None = None,
+        source: str | None = None,
     ) -> AIChatSession:
         """Create a new chat session row.
 
@@ -36,6 +37,7 @@ class ChatSessionService:
             family_id=family_id,
             user_id=user_id,
             agent_id=agent_id,
+            source=source,
         )
         db.add(session)
         db.commit()

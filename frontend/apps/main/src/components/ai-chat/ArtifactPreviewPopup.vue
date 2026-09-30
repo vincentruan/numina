@@ -153,11 +153,11 @@ function handleBack() {
 }
 
 function handleDownload() {
-  window.open(downloadUrl.value, '_blank')
+  window.open(downloadUrl.value, '_blank', 'noopener,noreferrer')
 }
 
 function handleOpenNewWindow() {
-  window.open(openUrl.value, '_blank')
+  window.open(openUrl.value, '_blank', 'noopener,noreferrer')
 }
 </script>
 

@@ -35,7 +35,7 @@ const count = computed(() => suggestions.value.length)
 // always runs next and checks the cache endpoint. The backend returns cached
 // data (200) if a valid result exists within TTL, or triggers regeneration
 // otherwise. This prevents abnormal tasks from blocking the cache display.
-const resumeHandle = useTaskResume('coach', {
+const resumeHandle = useTaskResume('finance-coach', {
   onComplete: async () => {
     // Skip redundant API call when suggestions are already loaded
     // (KeepAlive re-activation with completed task). On initial mount,
@@ -61,6 +61,7 @@ async function load(force = false, _retryCount = 0) {
   try {
     refreshing.value = force
     loading.value = true
+    if (force) try { sessionStorage.removeItem(_SS_KEY) } catch { /* ignore */ }
     // Clear stale taskId from any previous task
     resumeHandle.taskId.value = null
 
@@ -86,6 +87,7 @@ async function load(force = false, _retryCount = 0) {
           } else {
             suggestions.value = valid.slice(0, 3)
             visible.value = true
+            _writeCache(suggestions.value)
           }
           resumeHandle.taskId.value = null
           loading.value = false
@@ -217,10 +219,39 @@ async function onToggle(names: string[]) {
 // When AI is disabled and no valid cache exists, the backend returns 403
 // on the generation path → load() catch block hides the card silently.
 // When valid cache exists, the backend returns it even if AI is off.
+// ── Session-storage cache (avoids skeleton flash on page reload) ──────────
+// Backend cache is DB-level (AIReport + TTL), but every component mount still
+// fires a POST and shows loading=true until the response arrives.  Caching
+// the validated suggestions in sessionStorage lets us skip the API call and
+// render instantly on subsequent mounts within the same tab session.
+const _SS_KEY = `coach_cache_v1`
+
+function _readCache(): { suggestions: FinanceSuggestion[]; ts: number } | null {
+  try {
+    const raw = sessionStorage.getItem(_SS_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function _writeCache(data: FinanceSuggestion[]) {
+  try {
+    sessionStorage.setItem(_SS_KEY, JSON.stringify({ suggestions: data, ts: Date.now() }))
+  } catch { /* quota / private mode — ignore */ }
+}
+
 let hasStarted = false
 function startLoad() {
   if (hasStarted) return
   hasStarted = true
+  // Try browser cache first — skip API call and skeleton entirely.
+  const cached = _readCache()
+  if (cached?.suggestions?.length) {
+    suggestions.value = cached.suggestions
+    visible.value = true
+    loaded.value = true
+    loading.value = false
+    return
+  }
   load(false)
 }
 
@@ -236,7 +267,7 @@ onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
   // If data is already displayed, only resume a running task (SSE reconnect).
   // Skip reload when no task is active — cache is already in the component.
-  const tasks = await getAITasks('coach', undefined, 1)
+  const tasks = await getAITasks('finance-coach', undefined, 1)
   const latest = tasks[0]
   if (latest?.id && ['running', 'queued', 'post_processing'].includes(latest.status)) {
     resumeHandle.taskId.value = latest.id

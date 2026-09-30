@@ -2,11 +2,11 @@
   <div class="weekly-report-card">
     <!-- Badge Status -->
     <ReportSection :title="t('literacyReport.badgeStatus')" icon="medal-o">
-      <div v-if="report.report_json.badge_summary.new_unlocks.length > 0" class="sub-block">
+      <div v-if="badgeSummary.new_unlocks.length > 0" class="sub-block">
         <div class="sub-label">{{ t('literacyReport.newUnlocks') }}</div>
         <div class="badge-list">
           <van-tag
-            v-for="(badge, i) in report.report_json.badge_summary.new_unlocks"
+            v-for="(badge, i) in badgeSummary.new_unlocks"
             :key="`unlock-${i}`"
             type="primary"
             size="medium"
@@ -17,16 +17,16 @@
           </van-tag>
         </div>
       </div>
-      <div v-if="report.report_json.badge_summary.progress.length > 0" class="sub-block">
+      <div v-if="badgeSummary.progress.length > 0" class="sub-block">
         <div class="sub-label">{{ t('literacyReport.progress') }}</div>
         <ul class="highlight-list">
-          <li v-for="(item, i) in report.report_json.badge_summary.progress" :key="`prog-${i}`">
+          <li v-for="(item, i) in badgeSummary.progress" :key="`prog-${i}`">
             {{ item }}
           </li>
         </ul>
       </div>
       <div
-        v-if="report.report_json.badge_summary.new_unlocks.length === 0 && report.report_json.badge_summary.progress.length === 0"
+        v-if="badgeSummary.new_unlocks.length === 0 && badgeSummary.progress.length === 0"
         class="empty-hint"
       >
         --
@@ -35,9 +35,9 @@
 
     <!-- Behavioral Highlights -->
     <ReportSection :title="t('literacyReport.behavioralHighlights')" icon="fire-o">
-      <ul v-if="report.report_json.behavioral_highlights.length > 0" class="highlight-list">
+      <ul v-if="behavioralHighlights.length > 0" class="highlight-list">
         <li
-          v-for="(item, i) in report.report_json.behavioral_highlights"
+          v-for="(item, i) in behavioralHighlights"
           :key="`hl-${i}`"
         >
           {{ item }}
@@ -51,19 +51,19 @@
       <div class="scenario-block">
         <div class="scenario-row">
           <span class="scenario-label">{{ t('literacyReport.childChoice') }}</span>
-          <span class="scenario-value">{{ report.report_json.scenario_analysis.choice }}</span>
+          <span class="scenario-value">{{ scenarioAnalysis.choice }}</span>
         </div>
         <div class="scenario-row">
           <span class="scenario-label">{{ t('literacyReport.interpretation') }}</span>
-          <span class="scenario-value">{{ report.report_json.scenario_analysis.interpretation }}</span>
+          <span class="scenario-value">{{ scenarioAnalysis.interpretation }}</span>
         </div>
       </div>
     </ReportSection>
 
     <!-- Family Activity -->
     <ReportSection :title="t('literacyReport.familyActivity')" icon="friends-o">
-      <div v-if="report.report_json.family_activity" class="activity-callout">
-        <MarkdownContent :content="String(report.report_json.family_activity)" />
+      <div v-if="familyActivity" class="activity-callout">
+        <MarkdownContent :content="familyActivity" />
       </div>
       <div v-else class="empty-hint">--</div>
     </ReportSection>
@@ -76,6 +76,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { WeeklyReportResponse } from '@/api/literacy'
 import ReportSection from './ReportSection.vue'
@@ -83,9 +84,15 @@ import MarkdownContent from '@/components/ai-chat/MarkdownContent.vue'
 
 const { t } = useI18n()
 
-defineProps<{
+const props = defineProps<{
   report: WeeklyReportResponse
 }>()
+
+/** Safe accessors — backend may return partial report_json fields. */
+const badgeSummary = computed(() => props.report.report_json?.badge_summary ?? { new_unlocks: [], progress: [] })
+const behavioralHighlights = computed(() => props.report.report_json?.behavioral_highlights ?? [])
+const scenarioAnalysis = computed(() => props.report.report_json?.scenario_analysis ?? { choice: '', interpretation: '' })
+const familyActivity = computed(() => props.report.report_json?.family_activity ?? '')
 </script>
 
 <style scoped>
