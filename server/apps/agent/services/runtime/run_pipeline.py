@@ -20,6 +20,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+import yaml
 from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 
 from apps.agent.core.backend_client import (
@@ -56,14 +57,17 @@ logger = get_logger(__name__)
 # lead_agent/prompt.py:get_agent_soul() (HTML-escape + <soul> wrapping).
 
 
-def _sync_agent_soul(agent_name: str, soul_md: str) -> None:
-    """Write agent soul to the filesystem path DeerFlow expects.
+def _sync_agent_soul(agent_name: str, soul_md: str, *, memory_enabled: bool = True) -> None:
+    """Write agent soul and config to the filesystem path DeerFlow expects.
 
     DeerFlow's ``load_agent_soul(agent_name, user_id=family_id)`` reads from
     ``{base_dir}/users/{family_id}/agents/{agent_name}/SOUL.md``.  The
     ``family_id`` comes from ``get_effective_user_id()`` which reads the
     ``set_current_user()`` ContextVar — already set by ``worker.run_agent``
     before ``typed_stream_dispatch()`` is called.
+
+    Also writes a minimal ``config.yaml`` so DeerFlow's ``load_agent_config()``
+    finds the agent on disk (avoids FileNotFoundError + wrong memory fallback).
 
     This function is idempotent: skips the write when the file already contains
     the same content (avoids unnecessary disk I/O on every chat turn).
@@ -80,22 +84,53 @@ def _sync_agent_soul(agent_name: str, soul_md: str) -> None:
             logger.debug("[run_pipeline] agent soul sync skipped: no sandbox family_id")
             return
         agent_dir = get_paths().user_agent_dir(str(family_id), agent_name)
+        agent_dir.mkdir(parents=True, exist_ok=True)
+
+        # -- SOUL.md --
         soul_path = agent_dir / "SOUL.md"
-        # Skip if already present with same content (avoid per-turn disk I/O).
         if soul_path.exists():
             try:
                 if soul_path.read_text(encoding="utf-8") == soul_md:
-                    return
+                    soul_skip = True
+                else:
+                    soul_skip = False
             except OSError:
-                pass  # Read failed — rewrite below.
-        soul_path.parent.mkdir(parents=True, exist_ok=True)
-        soul_path.write_text(soul_md, encoding="utf-8")
-        logger.info(
-            "[run_pipeline] agent soul synced: agent=%s path=%s (%d chars)",
-            agent_name,
-            soul_path,
-            len(soul_md),
-        )
+                soul_skip = False
+        else:
+            soul_skip = False
+        if not soul_skip:
+            soul_path.write_text(soul_md, encoding="utf-8")
+            logger.info(
+                "[run_pipeline] agent soul synced: agent=%s path=%s (%d chars)",
+                agent_name,
+                soul_path,
+                len(soul_md),
+            )
+
+        # -- config.yaml (minimal: name + memory_enabled) --
+        config_path = agent_dir / "config.yaml"
+        desired_config = {"name": agent_name, "memory_enabled": memory_enabled}
+        config_skip = False
+        if config_path.exists():
+            try:
+                existing = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+                if (
+                    existing.get("name") == agent_name
+                    and existing.get("memory_enabled") == memory_enabled
+                ):
+                    config_skip = True
+            except OSError:
+                config_skip = False
+        if not config_skip:
+            config_path.write_text(
+                yaml.dump(desired_config, default_flow_style=False, allow_unicode=True),
+                encoding="utf-8",
+            )
+            logger.info(
+                "[run_pipeline] agent config synced: agent=%s memory_enabled=%s",
+                agent_name,
+                memory_enabled,
+            )
     except Exception:
         # Non-fatal: if DeerFlow's paths API is unavailable or the write fails,
         # the run continues without a soul (DeerFlow's load_agent_soul returns
@@ -378,7 +413,11 @@ class RunPipeline:
         # Fix: write the DB value to the path DeerFlow expects before the
         # adapter's first stream call (which triggers apply_prompt_template).
         if agent_meta and agent_meta.get("soul_md"):
-            _sync_agent_soul(self.app_name, agent_meta["soul_md"])
+            _sync_agent_soul(
+                self.app_name,
+                agent_meta["soul_md"],
+                memory_enabled=self.memory_enabled,
+            )
 
         # 5. Build adapter
         adapter_kwargs: dict[str, Any] = dict(

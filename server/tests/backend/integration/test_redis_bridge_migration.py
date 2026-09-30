@@ -1,6 +1,7 @@
 """Verify backend triggers agent run and subscribes to Redis directly."""
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock
+from contextlib import asynccontextmanager
 
 
 @pytest.mark.asyncio
@@ -10,11 +11,17 @@ async def test_trigger_and_subscribe_pattern():
         trigger_agent_run,
     )
 
-    mock_agent_client = AsyncMock()
-    mock_agent_client.post = AsyncMock(return_value=MagicMock(
+    mock_response = MagicMock(
         headers={"Content-Location": "/internal/gateway/runs/asset-report/session_1/r456"},
         status_code=200,
-    ))
+    )
+
+    @asynccontextmanager
+    async def _mock_stream(*args, **kwargs):
+        yield mock_response
+
+    mock_agent_client = AsyncMock()
+    mock_agent_client.stream = _mock_stream
 
     result = await trigger_agent_run(
         agent_client=mock_agent_client,
@@ -24,8 +31,6 @@ async def test_trigger_and_subscribe_pattern():
         family_id=123,
     )
 
-    # Agent was called (trigger)
-    mock_agent_client.post.assert_called_once()
     # run_id extracted from Content-Location
     assert result["run_id"] == "r456"
 
