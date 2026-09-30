@@ -55,7 +55,7 @@ JSON_FENCE_PATTERN = re.compile(r"```json\s*\n(.*?)\n\s*```", re.DOTALL)
 SKILL_SCHEMAS = {
     "asset-report": {
         "type": "object",
-        "required": ["overall_score", "indicators"],
+        "required": ["overall_score", "indicators", "summary"],
         "properties": {
             "overall_score": {"type": "integer", "minimum": 0, "maximum": 100},
             "data_completeness_score": {"type": "number"},

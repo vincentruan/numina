@@ -103,6 +103,56 @@ def normalize_indicator(item: dict, idx: int) -> dict:
     }
 
 
+def _synthesize_summary(indicators: list[dict]) -> str:
+    """Synthesize a short markdown summary from indicator narratives when the LLM
+    omitted the ``summary`` field. Uses each indicator's label + score + the
+    first sentence of its narrative to produce a coherent overview."""
+    if not indicators:
+        return ""
+    parts: list[str] = []
+    for ind in indicators:
+        label = ind.get("label") or ind.get("key") or "指标"
+        score = ind.get("score", 0)
+        narrative = ind.get("narrative") or ""
+        # Take the first line/sentence (up to ~80 chars) for brevity
+        first_line = narrative.split("\n")[0].strip()
+        if len(first_line) > 80:
+            first_line = first_line[:77] + "…"
+        stars = "★" * min(score, 5) + "☆" * max(0, 5 - score)
+        parts.append(f"- **{label}**（{stars}）{first_line}")
+    return "\n".join(parts)
+
+
+def _compute_completeness_score(indicators: list[dict]) -> float:
+    """Derive a data-completeness proxy from indicator coverage when the LLM
+    omitted ``data_completeness_score``.
+
+    Heuristic: 10 points per indicator with valid data.items (max 7 indicators
+    = 70 base) + 30 points if all indicators have suggestions (coverage depth).
+    This produces a reasonable 0-100 score without needing the original family
+    data (which is not available at normalization time)."""
+    if not indicators:
+        return 0.0
+    score = 0.0
+    # Base: 10 points per indicator with non-empty data.items
+    for ind in indicators:
+        data_obj = ind.get("data")
+        if isinstance(data_obj, dict):
+            items = data_obj.get("items")
+            if isinstance(items, list) and len(items) > 0:
+                score += 10.0
+    # Cap base at 70 (7 indicators × 10)
+    score = min(score, 70.0)
+    # Bonus: 30 points if all indicators have suggestions
+    all_have_suggestions = all(
+        isinstance(ind.get("suggestions"), list) and len(ind["suggestions"]) > 0
+        for ind in indicators
+    )
+    if all_have_suggestions:
+        score += 30.0
+    return round(score, 1)
+
+
 def normalize_report_json(data: dict) -> dict:
     """Normalize report JSON after parsing — ensures indicators and data.items use canonical format.
 
@@ -112,12 +162,26 @@ def normalize_report_json(data: dict) -> dict:
     2. ``data.items`` arrays: transform non-standard shapes
        (``{category_name, percentage}``, ``{name, value}``, etc.) into the
        canonical ``{key, zh, en, value}`` shape that the frontend expects.
+
+    Safety-net defaults (KTD-8 hardening): when the LLM omits critical
+    fields, derive them from available indicator data so the user always
+    sees a meaningful report:
+    - ``summary`` ← synthesized from indicator narratives
+    - ``data_completeness_score`` ← computed from indicator coverage
+    - per-indicator ``suggestions`` ← ensured as empty list (not missing)
     """
     if not isinstance(data, dict):
         return data
     indicators = data.get("indicators")
     if not isinstance(indicators, list):
         return data
+
+    # Safety-net: fill missing top-level fields BEFORE indicator normalization
+    # so downstream code can rely on their presence.
+    if not data.get("summary"):
+        data["summary"] = _synthesize_summary(indicators)
+    if data.get("data_completeness_score") is None:
+        data["data_completeness_score"] = _compute_completeness_score(indicators)
 
     for idx, indicator in enumerate(indicators):
         if not isinstance(indicator, dict):

@@ -166,6 +166,7 @@ class TestValidateJson:
         """A well-formed report object passes validation."""
         data = {
             "overall_score": 65,
+            "summary": "Test summary text.",
             "indicators": [
                 {"key": "liquidity", "label": "流动性", "score": 3, "narrative": "ok"},
             ],
@@ -174,12 +175,22 @@ class TestValidateJson:
 
     def test_validate_report_missing_required_field_fails(self):
         """Missing a top-level required field (indicators) is rejected."""
-        data = {"overall_score": 65}  # no "indicators"
+        data = {"overall_score": 65}  # no "indicators", no "summary"
         assert _validate_json(data, "asset-report") is False
 
     def test_validate_report_missing_overall_score_fails(self):
         """Missing overall_score is rejected."""
         data = {"indicators": []}
+        assert _validate_json(data, "asset-report") is False
+
+    def test_validate_report_missing_summary_fails(self):
+        """Missing summary is rejected (KTD-8 hardening)."""
+        data = {
+            "overall_score": 65,
+            "indicators": [
+                {"key": "liquidity", "label": "流动性", "score": 3, "narrative": "ok"},
+            ],
+        }
         assert _validate_json(data, "asset-report") is False
 
     def test_validate_report_wrong_type_fails(self):
@@ -191,7 +202,7 @@ class TestValidateJson:
         data = {
             "code": "OK",
             "message": "",
-            "data": {"report": {"overall_score": 70, "indicators": []}},
+            "data": {"report": {"overall_score": 70, "summary": "Cached.", "indicators": []}},
         }
         assert _validate_json(data, "asset-report") is True
 

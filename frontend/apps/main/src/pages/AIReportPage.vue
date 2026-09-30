@@ -4,7 +4,7 @@
 
     <!-- Three-step timeline (hidden once the report is available via cache) -->
     <ReportStepTimeline
-      v-if="isGenerating || stream.cached.value || hasStepProgress"
+      v-if="(isGenerating || hasStepProgress) && stream.status.value !== 'completed'"
       :step1-status="stream.step1Status.value"
       :step2-status="stream.step2Status.value"
       :step3-status="stream.step3Status.value"
