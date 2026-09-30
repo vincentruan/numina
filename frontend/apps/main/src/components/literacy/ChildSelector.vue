@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, watch } from 'vue'
 import type { ReportChild } from '@/api/literacy'
 import UserAvatar from '@/components/common/UserAvatar.vue'
 
@@ -36,21 +36,35 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:selectedChildId': [childId: string
-]
+  'update:selectedChildId': [childId: string]
 }>()
 
-const activeIndex = computed({
-  get: () => {
-    const idx = props.children.findIndex(c => c.child_id === props.selectedChildId)
-    return idx >= 0 ? idx : 0
+/**
+ * Use a plain ref (not a computed) for v-model:active.
+ * Vant's van-tabs writes to the active binding on internal tab lifecycle
+ * events; a no-op computed setter leaves its internal index unsynced,
+ * which after several tab switches causes
+ * "Cannot destructure property 'title' of 'children[index]' as it is undefined."
+ */
+const activeIndex = ref(0)
+
+// Sync activeIndex when props change (child switch from parent, or children array update)
+watch(
+  [() => props.selectedChildId, () => props.children],
+  ([childId, kids]) => {
+    const idx = kids.findIndex(c => c.child_id === childId)
+    const next = idx >= 0 ? idx : 0
+    if (activeIndex.value !== next) {
+      activeIndex.value = next
+    }
   },
-  set: () => { /* managed by van-tabs via v-model */ }
-})
+  { immediate: true },
+)
 
 function onTabChange(index: number) {
+  // Safety: guard against out-of-bounds (defence in depth for van-tabs quirks)
   const child = props.children[index]
-  if (child) {
+  if (child && child.child_id !== props.selectedChildId) {
     emit('update:selectedChildId', child.child_id)
   }
 }

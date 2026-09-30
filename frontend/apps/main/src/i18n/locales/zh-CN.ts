@@ -3415,6 +3415,11 @@ export default {
     indicatorLabel_liquidity_analysis: '流动性分析',
     indicatorLabel_risk_assessment: '风险评估',
     indicatorLabel_growth_potential: '增长潜力',
+    indicatorLabel_asset_scale: '资产规模',
+    indicatorLabel_asset_allocation: '资产配置',
+    indicatorLabel_debt_management: '负债管理',
+    indicatorLabel_liquidity: '流动性',
+    indicatorLabel_insurance_coverage: '保险覆盖',
     // Generic indicator data-row labels (LLM-emitted snake_case keys → 中文)
     dataLabel_total_assets: '总资产',
     dataLabel_total_liabilities: '总负债',
