@@ -208,6 +208,31 @@
         </div>
       </div>
 
+      <!-- AI 对话历史 Section -->
+      <div class="agent-section">
+        <div class="app-list">
+          <div
+            class="app-list-item"
+            role="button"
+            tabindex="0"
+            @click="router.push('/ai/chat/history')"
+            @keydown.enter="router.push('/ai/chat/history')"
+            @keydown.space.prevent="router.push('/ai/chat/history')"
+          >
+            <div class="app-list-item__icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--van-primary-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <div class="app-list-item__body">
+              <div class="app-list-item__name">{{ t('aiHub.chatHistoryLink') }}</div>
+              <div class="app-list-item__desc">{{ t('aiHub.chatHistoryLinkDesc') }}</div>
+            </div>
+            <van-icon name="arrow" class="app-list-item__arrow" />
+          </div>
+        </div>
+      </div>
+
       <!-- 分析应用 Section -->
       <div class="agent-section">
         <div class="agent-section__header" role="button" tabindex="0" @click="toggleAnalysisApps" @keydown.enter="toggleAnalysisApps" @keydown.space.prevent="toggleAnalysisApps">
