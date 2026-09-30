@@ -1467,7 +1467,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             // yielding, so any non-empty title here is display-safe.
             // Updates the session store in-place so the sidebar reflects the
             // title without HTTP polling.
-            if (data.title) {
+            if (data.title && import.meta.env.DEV) {
               console.info('[useThreadChat] values.title received:', data.title, 'threadId:', currentThreadId, 'retryPreserve:', retryPreserveTitle)
             }
             if (data.title && currentThreadId && !retryPreserveTitle) {

@@ -6,6 +6,7 @@ Provides automatic schema migration with:
 - Full table/column/index alignment
 """
 
+import re
 import time
 from typing import Any
 
@@ -16,6 +17,20 @@ from apps.backend.app.database import Base
 from packages.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Regex to validate SQL identifiers (table names, column names, index names).
+# Prevents SQL injection via f-string interpolation in DDL statements.
+_SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
+
+
+def _validate_identifier(name: str, label: str = "identifier") -> str:
+    """Validate a SQL identifier against injection.
+
+    Raises ValueError if the name contains unsafe characters.
+    """
+    if not _SAFE_IDENTIFIER.match(name):
+        raise ValueError(f"Unsafe {label}: {name!r}")
+    return name
 
 # Lock configuration
 LOCK_TABLE_NAME = "_schema_migration_lock"
@@ -59,6 +74,7 @@ def get_existing_tables(engine: Engine) -> set[str]:
 def get_existing_columns(engine: Engine, table_name: str) -> dict[str, str]:
     """Get existing columns for a table. Returns dict of column_name -> column_type."""
     db_type = get_db_type(engine)
+    _validate_identifier(table_name, "table_name")
 
     with engine.connect() as conn:
         if db_type == "sqlite":
@@ -79,6 +95,7 @@ def get_existing_columns(engine: Engine, table_name: str) -> dict[str, str]:
 def get_existing_indexes(engine: Engine, table_name: str) -> set[str]:
     """Get existing indexes for a table."""
     db_type = get_db_type(engine)
+    _validate_identifier(table_name, "table_name")
 
     with engine.connect() as conn:
         if db_type == "sqlite":
@@ -373,6 +390,8 @@ def add_column(
 ) -> None:
     """Add a missing column to a table."""
     db_type = get_db_type(engine)
+    _validate_identifier(table_name, "table_name")
+    _validate_identifier(column_name, "column_name")
     col_type = column_info["type"]
 
     # Normalize type for different databases
@@ -462,6 +481,11 @@ def add_index(
     """Add a missing index to a table."""
     columns = index_info["columns"]
     unique = "UNIQUE" if index_info["unique"] else ""
+
+    _validate_identifier(table_name, "table_name")
+    _validate_identifier(index_name, "index_name")
+    for col in columns:
+        _validate_identifier(col, "column_name")
 
     columns_str = ", ".join(columns)
 

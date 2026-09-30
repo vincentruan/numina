@@ -208,10 +208,10 @@ def _cfg_to_response(
 
 @router.get("/config", response_model=AIConfigListResponse)
 def get_ai_configs(
-    current_user: User = Depends(require_adult),
+    current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> AIConfigListResponse:
-    """获取当前家庭所有 AI 配置（所有成员可查看）。"""
+    """获取当前家庭所有 AI 配置（仅 owner 可查看 API Key 信息）。"""
     configs = (
         db.query(AIProviderConfig)
         .filter(AIProviderConfig.family_id == current_user.family_id)

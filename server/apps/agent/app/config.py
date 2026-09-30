@@ -32,6 +32,9 @@ class AgentSettings(BaseSettings):
     # 加密（与 backend 共享同一个 Fernet key，用于解密 API Key）
     AI_ENCRYPTION_KEY: str = ""
 
+    # CORS
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8080", "http://127.0.0.1:8080"]
+
     # 日志
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = ""

@@ -77,15 +77,23 @@ def create_child_refresh_token(data: dict) -> str:
     """Create long-lived refresh token for child users.
 
     Child tokens have 10 year expiry for persistent sessions.
-    Embeds token_version for session revocation support.
+    Embeds token_version for session revocation support and JTI for
+    individual token revocation (same pattern as create_refresh_token).
     """
     to_encode = data.copy()
-    expire = datetime.now(UTC) + timedelta(
-        days=settings.CHILD_REFRESH_TOKEN_EXPIRE_DAYS
-    )
+    now = datetime.now(UTC)
+    expire = now + timedelta(days=settings.CHILD_REFRESH_TOKEN_EXPIRE_DAYS)
     # Embed token_version (defaults to 0 for backward compat)
     token_version = to_encode.get("token_version", 0)
-    to_encode.update({"exp": expire, "type": "refresh", "token_version": token_version})
+    to_encode.update(
+        {
+            "exp": expire,
+            "type": "refresh",
+            "jti": str(uuid4()),
+            "iat": now,
+            "token_version": token_version,
+        }
+    )
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
