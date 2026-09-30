@@ -258,6 +258,7 @@ class BackendClient:
         sort_by: str = "updated_at",
         sort_order: str = "desc",
         source: str | None = None,
+        agent_id: str | None = None,
     ) -> tuple[list[dict], int]:
         return await list_sessions(
             self.family_id,
@@ -266,6 +267,7 @@ class BackendClient:
             sort_by=sort_by,
             sort_order=sort_order,
             source=source,
+            agent_id=agent_id,
         )
 
     async def get_session(self, session_id: str) -> dict | None:
@@ -897,6 +899,7 @@ async def list_sessions(
     sort_by: str = "updated_at",
     sort_order: str = "desc",
     source: str | None = None,
+    agent_id: str | None = None,
 ) -> tuple[list[dict], int]:
     validated_id = _validate_family_id(family_id)
     client = await get_shared_client()
@@ -908,6 +911,8 @@ async def list_sessions(
     }
     if source is not None:
         params["source"] = source
+    if agent_id is not None:
+        params["agent_id"] = agent_id
     resp = await client.get(
         "/api/v1/internal/ai/sessions",
         params=params,

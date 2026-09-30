@@ -366,6 +366,7 @@ async def generate_narrative(
             family_id=family_id,
             user_id=user.id,
             db=db,
+            source=SKILL_ID,
         )
         any_running = AITaskService.get_any_running_task(family_id, db)
         if any_running:

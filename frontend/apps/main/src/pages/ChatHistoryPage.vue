@@ -3,10 +3,13 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showDialog, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
+import IIcon from '@/components/IIcon.vue'
 import { useChatSessionStore } from '@/stores/chatSession'
 import { useThreadList } from '@/composables/useThreadList'
 import { parseApiDate } from '@/utils/format'
+import { getAgents } from '@/api/agent'
 import type { ThreadSession } from '@/types/ai-chat/session'
+import type { Agent } from '@/types/agent'
 
 defineOptions({ name: 'ChatHistory' })
 
@@ -26,9 +29,38 @@ const { t } = useI18n()
 
 // Source filter state — undefined means "show all"
 const selectedSource = ref<string | undefined>(undefined)
+const selectedAgentId = ref<string | undefined>(undefined)
 const filterSheetVisible = ref(false)
 
-const { dateGroups, isLoading, hasMore, loadMore, refresh, deleteSession, renameSession, togglePin, exportSession, shareSession, availableSources } = useThreadList(selectedSource)
+/** Custom agents with sessions (loaded once on mount). */
+const customAgents = ref<Agent[]>([])
+
+async function loadCustomAgents(): Promise<void> {
+  try {
+    const res = await getAgents()
+    customAgents.value = (res.custom || []).filter(a => a.is_enabled)
+  } catch {
+    // Non-fatal — filter still works without custom agents list
+  }
+}
+
+const { dateGroups, isLoading, hasMore, loadMore, refresh, deleteSession, renameSession, togglePin, exportSession, shareSession, availableSources } = useThreadList(selectedSource, selectedAgentId)
+
+/** Icon for each known source type. */
+const sourceIconMap: Record<string, string> = {
+  chat: 'lucide:message-circle',
+  'asset-report': 'lucide:file-bar-chart',
+  'import-parse': 'lucide:file-up',
+  'finance-coach': 'lucide:lightbulb',
+  'wish-advice': 'lucide:gift',
+  'dashboard-narrative': 'lucide:chart-line',
+  'literacy-weekly-report': 'lucide:book-open',
+  branch: 'lucide:git-branch',
+}
+
+function sourceIcon(source: string | undefined): string {
+  return sourceIconMap[source || 'chat'] || 'lucide:bot'
+}
 
 /** Known source → i18n key mapping. Unknown sources show raw value. */
 const sourceLabelMap: Record<string, string> = {
@@ -38,6 +70,8 @@ const sourceLabelMap: Record<string, string> = {
   'import-parse': 'aiChat.sourceImportParse',
   'finance-coach': 'aiChat.sourceFinanceCoach',
   'wish-advice': 'aiChat.sourceWishAdvice',
+  'dashboard-narrative': 'aiChat.sourceDashboardNarrative',
+  'literacy-weekly-report': 'aiChat.sourceLiteracyWeeklyReport',
 }
 
 function sourceLabel(source: string | undefined): string {
@@ -45,18 +79,31 @@ function sourceLabel(source: string | undefined): string {
   return key ? t(key) : (source || t('aiChat.sourceChat'))
 }
 
-/** Ordered list of filter options. Always starts with "all", then known types, then dynamic. */
+/** Ordered list of filter options. Grouped: All → System agents → Custom agents. */
 const filterOptions = computed(() => {
-  const known = ['chat', 'asset-report', 'import-parse', 'finance-coach', 'wish-advice']
+  const known = ['chat', 'asset-report', 'import-parse', 'finance-coach', 'wish-advice', 'dashboard-narrative', 'literacy-weekly-report']
   const dynamic = availableSources.value.filter(s => !known.includes(s) && s !== 'branch')
-  const items = [...known.filter(s => availableSources.value.includes(s)), ...dynamic]
+  // Show all known types unconditionally so users can filter even when the
+  // current page doesn't contain every source variant.
+  const items = [...known, ...dynamic]
   return [
-    { value: undefined as string | undefined, label: t('aiChat.filterAllAgents') },
-    ...items.map(s => ({ value: s, label: sourceLabel(s) })),
+    { value: undefined as string | undefined, label: t('aiChat.filterAllAgents'), icon: 'lucide:list-filter-plus' },
+    // ── System agents (source-based) ──
+    ...items.map(s => ({
+      value: `source:${s}`,
+      label: sourceLabel(s),
+      icon: sourceIcon(s),
+    })),
+    // ── Custom agents (agent_id-based) ──
+    ...customAgents.value.map(a => ({
+      value: `agent:${a.id}`,
+      label: a.display_name || a.agent_name,
+      icon: a.icon?.startsWith('lucide:') ? a.icon : 'lucide:bot',
+    })),
   ]
 })
 
-const isFilterActive = computed(() => selectedSource.value !== undefined)
+const isFilterActive = computed(() => selectedSource.value !== undefined || selectedAgentId.value !== undefined)
 
 // U4: in-memory cross-join of parent_thread_id -> parent title. The history
 // list is the set of sessions already loaded for this family; if a branch's
@@ -122,6 +169,7 @@ let observer: IntersectionObserver | null = null
 
 onMounted(() => {
   refresh()
+  loadCustomAgents()
 
   // Set up IntersectionObserver for infinite scroll
   observer = new IntersectionObserver(
@@ -275,9 +323,32 @@ function onExportSelect(action: { key: string }) {
   else if (action.key === 'export-json') handleExport(session.thread_id, 'json')
 }
 
-function selectFilterSource(source: string | undefined) {
-  selectedSource.value = source
+function selectFilterSource(value: string | undefined) {
+  if (value === undefined) {
+    selectedSource.value = undefined
+    selectedAgentId.value = undefined
+  } else if (value.startsWith('source:')) {
+    // Explicit cross-clear so the search request never ANDs source+agent_id.
+    selectedSource.value = value.slice(7) || undefined
+    selectedAgentId.value = undefined
+  } else if (value.startsWith('agent:')) {
+    selectedSource.value = undefined
+    selectedAgentId.value = value.slice(6) || undefined
+  }
   filterSheetVisible.value = false
+}
+
+function isOptionSelected(opt: { value: string | undefined; label: string; icon: string }): boolean {
+  if (opt.value === undefined) {
+    return selectedSource.value === undefined && selectedAgentId.value === undefined
+  }
+  if (opt.value.startsWith('source:')) {
+    return opt.value === `source:${selectedSource.value}`
+  }
+  if (opt.value.startsWith('agent:')) {
+    return opt.value === `agent:${selectedAgentId.value}`
+  }
+  return false
 }
 
 
@@ -481,15 +552,18 @@ function handleTouchEnd(e: TouchEvent, sessionId: string) {
             v-for="opt in filterOptions"
             :key="opt.label"
             class="filter-option"
-            :class="{ selected: selectedSource === opt.value }"
+            :class="{ selected: isOptionSelected(opt) }"
             role="button"
             tabindex="0"
             @click="selectFilterSource(opt.value)"
             @keydown.enter="selectFilterSource(opt.value)"
             @keydown.space.prevent="selectFilterSource(opt.value)"
           >
-            <span class="filter-option-label">{{ opt.label }}</span>
-            <svg v-if="selectedSource === opt.value" class="filter-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <div class="filter-option-left">
+              <IIcon :icon="opt.icon" size="18" class="filter-option-icon" aria-hidden="true" />
+              <span class="filter-option-label">{{ opt.label }}</span>
+            </div>
+            <svg v-if="isOptionSelected(opt)" class="filter-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <polyline points="20 6 9 17 4 12"/>
             </svg>
           </div>
@@ -915,9 +989,30 @@ function handleTouchEnd(e: TouchEvent, sessionId: string) {
   color: var(--van-primary-color, #1989fa);
 }
 
+.filter-option-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.filter-option-icon {
+  flex-shrink: 0;
+  color: var(--van-text-color-2, #666);
+  opacity: 0.85;
+}
+
+.filter-option.selected .filter-option-icon {
+  color: var(--van-primary-color, #1989fa);
+}
+
 .filter-option-label {
   font-size: 14px;
   color: var(--van-text-color, #333);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .filter-option.selected .filter-option-label {
@@ -941,6 +1036,10 @@ function handleTouchEnd(e: TouchEvent, sessionId: string) {
 
 :global([data-theme='dark'] .filter-option-label) {
   color: var(--text-primary);
+}
+
+:global([data-theme='dark'] .filter-option-icon) {
+  color: var(--text-secondary);
 }
 
 :global([data-theme='dark'] .filter-btn:hover) {

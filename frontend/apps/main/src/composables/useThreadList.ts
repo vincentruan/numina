@@ -38,7 +38,7 @@ function downloadFile(filename: string, content: string, mimeType: string): void
   URL.revokeObjectURL(url)
 }
 
-export function useThreadList(sourceFilter?: Ref<string | undefined>) {
+export function useThreadList(sourceFilter?: Ref<string | undefined>, agentFilter?: Ref<string | undefined>) {
   const { t } = useI18n()
   const sessions = ref<ThreadSession[]>([])
   const isLoading = ref(false)
@@ -102,7 +102,7 @@ export function useThreadList(sourceFilter?: Ref<string | undefined>) {
     currentAbort = new AbortController()
     try {
       const res = await searchThreads(
-        { limit: PAGE_SIZE, offset, source: sourceFilter?.value },
+        { limit: PAGE_SIZE, offset, source: sourceFilter?.value, agent_id: agentFilter?.value },
         currentAbort.signal,
       )
       sessions.value = [...sessions.value, ...res.items]
@@ -127,9 +127,10 @@ export function useThreadList(sourceFilter?: Ref<string | undefined>) {
     await loadMore()
   }
 
-  // When the source filter changes, reset and reload.
-  if (sourceFilter) {
-    watch(sourceFilter, () => {
+  // When the source or agent filter changes, reset and reload.
+  const activeFilter = computed(() => sourceFilter?.value ?? agentFilter?.value)
+  if (sourceFilter || agentFilter) {
+    watch(activeFilter, () => {
       refresh()
     })
   }
