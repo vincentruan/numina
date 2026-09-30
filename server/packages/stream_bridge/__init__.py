@@ -1,12 +1,16 @@
 """StreamBridge abstraction for Numina AI task resilience.
 
 Self-contained implementation — no DeerFlow dependency.
-Provides StreamBridge protocol, MemoryStreamBridge (in-process dev),
+Provides StreamBridge protocol, MemoryStreamBridge (unit-test only),
 NuminaRedisStreamBridge (cross-process production with tenant isolation),
 and factory/config utilities.
 
 The bridge decouples agent workers (event producers) from SSE endpoints
 (event consumers), enabling cross-process SSE reconnection via Redis Streams.
+
+Production always uses NuminaRedisStreamBridge.  MemoryStreamBridge exists
+solely as a test double — it is invisible across processes and cannot work
+in the agent↔backend split architecture.
 """
 
 from __future__ import annotations

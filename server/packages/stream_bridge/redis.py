@@ -24,7 +24,8 @@ except ImportError:  # pragma: no cover - only hit when the optional extra is mi
         "stream_bridge.type is set to 'redis' but the redis package is not installed.\n"
         "Install it with:\n"
         "    cd server && uv sync --extra backend\n"
-        "Or switch to stream_bridge.type: memory for single-process deployment."
+        "Or switch to stream_bridge.type: memory for local unit tests only "
+        "(not supported in production — agent and backend are separate processes)."
     ) from None
 
 from .base import (

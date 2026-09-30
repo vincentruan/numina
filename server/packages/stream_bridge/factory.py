@@ -1,7 +1,10 @@
 """Factory for creating StreamBridge instances.
 
-Reads configuration and returns the appropriate StreamBridge implementation
-(MemoryStreamBridge for dev, NuminaRedisStreamBridge for production).
+Reads configuration and returns the appropriate StreamBridge implementation.
+Production always uses ``type="redis"`` (NuminaRedisStreamBridge).
+The ``type="memory"`` branch and ``config=None`` default exist for unit tests
+only — a memory bridge in the agent process is invisible to the backend's
+bridge_consumer, so it cannot work in production.
 """
 
 from __future__ import annotations
