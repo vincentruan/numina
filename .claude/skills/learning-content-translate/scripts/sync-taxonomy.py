@@ -7,11 +7,14 @@ Usage:
 
 Modes:
     (default)   Pull latest upstream, compare against packages/os_taxonomy/, print change summary
-    --init      Clone upstream repo if not present, then do full compare
+    --init      Initialize submodule if not present, then do full compare
     --dry-run   Show what would change without writing anything
     --json      Output change summary as JSON (for scripting)
 
-The upstream clone lives at server/data/os-taxonomy/ (or $LEARNING_TAXONOMY_DIR).
+The upstream data lives in a git submodule at:
+    .claude/skills/learning-content-translate/references/os-taxonomy/
+Sync via: git submodule update --init --remote .claude/skills/learning-content-translate/references/os-taxonomy
+Override path via LEARNING_TAXONOMY_DIR env var.
 """
 
 import argparse
@@ -22,8 +25,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 # Paths
-SERVER_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent / "server"
-UPSTREAM_DIR = SERVER_ROOT / "data" / "os-taxonomy"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
+SERVER_ROOT = REPO_ROOT / "server"
+SUBMODULE_PATH = ".claude/skills/learning-content-translate/references/os-taxonomy"
+UPSTREAM_DIR = REPO_ROOT / SUBMODULE_PATH
 PACKAGE_DIR = SERVER_ROOT / "packages" / "os_taxonomy"
 UPSTREAM_REPO = "git@github.com:withmarbleapp/os-taxonomy.git"
 
@@ -44,7 +49,7 @@ def run_git(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
 
 
 def ensure_upstream(init: bool = False) -> Path:
-    """Ensure upstream repo is cloned and up to date.
+    """Ensure upstream submodule is initialized and up to date.
 
     Returns the upstream data directory path.
     """
@@ -52,29 +57,37 @@ def ensure_upstream(init: bool = False) -> Path:
 
     data_dir = Path(os.environ.get("LEARNING_TAXONOMY_DIR", UPSTREAM_DIR))
 
-    if not data_dir.exists():
+    if not data_dir.exists() or not (data_dir / ".git").exists():
         if not init:
             print(
-                f"Upstream not found at {data_dir}. Run with --init to clone.",
+                f"Upstream submodule not initialized at {data_dir}. "
+                f"Run with --init or:\n"
+                f"  git submodule update --init --remote {SUBMODULE_PATH}",
                 file=sys.stderr,
             )
             sys.exit(1)
-        data_dir.parent.mkdir(parents=True, exist_ok=True)
-        print(f"Cloning os-taxonomy → {data_dir}")
+        print(f"Initializing os-taxonomy submodule → {data_dir}")
         subprocess.run(
-            ["git", "clone", UPSTREAM_REPO, str(data_dir)],
+            ["git", "submodule", "update", "--init", "--remote", SUBMODULE_PATH],
             check=True,
             capture_output=True,
             text=True,
+            cwd=REPO_ROOT,
         )
     else:
-        # Pull latest
+        # Pull latest via submodule update --remote
         print(f"Pulling latest from upstream...")
-        result = run_git("pull", "--ff-only", cwd=data_dir)
-        if "Already up to date" in result.stdout:
+        result = subprocess.run(
+            ["git", "submodule", "update", "--remote", SUBMODULE_PATH],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+        )
+        if not result.stdout.strip():
             print("  Already up to date.")
         else:
-            print(f"  Updated: {result.stdout.strip()}")
+            print(f"  Updated.")
 
     return data_dir
 

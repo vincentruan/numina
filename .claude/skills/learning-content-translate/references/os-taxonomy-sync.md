@@ -3,9 +3,10 @@
 ## Data Source
 
 Upstream: `git@github.com:withmarbleapp/os-taxonomy.git`
-Local clone: `server/data/os-taxonomy/` (auto-managed by `sync-taxonomy.py`)
+Submodule: `.claude/skills/learning-content-translate/references/os-taxonomy/`
 
-Override path via `LEARNING_TAXONOMY_DIR` env var.
+通过 `git submodule update --init --remote` 同步上游。
+`sync-taxonomy.py` 默认读取 submodule 路径，也可通过 `LEARNING_TAXONOMY_DIR` 环境变量覆盖。
 
 ## Data Files
 

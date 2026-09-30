@@ -16,13 +16,31 @@ description: >
 Maintain the Chinese-localized os-taxonomy data pipeline: pull upstream English data,
 detect changes, translate in parallel, and update the translated JSON package.
 
-**Primary data flow:**
+## ⚠ 每次执行前：同步 os-taxonomy 上游
+
+os-taxonomy 通过 git submodule 管理（路径: `.claude/skills/learning-content-translate/references/os-taxonomy`）。
+**每次开发或执行翻译前**必须执行：
+
+```bash
+git submodule update --init --remote .claude/skills/learning-content-translate/references/os-taxonomy
+```
+
+**Why**: 确保参考最新上游数据，避免基于过时版本做增量翻译。
+
+同步后可用 `--dry-run` 检查变更：
+
+```bash
+cd server
+uv run python ../.claude/skills/learning-content-translate/scripts/sync-taxonomy.py --dry-run
+```
+
+## Primary Data Flow
 
 ```
 git@github.com:withmarbleapp/os-taxonomy.git   ← upstream (English only)
   │
-  ▼  git pull / clone
-os-taxonomy/data/*.json                         ← raw English source
+  ▼  git submodule (auto-managed)
+.claude/skills/learning-content-translate/references/os-taxonomy/data/*.json
   │
   ▼  change detection (diff against packages/os_taxonomy/)
 new / changed topics & clusters                 ← what needs translation
@@ -59,8 +77,8 @@ Pull latest upstream, translate everything, write translated JSON files.
 ```bash
 cd server
 
-# Step 1: Ensure upstream is available
-uv run python ../.claude/skills/learning-content-translate/scripts/sync-taxonomy.py --init
+# Step 1: Ensure upstream submodule is initialized and up to date
+git submodule update --init --remote .claude/skills/learning-content-translate/references/os-taxonomy
 
 # Step 2: Translate all topics + clusters → update packages/os_taxonomy/*.json
 uv run python ../.claude/skills/learning-content-translate/scripts/translate-to-package.py --force
@@ -76,8 +94,9 @@ Pull upstream, detect new/changed items, translate only those, merge back.
 ```bash
 cd server
 
-# Step 1: Pull latest upstream + detect changes
-uv run python ../.claude/skills/learning-content-translate/scripts/sync-taxonomy.py
+# Step 1: Update submodule + detect changes
+git submodule update --init --remote .claude/skills/learning-content-translate/references/os-taxonomy
+uv run python ../.claude/skills/learning-content-translate/scripts/sync-taxonomy.py --dry-run
 
 # Step 2: Translate only changed/new items → merge into packages/os_taxonomy/*.json
 uv run python ../.claude/skills/learning-content-translate/scripts/translate-to-package.py
@@ -166,6 +185,7 @@ For translatable field tables (Topic, Cluster, Path), see [references/data-model
 ## Upstream Sync Details
 
 → Change detection algorithm, git sync, schema diffing: [references/os-taxonomy-sync.md](references/os-taxonomy-sync.md)
+→ Upstream data lives in submodule: `references/os-taxonomy/`
 
 ## Parallel Translation Pipeline
 
@@ -179,7 +199,7 @@ For translatable field tables (Topic, Cluster, Path), see [references/data-model
 
 | Symptom | Root Cause | Fix |
 |---------|-----------|-----|
-| Upstream changes not detected | Stale local clone | `sync-taxonomy.py --init` to re-clone |
+| Upstream changes not detected | Stale submodule | `git submodule update --init --remote .claude/skills/learning-content-translate/references/os-taxonomy` |
 | Translation not appearing in JSON | Script crashed mid-batch | Re-run (idempotent, resumes from last commit) |
 | `*Zh` field is null in DB | JSON package has translation but seed skipped | Run seed without `--skip-translation` |
 | All English despite locale=zh | `*_zh` fields NULL | Run seed without `--skip-translation` |
@@ -195,7 +215,7 @@ For translatable field tables (Topic, Cluster, Path), see [references/data-model
 | `AI_MODEL_ID` | Model | `gpt-4o-mini` |
 | `AI_API_KEY` / `OPENAI_API_KEY` | Credentials | (required) |
 | `AI_BASE_URL` | Custom endpoint (proxies) | (optional) |
-| `LEARNING_TAXONOMY_DIR` | Override upstream data path | `server/data/os-taxonomy` |
+| `LEARNING_TAXONOMY_DIR` | Override upstream data path | `.claude/skills/learning-content-translate/references/os-taxonomy` (submodule) |
 
 ## Quality Assurance
 

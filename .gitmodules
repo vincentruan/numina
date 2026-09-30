@@ -1,3 +1,6 @@
 [submodule ".claude/skills/deerflow-agent-dev/references/deerflow"]
 	path = .claude/skills/deerflow-agent-dev/references/deerflow
 	url = git@github.com:bytedance/deer-flow.git
+[submodule ".claude/skills/learning-content-translate/references/os-taxonomy"]
+	path = .claude/skills/learning-content-translate/references/os-taxonomy
+	url = git@github.com:withmarbleapp/os-taxonomy.git
