@@ -402,16 +402,16 @@ const agentStore = useAgentStore()
 const authStore = useAuthStore()
 const stream = useReportStream()
 // v3: useTaskResume for SSE reconnection on page re-entry
-const resumeHandle = useTaskResume('report', {
+const resumeHandle = useTaskResume('asset-report', {
   onStreamEvent: (event, data) => {
     stream.ingestEvent(event, data)
   },
   onComplete: async () => {
-    aiStore.clearBackgroundTask('report')
+    aiStore.clearBackgroundTask('asset-report')
     await loadReport()
   },
   onError: () => {
-    aiStore.clearBackgroundTask('report')
+    aiStore.clearBackgroundTask('asset-report')
   },
 })
 const { increment, decrement } = usePageLoading()
@@ -771,11 +771,11 @@ async function generateReport() {
   async function registerBgTask() {
     if (registered) return
     try {
-      const task = await getAITask('report')
+      const task = await getAITask('asset-report')
       if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
         reportTaskId.value = task.task_id
         aiStore.registerBackgroundTask({
-          capability: 'report',
+          capability: 'asset-report',
           taskId: task.task_id,
           sessionId: task.session_id || '',
           startedAt: task.started_at || new Date().toISOString(),
@@ -801,7 +801,7 @@ async function generateReport() {
     // Stream completed — reload from API to get the persisted report
     // (stream.report is only populated on cache hit, not fresh generation)
     await loadReport()
-    aiStore.clearBackgroundTask('report')
+    aiStore.clearBackgroundTask('asset-report')
     reportTaskId.value = null
   } catch {
     showToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
@@ -816,7 +816,7 @@ async function cancelReport() {
   try {
     await cancelTaskById(reportTaskId.value)
     stream.abort(false)
-    aiStore.clearBackgroundTask('report')
+    aiStore.clearBackgroundTask('asset-report')
     reportTaskId.value = null
     reportLoading.value = false
     showToast(t('aiTask.cancelled'))
@@ -929,14 +929,14 @@ onActivated(async () => {
   const resumed = await resumeHandle.resume()
   if (resumed && resumeHandle.task.value) {
     aiStore.registerBackgroundTask({
-      capability: 'report',
+      capability: 'asset-report',
       taskId: resumeHandle.taskId.value!,
       sessionId: resumeHandle.task.value.session_id || '',
       startedAt: resumeHandle.task.value.started_at || new Date().toISOString(),
       status: resumeHandle.task.value.status,
     })
   } else {
-    aiStore.clearBackgroundTask('report')
+    aiStore.clearBackgroundTask('asset-report')
     reportTaskId.value = null
   }
   loadPageData()

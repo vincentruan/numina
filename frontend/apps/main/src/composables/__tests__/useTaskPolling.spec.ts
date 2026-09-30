@@ -18,7 +18,7 @@ function makeTask(overrides: Partial<AITask> = {}): AITask {
   return {
     id: '123',
     family_id: '1',
-    skill_id: 'coach',
+    skill_id: 'finance-coach',
     status: 'running',
     started_at: '2026-08-16T00:00:00+00:00',
     ...overrides,

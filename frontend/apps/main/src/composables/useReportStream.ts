@@ -443,7 +443,7 @@ export function useReportStream(): UseReportStreamReturn {
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL))
 
       try {
-        const taskStatus = await getAITask('report')
+        const taskStatus = await getAITask('asset-report')
         if (taskStatus.status === 'completed' || taskStatus.status === 'idle') {
           // Task completed — caller will reload report from API.
           // Polling bypasses the SSE stream, so handleEnd() never ran.

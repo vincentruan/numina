@@ -157,7 +157,7 @@ const reportLoading = ref(false)
 const stream = useLiteracyStream()
 
 // v3: useTaskResume replaces inline resumeIfRunning + useTaskPolling
-const resumeHandle = useTaskResume('literacy', {
+const resumeHandle = useTaskResume('literacy-weekly-report', {
   onComplete: async () => {
     if (selectedChildId.value) {
       await loadReport()
