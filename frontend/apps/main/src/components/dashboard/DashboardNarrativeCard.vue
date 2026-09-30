@@ -186,7 +186,42 @@ watch(
   },
 )
 
+// ── Session-storage cache (avoids skeleton flash on page reload) ──────────
+// Backend cache is DB-level (AIReport + TTL), but every component mount still
+// fires a POST and shows loading=true until the response arrives.  Caching
+// the narrative block in sessionStorage lets us skip the API call and render
+// instantly on subsequent mounts within the same tab session.
+const _SS_KEY = `narrative_cache_v1`
+
+function _readCache(): { narrative: string; thinking: string; generatedAt: string; ts: number } | null {
+  try {
+    const raw = sessionStorage.getItem(_SS_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function _writeCache() {
+  if (!narrative.value) return
+  try {
+    sessionStorage.setItem(_SS_KEY, JSON.stringify({
+      narrative: narrative.value,
+      thinking: thinking.value,
+      generatedAt: generatedAt.value || new Date().toISOString(),
+      ts: Date.now(),
+    }))
+  } catch { /* quota / private mode — ignore */ }
+}
+
 async function loadCached() {
+  // Try browser cache first — skip API call and skeleton entirely.
+  const cached = _readCache()
+  if (cached?.narrative) {
+    narrative.value = cached.narrative
+    thinking.value = cached.thinking || ''
+    generatedAt.value = cached.generatedAt || null
+    loading.value = false
+    return
+  }
   loading.value = true
   // `loading` is cleared by onDone/onError callbacks — NOT in a finally block.
   // This ensures the skeleton stays visible when the initial POST fails
@@ -242,6 +277,7 @@ async function triggerStream(force = true) {
       stopElapsedTimer()
       // Collapse thinking after completion
       isThinkingExpanded.value = false
+      _writeCache()
     },
     onBlocked: (info) => {
       blockReason.value = info
@@ -293,6 +329,7 @@ async function triggerStream(force = true) {
 }
 
 async function onGenerate() {
+  try { sessionStorage.removeItem(_SS_KEY) } catch { /* ignore */ }
   await triggerStream(true)
 }
 
