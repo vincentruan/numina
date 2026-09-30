@@ -54,6 +54,23 @@ const lastAssistantGroupIndex = computed(() => {
 })
 
 /**
+ * Whether the last assistant group has been superseded by a new user message.
+ * When the user sends a follow-up, isStreaming becomes true but the new AI
+ * response hasn't arrived yet — lastAssistantGroupIndex still points to the
+ * PREVIOUS completed assistant. Without this guard, its retry button would
+ * spin (retrying=true), misleading the user into thinking they need to click it.
+ */
+const isLastAssistantSuperseded = computed(() => {
+  const idx = lastAssistantGroupIndex.value
+  if (idx < 0) return false
+  const groups = visibleMessageGroups.value
+  for (let i = idx + 1; i < groups.length; i++) {
+    if (groups[i].type === 'human') return true
+  }
+  return false
+})
+
+/**
  * Show the three-dot thinking indicator while the user's message has been sent
  * but no assistant-type group exists yet (the AI hasn't produced any text or
  * tool-call chunk). Once an assistant / assistant:processing / etc. group
@@ -234,7 +251,7 @@ onUnmounted(() => {
         <MessageGroup
           :group="group"
           :thread-id="threadId"
-          :is-loading="isStreaming && index === lastAssistantGroupIndex"
+          :is-loading="isStreaming && index === lastAssistantGroupIndex && !isLastAssistantSuperseded"
           :is-last-assistant="index === lastAssistantGroupIndex"
           :can-branch="canBranch"
           :branching-message-id="branchingMessageId"

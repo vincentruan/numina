@@ -420,11 +420,11 @@ onMounted(async () => {
       // before loading history. Terminal states (completed/failed/interrupted)
       // determine whether to reconnect SSE or just show the last state.
       await checkChatTask()
-      // Existing thread: load history and hide skeleton immediately
-      // (skipped if chatTaskStatus is running → polling handles it via completion callback)
-      if (chatTaskStatus.value !== 'running') {
-        chat.loadHistory(store.activeThreadId)
-      }
+      // Always load current history — even when the task is still running,
+      // this shows partial content (tool calls, early messages) instead of a
+      // blank page with just a spinner. When the task completes, the polling
+      // callback reloads the full state.
+      chat.loadHistory(store.activeThreadId)
       // Watcher won't fire (same ID) - fetch thread metadata here too.
       // forceRefresh=true: on page return/refresh the server may have generated
       // an LLM title that differs from the temp title in the Pinia store.
@@ -513,13 +513,13 @@ onActivated(async () => {
   if (chatTaskStatus.value === 'running') {
     chat.isLoading.value = true
   }
-  // If the task completed while we were away, reload history and refresh title.
-  if (chatTaskStatus.value === 'completed') {
-    await Promise.all([
-      chat.loadHistory(store.activeThreadId),
-      ensureThreadInSessions(store.activeThreadId, true),
-    ])
-  }
+  // Always load current history — even while the task is running, this shows
+  // partial content instead of a blank spinner. When the task completes, the
+  // polling callback will reload the full state.
+  await Promise.all([
+    chat.loadHistory(store.activeThreadId),
+    ensureThreadInSessions(store.activeThreadId, true),
+  ])
 })
 
 // When handleStartChat creates a new thread and calls setActiveThread, the
