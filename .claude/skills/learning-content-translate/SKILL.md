@@ -9,6 +9,7 @@ description: >
   "batch translate", "retranslate", "翻译知识点", "incremental update",
   "增量更新", "seed translation", "learning translation", "os-taxonomy",
   "更新taxonomy", "检测变更", "change detection", "翻译知识图谱".
+disable-model-invocation: true
 ---
 
 # Learning Content Translation & Taxonomy Sync

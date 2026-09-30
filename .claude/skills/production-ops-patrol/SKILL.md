@@ -9,6 +9,7 @@ description: >
   只有 allowlist 容器可自动 restart 且有 cooldown。
   触发词："巡检", "patrol", "生产巡检", "ops patrol", "health check patrol",
   "生产环境检查", "智能运维", "生产状态", "production status", "check production".
+disable-model-invocation: true
 ---
 
 # Production Ops Patrol
