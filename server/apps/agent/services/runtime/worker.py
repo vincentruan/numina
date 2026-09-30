@@ -51,6 +51,7 @@ from .llm_json_repair import (
     validate_wish_advice_json,
 )
 from .run_extras import (
+    _text_fallback_title,
     generate_suggestions,
     strip_language_prefix,
     sync_title_from_checkpoint,
@@ -1814,6 +1815,14 @@ async def _run_numina_agent(
         # ``_ensure_interrupted_title`` pattern).  Interrupted first turns pass
         # ``allow_partial_exchange=True`` so a lone user message still yields a
         # fallback title, matching DeerFlow's behaviour.
+        #
+        # NON-BLOCKING: The LLM title call can take 20-30s.  Awaiting it would
+        # delay the ``end`` SSE event by the same amount, making the frontend
+        # show a spinner long after the AI response finished streaming.
+        # Instead: publish a temp title (truncated user message) immediately
+        # so the sidebar is never blank, then fire the LLM call in background.
+        # The LLM result is persisted to DB and published via SSE when ready;
+        # the frontend updates the sidebar on next poll/refresh.
         _title_gate_ok = p.selected_provider is not None and bool(title_user_message)
         logger.info(
             "[_run_numina_agent] title gate: provider=%s user_msg_len=%d ai_text_len=%d status=%s → generate=%s",
@@ -1838,41 +1847,51 @@ async def _run_numina_agent(
                         "English" if _prefix == "[LANGUAGE REQUIREMENT]" else "Chinese"
                     )
                     break
+
+            # Publish a temporary title immediately (truncated user message)
+            # so the sidebar shows something meaningful right away.
+            temp_title = _text_fallback_title(title_user_message)
+            if temp_title:
+                await bridge.publish(p.run_id, "values", {"title": temp_title})
+
             logger.info(
-                "[_run_numina_agent] scheduling title sync: thread=%s lang=%s interrupted=%s user_msg=%r",
+                "[_run_numina_agent] scheduling title sync (non-blocking): thread=%s lang=%s interrupted=%s user_msg=%r",
                 thread_id,
                 title_target_language,
                 was_interrupted,
                 title_user_message[:80],
             )
-            task = asyncio.create_task(
-                sync_title_from_checkpoint(
-                    thread_id,
-                    family_id,
-                    ai_config=p.selected_provider,
-                    user_message=title_user_message,
-                    ai_response=p.ai_text,
-                    allow_partial_exchange=was_interrupted,
-                    target_language=title_target_language,
-                )
-            )
-            _track_task(task)
-            try:
-                generated_title = await task
-            except Exception as exc:
-                logger.warning(
-                    "[_run_numina_agent] title sync task raised: thread=%s err=%s",
-                    thread_id,
-                    type(exc).__name__,
-                )
-                generated_title = None
-            logger.info(
-                "[_run_numina_agent] title sync result: thread=%s title=%r",
-                thread_id,
-                generated_title,
-            )
-            if generated_title:
-                await bridge.publish(p.run_id, "values", {"title": generated_title})
+
+            async def _background_title_sync() -> None:
+                """Generate LLM title, persist to DB, publish via SSE."""
+                try:
+                    generated = await sync_title_from_checkpoint(
+                        thread_id,
+                        family_id,
+                        ai_config=p.selected_provider,
+                        user_message=title_user_message,
+                        ai_response=p.ai_text,
+                        allow_partial_exchange=was_interrupted,
+                        target_language=title_target_language,
+                    )
+                    if generated:
+                        logger.info(
+                            "[_run_numina_agent] title sync result: thread=%s title=%r",
+                            thread_id,
+                            generated,
+                        )
+                        # Publish the LLM title via SSE — if the frontend is
+                        # still connected it updates in real-time; otherwise
+                        # the DB write ensures it shows on next page load.
+                        await bridge.publish(p.run_id, "values", {"title": generated})
+                except Exception:
+                    logger.warning(
+                        "[_run_numina_agent] background title sync failed: thread=%s",
+                        thread_id,
+                        exc_info=True,
+                    )
+
+            _track_task(asyncio.create_task(_background_title_sync()))
         else:
             logger.info(
                 "[_run_numina_agent] title generation SKIPPED: provider=%s user_message=%r",

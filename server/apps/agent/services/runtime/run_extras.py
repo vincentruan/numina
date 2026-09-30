@@ -192,12 +192,21 @@ def _is_fallback_title(title: str | None) -> bool:
     Also detects Python list-literal repr of structured LLM output (thinking
     blocks): ``[{'signature': '', 'thinking': '...'}]``. This leaks when the
     model returns content as a list of dicts and ``str()`` is called on it.
+
+    Also detects language-injection prefixes (``[语言要求]``, ``[LANGUAGE REQUIREMENT]``)
+    that the adapter prepends to the user message for DeerFlow — these leak
+    into the checkpoint title when TitleMiddleware falls back to the raw user
+    message.
     """
     if not title or not str(title).strip():
         return True
     t = str(title).strip()
     if t == "New Chat" or t.startswith(_SKILL_PROMPT_PREFIX):
         return True
+    # Language-injection prefixes from the adapter's _build_prompt.
+    for _lang_prefix in ("[语言要求]", "[LANGUAGE REQUIREMENT]"):
+        if t.startswith(_lang_prefix):
+            return True
     # Python list-literal repr of structured model output (thinking blocks).
     # e.g. ``[{'signature': '', 'thinking': '用户希望为一段对话生成一个简洁的标题...'}]``
     # This is NOT a real summary — it's the raw repr of a list[dict] response.content.
