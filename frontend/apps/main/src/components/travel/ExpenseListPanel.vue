@@ -16,7 +16,7 @@
               class="expense-item"
             >
               <template #icon>
-                <span v-if="getCategoryIcon(expense.category_id).length > 3" class="category-emoji">{{ getCategoryIcon(expense.category_id) }}</span>
+                <span v-if="Array.from(getCategoryIcon(expense.category_id)).length <= 1" class="category-emoji">{{ getCategoryIcon(expense.category_id) }}</span>
                 <van-icon v-else :name="getCategoryIcon(expense.category_id)" size="24" class="category-icon" />
               </template>
             </van-cell>
