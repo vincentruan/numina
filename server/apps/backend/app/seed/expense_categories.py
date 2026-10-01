@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from packages.db.models.expense_category import ExpenseCategory
 
 SYSTEM_EXPENSE_CATEGORIES: list[dict] = [
-    {"name": "餐饮", "icon": "food-o", "sort_order": 1},
+    {"name": "餐饮", "icon": "shop-o", "sort_order": 1},
     {"name": "交通", "icon": "logistics", "sort_order": 2},
     {"name": "住宿", "icon": "hotel-o", "sort_order": 3},
     {"name": "活动", "icon": "flag-o", "sort_order": 4},
