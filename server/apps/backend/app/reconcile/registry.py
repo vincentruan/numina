@@ -211,6 +211,30 @@ def _db_seed_resources() -> list[Resource]:
         bootstrap_family_mcp_servers(db)
         return None
 
+    def _check_expense_categories(db: Session) -> ResourceResult | None:
+        from packages.db.models.expense_category import ExpenseCategory
+        count = db.query(ExpenseCategory).filter(
+            ExpenseCategory.is_system.is_(True),
+            ExpenseCategory.family_id.is_(None),
+        ).count()
+        if count >= 6:
+            return None
+        return ResourceResult(
+            resource_name="seed_expense_categories",
+            resource_type=ResourceType.DATABASE_SEED,
+            desired_version="1",
+            status=ResourceStatus.DRIFTED,
+            current_version=f"count={count}",
+            critical=False,
+        )
+
+    def _apply_expense_categories(db: Session) -> ResourceResult | None:
+        from apps.backend.app.seed.expense_categories import (
+            bootstrap_expense_categories,
+        )
+        bootstrap_expense_categories(db)
+        return None
+
     return [
         DatabaseSeedResource(
             name="seed_categories",
@@ -262,6 +286,14 @@ def _db_seed_resources() -> list[Resource]:
             failure_action=FailureAction.WARN_ONLY,
             check_fn=_check_family_mcp_servers,
             apply_fn=_apply_family_mcp_servers,
+        ),
+        DatabaseSeedResource(
+            name="seed_expense_categories",
+            desired_version="1",
+            critical=False,
+            failure_action=FailureAction.WARN_ONLY,
+            check_fn=_check_expense_categories,
+            apply_fn=_apply_expense_categories,
         ),
     ]
 
