@@ -331,6 +331,7 @@ onMounted(async () => {
         store.fetchExpenses(id),
         store.fetchItinerary(id),
         store.fetchItineraryTypes(),
+        store.fetchCategories(),
       ])
     } catch {
       showFailToast(t('common.failed'))
