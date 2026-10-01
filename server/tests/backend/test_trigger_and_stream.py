@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,8 +13,15 @@ def mock_agent_client():
     """Mock AgentClient that returns a canned trigger response."""
     client = AsyncMock()
     resp = MagicMock()
+    resp.status_code = 200
     resp.headers = {"Content-Location": "/api/threads/t1/runs/run-123"}
     resp.raise_for_status = MagicMock()
+
+    @asynccontextmanager
+    async def _fake_stream(*args, **kwargs):
+        yield resp
+
+    client.stream = _fake_stream
     client.post = AsyncMock(return_value=resp)
     return client
 
@@ -166,7 +174,10 @@ class TestTriggerAndStream:
         """Agent trigger failure should propagate to the caller."""
         from apps.backend.app.services.bridge_consumer import trigger_and_stream
 
-        mock_agent_client.post = AsyncMock(side_effect=Exception("Agent unavailable"))
+        def _failing_stream(*args, **kwargs):
+            raise Exception("Agent unavailable")
+
+        mock_agent_client.stream = _failing_stream
         with pytest.raises(Exception, match="Agent unavailable"):
             await trigger_and_stream(
                 agent_client=mock_agent_client,
