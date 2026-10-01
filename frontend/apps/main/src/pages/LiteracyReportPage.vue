@@ -96,7 +96,6 @@
           type="primary"
           size="small"
           icon="replay"
-          :loading="stream.status.value === 'streaming' || stream.status.value === 'connecting'"
           @click="regenerate"
         >
           {{ t('literacyReport.generate') }}
