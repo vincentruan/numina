@@ -213,20 +213,38 @@ def _db_seed_resources() -> list[Resource]:
 
     def _check_expense_categories(db: Session) -> ResourceResult | None:
         from packages.db.models.expense_category import ExpenseCategory
-        count = db.query(ExpenseCategory).filter(
-            ExpenseCategory.is_system.is_(True),
-            ExpenseCategory.family_id.is_(None),
-        ).count()
-        if count >= 6:
-            return None
-        return ResourceResult(
-            resource_name="seed_expense_categories",
-            resource_type=ResourceType.DATABASE_SEED,
-            desired_version="1",
-            status=ResourceStatus.DRIFTED,
-            current_version=f"count={count}",
-            critical=False,
+        from apps.backend.app.seed.expense_categories import SYSTEM_EXPENSE_CATEGORIES
+
+        cats = (
+            db.query(ExpenseCategory.name, ExpenseCategory.icon)
+            .filter(
+                ExpenseCategory.is_system.is_(True),
+                ExpenseCategory.family_id.is_(None),
+            )
+            .order_by(ExpenseCategory.sort_order)
+            .all()
         )
+        if len(cats) < 6:
+            return ResourceResult(
+                resource_name="seed_expense_categories",
+                resource_type=ResourceType.DATABASE_SEED,
+                desired_version="2",
+                status=ResourceStatus.DRIFTED,
+                current_version=f"count={len(cats)}",
+                critical=False,
+            )
+        # Check icon content matches expected values
+        for i, cat_data in enumerate(SYSTEM_EXPENSE_CATEGORIES):
+            if i < len(cats) and cats[i].icon != cat_data["icon"]:
+                return ResourceResult(
+                    resource_name="seed_expense_categories",
+                    resource_type=ResourceType.DATABASE_SEED,
+                    desired_version="2",
+                    status=ResourceStatus.DRIFTED,
+                    current_version=f"icon_mismatch:{cats[i].name}={cats[i].icon!r}",
+                    critical=False,
+                )
+        return None
 
     def _apply_expense_categories(db: Session) -> ResourceResult | None:
         from apps.backend.app.seed.expense_categories import (
@@ -289,7 +307,7 @@ def _db_seed_resources() -> list[Resource]:
         ),
         DatabaseSeedResource(
             name="seed_expense_categories",
-            desired_version="1",
+            desired_version="2",
             critical=False,
             failure_action=FailureAction.WARN_ONLY,
             check_fn=_check_expense_categories,
