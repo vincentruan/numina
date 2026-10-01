@@ -16,7 +16,8 @@
               class="expense-item"
             >
               <template #icon>
-                <van-icon :name="getCategoryIcon(expense.category_id)" size="24" class="category-icon" />
+                <span v-if="getCategoryIcon(expense.category_id).length > 3" class="category-emoji">{{ getCategoryIcon(expense.category_id) }}</span>
+                <van-icon v-else :name="getCategoryIcon(expense.category_id)" size="24" class="category-icon" />
               </template>
             </van-cell>
             <template #right>
@@ -133,6 +134,16 @@ async function confirmDelete(expenseId: string) {
 .category-icon {
   margin-right: 12px;
   color: var(--van-primary-color);
+}
+.category-emoji {
+  font-size: 24px;
+  line-height: 1;
+  margin-right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
 }
 .delete-button {
   height: 100%;
