@@ -352,23 +352,39 @@ async def trigger_finance_coach_run(
     _validate_path_segment(thread_id, "thread_id")
 
     # Build a duck-typed body matching start_run's getattr() access pattern.
+    # multitask_strategy="interrupt": a new request cancels any stale run on
+    # the same thread instead of rejecting (avoids ConflictError → 500 when
+    # the backend re-triggers after a page reload or cache expiry).
     run_body = SimpleNamespace(
         assistant_id=None,
         input=body.input,
         config=None,
         metadata={"app": "finance-coach"},
         on_disconnect=body.on_disconnect,
-        multitask_strategy="reject",
+        multitask_strategy="interrupt",
     )
 
-    record = await start_run(
-        run_body,
-        thread_id,
-        request,
-        body.family_id,
-        body.user_id,
-        internal=True,
-    )
+    try:
+        record = await start_run(
+            run_body,
+            thread_id,
+            request,
+            body.family_id,
+            body.user_id,
+            internal=True,
+        )
+    except ConflictError:
+        logger.warning(
+            "[gateway] finance-coach ConflictError thread=%s — "
+            "another run is already active",
+            thread_id,
+        )
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": f"Thread {thread_id} already has an active run",
+            },
+        )
     run_mgr = get_run_manager(request)
 
     async def sse_generator():
@@ -575,14 +591,27 @@ async def trigger_dashboard_narrative_run(
         multitask_strategy="interrupt",
     )
 
-    record = await start_run(
-        run_body,
-        thread_id,
-        request,
-        body.family_id,
-        body.user_id,
-        internal=True,
-    )
+    try:
+        record = await start_run(
+            run_body,
+            thread_id,
+            request,
+            body.family_id,
+            body.user_id,
+            internal=True,
+        )
+    except ConflictError:
+        logger.warning(
+            "[gateway] dashboard-narrative ConflictError thread=%s — "
+            "another run is already active",
+            thread_id,
+        )
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": f"Thread {thread_id} already has an active run",
+            },
+        )
     run_mgr = get_run_manager(request)
 
     async def sse_generator():
