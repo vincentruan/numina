@@ -763,35 +763,12 @@ deploy-remote:
 	fi && \
 	echo "" && \
 	echo "══ 远程加载并部署 ══" && \
-	ssh -p $${DEPLOY_SSH_PORT:-22} $${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST} 'cd '"$${DEPLOY_REMOTE_DIR}"' && \
-		command -v docker >/dev/null 2>&1 || { echo "✗ docker 未安装"; exit 1; }; \
-		if [ -f images.tar.gz ]; then \
-			echo "加载镜像..." && \
-			sudo docker load -i images.tar.gz && \
-			echo "✓ 镜像已加载" && \
-			rm -f images.tar.gz; \
-		else \
-			echo "ℹ 无镜像包，跳过加载"; \
-		fi && \
-		echo "重建服务..." && \
-		sudo docker compose -f docker-compose.production.yml up -d && \
-		echo "等待 backend 就绪..." && \
-		for i in $$(seq 1 30); do \
-			if sudo docker compose -f docker-compose.production.yml ps backend 2>/dev/null | grep -q "healthy"; then \
-				echo "✓ Backend healthy"; break; \
-			fi; \
-			if [ "$$i" = "30" ]; then \
-				echo "✗ Backend 启动超时"; \
-				sudo docker compose -f docker-compose.production.yml logs --tail 30 backend; \
-				exit 1; \
-			fi; \
-			sleep 2; \
-		done && \
-		echo "重新加载 nginx (刷新上游 DNS)..." && \
-		sudo docker exec numina-nginx nginx -s reload 2>/dev/null && \
-		echo "" && \
-		sudo docker compose -f docker-compose.production.yml ps --format "table {{.Name}}\t{{.Status}}" \
-	'
+	ssh -p $${DEPLOY_SSH_PORT:-22} $${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST} "cd $${DEPLOY_REMOTE_DIR} && command -v docker >/dev/null 2>&1 || { echo 'docker not installed'; exit 1; }" && \
+	ssh -p $${DEPLOY_SSH_PORT:-22} $${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST} "cd $${DEPLOY_REMOTE_DIR} && if [ -f images.tar.gz ]; then echo 'Loading images...' && sudo docker load -i images.tar.gz && echo 'Images loaded' && rm -f images.tar.gz; else echo 'No image tarball, skipping load'; fi" && \
+	ssh -p $${DEPLOY_SSH_PORT:-22} $${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST} "cd $${DEPLOY_REMOTE_DIR} && echo 'Recreating services...' && sudo docker compose -f docker-compose.production.yml up -d" && \
+	ssh -p $${DEPLOY_SSH_PORT:-22} $${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST} "cd $${DEPLOY_REMOTE_DIR} && echo 'Waiting for backend...' && for i in \$$(seq 1 30); do if sudo docker compose -f docker-compose.production.yml ps backend 2>/dev/null | grep -q healthy; then echo 'Backend healthy'; break; fi; if [ \$$i = 30 ]; then echo 'Backend timeout'; sudo docker compose -f docker-compose.production.yml logs --tail 30 backend; exit 1; fi; sleep 2; done" && \
+	ssh -p $${DEPLOY_SSH_PORT:-22} $${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST} "cd $${DEPLOY_REMOTE_DIR} && echo 'Reloading nginx...' && sudo docker exec numina-nginx nginx -s reload 2>/dev/null" && \
+	ssh -p $${DEPLOY_SSH_PORT:-22} $${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST} "cd $${DEPLOY_REMOTE_DIR} && sudo docker compose -f docker-compose.production.yml ps --format 'table {{.Name}}\t{{.Status}}'"
 	@echo ""
 	@echo "✓ 远程部署完成"
 

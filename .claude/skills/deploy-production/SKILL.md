@@ -190,11 +190,11 @@ sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c \
 | 配置项 | 本地开发 | 生产服务器 | 验证方式 |
 |--------|----------|------------|----------|
 | `ENVIRONMENT` | `development` (默认) | **`production`** | 启动日志 |
-| `CAPTCHA_ENABLED` | `false` (默认) | **`true`** | `curl -sk /api/v1/captcha/config` → `captcha_enabled: true` |
+| `CAPTCHA_ENABLED` | `false` (默认) | **`true`** | `curl -s -H 'Host: ...' http://127.0.0.1/api/v1/captcha/config` → `captcha_enabled: true` |
 | `DATABASE_URL` | SQLite 或 localhost PG | `postgresql://...@172.17.0.1:5432/numina_prod` | backend 日志 |
 | `DEERFLOW_DB_URL` | SQLite 或 localhost PG | `postgresql://...@172.17.0.1:5432/numina_prod_deerflow` | agent 日志 |
 | `REDIS_URL` | `redis://localhost:6379/0` | `redis://numina-redis:6379/0`（compose 默认值） | `redis-cli ping` → PONG |
-| SSL/TLS | 无 | Origin CA cert (`origin.crt` + `origin.key`) | `curl -sk https://localhost/` |
+| SSL/TLS | 无 | Origin CA cert (`origin.crt` + `origin.key`) | `curl -s -H 'Host: ...' http://127.0.0.1/` (HTTP, 非 HTTPS) |
 | `*_IMAGE` | 无 (compose 默认) | `ghcr.io/...` (Mode A) 或 `numina/...` (Mode C) | `docker inspect` |
 | `CORS_ORIGINS` | `localhost` | 实际域名 JSON 数组 | 浏览器 CORS 头 |
 
@@ -237,22 +237,35 @@ AGENT_DB_POOL_SIZE=15
 
 ### Health Check 验证清单
 
-每次部署后验证以下项目（详见 Step 7 完整流程）：
+每次部署后验证以下项目（详见 Step 7 完整流程）。
+
+> **⚠️ 验证方法：HTTP + Host header，不用 HTTPS**
+>
+> 生产环境 SSL 使用 Cloudflare Origin CA 证书，仅 Cloudflare 边缘信任。服务器本地 curl 不信任该 CA，HTTPS 握手会失败（`SSL_ERROR_ZERO_RETURN`）。
+> 同时 `localhost` 在服务器上可能解析为 IPv6 `::1`，导致连接失败。
+>
+> **正确做法：** 通过 nginx 的 HTTP port 80 验证，用 `127.0.0.1`（避免 IPv6）并带 `Host` header（匹配 nginx `server_name`）：
+> ```bash
+> curl -s -H 'Host: numina.xiaoshutiao.space' http://127.0.0.1/api/health
+> ```
+
 ```bash
 # 1. 容器状态
 sudo docker ps --format "table {{.Names}}\t{{.Status}}" | grep numina
 # 期望: 7 (app) + 1 (postgres-prod) + 1 (redis) = 9 个容器，backend/agent/scheduler/redis (healthy)
 
-# 2. 各服务健康
-curl -sk https://localhost/api/health              # → {"status":"ok"}
+# 2. 各服务健康（通过 nginx HTTP port 80）
+curl -s -H 'Host: numina.xiaoshutiao.space' http://127.0.0.1/api/health
+# → {"status":"ok"}
 # Agent + Scheduler 通过 docker exec 检查（见 Step 7a）
 
 # 3. 验证码
-curl -sk https://localhost/api/v1/captcha/config   # → captcha_enabled: true
+curl -s -H 'Host: numina.xiaoshutiao.space' http://127.0.0.1/api/v1/captcha/config
+# → captcha_enabled: true
 
 # 4. 前端
-curl -sk -o /dev/null -w "%{http_code}" https://localhost/        # → 200
-curl -sk -o /dev/null -w "%{http_code}" https://localhost/child/  # → 200
+curl -s -o /dev/null -w "%{http_code}" -H 'Host: numina.xiaoshutiao.space' http://127.0.0.1/        # → 200
+curl -s -o /dev/null -w "%{http_code}" -H 'Host: numina.xiaoshutiao.space' http://127.0.0.1/child/  # → 200
 
 # 5. 启动日志（缓存预热 + bootstrap 完成确认）
 sudo docker compose -f docker-compose.production.yml logs --tail 100 backend | \
@@ -648,21 +661,21 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   sudo docker exec numina-redis redis-cli ping &&
   echo "" &&
   echo "=== BACKEND HEALTH ===" &&
-  curl -sk https://localhost/api/health && echo "" &&
+  curl -s -H "Host: numina.xiaoshutiao.space" http://127.0.0.1/api/health && echo "" &&
   echo "" &&
   echo "=== AGENT HEALTH ===" &&
-  curl -sk https://localhost/api/health-agent 2>/dev/null || \
+  curl -s -H "Host: numina.xiaoshutiao.space" http://127.0.0.1/api/health-agent 2>/dev/null || \
     sudo docker exec numina-agent python -c "import urllib.request,json; print(json.loads(urllib.request.urlopen(\"http://localhost:8001/health\").read()))" &&
   echo "" &&
   echo "=== SCHEDULER HEALTH ===" &&
   sudo docker exec numina-scheduler-worker python -c "import urllib.request,json; r=json.loads(urllib.request.urlopen(\"http://localhost:8002/health\").read()); print(f\"status={r[\"status\"]} jobs={r[\"job_count\"]}\")" &&
   echo "" &&
   echo "=== CAPTCHA ===" &&
-  curl -sk https://localhost/api/v1/captcha/config && echo "" &&
+  curl -s -H "Host: numina.xiaoshutiao.space" http://127.0.0.1/api/v1/captcha/config && echo "" &&
   echo "" &&
   echo "=== FRONTEND ===" &&
-  curl -sk -o /dev/null -w "main: HTTP %{http_code}\n" https://localhost/ &&
-  curl -sk -o /dev/null -w "child: HTTP %{http_code}\n" https://localhost/child/
+  curl -s -o /dev/null -w "main: HTTP %{http_code}\n" -H "Host: numina.xiaoshutiao.space" http://127.0.0.1/ &&
+  curl -s -o /dev/null -w "child: HTTP %{http_code}\n" -H "Host: numina.xiaoshutiao.space" http://127.0.0.1/child/
 '
 ```
 
@@ -718,19 +731,20 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 ```bash
 set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
-  echo "=== 1. HTTPS + CORS ===" &&
-  curl -sk -o /dev/null -w "HTTPS: %{http_code}\n" https://localhost/api/health &&
-  curl -sk -o /dev/null -w "CORS preflight: %{http_code}\n" -X OPTIONS \
+  echo "=== 1. HTTP + CORS ===" &&
+  curl -s -o /dev/null -w "HTTP: %{http_code}\n" -H "Host: numina.xiaoshutiao.space" http://127.0.0.1/api/health &&
+  curl -s -o /dev/null -w "CORS preflight: %{http_code}\n" -X OPTIONS \
+    -H "Host: numina.xiaoshutiao.space" \
     -H "Origin: https://numina.xiaoshutiao.space" \
     -H "Access-Control-Request-Method: GET" \
-    https://localhost/api/health &&
+    http://127.0.0.1/api/health &&
   echo "" &&
   echo "=== 2. Captcha challenge ===" &&
-  curl -sk https://localhost/api/v1/captcha/config | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"captcha_enabled: {d.get(\"captcha_enabled\")}\")" &&
+  curl -s -H "Host: numina.xiaoshutiao.space" http://127.0.0.1/api/v1/captcha/config | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"captcha_enabled: {d.get(\"captcha_enabled\")}\")" &&
   echo "" &&
   echo "=== 3. Login endpoint reachable ===" &&
-  curl -sk -o /dev/null -w "POST /auth/login: HTTP %{http_code}\n" \
-    -X POST https://localhost/api/v1/auth/login \
+  curl -s -o /dev/null -w "POST /auth/login: HTTP %{http_code}\n" \
+    -X POST -H "Host: numina.xiaoshutiao.space" http://127.0.0.1/api/v1/auth/login \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"_probe_\",\"password\":\"_probe_\"}" &&
   echo "(401=reachable, 429=rate-limited, 502=broken)" &&
@@ -750,7 +764,7 @@ for j in r.get(\"jobs\", []):
 
 | 测试 | 期望 | 含义 |
 |------|------|------|
-| HTTPS health | 200 | SSL + nginx + backend 通路正常 |
+| HTTP health | 200 | nginx + backend 通路正常 |
 | CORS preflight | 200/204 | CORS 配置正确，前端可跨域请求 |
 | Captcha config | `captcha_enabled: true` | 生产安全配置生效 |
 | Login endpoint | 401 (非 502/500) | Auth 路由可达，DB 连接正常 |
