@@ -149,6 +149,30 @@ def test_update_trip_status(client, auth_headers, sample_trip):
     assert response.json()["data"]["status"] == "active"
 
 
+def test_advance_trip_status(client, auth_headers, sample_trip):
+    """Advance status: planning -> active -> settled -> archived."""
+    trip_id = sample_trip["id"]
+
+    # planning -> active
+    response = client.post(f"/api/v1/trips/{trip_id}/advance-status", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "active"
+
+    # active -> settled
+    response = client.post(f"/api/v1/trips/{trip_id}/advance-status", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "settled"
+
+    # settled -> archived
+    response = client.post(f"/api/v1/trips/{trip_id}/advance-status", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "archived"
+
+    # archived -> 409 (no further transition)
+    response = client.post(f"/api/v1/trips/{trip_id}/advance-status", headers=auth_headers)
+    assert response.status_code == 409
+
+
 def test_delete_trip(client, auth_headers, sample_trip):
     """Delete (soft) sets is_active=False."""
     trip_id = sample_trip["id"]
@@ -175,8 +199,8 @@ def test_cancel_trip(client, auth_headers, sample_trip):
     assert data["is_active"] is False
 
 
-def test_cancel_active_trip_fails(client, auth_headers, sample_trip):
-    """Cannot cancel a trip that is not in planning status."""
+def test_cancel_active_trip(client, auth_headers, sample_trip):
+    """Can cancel a trip that is in active status."""
     trip_id = sample_trip["id"]
     # Move to active first
     client.patch(
@@ -185,8 +209,10 @@ def test_cancel_active_trip_fails(client, auth_headers, sample_trip):
         json={"status": "active"},
     )
     response = client.post(f"/api/v1/trips/{trip_id}/cancel", headers=auth_headers)
-    # TRIP_STATUS_CONFLICT -> 409
-    assert response.status_code == 409
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["status"] == "cancelled"
+    assert data["is_active"] is False
 
 
 # ---------------------------------------------------------------------------

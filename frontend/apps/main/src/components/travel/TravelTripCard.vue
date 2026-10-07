@@ -1,5 +1,55 @@
 <template>
+  <van-swipe-cell v-if="nextStatus" :before-close="onSwipeClose">
+    <van-cell
+      class="trip-card"
+      :border="false"
+      @click="$emit('click')"
+    >
+      <template #title>
+        <div class="trip-header">
+          <span class="trip-name">{{ trip.name }}</span>
+          <van-tag :type="statusTagType" size="medium">{{ statusLabel }}</van-tag>
+        </div>
+      </template>
+      <template #label>
+        <div class="trip-body">
+          <div class="trip-destination">
+            <van-icon name="location-o" />
+            <span>{{ trip.destination }}</span>
+          </div>
+          <div class="trip-dates">
+            <van-icon name="clock-o" />
+            <span>{{ formatDate(trip.departure_date) }} - {{ trip.return_date ? formatDate(trip.return_date) : t('travel.openEnded') }}</span>
+          </div>
+          <div v-if="budgetPercentage > 0" class="trip-budget">
+            <div class="budget-info">
+              <span class="budget-spent">{{ formatAmount(trip.actual_spend) }}</span>
+              <span class="budget-separator">/</span>
+              <span class="budget-total">{{ formatAmount(trip.planned_budget) }}</span>
+              <span class="budget-percentage" :style="{ color: budgetColor }">{{ budgetPercentage }}%</span>
+            </div>
+            <van-progress
+              :percentage="Math.min(budgetPercentage, 100)"
+              :color="budgetColor"
+              :stroke-width="6"
+              :show-pivot="false"
+            />
+          </div>
+        </div>
+      </template>
+    </van-cell>
+    <template #right>
+      <van-button
+        square
+        type="primary"
+        class="swipe-action"
+        :text="t('travel.advanceStatus')"
+        @click="$emit('advance-status')"
+      />
+    </template>
+  </van-swipe-cell>
   <van-cell
+    v-else
     class="trip-card"
     :border="false"
     @click="$emit('click')"
@@ -51,6 +101,7 @@ const props = defineProps<{
 
 defineEmits<{
   click: []
+  'advance-status': []
 }>()
 
 const { t, locale } = useI18n()
@@ -59,6 +110,20 @@ const { formatIn } = useCurrency()
 function formatAmount(amount: string | null): string {
   if (!amount) return formatIn(0, props.trip.currency)
   return formatIn(amount, props.trip.currency)
+}
+
+const STATUS_TRANSITIONS: Record<string, string> = {
+  planning: 'active',
+  active: 'settled',
+  settled: 'archived',
+}
+
+const nextStatus = computed(() => STATUS_TRANSITIONS[props.trip.status] ?? null)
+
+function onSwipeClose(args: { position: string; instance: { close: () => void } }) {
+  if (args.position === 'right') {
+    args.instance.close()
+  }
 }
 
 const statusLabel = computed(() => {
@@ -173,5 +238,8 @@ const budgetColor = computed(() => {
   margin-left: auto;
   font-weight: 600;
   font-size: 13px;
+}
+.swipe-action {
+  height: 100%;
 }
 </style>

@@ -110,6 +110,15 @@
 
       <!-- Action buttons -->
       <div class="action-buttons">
+        <van-button
+          v-if="nextStatus"
+          type="primary"
+          block
+          round
+          @click="confirmAdvanceStatus"
+        >
+          {{ t('travel.advanceStatus') }} → {{ statusLabel(nextStatus) }}
+        </van-button>
         <van-button type="primary" block round @click="navigateToEdit">
           {{ t('common.edit') }}
         </van-button>
@@ -204,6 +213,28 @@ const deleteTargetItem = ref<ItineraryItem | null>(null)
 
 const trip = computed(() => store.currentTrip)
 const expenses = computed(() => store.expenses)
+
+const STATUS_TRANSITIONS: Record<string, string> = {
+  planning: 'active',
+  active: 'settled',
+  settled: 'archived',
+}
+
+const nextStatus = computed(() => {
+  if (!trip.value) return null
+  return STATUS_TRANSITIONS[trip.value.status] ?? null
+})
+
+function statusLabel(status: string): string {
+  const map: Record<string, string> = {
+    planning: t('travel.status.planning'),
+    active: t('travel.status.active'),
+    settled: t('travel.status.settled'),
+    archived: t('travel.status.archived'),
+    cancelled: t('travel.status.cancelled'),
+  }
+  return map[status] || status
+}
 
 const expenseActions = [
   { name: t('travel.itinerary.addItem'), value: 'itinerary' },
@@ -305,6 +336,20 @@ async function onDeleteActionSelect(action: { value: string }) {
     showFailToast(t('common.failed'))
   } finally {
     deleteTargetItem.value = null
+  }
+}
+
+async function confirmAdvanceStatus() {
+  if (!trip.value || !nextStatus.value) return
+  try {
+    await showConfirmDialog({
+      title: t('travel.advanceStatus'),
+      message: t('travel.advanceStatusConfirm', { status: statusLabel(nextStatus.value) }),
+    })
+    await store.advanceTripStatus(trip.value.id)
+    showSuccessToast(t('travel.statusAdvanced'))
+  } catch {
+    // user cancelled or API error
   }
 }
 

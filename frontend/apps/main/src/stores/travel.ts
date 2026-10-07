@@ -42,6 +42,14 @@ export const useTravelStore = defineStore('travel', () => {
     currentTrip.value = res.data
   }
 
+  async function advanceTripStatus(id: string) {
+    const res = await travelApi.advanceTripStatus(id)
+    const idx = trips.value.findIndex(t => t.id === id)
+    if (idx !== -1) trips.value[idx] = res.data
+    if (currentTrip.value?.id === id) currentTrip.value = res.data
+    return res.data
+  }
+
   async function createTrip(data: Parameters<typeof travelApi.createTrip>[0]) {
     const res = await travelApi.createTrip(data)
     trips.value.unshift(res.data)
@@ -152,6 +160,7 @@ export const useTravelStore = defineStore('travel', () => {
     activeTrip,
     fetchTrips,
     fetchTrip,
+    advanceTripStatus,
     createTrip,
     fetchExpenses,
     createExpense,

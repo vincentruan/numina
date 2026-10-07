@@ -83,3 +83,12 @@ def cancel_trip(
 ):
     trip_service.cancel_trip(db, trip_id, user.family_id)
     return trip_service.get_trip(db, trip_id, user.family_id)
+
+
+@router.post("/{trip_id}/advance-status", response_model=TripResponse)
+def advance_trip_status(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    return trip_service.advance_status(db, trip_id, user.family_id)

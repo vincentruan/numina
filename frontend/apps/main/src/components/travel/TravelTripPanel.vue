@@ -17,6 +17,7 @@
           :key="trip.id"
           :trip="trip"
           @click="navigateToTrip(trip.id)"
+          @advance-status="advanceStatus(trip)"
         />
       </div>
 
@@ -50,7 +51,7 @@
 import { computed, ref, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { showFailToast } from 'vant'
+import { showFailToast, showSuccessToast, showConfirmDialog } from 'vant'
 import { useTravelStore } from '@/stores/travel'
 import { useCurrency } from '@/composables/useCurrency'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -97,6 +98,28 @@ function navigateToTrip(id: string) {
 
 function navigateToNew() {
   router.push('/travel/new')
+}
+
+const STATUS_TRANSITIONS: Record<string, string> = {
+  planning: 'active',
+  active: 'settled',
+  settled: 'archived',
+}
+
+async function advanceStatus(trip: Trip) {
+  const next = STATUS_TRANSITIONS[trip.status]
+  if (!next) return
+  const nextLabel = t(`travel.status.${next}`)
+  try {
+    await showConfirmDialog({
+      title: t('travel.advanceStatus'),
+      message: t('travel.advanceStatusConfirm', { status: nextLabel }),
+    })
+    await store.advanceTripStatus(trip.id)
+    showSuccessToast(t('travel.statusAdvanced'))
+  } catch {
+    // user cancelled or API error
+  }
 }
 
 async function loadTrips() {

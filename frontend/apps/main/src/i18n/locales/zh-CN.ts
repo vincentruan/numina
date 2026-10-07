@@ -4161,6 +4161,10 @@ export default {
       archived: '已归档',
       cancelled: '已取消',
     },
+    advanceStatus: '推进状态',
+    advanceStatusConfirm: '确定要将状态推进到「{status}」吗？',
+    statusAdvanced: '状态已推进',
+    statusEndReached: '当前状态已是最终状态',
     openEnded: '未定',
     splitGroup: {
       title: '分摊组',

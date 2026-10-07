@@ -40,6 +40,10 @@ export function cancelTrip(id: string) {
   return http.post(`/trips/${id}/cancel`)
 }
 
+export function advanceTripStatus(id: string) {
+  return http.post<Trip>(`/trips/${id}/advance-status`)
+}
+
 export function graduateWish(wishId: string) {
   return http.post<Trip>('/trips/graduate', { wish_id: wishId })
 }

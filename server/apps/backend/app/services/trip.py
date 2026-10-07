@@ -96,11 +96,29 @@ def delete_trip(db: Session, trip_id: int, family_id: int) -> None:
     db.commit()
 
 
+def advance_status(db: Session, trip_id: int, family_id: int) -> Trip:
+    """Advance trip to the next status in the lifecycle.
+
+    planning → active → settled → archived
+    """
+    trip = get_trip(db, trip_id, family_id)
+    next_status = _VALID_TRANSITIONS.get(trip.status)
+    if not next_status:
+        raise AppError(
+            ErrorCode.TRIP_STATUS_CONFLICT,
+            details=f"Cannot advance from '{trip.status}'",
+        )
+    trip.status = next_status
+    db.commit()
+    db.refresh(trip)
+    return trip
+
+
 def cancel_trip(db: Session, trip_id: int, family_id: int) -> None:
     """Cancel a trip: revert wish, reverse expenses, invalidate split group."""
     trip = get_trip(db, trip_id, family_id)
 
-    if trip.status != "planning":
+    if trip.status not in ("planning", "active"):
         raise AppError(ErrorCode.TRIP_STATUS_CONFLICT)
 
     # Revert wish to pending if linked
