@@ -12,7 +12,16 @@
 #   - 服务端命令统一在 server/ 下执行；alembic 在 server/apps/backend/ 下执行。
 
 .DEFAULT_GOAL := help
-SHELL := /usr/bin/env bash
+
+# ── OS detection ──────────────────────────────────────────────
+# GNU make on Windows/MSYS2 hardcodes SHELL to sh.exe and ignores Makefile overrides.
+# We detect Windows for conditional recipes, but cannot change SHELL globally.
+# dev-all and stop-dev-all explicitly invoke pwsh on Windows.
+ifeq ($(OS),Windows_NT)
+IS_WIN := 1
+else
+IS_WIN := 0
+endif
 
 # ── 工具与路径变量（可被环境覆盖）──────────────────────────
 PYTHON ?= python3
@@ -27,6 +36,10 @@ MAIN_APP     := frontend/apps/main
 CHILD_APP    := frontend/apps/child
 ALEMBIC_DIR  := $(SERVER_DIR)/apps/backend
 DATA_DIR     ?= .numina/data
+
+# ── dev-all 参数默认值 ──────────────────────────────────────────
+DB    ?= sqlite
+CACHE ?= memory
 
 # 服务端测试 / lint / 类型检查命令（在 SERVER_DIR 下运行）
 PYTEST := $(UV) run pytest
@@ -93,7 +106,9 @@ help:
 	@echo "  make dev-all       - 同时启动以上 5 个 dev server"
 	@echo "    MODE=tmux|term|bg  启动方式 (默认 tmux; term=多终端窗口; bg=后台)"
 	@echo "    LOG=0|1            Python 服务日志写入 server/.dev-logs/ (默认 0)"
-	@echo "    示例: make dev-all MODE=bg LOG=1"
+	@echo "    DB=sqlite|pgsql    数据库类型 (默认 sqlite; pgsql 需已有 PostgreSQL 实例)"
+	@echo "    CACHE=memory|redis 缓存后端 (默认 memory; redis 需已有 Redis 实例)"
+	@echo "    示例: make dev-all MODE=bg LOG=1 DB=pgsql CACHE=redis"
 	@echo "  make stop-dev-all  - 停止以上全部 dev server (按端口查找并终止)"
 	@echo ""
 	@echo "编译 / 构建:"
@@ -440,9 +455,16 @@ dev-child: install
 	@cd $(CHILD_APP) && $(PNPM) dev --host 0.0.0.0
 
 dev-all:
-	@MODE="$(MODE)" LOG="$(LOG)" bash scripts/dev/dev-all.sh
+ifeq ($(IS_WIN),1)
+	@pwsh -NoProfile -Command "$$env:MODE='$(MODE)'; $$env:LOG='$(LOG)'; $$env:DB='$(DB)'; $$env:CACHE='$(CACHE)'; & scripts/dev/dev-all.ps1"
+else
+	@MODE="$(MODE)" LOG="$(LOG)" DB="$(DB)" CACHE="$(CACHE)" bash scripts/dev/dev-all.sh
+endif
 
 stop-dev-all:
+ifeq ($(IS_WIN),1)
+	@pwsh -NoProfile -File scripts/dev/stop-dev-all.ps1
+else
 	@echo "停止全部 dev server (端口 8000/8001/8002/5173/5174)..."
 	@if command -v tmux >/dev/null 2>&1; then \
 	  if tmux has-session -t numina-dev 2>/dev/null; then \
@@ -526,6 +548,7 @@ stop-dev-all:
 	else \
 	  echo "✓ 没有运行中的 dev server"; \
 	fi
+endif
 
 # ══════════════════════════════════════════════════════════
 # 编译 / 构建

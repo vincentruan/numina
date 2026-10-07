@@ -8,11 +8,16 @@
 #   make dev-all MODE=bg                      # all background, shell redirect
 #   make dev-all LOG=1                        # Python services → log files
 #   make dev-all MODE=bg LOG=1               # background + log files
+#   make dev-all DB=pgsql                     # use PostgreSQL instead of SQLite
+#   make dev-all CACHE=redis                  # use Redis instead of in-memory
+#   make dev-all DB=pgsql CACHE=redis         # both
 #   DEV_MODE=bg DEV_LOG=1 make dev-all        # env-var form
 #
 # Parameters:
-#   MODE  — tmux (default) | term | bg
-#   LOG   — 0 (default, console only) | 1 (Python services → server/.dev-logs/)
+#   MODE   — tmux (default) | term | bg
+#   LOG    — 0 (default, console only) | 1 (Python services → server/.dev-logs/)
+#   DB     — sqlite (default) | pgsql
+#   CACHE  — memory (default) | redis
 #
 # Priority (auto-detect when MODE not set):
 #   1. tmux  → single session, 5 panes in 3+2 layout
@@ -42,11 +47,13 @@ CHILD_APP="frontend/apps/child"
 PORTS=(8000 8001 8002 5173 5174)
 
 # ── parameter parsing ────────────────────────────────────────────────
-# Accept both env vars (MODE=, LOG=) and positional args ($1, $2).
+# Accept both env vars (MODE=, LOG=, DB=, CACHE=) and positional args.
 # Env vars take precedence.
 
 MODE="${DEV_MODE:-${MODE:-}}"
 LOG="${DEV_LOG:-${LOG:-0}}"
+DB="${DEV_DB:-${DB:-sqlite}}"
+CACHE="${DEV_CACHE:-${CACHE:-memory}}"
 
 case "${1:-}" in
     tmux|term|bg) MODE="${1}" ;;
@@ -74,6 +81,14 @@ esac
 case "$LOG" in
     0|1) ;;
     *) echo "✗ 未知 LOG: $LOG (可选: 0 | 1)"; exit 1 ;;
+esac
+case "$DB" in
+    sqlite|pgsql) ;;
+    *) echo "✗ 未知 DB: $DB (可选: sqlite | pgsql)"; exit 1 ;;
+esac
+case "$CACHE" in
+    memory|redis) ;;
+    *) echo "✗ 未知 CACHE: $CACHE (可选: memory | redis)"; exit 1 ;;
 esac
 
 # ── log directory setup ──────────────────────────────────────────────
@@ -363,10 +378,15 @@ launch_background() {
 
 main() {
     echo "═══ Numina dev-all ═══"
-    echo "  MODE=$MODE  LOG=$LOG"
+    echo "  MODE=$MODE  LOG=$LOG  DB=$DB  CACHE=$CACHE"
 
     check_deps
     check_ports || exit 1
+
+    # Apply .env overrides for DB and CACHE
+    echo ""
+    python3 scripts/dev/apply_dev_env.py --db "$DB" --cache "$CACHE" || exit 1
+    echo ""
 
     case "$MODE" in
         tmux) launch_tmux ;;
