@@ -83,19 +83,20 @@
         <van-cell :title="t('travel.currency')" :value="trip.currency" />
       </van-cell-group>
 
-      <!-- Itinerary Timeline (primary view) -->
-      <van-cell-group inset class="expense-card">
-        <van-cell :title="t('travel.itinerary.title')" />
-      </van-cell-group>
-      <ItineraryTimeline
-        :trip-id="trip.id"
-        :departure-date="trip.departure_date"
-        :return-date="trip.return_date"
-        :expenses="expenses"
-        @add="openAddForm"
-        @edit="openEditForm"
-        @delete="handleDeleteRequest"
-      />
+      <!-- Itinerary Timeline (collapsible) -->
+      <van-collapse v-model="itineraryCollapseActive">
+        <van-collapse-item :title="t('travel.itinerary.title')" name="itinerary">
+          <ItineraryTimeline
+            :trip-id="trip.id"
+            :departure-date="trip.departure_date"
+            :return-date="trip.return_date"
+            :expenses="expenses"
+            @add="openAddForm"
+            @edit="openEditForm"
+            @delete="handleDeleteRequest"
+          />
+        </van-collapse-item>
+      </van-collapse>
 
       <!-- Collapsible details section (expenses + split) -->
       <van-collapse v-model="collapseActive">
@@ -194,6 +195,7 @@ const loading = ref(true)
 const showActionSheet = ref(false)
 const showReceiptScan = ref(false)
 const collapseActive = ref<string[]>([])
+const itineraryCollapseActive = ref<string[]>(['itinerary'])
 const showItineraryForm = ref(false)
 const editingItem = ref<ItineraryItem | null>(null)
 const addItemDate = ref<string | undefined>(undefined)
