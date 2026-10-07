@@ -17,16 +17,22 @@ def validate_badge_subjects(badge_subjects: set[str], db: Session) -> list[str]:
     storing subject slugs (e.g., "mathematics", "science") that must match
     actual LearningTopic.subject values in the seed data.
 
+    The virtual subject "comprehensive" is allowed — it represents cross-subject
+    badges that don't correspond to any single topic subject.
+
     Returns:
         List of error messages (empty = all good).
     """
+    # Virtual badge dimensions that don't map to a topic subject
+    VIRTUAL_SUBJECTS = {"comprehensive"}
+
     existing_subjects = {
         row[0]
         for row in db.query(LearningTopic.subject).distinct().all()
         if row[0]
     }
     errors = []
-    for subj in sorted(badge_subjects):
+    for subj in sorted(badge_subjects - VIRTUAL_SUBJECTS):
         if subj not in existing_subjects:
             errors.append(
                 f"Badge subject '{subj}' does not match any LearningTopic.subject"

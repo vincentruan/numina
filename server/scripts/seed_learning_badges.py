@@ -13,6 +13,11 @@ Usage:
     uv run python scripts/seed_learning_badges.py
 """
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from packages.db.models.literacy_badge import LiteracyBadgeDefinition
 
 # 27 badge definitions: (dimension, level, name, description, criteria_summary)
