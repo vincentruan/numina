@@ -50,6 +50,9 @@ export default defineConfig(({ mode }) => {
     },
     dedupe: ['vue', 'pinia', '@vue/runtime-dom', '@vue/runtime-core', 'vue-i18n', '@intlify/core-base', '@intlify/shared', 'vant', '@vant/use']
   },
+  // TODO: Temporary workaround for Vite 8 rolldown bug — fails to resolve
+  // ESM re-exports from @intlify/core-base (CORE_WARN_CODES_EXTEND_POINT,
+  // CORE_ERROR_CODES_EXTEND_POINT). Remove once rolldown fixes this.
   optimizeDeps: {
     exclude: ['vue-i18n', '@intlify/core-base', '@intlify/shared'],
   },
