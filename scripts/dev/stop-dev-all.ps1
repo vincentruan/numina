@@ -32,17 +32,17 @@ if (Test-Path $PidFile) {
         $pidData = Get-Content $PidFile -Raw | ConvertFrom-Json
         if ($pidData.pids) {
             Write-Host "  Found PID file, stopping background processes..."
-            foreach ($pid in $pidData.pids) {
+            foreach ($procId in $pidData.pids) {
                 try {
-                    $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                    $proc = Get-Process -Id $procId -ErrorAction SilentlyContinue
                     if ($proc) {
                         # Kill the process and its children
-                        $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $pid" -ErrorAction SilentlyContinue
-                        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                        $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $procId" -ErrorAction SilentlyContinue
+                        Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
                         foreach ($child in $children) {
                             Stop-Process -Id $child.ProcessId -Force -ErrorAction SilentlyContinue
                         }
-                        Write-Host "  Port $($pidData.services | Where-Object { $true } | Select-Object -First 1): stopped PID $pid"
+                        Write-Host "  Port $($pidData.services | Where-Object { $true } | Select-Object -First 1): stopped PID $procId"
                     }
                 } catch {}
             }
@@ -68,14 +68,14 @@ foreach ($port in $Ports) {
     $conn = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     if (-not $conn) { continue }
 
-    $pid = $conn[0].OwningProcess
-    if (-not $pid) { continue }
+    $procId = $conn[0].OwningProcess
+    if (-not $procId) { continue }
 
     try {
-        $proc = Get-Process -Id $pid -ErrorAction Stop
+        $proc = Get-Process -Id $procId -ErrorAction Stop
         $cmdline = ""
         try {
-            $cim = Get-CimInstance Win32_Process -Filter "ProcessId = $pid" -ErrorAction Stop
+            $cim = Get-CimInstance Win32_Process -Filter "ProcessId = $procId" -ErrorAction Stop
             $cmdline = $cim.CommandLine
         } catch {}
 
@@ -93,7 +93,7 @@ foreach ($port in $Ports) {
         }
 
         if (-not $matched) {
-            Write-Host "  ! Port $port cannot be identified (PID $pid):" -ForegroundColor Yellow
+            Write-Host "  ! Port $port cannot be identified (PID $procId):" -ForegroundColor Yellow
             Write-Host "    $cmdline" -ForegroundColor Yellow
             Write-Host "    Expected: $expect (numina dev server)" -ForegroundColor Yellow
             $bad = $true
@@ -103,14 +103,14 @@ foreach ($port in $Ports) {
         $found = $true
 
         # Kill process tree
-        $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $pid" -ErrorAction SilentlyContinue
-        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+        $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $procId" -ErrorAction SilentlyContinue
+        Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
         foreach ($child in $children) {
             Stop-Process -Id $child.ProcessId -Force -ErrorAction SilentlyContinue
         }
-        Write-Host "  Port $port`: stopped process tree (PID $pid)"
+        Write-Host "  Port $port`: stopped process tree (PID $procId)"
     } catch {
-        Write-Host "  Port $port`: process $pid already gone"
+        Write-Host "  Port $port`: process $procId already gone"
     }
 }
 
@@ -121,13 +121,13 @@ Start-Sleep -Milliseconds 500
 foreach ($port in $Ports) {
     $conn = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     if ($conn) {
-        $pid = $conn[0].OwningProcess
+        $procId = $conn[0].OwningProcess
         try {
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
             # Also kill children
-            Get-CimInstance Win32_Process -Filter "ParentProcessId = $pid" -ErrorAction SilentlyContinue |
+            Get-CimInstance Win32_Process -Filter "ParentProcessId = $procId" -ErrorAction SilentlyContinue |
                 ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-            Write-Host "  Port $port`: force-cleaned residual process (PID $pid)"
+            Write-Host "  Port $port`: force-cleaned residual process (PID $procId)"
             $stale = $true
         } catch {}
     }

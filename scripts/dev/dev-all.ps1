@@ -1,18 +1,18 @@
 # scripts/dev/dev-all.ps1 — Launch all Numina dev servers (Windows)
 #
 # Usage:
-#   make dev-all                              # default: bg on Windows
+#   make dev-all                              # default: term on Windows
+#   make dev-all MODE=term                    # separate PowerShell windows (default)
 #   make dev-all MODE=bg                      # background, log to files
-#   make dev-all MODE=term                    # Windows Terminal tabs
-#   make dev-all LOG=1                        # Python services → log files
+#   make dev-all LOG=1                        # Python services -> log files
 #   make dev-all MODE=bg LOG=1               # background + log files
 #   make dev-all DB=pgsql                     # use PostgreSQL instead of SQLite
 #   make dev-all CACHE=redis                  # use Redis instead of in-memory
 #   make dev-all DB=pgsql CACHE=redis         # both
 #
 # Parameters:
-#   MODE   — term | bg  (default: term if Windows Terminal available, else bg)
-#   LOG    — 0 (default) | 1 (Python services → server/.dev-logs/)
+#   MODE   — term | bg  (default: term — separate PowerShell windows)
+#   LOG    — 0 (default) | 1 (Python services -> server/.dev-logs/)
 #   DB     — sqlite (default) | pgsql
 #   CACHE  — memory (default) | redis
 
@@ -38,13 +38,9 @@ $CACHE = if ($env:DEV_CACHE) { $env:DEV_CACHE } elseif ($env:CACHE) { $env:CACHE
 if ($args.Count -ge 1 -and $args[0] -match '^(tmux|term|bg)$') { $MODE = $args[0] }
 if ($args.Count -ge 2 -and $args[1] -match '^[01]$') { $LOG = $args[1] }
 
-# Default mode: term if Windows Terminal available, else bg
+# Default mode: term (separate PowerShell windows)
 if (-not $MODE) {
-    if (Get-Command wt -ErrorAction SilentlyContinue) {
-        $MODE = "term"
-    } else {
-        $MODE = "bg"
-    }
+    $MODE = "term"
 }
 
 # Validate
@@ -173,18 +169,12 @@ function Invoke-CheckInfra {
     return $ok
 }
 
-# ── Windows Terminal mode ────────────────────────────────────────
+# ── separate windows mode ────────────────────────────────────────
 
 function Launch-Terminal {
-    $wtExe = Get-Command wt -ErrorAction SilentlyContinue
-    if (-not $wtExe) {
-        Write-Host "x Windows Terminal (wt) not found. Use MODE=bg." -ForegroundColor Red
-        return $false
-    }
+    Write-Host "Launching 5 PowerShell windows..."
 
-    Write-Host "Launching 5 Windows Terminal tabs..."
-
-    # Use a temp directory for launcher scripts (avoids inline quoting issues with wt.exe)
+    # Use a temp directory for launcher scripts
     $tmpDir = Join-Path $env:TEMP "numina-dev-wt"
     New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 
@@ -196,13 +186,16 @@ function Launch-Terminal {
         @{ Name = "child";    Port = 5174; Dir = $ChildAbs;  IsPython = $false; Cmd = "pnpm dev --host 0.0.0.0" }
     )
 
-    # Write per-service launcher scripts
+    $pwshPath = (Get-Command pwsh).Source
+
+    # Write per-service launcher scripts and start them
     foreach ($svc in $services) {
         $scriptPath = Join-Path $tmpDir "$($svc.Name).ps1"
         $scriptLines = @(
             '$ErrorActionPreference = "Continue"'
             '$OutputEncoding = [System.Text.Encoding]::UTF8'
             '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8'
+            '$host.UI.RawUI.WindowTitle = "' + $svc.Name + ' :' + $svc.Port + '"'
             "Set-Location '$($svc.Dir)'"
             "Write-Host '=== $($svc.Name) :$($svc.Port) ===' -ForegroundColor Cyan"
         )
@@ -210,25 +203,15 @@ function Launch-Terminal {
             $scriptLines += "`$env:DEV_LOG_DIR = '$DevLogDirValue'"
         }
         $scriptLines += "& $($svc.Cmd)"
+        $scriptLines += "Read-Host 'Press Enter to close'"
         $scriptLines | Set-Content -Path $scriptPath -Encoding UTF8
-    }
 
-    # Build wt.exe argument string manually.
-    # wt.exe stops parsing its own flags after seeing the first non-flag arg (the program),
-    # so & wt @array splatting passes "new-tab" as an argument to pwsh instead of wt.
-    # Start-Process with a single ArgumentList string passes it verbatim to CreateProcess.
-    $pwshPath = (Get-Command pwsh).Source
-    $tabParts = @()
-    foreach ($svc in $services) {
-        $scriptPath = Join-Path $tmpDir "$($svc.Name).ps1"
-        $tabParts += "--title `"${svc.Name} :$($svc.Port)`" `"$pwshPath`" -NoExit -File `"$scriptPath`""
+        # Start each service in its own PowerShell window
+        Start-Process -FilePath $pwshPath -ArgumentList "-NoExit", "-File", "`"$scriptPath`"" -WindowStyle Normal
     }
-    $wtArgString = $tabParts -join " new-tab "
-
-    Start-Process -FilePath $wtExe.Source -ArgumentList $wtArgString
 
     Write-Host ""
-    Write-Host "5 services launched in Windows Terminal tabs."
+    Write-Host "5 services launched in separate PowerShell windows."
     Write-Host "  Stop: make stop-dev-all"
     Write-LogInfo
     return $true
@@ -250,7 +233,7 @@ function Launch-Background {
         @{ Name = "child";    Port = 5174; Dir = $ChildAbs;  Cmd = "pnpm dev --host 0.0.0.0"; IsPython = $false }
     )
 
-    $pids = @()
+    $procIds = @()
     foreach ($svc in $services) {
         $logFile = Join-Path $LogDir "$($svc.Name).log"
         $pwshScript = @"
@@ -264,7 +247,7 @@ $(if ($svc.IsPython) { "`$env:DEV_LOG_DIR = '$DevLogDirValue'" })
             -RedirectStandardError (Join-Path $LogDir "$($svc.Name)-err.log") `
             -PassThru -WindowStyle Hidden
 
-        $pids += $proc.Id
+        $procIds += $proc.Id
         Write-Host "  + $($svc.Name) :$($svc.Port) (PID $($proc.Id)) -> $logFile"
     }
 
@@ -273,7 +256,7 @@ $(if ($svc.IsPython) { "`$env:DEV_LOG_DIR = '$DevLogDirValue'" })
     New-Item -ItemType Directory -Force -Path (Split-Path $pidFile) | Out-Null
     $pidData = @{
         services = $services | ForEach-Object { @{ name = $_.Name; port = $_.Port } }
-        pids = $pids
+        pids = $procIds
         startedAt = (Get-Date -Format "o")
     } | ConvertTo-Json
     Set-Content -Path $pidFile -Value $pidData -Encoding UTF8
@@ -290,16 +273,16 @@ $(if ($svc.IsPython) { "`$env:DEV_LOG_DIR = '$DevLogDirValue'" })
     # Keep script alive until Ctrl+C
     try {
         Write-Host "Press Ctrl+C to stop all services..."
-        Wait-Process -Id $pids -ErrorAction SilentlyContinue
+        Wait-Process -Id $procIds -ErrorAction SilentlyContinue
     } finally {
         Write-Host "`nStopping all services..."
-        foreach ($pid in $pids) {
+        foreach ($procId in $procIds) {
             try {
-                $p = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
                 if ($p) {
-                    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                    Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
                     # Also kill child processes
-                    Get-CimInstance Win32_Process -Filter "ParentProcessId = $pid" -ErrorAction SilentlyContinue |
+                    Get-CimInstance Win32_Process -Filter "ParentProcessId = $procId" -ErrorAction SilentlyContinue |
                         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
                 }
             } catch {}

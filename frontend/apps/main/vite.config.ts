@@ -50,6 +50,9 @@ export default defineConfig(({ mode }) => {
     },
     dedupe: ['vue', 'pinia', '@vue/runtime-dom', '@vue/runtime-core', 'vue-i18n', '@intlify/core-base', '@intlify/shared', 'vant', '@vant/use']
   },
+  optimizeDeps: {
+    exclude: ['vue-i18n', '@intlify/core-base', '@intlify/shared'],
+  },
   server: {
     port: 5173,
     strictPort: true,
