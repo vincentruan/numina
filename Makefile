@@ -28,6 +28,17 @@ PYTHON ?= python3
 UV     ?= uv
 PNPM   ?= pnpm
 COMPOSE ?= docker compose
+
+# ── 文件同步工具（优先 rsync，不可用时用 scp）────────────
+# 运行时检测 rsync 是否可用，Windows Git Bash 通常没有 rsync
+HAS_RSYNC := $(shell command -v rsync 2>/dev/null)
+ifdef HAS_RSYNC
+SYNC = rsync -avz --progress -e "ssh -p $${DEPLOY_SSH_PORT:-22}"
+SYNC_DIR = rsync -avz --progress -e "ssh -p $${DEPLOY_SSH_PORT:-22}"
+else
+SYNC = scp -P $${DEPLOY_SSH_PORT:-22}
+SYNC_DIR = scp -P $${DEPLOY_SSH_PORT:-22} -r
+endif
 OPENSSL ?= openssl
 
 SERVER_DIR   := server
@@ -740,7 +751,7 @@ deploy-remote:
 	echo "═══════════════════════════════════════════════" && \
 	echo "" && \
 	echo "══ 同步配置文件 ══" && \
-	rsync -avz --progress -e "ssh -p $${DEPLOY_SSH_PORT:-22}" \
+	$(SYNC) \
 		docker-compose.production.yml \
 		docker-compose.production-pg.yml \
 		nginx.production.conf \
@@ -748,13 +759,13 @@ deploy-remote:
 		$${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST}:$${DEPLOY_REMOTE_DIR}/ && \
 	ssh -p $${DEPLOY_SSH_PORT:-22} $${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST} \
 		"mkdir -p $${DEPLOY_REMOTE_DIR}/scripts" && \
-	rsync -avz --progress -e "ssh -p $${DEPLOY_SSH_PORT:-22}" \
+	$(SYNC) \
 		scripts/init-prod-databases.sql \
 		$${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST}:$${DEPLOY_REMOTE_DIR}/scripts/ && \
 	echo "" && \
 	if [ -f "$(DIST_DIR)/images.tar.gz" ]; then \
 		echo "══ 传输镜像包 ══" && \
-		rsync -avz --progress -e "ssh -p $${DEPLOY_SSH_PORT:-22}" \
+		$(SYNC) \
 			$(DIST_DIR)/images.tar.gz \
 			$${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST}:$${DEPLOY_REMOTE_DIR}/images.tar.gz && \
 		echo "✓ 镜像包已传输"; \
