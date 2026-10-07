@@ -14,6 +14,25 @@
       </div>
 
       <div class="form-body">
+        <!-- Custom type creation (moved to top for visibility) -->
+        <van-cell-group v-if="showCustomTypeForm" inset class="custom-type-form">
+          <van-field
+            v-model="newCustomTypeName"
+            :label="t('travel.itinerary.form.customTypeName')"
+            clearable
+            :placeholder="t('travel.itinerary.form.customTypeName')"
+            autofocus
+          />
+          <div class="custom-type-actions">
+            <van-button size="small" type="primary" :loading="creatingType" :disabled="!newCustomTypeName.trim()" @click="createCustomType">
+              {{ t('common.confirm') }}
+            </van-button>
+            <van-button size="small" plain @click="showCustomTypeForm = false">
+              {{ t('common.cancel') }}
+            </van-button>
+          </div>
+        </van-cell-group>
+
         <!-- Type selector -->
         <van-cell-group inset>
           <van-field
@@ -22,7 +41,11 @@
             readonly
             is-link
             @click="showTypePicker = true"
-          />
+          >
+            <template #left-icon>
+              <IIcon v-if="selectedTypeIcon" :icon="selectedTypeIcon" size="18" class="type-field-icon" />
+            </template>
+          </van-field>
         </van-cell-group>
 
         <!-- Date picker -->
@@ -73,6 +96,19 @@
             clearable
             placeholder="--:--"
           />
+          <!-- Cost amount with currency selector -->
+          <van-field
+            v-model="form.cost_amount"
+            :label="t('travel.itinerary.form.costAmount')"
+            type="number"
+            inputmode="decimal"
+            clearable
+            placeholder="0.00"
+          >
+            <template #left-icon>
+              <CurrencyButton v-model="form.cost_currency" />
+            </template>
+          </van-field>
         </van-cell-group>
 
         <!-- Type-specific fields -->
@@ -148,47 +184,15 @@
           />
         </van-cell-group>
 
-        <!-- Cost section -->
-        <van-cell-group inset>
+        <!-- Purchase date (shown when cost is entered) -->
+        <van-cell-group v-if="form.cost_amount" inset>
           <van-field
-            v-model="form.cost_amount"
-            :label="t('travel.itinerary.form.costAmount')"
-            type="number"
-            clearable
-            placeholder="0.00"
-          />
-          <van-field
-            v-model="form.cost_currency"
-            :label="t('travel.itinerary.form.costCurrency')"
-            clearable
-            placeholder="CNY"
-          />
-          <van-field
-            v-if="form.cost_amount"
             :model-value="form.purchase_date || form.date"
             :label="t('travel.itinerary.purchaseDate')"
             readonly
             is-link
             @click="showPurchaseDatePicker = true"
           />
-        </van-cell-group>
-
-        <!-- Custom type creation -->
-        <van-cell-group v-if="showCustomTypeForm" inset class="custom-type-form">
-          <van-field
-            v-model="newCustomTypeName"
-            :label="t('travel.itinerary.form.customTypeName')"
-            clearable
-            :placeholder="t('travel.itinerary.form.customTypeName')"
-          />
-          <div class="custom-type-actions">
-            <van-button size="small" type="primary" :loading="creatingType" @click="createCustomType">
-              {{ t('common.confirm') }}
-            </van-button>
-            <van-button size="small" plain @click="showCustomTypeForm = false">
-              {{ t('common.cancel') }}
-            </van-button>
-          </div>
         </van-cell-group>
       </div>
 
@@ -214,7 +218,14 @@
         :model-value="[form.type]"
         @confirm="onTypeConfirm"
         @cancel="showTypePicker = false"
-      />
+      >
+        <template #option="{ option }">
+          <div class="type-option">
+            <IIcon v-if="option.icon" :icon="option.icon" size="18" class="type-icon" />
+            <span>{{ option.text }}</span>
+          </div>
+        </template>
+      </van-picker>
     </van-popup>
 
     <!-- Date picker popup -->
@@ -258,6 +269,8 @@ import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { useTravelStore } from '@/stores/travel'
 import { createItineraryType } from '@/api/travel'
+import IIcon from '@/components/IIcon.vue'
+import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import type { ItineraryItem, ItineraryItemCreate, ItineraryItemType } from '@/types/travel'
 
 const props = defineProps<{
@@ -353,19 +366,30 @@ const startDateAsDate = computed(() => {
 
 const CORE_TYPES: ItineraryItemType[] = ['accommodation', 'dining', 'transport', 'activity']
 
+// Icon mapping for core types
+const TYPE_ICONS: Record<string, string> = {
+  accommodation: 'lucide:bed',
+  dining: 'lucide:utensils-crossed',
+  transport: 'lucide:car',
+  activity: 'lucide:map-pin',
+  custom: 'lucide:tag',
+}
+
 const typeColumns = computed(() => {
   const core = CORE_TYPES.map(type => ({
     text: t(`travel.itinerary.types.${type}`),
     value: type,
+    icon: TYPE_ICONS[type],
   }))
   const custom = store.itineraryTypes.map(ct => ({
     text: ct.name,
     value: `custom:${ct.id}`,
+    icon: ct.icon || TYPE_ICONS.custom,
   }))
   return [
     ...core,
     ...custom,
-    { text: `+ ${t('travel.itinerary.form.addCustomType')}`, value: '__add_custom__' },
+    { text: `+ ${t('travel.itinerary.form.addCustomType')}`, value: '__add_custom__', icon: 'lucide:plus' },
   ]
 })
 
@@ -375,6 +399,14 @@ const selectedTypeName = computed(() => {
     if (ct) return ct.name
   }
   return t(`travel.itinerary.types.${form.value.type}`)
+})
+
+const selectedTypeIcon = computed(() => {
+  if (form.value.type === 'custom' && form.value.custom_type_id) {
+    const ct = store.itineraryTypes.find(c => c.id === form.value.custom_type_id)
+    if (ct) return ct.icon || TYPE_ICONS.custom
+  }
+  return TYPE_ICONS[form.value.type]
 })
 
 const canSubmit = computed(() => {
@@ -622,6 +654,10 @@ function handleClose() {
 
 .custom-type-form {
   padding: 8px 0;
+  background: var(--primary-color-light, rgba(25, 137, 250, 0.05));
+  border: 1px solid var(--van-primary-color, #1989fa);
+  border-radius: 8px;
+  margin: 8px 12px;
 }
 
 .custom-type-actions {
@@ -648,5 +684,25 @@ function handleClose() {
 
 .form-footer {
   padding: 12px 16px;
+}
+
+/* Type picker option with icon */
+.type-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.type-icon {
+  color: var(--van-primary-color, #1989fa);
+}
+
+.type-field-icon {
+  color: var(--van-primary-color, #1989fa);
+  margin-right: 4px;
+}
+
+:deep(.van-picker) .type-option {
+  width: 100%;
 }
 </style>
