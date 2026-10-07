@@ -753,7 +753,7 @@ deploy-remote:
 		$${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST}:$${DEPLOY_REMOTE_DIR}/scripts/ && \
 	echo "" && \
 	if [ -f "$(DIST_DIR)/images.tar.gz" ]; then \
-		echo "══ 传输镜像包 ($(shell ls -lh $(DIST_DIR)/images.tar.gz 2>/dev/null | awk '{print $$5}')) ══" && \
+		echo "══ 传输镜像包 ══" && \
 		rsync -avz --progress -e "ssh -p $${DEPLOY_SSH_PORT:-22}" \
 			$(DIST_DIR)/images.tar.gz \
 			$${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST}:$${DEPLOY_REMOTE_DIR}/images.tar.gz && \
