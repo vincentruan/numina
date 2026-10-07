@@ -219,10 +219,10 @@
         @confirm="onTypeConfirm"
         @cancel="showTypePicker = false"
       >
-        <template #option="{ option }">
+        <template #option="{ text, icon }">
           <div class="type-option">
-            <IIcon v-if="option.icon" :icon="option.icon" size="18" class="type-icon" />
-            <span>{{ option.text }}</span>
+            <IIcon v-if="icon" :icon="icon" size="18" class="type-icon" />
+            <span>{{ text }}</span>
           </div>
         </template>
       </van-picker>
