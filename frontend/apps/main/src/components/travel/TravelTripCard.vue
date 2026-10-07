@@ -25,10 +25,11 @@
             <span class="budget-spent">{{ formatAmount(trip.actual_spend) }}</span>
             <span class="budget-separator">/</span>
             <span class="budget-total">{{ formatAmount(trip.planned_budget) }}</span>
+            <span class="budget-percentage" :style="{ color: budgetColor }">{{ budgetPercentage }}%</span>
           </div>
           <van-progress
             :percentage="Math.min(budgetPercentage, 100)"
-            :color="budgetPercentage > 100 ? '#ee0a24' : '#1989fa'"
+            :color="budgetColor"
             :stroke-width="6"
             :show-pivot="false"
           />
@@ -93,6 +94,14 @@ const budgetPercentage = computed(() => {
   const budget = parseFloat(props.trip.planned_budget) || 0
   if (budget === 0) return 0
   return Math.round((spend / budget) * 100)
+})
+
+const budgetColor = computed(() => {
+  const percentage = budgetPercentage.value
+  if (percentage > 100) return '#ee0a24' // 超支：深红色
+  if (percentage >= 80) return '#ee0a24' // 80-100%：红色（危险）
+  if (percentage >= 50) return '#ff976a' // 50-80%：橙色（警告）
+  return '#07c160' // <50%：绿色（安全）
 })
 </script>
 
@@ -159,5 +168,10 @@ const budgetPercentage = computed(() => {
 }
 .budget-total {
   color: var(--text-secondary);
+}
+.budget-percentage {
+  margin-left: auto;
+  font-weight: 600;
+  font-size: 13px;
 }
 </style>
