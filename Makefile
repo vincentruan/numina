@@ -73,14 +73,15 @@ LOCAL_IMAGE_TAG ?= latest
 DOCKER_PLATFORM ?= linux/amd64
 DIST_DIR ?= dist
 
-.PHONY: help check install \
+.PHONY: help help-all help-setup help-dev help-build help-quality help-test help-migrate help-docker help-deploy \
+        check install \
         setup setup-keys setup-env setup-env-db setup-data setup-db setup-db-mysql setup-db-postgres setup-invitation-codes \
         dev-backend dev-agent dev-worker dev-frontend dev-child dev-all stop-dev-all \
         build build-main build-child \
         typecheck lint format \
         test test-backend test-agent test-worker test-server test-frontend test-e2e \
         migrate migrate-revision migrate-down migrate-current \
-        up down build-docker pull logs logs-backend logs-agent logs-worker logs-frontend ps restart shell up-prod down-prod \
+        up down build-docker pull logs logs-backend logs-agent logs-worker logs-frontend ps restart shell up-prod down-prod up-dev down-dev \
         build-local package-images deploy-remote deploy-local \
         deploy deploy-images deploy-dev \
         clean
@@ -88,100 +89,297 @@ DIST_DIR ?= dist
 # ══════════════════════════════════════════════════════════
 # Help
 # ══════════════════════════════════════════════════════════
+
+# ── Help formatting helpers ──────────────────────────────────────
+define help_header
+	@echo ""
+	@echo "╔═══════════════════════════════════════════════════╗"
+	@echo "║         Numina - 家庭资产可视化                   ║"
+	@echo "╚═══════════════════════════════════════════════════╝"
+	@echo ""
+endef
+
+define help_footer
+	@echo ""
+endef
+
 help:
-	@echo "Numina - 家庭资产可视化"
+	$(call help_header)
+	@echo "  快速开始:"
+	@echo "    make install              安装全部依赖"
+	@echo "    make setup                交互式初始化 (密钥 + .env + 数据目录)"
+	@echo "    make deploy               构建并部署到本地 Docker"
+	@echo "    make dev-all              启动 5 个本地 dev server"
 	@echo ""
-	@echo "环境准备:"
-	@echo "  make check         - 检查 uv / pnpm / docker 等依赖工具"
-	@echo "  make install       - 安装服务端 (uv sync) + 前端 (pnpm install) 依赖"
+	@echo "  命令分类 (运行查看详细用法):"
+	@echo "    make help-setup           环境准备与初始化"
+	@echo "    make help-dev             本地开发 (热重载)"
+	@echo "    make help-build           编译构建"
+	@echo "    make help-quality         质量检查 (typecheck / lint / format)"
+	@echo "    make help-test            测试"
+	@echo "    make help-migrate         数据库迁移 (Alembic)"
+	@echo "    make help-docker          Docker 容器管理"
+	@echo "    make help-deploy          生产部署 (Docker / GHCR / 本地编译)"
 	@echo ""
-	@echo "初始化部署 (首次部署必须运行):"
-	@echo "  make setup         - 交互式初始化 (生成密钥 + .env + 数据目录 + 邀请码)"
-	@echo "  make setup-keys    - 仅生成所有安全密钥 (SECRET_KEY, 加密密钥等)"
-	@echo "  make setup-env     - 生成 .env 配置文件 (从模板)"
-	@echo "  make setup-env-db  - 切换部署模式 (production PostgreSQL / dev SQLite)"
-	@echo "  make setup-data    - 创建数据目录 (.numina/data/{db,uploads})"
-	@echo "  make setup-db      - 初始化数据库 (默认 SQLite; 可选 NUMINA_DB=mysql|postgres)"
-	@echo "  make setup-db-mysql     - 启动 MySQL 容器并初始化"
-	@echo "  make setup-db-postgres  - 启动 PostgreSQL 容器并初始化"
-	@echo "  make setup-invitation-codes              - 生成家庭邀请码 (默认随机20个)"
-	@echo "    INVITATION_CODES=A,B,C make setup-invitation-codes  - 指定邀请码"
-	@echo "    INVITATION_CODE_COUNT=5 make setup-invitation-codes - 指定随机数量"
+	@echo "  make help-all               显示全部命令"
+	@echo "  make help                   显示本概览"
+	$(call help_footer)
+
+help-all:
+	$(call help_header)
+	@$(MAKE) --no-print-directory _help-setup
+	@$(MAKE) --no-print-directory _help-dev
+	@$(MAKE) --no-print-directory _help-build
+	@$(MAKE) --no-print-directory _help-quality
+	@$(MAKE) --no-print-directory _help-test
+	@$(MAKE) --no-print-directory _help-migrate
+	@$(MAKE) --no-print-directory _help-docker
+	@$(MAKE) --no-print-directory _help-deploy
+	@$(MAKE) --no-print-directory _help-maintenance
+	$(call help_footer)
+
+help-setup:
+	$(call help_header)
+	@$(MAKE) --no-print-directory _help-setup
+	$(call help_footer)
+
+help-dev:
+	$(call help_header)
+	@$(MAKE) --no-print-directory _help-dev
+	$(call help_footer)
+
+help-build:
+	$(call help_header)
+	@$(MAKE) --no-print-directory _help-build
+	$(call help_footer)
+
+help-quality:
+	$(call help_header)
+	@$(MAKE) --no-print-directory _help-quality
+	$(call help_footer)
+
+help-test:
+	$(call help_header)
+	@$(MAKE) --no-print-directory _help-test
+	$(call help_footer)
+
+help-migrate:
+	$(call help_header)
+	@$(MAKE) --no-print-directory _help-migrate
+	$(call help_footer)
+
+help-docker:
+	$(call help_header)
+	@$(MAKE) --no-print-directory _help-docker
+	$(call help_footer)
+
+help-deploy:
+	$(call help_header)
+	@$(MAKE) --no-print-directory _help-deploy
+	$(call help_footer)
+
+# ── Internal help targets (prefixed with _) ────────────────────────
+
+_help-setup:
+	@echo "┌───────────────────────────────────────────────────┐"
+	@echo "│  环境准备与初始化                                   │"
+	@echo "└───────────────────────────────────────────────────┘"
 	@echo ""
-	@echo "本地开发 (热重载，阻塞终端，手动运行):"
-	@echo "  make dev-backend   - 后端 API  :8000"
-	@echo "  make dev-agent     - AI agent  :8001"
-	@echo "  make dev-worker    - 调度 worker :8002"
-	@echo "  make dev-frontend  - 主端 (成人) :5173"
-	@echo "  make dev-child     - 子端       :5174"
-	@echo "  make dev-all       - 同时启动以上 5 个 dev server"
-	@echo "    MODE=tmux|term|bg  启动方式 (默认 tmux; term=多终端窗口; bg=后台)"
-	@echo "    LOG=0|1            Python 服务日志写入 server/.dev-logs/ (默认 0)"
-	@echo "    DB=sqlite|pgsql    数据库类型 (默认 sqlite; pgsql 需已有 PostgreSQL 实例)"
-	@echo "    CACHE=memory|redis 缓存后端 (默认 memory; redis 需已有 Redis 实例)"
-	@echo "    示例: make dev-all MODE=bg LOG=1 DB=pgsql CACHE=redis"
-	@echo "  make stop-dev-all  - 停止以上全部 dev server (按端口查找并终止)"
+	@echo "  基础:"
+	@echo "    make check                    检查 uv / pnpm / docker 等依赖工具"
+	@echo "    make install                  安装服务端 (uv sync) + 前端 (pnpm install) 依赖"
 	@echo ""
-	@echo "编译 / 构建:"
-	@echo "  make build         - 构建主端 + 子端 (生产产物)"
-	@echo "  make build-main    - 仅构建主端"
-	@echo "  make build-child   - 仅构建子端"
+	@echo "  首次部署 (按顺序执行):"
+	@echo "    make setup                    交互式一键初始化 (密钥 + .env + 数据目录 + 邀请码)"
 	@echo ""
-	@echo "质量检查:"
-	@echo "  make typecheck     - 前端 vue-tsc 类型检查 (主端 + 子端)"
-	@echo "  make lint          - 前端 ESLint + 服务端 ruff check"
-	@echo "  make format        - 服务端 ruff format + 前端 prettier"
+	@echo "  分步初始化:"
+	@echo "    make setup-keys               生成安全密钥 (SECRET_KEY, 加密密钥等)"
+	@echo "    make setup-env                从模板生成 .env 配置文件"
+	@echo "    make setup-env-db             切换部署模式:"
+	@echo "                                    production — PostgreSQL + 可选 Redis"
+	@echo "                                    dev        — SQLite, 无 Redis"
+	@echo "                                  用法: make setup-env-db NUMINA_DB_MODE=production"
+	@echo "    make setup-data               创建数据目录 (.numina/data/{db,uploads})"
+	@echo "    make setup-db                 初始化数据库 (默认 SQLite)"
+	@echo "                                  用法: make setup-db NUMINA_DB=postgres"
+	@echo "                                        make setup-db NUMINA_DB=mysql"
+	@echo "    make setup-db-postgres        启动 PostgreSQL 容器并初始化 (含 deerflow 库)"
+	@echo "    make setup-db-mysql           启动 MySQL 容器并初始化"
 	@echo ""
-	@echo "测试:"
-	@echo "  make test          - 服务端 pytest (backend) + 前端 vitest"
-	@echo "  make test-backend  - 服务端 backend 套件"
-	@echo "  make test-agent    - 服务端 agent 套件"
-	@echo "  make test-worker   - 服务端 scheduler_worker 套件"
-	@echo "  make test-server   - 服务端全部测试 (tests/)"
-	@echo "  make test-frontend - 前端 vitest (主端 + 子端)"
-	@echo "  make test-e2e      - Playwright E2E 回归 (基于 Docker)"
+	@echo "  邀请码:"
+	@echo "    make setup-invitation-codes   随机生成邀请码 (默认 20 个)"
+	@echo "                                  指定数量: INVITATION_CODE_COUNT=5 make setup-invitation-codes"
+	@echo "                                  指定内容: INVITATION_CODES=A,B,C make setup-invitation-codes"
+
+_help-dev:
+	@echo "┌───────────────────────────────────────────────────┐"
+	@echo "│  本地开发 (热重载，阻塞终端，手动运行)                │"
+	@echo "└───────────────────────────────────────────────────┘"
 	@echo ""
-	@echo "数据库迁移 (Alembic):"
-	@echo "  make migrate                - alembic upgrade head"
-	@echo "  make migrate-current        - 查看当前迁移版本"
-	@echo "  make migrate-revision m=msg - 生成新迁移 (autogenerate)"
-	@echo "  make migrate-down           - 回退一步"
+	@echo "  单个服务:"
+	@echo "    make dev-backend              后端 API        :8000"
+	@echo "    make dev-agent                AI agent        :8001"
+	@echo "    make dev-worker               调度 worker     :8002"
+	@echo "    make dev-frontend             主端 (成人)     :5173"
+	@echo "    make dev-child                子端 (儿童)     :5174"
 	@echo ""
-	@echo "Docker 部署:"
-	@echo "  标准 (docker-compose.yml, PostgreSQL + Redis):"
-	@echo "    make up            - 构建并启动全部服务"
-	@echo "    make down          - 停止并移除容器"
-	@echo "  开发 (docker-compose.dev.yml, SQLite, 无 Redis):"
-	@echo "    make up-dev        - 开发模式启动 (快速验证)"
-	@echo "    make down-dev      - 停止开发容器"
-	@echo "  通用:"
-	@echo "    make build-docker  - 仅构建镜像 (不启动)"
-	@echo "    make pull          - 拉取外部镜像 (nginx / postgres / redis)"
-	@echo "    make ps            - 查看容器状态"
-	@echo "    make restart       - 重启全部服务"
-	@echo "    make logs          - 跟踪全部日志"
-	@echo "    make logs-backend  - 跟踪后端日志"
-	@echo "    make logs-agent    - 跟踪 agent 日志"
-	@echo "    make logs-worker   - 跟踪 worker 日志"
-	@echo "    make logs-frontend - 跟踪前端日志"
-	@echo "    make shell         - 进入 backend 容器 shell"
-	@echo "  生产 (docker-compose.production.yml, GHCR 镜像):"
-	@echo "    make up-prod       - 拉取 GHCR 镜像并启动"
-	@echo "    make down-prod     - 停止 production 容器"
+	@echo "  全部服务:"
+	@echo "    make dev-all                  同时启动以上 5 个 dev server"
+	@echo "    make stop-dev-all             停止全部 dev server (按端口查找并终止)"
 	@echo ""
-	@echo "本地编译镜像 (CI 额度不足时替代方案):"
-	@echo "  make build-local   - 本地编译全部 Docker 镜像 (可指定 DOCKER_PLATFORM=linux/amd64)"
-	@echo "  make package-images - 打包镜像为 dist/images.tar.gz (用于传输到服务器)"
-	@echo "  make deploy-remote - 将镜像包和配置推送到远程服务器并部署"
-	@echo "  make deploy-local  - 完整流程: build + package + deploy-remote (验证在远程完成)"
+	@echo "  dev-all 参数 (均可选，大小写不敏感):"
 	@echo ""
-	@echo "部署:"
-	@echo "  make deploy        - 生产部署 (本地构建 + 健康检查 + 邀请码初始化)"
-	@echo "  make deploy-images - 拉取预构建镜像部署 (默认 GHCR，可自定义 *_IMAGE)"
-	@echo "  make deploy-dev    - 开发模式部署 (放宽安全检查 + 种子数据)"
+	@echo "    MODE=<value>                  启动方式"
+	@echo "      tmux    (默认)              tmux 分屏 (上三下二布局)"
+	@echo "      term                        独立终端窗口 (macOS Terminal / iTerm2)"
+	@echo "      bg                          后台运行，日志输出到文件"
 	@echo ""
-	@echo "维护:"
-	@echo "  make clean         - 清理构建产物与缓存 (不动 node_modules / 数据)"
+	@echo "    LOG=<0|1>                     Python 服务日志 (默认 0)"
+	@echo "      0       (默认)              控制台输出"
+	@echo "      1                           写入 server/.dev-logs/{backend,agent,worker}.log"
+	@echo ""
+	@echo "    DB=<value>                    数据库类型 (默认 sqlite)"
+	@echo "      sqlite  (默认)              SQLite, 零配置"
+	@echo "      pgsql                       PostgreSQL (需已有实例，端口 5432)"
+	@echo ""
+	@echo "    CACHE=<value>                 缓存后端 (默认 memory)"
+	@echo "      memory  (默认)              进程内内存缓存"
+	@echo "      redis                       Redis (需已有实例，端口 6379)"
+	@echo ""
+	@echo "  示例:"
+	@echo "    make dev-all                                         # 默认 tmux + sqlite + memory"
+	@echo "    make dev-all MODE=bg LOG=1                           # 后台 + 日志文件"
+	@echo "    make dev-all DB=pgsql CACHE=redis                    # PostgreSQL + Redis"
+	@echo "    make dev-all MODE=BG LOG=1 DB=PGSQL CACHE=REDIS      # 参数大小写不敏感"
+	@echo ""
+	@echo "  tmux 布局 (上三下二):"
+	@echo "    ┌──────────┬──────────┬──────────┐"
+	@echo "    │ backend  │  agent   │  worker  │"
+	@echo "    │  :8000   │  :8001   │  :8002   │"
+	@echo "    ├───────────┴────┬─────┴──────────┤"
+	@echo "    │   frontend     │     child      │"
+	@echo "    │    :5173       │     :5174      │"
+	@echo "    └────────────────┴────────────────┘"
+
+_help-build:
+	@echo "┌───────────────────────────────────────────────────┐"
+	@echo "│  编译构建                                          │"
+	@echo "└───────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "    make build                    构建主端 + 子端 (生产产物)"
+	@echo "    make build-main               仅构建主端 (frontend/apps/main)"
+	@echo "    make build-child              仅构建子端 (frontend/apps/child)"
+	@echo ""
+	@echo "  Docker 镜像构建:"
+	@echo "    make build-docker             构建 docker-compose.yml 中的全部镜像"
+	@echo "    make build-local              本地编译生产镜像"
+	@echo "                                  交叉编译: DOCKER_PLATFORM=linux/amd64 make build-local"
+	@echo "                                  自定义标签: LOCAL_IMAGE_TAG=v1.0 make build-local"
+	@echo "    make package-images           打包镜像 → dist/images.tar.gz (传输到服务器)"
+
+_help-quality:
+	@echo "┌───────────────────────────────────────────────────┐"
+	@echo "│  质量检查                                          │"
+	@echo "└───────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "    make typecheck                前端 vue-tsc 类型检查 (主端 + 子端)"
+	@echo "    make lint                     前端 ESLint + 服务端 ruff check"
+	@echo "    make format                   服务端 ruff format + 前端 prettier"
+
+_help-test:
+	@echo "┌───────────────────────────────────────────────────┐"
+	@echo "│  测试                                              │"
+	@echo "└───────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "  全部:"
+	@echo "    make test                     服务端 pytest + 前端 vitest"
+	@echo ""
+	@echo "  服务端 (pytest):"
+	@echo "    make test-server              服务端全部测试 (tests/)"
+	@echo "    make test-backend             后端套件 (tests/backend)"
+	@echo "    make test-agent               AI agent 套件 (tests/agent)"
+	@echo "    make test-worker              调度 worker 套件 (tests/scheduler_worker)"
+	@echo ""
+	@echo "  前端 (vitest):"
+	@echo "    make test-frontend            主端 + 子端"
+	@echo ""
+	@echo "  E2E:"
+	@echo "    make test-e2e                 Playwright E2E 回归 (基于 Docker)"
+
+_help-migrate:
+	@echo "┌───────────────────────────────────────────────────┐"
+	@echo "│  数据库迁移 (Alembic, backend 专属)                  │"
+	@echo "└───────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "    make migrate                        alembic upgrade head (应用全部迁移)"
+	@echo "    make migrate-current                查看当前迁移版本"
+	@echo "    make migrate-revision m=\"描述\"      生成新迁移 (autogenerate)"
+	@echo "    make migrate-down                   回退一步 (downgrade -1)"
+
+_help-docker:
+	@echo "┌───────────────────────────────────────────────────┐"
+	@echo "│  Docker 容器管理                                    │"
+	@echo "└───────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "  标准模式 (docker-compose.yml, PostgreSQL + Redis):"
+	@echo "    make up                       构建并启动全部服务"
+	@echo "    make down                     停止并移除容器"
+	@echo ""
+	@echo "  开发模式 (docker-compose.dev.yml, SQLite, 无 Redis):"
+	@echo "    make up-dev                   开发模式启动 (快速验证)"
+	@echo "    make down-dev                 停止开发容器"
+	@echo ""
+	@echo "  生产模式 (docker-compose.production.yml, GHCR 镜像):"
+	@echo "    make up-prod                  拉取 GHCR 镜像并启动"
+	@echo "    make down-prod                停止 production 容器"
+	@echo ""
+	@echo "  通用管理:"
+	@echo "    make pull                     拉取外部镜像 (nginx / postgres / redis)"
+	@echo "    make ps                       查看容器状态"
+	@echo "    make restart                  重启全部服务"
+	@echo "    make shell                    进入 backend 容器 shell"
+	@echo ""
+	@echo "  日志:"
+	@echo "    make logs                     跟踪全部日志"
+	@echo "    make logs-backend             跟踪后端日志"
+	@echo "    make logs-agent               跟踪 agent 日志"
+	@echo "    make logs-worker              跟踪 worker 日志"
+	@echo "    make logs-frontend            跟踪前端日志 (主端 + 子端)"
+
+_help-deploy:
+	@echo "┌───────────────────────────────────────────────────┐"
+	@echo "│  生产部署                                          │"
+	@echo "└───────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "  方式一: 本地构建部署 (默认):"
+	@echo "    make deploy                   本地构建 + 健康检查 + 邀请码初始化"
+	@echo ""
+	@echo "  方式二: 拉取预构建镜像 (默认 GHCR):"
+	@echo "    make deploy-images            拉取镜像并部署"
+	@echo "                                  自定义镜像: BACKEND_IMAGE=xxx make deploy-images"
+	@echo ""
+	@echo "  方式三: 本地编译 + 远程部署 (CI 额度不足时):"
+	@echo "    make build-local              本地编译全部 Docker 镜像"
+	@echo "    make package-images           打包为 dist/images.tar.gz"
+	@echo "    make deploy-remote            传输到远程服务器并部署"
+	@echo "    make deploy-local             一键: build-local + package + deploy-remote"
+	@echo ""
+	@echo "  开发模式部署:"
+	@echo "    make deploy-dev               SQLite + 放宽安全检查 + 种子数据"
+	@echo "                                  测试账号: demouser/DemoPass123"
+	@echo ""
+	@echo "  配置变量:"
+	@echo "    NUMINA_DOMAIN                 生产域名 (用于 CORS, 默认 localhost)"
+	@echo "    LOCAL_IMAGE_PREFIX            本地镜像前缀 (默认 numina)"
+	@echo "    LOCAL_IMAGE_TAG               本地镜像标签 (默认 latest)"
+	@echo "    DOCKER_PLATFORM               目标平台 (如 linux/amd64)"
+
+_help-maintenance:
+	@echo "┌───────────────────────────────────────────────────┐"
+	@echo "│  维护                                              │"
+	@echo "└───────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "    make clean                    清理构建产物与缓存 (不动 node_modules / 数据)"
 
 # ══════════════════════════════════════════════════════════
 # 环境准备
