@@ -436,6 +436,10 @@ async def login(db: Session, req: LoginRequest) -> TokenResponse:
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     # User found - normal verification
+    # Defense-in-depth: reject synthetic service users (external_token role)
+    if user.role == "external_token":
+        bcrypt.checkpw(req.password.encode("utf-8"), _get_dummy_hash().encode("utf-8"))
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
     # Child accounts have no password_hash (PIN-only) — reject password login with timing safety
     if user.password_hash is None:
         bcrypt.checkpw(req.password.encode("utf-8"), _get_dummy_hash().encode("utf-8"))

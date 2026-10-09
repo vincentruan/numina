@@ -227,6 +227,7 @@ class MCPSession:
         "_caller_role",
         "_thread_id",
         "_server",
+        "_allow_write",
     )
 
     def __init__(
@@ -235,6 +236,7 @@ class MCPSession:
         caller_user_id: str,
         caller_role: str,
         thread_id: str | None = None,
+        allow_write: bool = False,
     ) -> None:
         if not family_id:
             raise ValueError("family_id must not be empty")
@@ -246,6 +248,7 @@ class MCPSession:
         self._caller_user_id = caller_user_id
         self._caller_role = caller_role
         self._thread_id = thread_id
+        self._allow_write = allow_write
         self._server = Server(f"numina-family-{family_id}")
         self._register_tools()
 
@@ -277,7 +280,16 @@ class MCPSession:
             return await self.call_tool(name, arguments)
 
     async def list_tools(self) -> list[Tool]:
-        from apps.backend.app.services.mcp_tool_registry import list_tools_for_role
+        from apps.backend.app.services.mcp_tool_registry import (
+            _REGISTRY,
+            list_tools_for_role,
+        )
+
+        if self._caller_role == "external_token" and self._allow_write:
+            # External token with write access: include all tools
+            metas = list(_REGISTRY.values())
+        else:
+            metas = list_tools_for_role(self._caller_role)
 
         return [
             Tool(
@@ -285,7 +297,7 @@ class MCPSession:
                 description=meta.description,
                 inputSchema=meta.input_schema,
             )
-            for meta in list_tools_for_role(self._caller_role)
+            for meta in metas
         ]
 
     async def call_tool(
@@ -299,7 +311,18 @@ class MCPSession:
         from apps.backend.app.services.mcp_tool_registry import get_tool
 
         meta = get_tool(name)
-        if not meta or self._caller_role not in meta.allowed_roles:
+        # Role check: external_token with allow_write bypasses the role filter
+        _role_allowed = (
+            self._caller_role in meta.allowed_roles
+            if meta
+            else False
+        )
+        _write_bypass = (
+            meta is not None
+            and self._caller_role == "external_token"
+            and self._allow_write
+        )
+        if not meta or (not _role_allowed and not _write_bypass):
             logger.warning(
                 "[mcp_session] permission_denied family=%s caller_user_id=%s caller_role=%s attempted_tool=%s",
                 self._family_id,

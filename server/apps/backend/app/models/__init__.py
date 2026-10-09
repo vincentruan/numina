@@ -49,6 +49,7 @@ from apps.backend.app.models.family_invitation_code import (
     FamilyInvitationCode,
 )
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
+from apps.backend.app.models.family_mcp_token import FamilyMCPToken
 from apps.backend.app.models.file_remote_location import (
     FileRemoteLocation,
 )

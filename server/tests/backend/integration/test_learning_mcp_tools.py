@@ -69,15 +69,24 @@ class TestLearningToolRegistry:
         }
 
     def test_all_learning_tools_owner_member_only(self):
-        """Learning tools should only be accessible to owner/member (not child)."""
+        """Learning tools exclude the child role.
+
+        Read-only tools additionally allow external_token (external MCP clients);
+        the write tool stays owner/member-only (external write access is gated
+        separately by the token's ``allow_write`` flag, not by role).
+        """
         for name in (
             "get_learning_topic",
             "get_child_learning_profile",
-            "record_learning_result",
         ):
             meta = get_tool(name)
-            assert meta.allowed_roles == frozenset({"owner", "member"})
+            assert meta.allowed_roles == frozenset({"owner", "member", "external_token"})
             assert "child" not in meta.allowed_roles
+
+        write_meta = get_tool("record_learning_result")
+        assert write_meta.allowed_roles == frozenset({"owner", "member"})
+        assert "child" not in write_meta.allowed_roles
+        assert "external_token" not in write_meta.allowed_roles
 
 
 class TestValidateEvaluationSchema:
