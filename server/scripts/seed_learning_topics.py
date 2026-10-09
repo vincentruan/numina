@@ -1,8 +1,14 @@
-"""Seed learning topics, dependencies, and clusters from os-taxonomy data.
+"""Seed learning topics, dependencies, and clusters from taxonomy data.
+
+Supports two sources:
+    os-taxonomy (default) — packages/os_taxonomy JSON data
+    beijing — os-taxonomy-beijing data via get_loader("beijing"), with
+    dedup_mapping.json support for merging mt_/mtc_ overlap
 
 Usage:
     cd server
     uv run python scripts/seed_learning_topics.py [--data-dir /path/to/os-taxonomy/data]
+    uv run python scripts/seed_learning_topics.py --source beijing
 """
 
 import argparse
@@ -18,6 +24,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 DEFAULT_DATA_DIR = Path(os.environ.get("LEARNING_TAXONOMY_DIR", Path(__file__).parent.parent / "data" / "os-taxonomy"))
+
+# Supported taxonomy source identifiers
+SOURCE_OSTAX = "os-taxonomy"
+SOURCE_BEIJING = "beijing"
 
 # os-taxonomy subject title -> DB subject slug
 SUBJECT_MAP = {
@@ -105,7 +115,11 @@ def get_taxonomy_version(data_dir: Path) -> str:
 
 
 def seed_topics(session, data_dir: Path) -> int:
-    """Import topics from topics.json."""
+    """Import topics from topics.json.
+
+    UPSERT is keyed on the composite (topic_key, source_taxonomy) so that
+    the same topic_key from different sources remains distinct rows.
+    """
     from packages.db.models.learning.topic import LearningTopic
 
     with open(data_dir / "topics.json") as f:
@@ -115,7 +129,11 @@ def seed_topics(session, data_dir: Path) -> int:
     created = 0
     for t in topics:
         topic_key = t["id"]  # mt_xxx format
-        existing = session.query(LearningTopic).filter_by(topic_key=topic_key).first()
+        existing = (
+            session.query(LearningTopic)
+            .filter_by(topic_key=topic_key, source_taxonomy=SOURCE_OSTAX)
+            .first()
+        )
         if existing:
             existing.name = t.get("name")
             existing.description = t.get("description", "")
@@ -141,6 +159,7 @@ def seed_topics(session, data_dir: Path) -> int:
                 standards_json=json.dumps(t.get("standards", [])),
                 assessment_prompt=t.get("assessmentPrompt"),
                 age_group=compute_age_group(t.get("ageRangeStart")),
+                source_taxonomy=SOURCE_OSTAX,
             )
             session.add(topic)
             created += 1
@@ -151,15 +170,23 @@ def seed_topics(session, data_dir: Path) -> int:
 
 
 def seed_dependencies(session, data_dir: Path) -> int:
-    """Import dependencies from dependencies.json."""
+    """Import dependencies from dependencies.json.
+
+    topic_key -> id resolution is scoped to the os-taxonomy source so
+    that beijing rows with the same topic_key are not accidentally used.
+    """
     from packages.db.models.learning.topic import LearningDependency, LearningTopic
 
     with open(data_dir / "dependencies.json") as f:
         data = json.load(f)
 
-    # Build topic_key -> id map
+    # Build topic_key -> id map (scoped to os-taxonomy source)
     key_map = {}
-    for row in session.query(LearningTopic.topic_key, LearningTopic.id).all():
+    for row in (
+        session.query(LearningTopic.topic_key, LearningTopic.id)
+        .filter(LearningTopic.source_taxonomy == SOURCE_OSTAX)
+        .all()
+    ):
         key_map[row[0]] = row[1]
 
     deps = data["dependencies"]
@@ -182,6 +209,7 @@ def seed_dependencies(session, data_dir: Path) -> int:
                 prerequisite_id=prereq_id,
                 strength=d["strength"],
                 reason=d.get("reason"),
+                review_status=None,
             )
             session.add(dep)
             created += 1
@@ -208,6 +236,7 @@ def seed_clusters(session, data_dir: Path) -> int:
                 subject=subject_slug,
                 domain=c["domain"],
                 age_range_start=c.get("ageRangeStart"),
+                source_taxonomy=SOURCE_OSTAX,
             )
             .first()
         )
@@ -218,12 +247,429 @@ def seed_clusters(session, data_dir: Path) -> int:
                 age_range_start=c.get("ageRangeStart"),
                 age_group=compute_age_group(c.get("ageRangeStart")),
                 summary=c.get("summary", ""),
+                source_taxonomy=SOURCE_OSTAX,
             )
             session.add(cluster)
             created += 1
 
     session.flush()
     print(f"  Clusters: {created} created")
+    return created
+
+
+# ---------------------------------------------------------------------------
+# Beijing source: loader-based seeding with dedup mapping
+# ---------------------------------------------------------------------------
+
+
+def load_dedup_mapping(loading_dir: Path) -> list[dict]:
+    """Load dedup_mapping.json from the Beijing data root.
+
+    Looks in <data_root>/dedup_mapping.json and <data_dir>/dedup_mapping.json.
+    Returns [] when the file is absent.
+    """
+    for candidate in (loading_dir / "dedup_mapping.json", loading_dir.parent / "dedup_mapping.json"):
+        if candidate.is_file():
+            with open(candidate, encoding="utf-8") as f:
+                return json.load(f)
+    return []
+
+
+def build_dedup_views(
+    mapping: list[dict],
+) -> tuple[dict[str, dict], dict[str, str]]:
+    """Build pure-logic lookup structures from a dedup mapping.
+
+    Returns:
+        mtc_actions: mtc_topic_key -> mapping entry (dict with 'action', 'mt_topic_key')
+        deprecated_to_merged: mtc_topic_key -> mt_topic_key for merge actions only
+    """
+    mtc_actions: dict[str, dict] = {}
+    deprecated_to_merged: dict[str, str] = {}
+    for entry in mapping:
+        mtc_key = entry.get("mtc_topic_key")
+        if not mtc_key:
+            continue
+        mtc_actions[mtc_key] = entry
+        if entry.get("action") == "merge" and entry.get("mt_topic_key"):
+            deprecated_to_merged[mtc_key] = entry["mt_topic_key"]
+    return mtc_actions, deprecated_to_merged
+
+
+def apply_dedup_to_topics(
+    topics: list, mtc_actions: dict[str, dict]
+) -> int:
+    """Apply dedup actions to NormalizedTopic instances in place.
+
+    For each mtc_ topic found in *topics*, apply the mapped action:
+    - merge: mtc deprecated=True; mt_ topic gets concatenated description_zh,
+      unioned curriculum_standards + evidence;
+    - hide_mtc: mtc deprecated=True;
+    - keep_both: no change.
+
+    Returns the number of merge actions actually applied.
+    """
+    by_key = {t.topic_key: t for t in topics}
+    merges_applied = 0
+    for mtc_key, entry in mtc_actions.items():
+        mtc = by_key.get(mtc_key)
+        if mtc is None:
+            continue
+        action = entry.get("action")
+        if action == "merge":
+            mt_key = entry.get("mt_topic_key")
+            mt = by_key.get(mt_key)
+            mtc.deprecated = True
+            if mt is None:
+                continue
+            merges_applied += 1
+            # Concatenate description_zh
+            mt_desc = (mt.description_zh or "").strip()
+            mtc_desc = (mtc.description_zh or "").strip()
+            combined = mt_desc
+            if mtc_desc:
+                combined = (combined + "\n\n" + mtc_desc) if combined else mtc_desc
+            mt.description_zh = combined or None
+            # Union curriculum_standards (order-preserving)
+            mt.curriculum_standards = _union_list(mt.curriculum_standards, mtc.curriculum_standards)
+            # Union evidence
+            mt.evidence = _union_list(mt.evidence, mtc.evidence)
+        elif action == "hide_mtc":
+            mtc.deprecated = True
+    return merges_applied
+
+
+def _union_list(a: list, b: list) -> list:
+    """Order-preserving union of two lists."""
+    seen = set()
+    result = []
+    for item in list(a) + list(b):
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+
+def load_source_topics(source: str, data_dir: Path | None) -> list:
+    """Load NormalizedTopic list for the given source.
+
+    For 'os-taxonomy', reads packages/os_taxonomy/topics.json directly
+    (preserving the legacy behavior, including *Zh fields). For 'beijing',
+    uses the loader.
+    """
+    if source == SOURCE_BEIJING:
+        # Import beijing loader module so it self-registers in the registry
+        import packages.os_taxonomy.loaders.beijing  # noqa: F401
+        from packages.os_taxonomy.loaders import get_loader
+        loader = get_loader(SOURCE_BEIJING)
+        if data_dir is not None:
+            loader = type(loader)(data_dir=data_dir)
+        return loader.load_topics()
+
+    if source == SOURCE_OSTAX:
+        # Read the same JSON file the legacy seed_topics path uses, but
+        # through the loader so both code paths share one NormalizedTopic
+        # shape. _Zh fields are picked up from the JSON.
+        import packages.os_taxonomy.loaders.os_taxonomy  # noqa: F401
+        from packages.os_taxonomy.loaders import get_loader
+        loader = get_loader(SOURCE_OSTAX)
+        topics = loader.load_topics()
+        if data_dir is None:
+            return topics
+        # If a custom data dir was supplied, load topics.json from there.
+        with open(data_dir / "topics.json", encoding="utf-8") as f:
+            raw = json.load(f)["topics"]
+        return [
+            _topic_from_raw_os_taxonomy(r) for r in raw
+        ]
+    raise ValueError(f"Unknown source: {source!r}")
+
+
+def _topic_from_raw_os_taxonomy(raw: dict):
+    """Build a NormalizedTopic from a raw os-taxonomy topics.json record."""
+    from packages.os_taxonomy.types import NormalizedTopic
+
+    return NormalizedTopic(
+        topic_key=raw["id"],
+        source_taxonomy=SOURCE_OSTAX,
+        topic_type=raw["type"],
+        subject=raw["subject"],
+        domain=raw.get("domain"),
+        name=raw.get("name"),
+        name_zh=raw.get("nameZh"),
+        description=raw.get("description", ""),
+        description_zh=raw.get("descriptionZh"),
+        age_range_start=raw.get("ageRangeStart"),
+        age_range_end=raw.get("ageRangeEnd"),
+        centrality=raw.get("centrality"),
+        evidence=raw.get("evidence", []),
+        evidence_zh=raw.get("evidenceZh"),
+        assessment_prompt=raw.get("assessmentPrompt"),
+        assessment_prompt_zh=raw.get("assessmentPromptZh"),
+        standards=raw.get("standards", []),
+        curriculum_standards=raw.get("cnStandards", []),
+        translation_status=raw.get("translationStatus"),
+        deprecated=False,
+        age_group=compute_age_group(raw.get("ageRangeStart")),
+    )
+
+
+def upsert_topic(session, t) -> bool:
+    """UPSERT a single NormalizedTopic using the composite (topic_key, source_taxonomy) key.
+
+    Returns True if a new row was created, False if an existing row was updated.
+    Applies injection-pattern safety checks on text fields where sensible.
+    """
+    from packages.db.models.learning.topic import LearningTopic
+
+    # Apply injection-pattern safety on Chinese-text fields
+    if t.assessment_prompt_zh and has_injection_pattern(t.assessment_prompt_zh):
+        t.assessment_prompt_zh = None
+
+    existing = (
+        session.query(LearningTopic)
+        .filter_by(topic_key=t.topic_key, source_taxonomy=t.source_taxonomy)
+        .first()
+    )
+    if existing:
+        _apply_normalized_to_db(existing, t)
+        return False
+    row = LearningTopic(topic_key=t.topic_key, source_taxonomy=t.source_taxonomy)
+    _apply_normalized_to_db(row, t)
+    session.add(row)
+    return True
+
+
+def _apply_normalized_to_db(row, t) -> None:
+    """Copy NormalizedTopic fields onto a LearningTopic instance."""
+    # The loader returns subject as a slug (os-taxonomy: raw title, beijing: slug).
+    # For os-taxonomy we normalize via SUBJECT_MAP; for beijing it's already a slug.
+    if t.source_taxonomy == SOURCE_OSTAX:
+        subject = normalize_subject(t.subject)
+    else:
+        subject = t.subject or normalize_subject("")
+    row.topic_type = t.topic_type
+    row.subject = subject
+    row.domain = t.domain
+    row.name = t.name
+    row.name_zh = t.name_zh
+    row.description = t.description or ""
+    row.description_zh = t.description_zh
+    row.age_range_start = t.age_range_start
+    row.age_range_end = t.age_range_end
+    row.centrality = t.centrality
+    row.evidence_json = json.dumps(t.evidence or [])
+    if t.evidence_zh is not None:
+        row.evidence_zh_json = json.dumps(t.evidence_zh, ensure_ascii=False)
+    row.assessment_prompt = t.assessment_prompt
+    row.assessment_prompt_zh = t.assessment_prompt_zh
+    row.standards_json = json.dumps(t.standards or [])
+    row.curriculum_standards_json = json.dumps(t.curriculum_standards or [])
+    row.age_group = compute_age_group(t.age_range_start)
+    row.deprecated = t.deprecated
+
+
+def upsert_cluster(session, c) -> bool:
+    """UPSERT a NormalizedCluster. Returns True if created, False if skipped."""
+    from packages.db.models.learning.topic import LearningCluster
+
+    subject = c.subject if c.source_taxonomy == SOURCE_BEIJING else normalize_subject(c.subject)
+    existing = (
+        session.query(LearningCluster)
+        .filter_by(
+            subject=subject,
+            domain=c.domain,
+            age_range_start=c.age_range_start,
+            source_taxonomy=c.source_taxonomy,
+        )
+        .first()
+    )
+    if existing:
+        existing.summary = c.summary or ""
+        existing.summary_zh = c.summary_zh
+        return False
+    cluster = LearningCluster(
+        subject=subject,
+        domain=c.domain,
+        age_range_start=c.age_range_start,
+        age_group=c.age_group or compute_age_group(c.age_range_start),
+        summary=c.summary or "",
+        summary_zh=c.summary_zh,
+        source_taxonomy=c.source_taxonomy,
+    )
+    session.add(cluster)
+    return True
+
+
+def seed_source_topics(
+    session, source: str, data_dir: Path | None, dedup_mapping: list[dict] | None
+) -> tuple[int, int, int]:
+    """Seed topics for the given source. Returns (seeded, created, deprecated).
+
+    For beijing, applies the dedup mapping before the UPSERT loop so merged
+    topics are concatenated, mtc_ topics are marked deprecated, and
+    dependencies that reference them will be rerouted.
+    """
+    if source == SOURCE_BEIJING:
+        import packages.os_taxonomy.loaders.beijing  # noqa: F401
+        from packages.os_taxonomy.loaders import get_loader
+        loader = get_loader(SOURCE_BEIJING)
+        if data_dir is not None:
+            loader = type(loader)(data_dir=data_dir)
+        topics = loader.load_topics()
+    else:
+        topics = _load_os_taxonomy_topics(data_dir)
+
+    merges = 0
+    deprecated = 0
+    if source == SOURCE_BEIJING and dedup_mapping:
+        mtc_actions, _ = build_dedup_views(dedup_mapping)
+        merges = apply_dedup_to_topics(topics, mtc_actions)  # noqa: F841
+        deprecated = sum(1 for t in topics if t.deprecated)
+
+    created = 0
+    for t in topics:
+        if upsert_topic(session, t):
+            created += 1
+    session.flush()
+    print(f"  Topics ({source}): {created} created, {len(topics) - created} updated")
+    return len(topics), created, deprecated
+
+
+def _load_os_taxonomy_topics(data_dir: Path | None):
+    """Load os-taxonomy NormalizedTopics, honoring a custom data_dir if given."""
+    if data_dir is None:
+        import packages.os_taxonomy.loaders.os_taxonomy  # noqa: F401
+        from packages.os_taxonomy.loaders import get_loader
+        return get_loader(SOURCE_OSTAX).load_topics()
+    with open(data_dir / "topics.json", encoding="utf-8") as f:
+        raw = json.load(f)["topics"]
+    return [_topic_from_raw_os_taxonomy(r) for r in raw]
+
+
+def seed_source_dependencies(
+    session,
+    source: str,
+    data_dir: Path | None,
+    dedup_mapping: list[dict] | None,
+) -> int:
+    """Seed dependencies for the given source, rerouting any references to
+    deprecated mtc_ topics through the merged mt_ counterpart.
+
+    Skips NormalizedDependency rows whose review_status is 'rejected'.
+    Returns the number of created rows.
+    """
+    from packages.db.models.learning.topic import LearningDependency, LearningTopic
+
+    if source == SOURCE_BEIJING:
+        import packages.os_taxonomy.loaders.beijing  # noqa: F401
+        from packages.os_taxonomy.loaders import get_loader
+        loader = get_loader(SOURCE_BEIJING)
+        if data_dir is not None:
+            loader = type(loader)(data_dir=data_dir)
+        deps = loader.load_dependencies()
+    else:
+        import packages.os_taxonomy.loaders.os_taxonomy  # noqa: F401
+        from packages.os_taxonomy.loaders import get_loader
+        deps = get_loader(SOURCE_OSTAX).load_dependencies()
+        if data_dir is not None:
+            with open(data_dir / "dependencies.json", encoding="utf-8") as f:
+                raw = json.load(f).get("dependencies", [])
+            from packages.os_taxonomy.types import NormalizedDependency
+            deps = [
+                NormalizedDependency(
+                    topic_key=r["topicId"],
+                    prerequisite_key=r["prerequisiteId"],
+                    strength=r["strength"],
+                    reason=r.get("reason"),
+                    review_status=r.get("reviewStatus"),
+                )
+                for r in raw
+            ]
+
+    # Composite key -> id map (topic_key, source_taxonomy)
+    key_map: dict[tuple[str, str], int] = {}
+    for topic_key, source_row, row_id in session.query(
+        LearningTopic.topic_key, LearningTopic.source_taxonomy, LearningTopic.id
+    ).all():
+        key_map[(topic_key, source_row)] = row_id
+
+    reroute: dict[str, str] = {}
+    if source == SOURCE_BEIJING and dedup_mapping:
+        _, reroute = build_dedup_views(dedup_mapping)
+
+    created = 0
+    skipped = 0
+    for d in deps:
+        if d.review_status == "rejected":
+            skipped += 1
+            continue
+        topic_key = reroute.get(d.topic_key, d.topic_key)
+        prereq_key = reroute.get(d.prerequisite_key, d.prerequisite_key)
+        topic_id = key_map.get((topic_key, source))
+        prereq_id = key_map.get((prereq_key, source))
+        if topic_id is None or prereq_id is None:
+            skipped += 1
+            continue
+        existing = (
+            session.query(LearningDependency)
+            .filter_by(topic_id=topic_id, prerequisite_id=prereq_id)
+            .first()
+        )
+        if not existing:
+            dep = LearningDependency(
+                topic_id=topic_id,
+                prerequisite_id=prereq_id,
+                strength=d.strength,
+                reason=d.reason,
+                review_status=d.review_status,
+            )
+            session.add(dep)
+            created += 1
+
+    session.flush()
+    print(f"  Dependencies ({source}): {created} created, {skipped} skipped")
+    return created
+
+
+def seed_source_clusters(
+    session, source: str, data_dir: Path | None
+) -> int:
+    """Seed clusters for the given source via the loader."""
+    if source == SOURCE_BEIJING:
+        import packages.os_taxonomy.loaders.beijing  # noqa: F401
+        from packages.os_taxonomy.loaders import get_loader
+        loader = get_loader(SOURCE_BEIJING)
+        if data_dir is not None:
+            loader = type(loader)(data_dir=data_dir)
+        clusters = loader.load_clusters()
+    else:
+        import packages.os_taxonomy.loaders.os_taxonomy  # noqa: F401
+        from packages.os_taxonomy.loaders import get_loader
+        clusters = get_loader(SOURCE_OSTAX).load_clusters()
+        if data_dir is not None:
+            with open(data_dir / "clusters.json", encoding="utf-8") as f:
+                raw = json.load(f).get("clusters", [])
+            from packages.os_taxonomy.types import NormalizedCluster
+            clusters = [
+                NormalizedCluster(
+                    subject=r["subject"],
+                    domain=r["domain"],
+                    age_range_start=r.get("ageRangeStart"),
+                    age_group=compute_age_group(r.get("ageRangeStart")),
+                    summary=r.get("summary", ""),
+                    summary_zh=r.get("summaryZh"),
+                    source_taxonomy=SOURCE_OSTAX,
+                )
+                for r in raw
+            ]
+
+    created = 0
+    for c in clusters:
+        if upsert_cluster(session, c):
+            created += 1
+    session.flush()
+    print(f"  Clusters ({source}): {created} created")
     return created
 
 
@@ -539,8 +985,24 @@ async def seed_cluster_translations(session):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Seed learning OS data from os-taxonomy")
-    parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
+    parser = argparse.ArgumentParser(
+        description="Seed learning OS data (os-taxonomy or beijing sources)"
+    )
+    parser.add_argument(
+        "--source",
+        choices=[SOURCE_OSTAX, SOURCE_BEIJING],
+        default=SOURCE_OSTAX,
+        help="Taxonomy source to seed from (default: os-taxonomy)",
+    )
+    parser.add_argument(
+        "--data-dir", type=Path, default=None, help="Custom data directory (default per source)"
+    )
+    parser.add_argument(
+        "--dedup-mapping",
+        type=Path,
+        default=None,
+        help="Path to dedup_mapping.json (default: search Beijing data root)",
+    )
     parser.add_argument(
         "--skip-validate", action="store_true", help="Skip post-seed quality validation"
     )
@@ -572,24 +1034,88 @@ def main():
     )
     args = parser.parse_args()
 
-    if not args.data_dir.exists():
-        print(f"Error: data directory {args.data_dir} does not exist")
-        raise SystemExit(1)
+    # Resolve the data dir based on source
+    if args.source == SOURCE_BEIJING:
+        beijing_dir = args.data_dir
+        if beijing_dir is None:
+            beijing_dir = Path(
+                os.environ.get(
+                    "BEIJING_TAXONOMY_DIR",
+                    Path(__file__).parent.parent
+                    / "data"
+                    / "os-taxonomy-beijing"
+                    / "data",
+                )
+            )
+        if not beijing_dir.is_dir():
+            print(f"Error: Beijing data directory {beijing_dir} does not exist")
+            raise SystemExit(1)
+    else:
+        beijing_dir = None
+        if args.data_dir is not None:
+            ostax_dir = args.data_dir
+            if not ostax_dir.is_dir():
+                print(f"Error: os-taxonomy data directory {ostax_dir} does not exist")
+                raise SystemExit(1)
+        else:
+            ostax_dir = DEFAULT_DATA_DIR
 
-    version = get_taxonomy_version(args.data_dir)
-    print(f"os-taxonomy version: {version}")
+    # Load dedup mapping (Beijing only)
+    dedup_mapping = None
+    if args.source == SOURCE_BEIJING:
+        if args.dedup_mapping is not None:
+            if not args.dedup_mapping.is_file():
+                print(f"Error: dedup mapping file {args.dedup_mapping} not found")
+                raise SystemExit(1)
+            with open(args.dedup_mapping, encoding="utf-8") as f:
+                dedup_mapping = json.load(f)
+        else:
+            dedup_mapping = load_dedup_mapping(beijing_dir)
+
+    version = get_taxonomy_version(
+        beijing_dir if args.source == SOURCE_BEIJING else ostax_dir
+    )
+    print(f"{args.source} version: {version}")
 
     from apps.backend.app.database import SessionLocal
 
     session = SessionLocal()
     try:
-        print("Seeding learning topics...")
-        seed_topics(session, args.data_dir)
-        print("Seeding dependencies...")
-        seed_dependencies(session, args.data_dir)
-        print("Seeding clusters...")
-        seed_clusters(session, args.data_dir)
-        session.commit()
+        if args.source == SOURCE_BEIJING:
+            print(f"Seeding {args.source} topics...")
+            seeded, created, deprecated = seed_source_topics(
+                session, args.source, beijing_dir, dedup_mapping
+            )
+            print(f"Seeding {args.source} dependencies...")
+            deps_created = seed_source_dependencies(
+                session, args.source, beijing_dir, dedup_mapping
+            )
+            print(f"Seeding {args.source} clusters...")
+            clusters_created = seed_source_clusters(session, args.source, beijing_dir)
+            session.commit()
+
+            # Summary (U5 requirement)
+            merges = 0
+            if dedup_mapping:
+                _, _ = build_dedup_views(dedup_mapping)
+                merges = sum(
+                    1 for m in dedup_mapping if m.get("action") == "merge"
+                )
+            print("\n=== Seed Summary ===")
+            print(f"  Topics seeded          : {seeded}")
+            print(f"  Topics deprecated      : {deprecated} (dedup hides + merges)")
+            print(f"  Dependencies seeded    : {deps_created}")
+            print(f"  Clusters seeded        : {clusters_created}")
+            print(f"  Dedup merges applied   : {merges}")
+
+        else:
+            print(f"Seeding {args.source} topics...")
+            seed_topics(session, ostax_dir)
+            print(f"Seeding {args.source} dependencies...")
+            seed_dependencies(session, ostax_dir)
+            print(f"Seeding {args.source} clusters...")
+            seed_clusters(session, ostax_dir)
+            session.commit()
 
         if not args.skip_translation:
             asyncio.run(
@@ -628,16 +1154,18 @@ def main():
 
             if args.dry_run:
                 # Export to JSON for review
-                output_path = args.data_dir / "mvp_topics.json"
+                output_path = (
+                    beijing_dir if args.source == SOURCE_BEIJING else ostax_dir
+                )
                 mvp_data = {
                     "topic_ids": sorted(mvp_ids),
                     "total": len(mvp_ids),
                     "subjects": dict(subject_counts),
                     "taxonomy_version": version,
                 }
-                with open(output_path, "w") as f:
+                with open(output_path / "mvp_topics.json", "w") as f:
                     json.dump(mvp_data, f, indent=2, ensure_ascii=False)
-                print(f"\n  MVP topic list exported to {output_path}")
+                print(f"\n  MVP topic list exported to {output_path / 'mvp_topics.json'}")
     except Exception:
         session.rollback()
         raise
