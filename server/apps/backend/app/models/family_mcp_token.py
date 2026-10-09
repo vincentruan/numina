@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, Index, String, func
+from sqlalchemy import BigInteger, Boolean, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.backend.app.database import Base, UTCDateTime
@@ -23,6 +23,9 @@ class FamilyMCPToken(Base):
     token_last4: Mapped[str] = mapped_column(String(4), nullable=False)  # last 4 chars
     allow_external: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     allow_write: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Per-tool whitelist: None = all tools available (Phase 1 compat);
+    # non-null list = exact enabled set (future tools NOT auto-exposed).
+    allowed_tools: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON list
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

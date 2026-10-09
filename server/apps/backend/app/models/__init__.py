@@ -63,6 +63,7 @@ from apps.backend.app.models.manifesto import (
     ManifestoSignature,
     ManifestoVersion,
 )
+from apps.backend.app.models.mcp_access_log import MCPAccessLog
 from apps.backend.app.models.notification_channel import (
     NotificationChannel,
 )
