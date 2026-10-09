@@ -1093,8 +1093,8 @@ onUnmounted(() => {
   --ai-btn-color: var(--text-secondary, #666666);
   --ai-btn-hover-bg: rgba(0, 0, 0, 0.04);
   --ai-btn-hover-color: var(--text-primary, #111111);
-  --ai-panel-bg: #ffffff;
-  --ai-panel-border: rgba(0, 0, 0, 0.08);
+  --ai-panel-bg: rgba(255, 255, 255, 0.82);
+  --ai-panel-border: rgba(0, 0, 0, 0.12);
   --ai-panel-item-color: var(--text-secondary, #666666);
   --ai-panel-item-hover-bg: rgba(0, 0, 0, 0.03);
   --ai-panel-item-hover-color: var(--text-primary, #111111);
@@ -1111,8 +1111,8 @@ onUnmounted(() => {
   --ai-btn-color: var(--text-secondary, #c8c8d0);
   --ai-btn-hover-bg: rgba(255, 255, 255, 0.06);
   --ai-btn-hover-color: rgba(255, 255, 255, 0.9);
-  --ai-panel-bg: #12122a;
-  --ai-panel-border: rgba(255, 255, 255, 0.1);
+  --ai-panel-bg: rgba(18, 18, 42, 0.82);
+  --ai-panel-border: rgba(255, 255, 255, 0.14);
   --ai-panel-item-color: rgba(255, 255, 255, 0.6);
   --ai-panel-item-hover-bg: rgba(255, 255, 255, 0.08);
   --ai-panel-item-hover-color: rgba(255, 255, 255, 0.9);
@@ -1494,13 +1494,15 @@ onUnmounted(() => {
 .plus-panel {
   position: fixed;
   background: var(--ai-panel-bg);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid var(--ai-panel-border);
   border-radius: 14px;
   padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
   z-index: 1002;
   min-width: 160px;
   opacity: 1;
