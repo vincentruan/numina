@@ -59,9 +59,15 @@ def list_topics(
     return q.all()
 
 
-def get_topic_by_id(db: Session, topic_id: int) -> LearningTopic | None:
+def get_topic_by_id(
+    db: Session, topic_id: int, deprecated: bool = False
+) -> LearningTopic | None:
     """Get a single topic by ID, or None if not found."""
-    return db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
+    return (
+        db.query(LearningTopic)
+        .filter(LearningTopic.id == topic_id, LearningTopic.deprecated == deprecated)
+        .first()
+    )
 
 
 def list_topics_by_ids(

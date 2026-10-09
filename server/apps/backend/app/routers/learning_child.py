@@ -220,7 +220,11 @@ def get_topic_detail(
     taxonomy = locale_to_source_taxonomy(child.language)
     topic = (
         db.query(LearningTopic)
-        .filter(LearningTopic.id == topic_id, LearningTopic.source_taxonomy == taxonomy)
+        .filter(
+            LearningTopic.id == topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+            LearningTopic.deprecated == False,  # noqa: E712
+        )
         .first()
     )
     if not topic:
