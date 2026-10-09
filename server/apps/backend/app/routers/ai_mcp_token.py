@@ -1,18 +1,27 @@
 """CRUD router for family MCP external API tokens. Owner-only."""
 
-from fastapi import APIRouter, Depends, Response
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_owner
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.models.mcp_access_log import MCPAccessLog
 from apps.backend.app.models.user import User
+from apps.backend.app.schemas.mcp_access_log import (
+    MCPAccessLogListResponse,
+    MCPAccessLogResponse,
+    MCPStatsResponse,
+)
 from apps.backend.app.schemas.mcp_token import (
     MCPTokenGenerateResponse,
     MCPTokenResponse,
     MCPTokenUpdate,
 )
 from apps.backend.app.services import mcp_token as token_svc
+from apps.backend.app.services.mcp_stats import get_mcp_stats
 
 router = APIRouter(prefix="/ai/mcp-token", tags=["ai-mcp-token"])
 
@@ -88,3 +97,59 @@ def delete_token(
     token_svc.revoke_token(current_user.family_id, db)
     db.commit()
     return Response(status_code=204)
+
+
+@router.get("/access-logs", response_model=MCPAccessLogListResponse)
+def list_access_logs(
+    event_type: str | None = Query(None),
+    tool_name: str | None = Query(None),
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> MCPAccessLogListResponse:
+    """Paginated access logs for the current family, newest-first."""
+    q = db.query(MCPAccessLog).filter(
+        MCPAccessLog.family_id == current_user.family_id
+    )
+    if event_type is not None:
+        q = q.filter(MCPAccessLog.event_type == event_type)
+    if tool_name is not None:
+        q = q.filter(MCPAccessLog.tool_name == tool_name)
+    if date_from is not None:
+        q = q.filter(MCPAccessLog.created_at >= date_from)
+    if date_to is not None:
+        q = q.filter(MCPAccessLog.created_at <= date_to)
+
+    total = q.count()
+    offset = (page - 1) * page_size
+    rows = (
+        q.order_by(MCPAccessLog.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+    return MCPAccessLogListResponse(
+        items=[MCPAccessLogResponse.model_validate(r) for r in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/stats", response_model=MCPStatsResponse)
+def get_stats(
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> MCPStatsResponse:
+    """Aggregate usage stats for the current family (default: last 7 days)."""
+    return get_mcp_stats(
+        current_user.family_id,
+        db,
+        date_from=date_from,
+        date_to=date_to,
+    )
