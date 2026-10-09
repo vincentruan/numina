@@ -8,7 +8,15 @@ import pytest
 from sqlalchemy.orm import Session
 
 from packages.db.models.learning.topic import LearningCluster, LearningTopic
-from packages.os_taxonomy.types import NormalizedCluster, NormalizedTopic
+from packages.os_taxonomy.types import (
+    CurriculumStandard,
+    NormalizedCluster,
+    NormalizedTopic,
+)
+
+_STD1 = CurriculumStandard(key="std1", name="Standard Set 1", code="1")
+_STD2 = CurriculumStandard(key="std2", name="Standard Set 2", code="2")
+_STD3 = CurriculumStandard(key="std3", name="Standard Set 3", code="3")
 
 # Import the seed script as a module (it uses sys.path.insert at the top)
 _spec = importlib.util.spec_from_file_location(
@@ -102,7 +110,7 @@ class TestApplyDedupToTopics:
             topic_type="CONCEPTUAL",
             subject="mathematics",
             description_zh="MT description",
-            curriculum_standards=["std1", "std2"],
+            curriculum_standards=[_STD1, _STD2],
             evidence=["ev1"],
         )
         mtc = NormalizedTopic(
@@ -111,7 +119,7 @@ class TestApplyDedupToTopics:
             topic_type="CONCEPTUAL",
             subject="mathematics",
             description_zh="MTC extra detail",
-            curriculum_standards=["std2", "std3"],
+            curriculum_standards=[_STD2, _STD3],
             evidence=["ev2"],
         )
         topics = [mt, mtc]
@@ -131,7 +139,7 @@ class TestApplyDedupToTopics:
         # Description concatenated with \n\n
         assert mt.description_zh == "MT description\n\nMTC extra detail"
         # curriculum_standards unioned (order-preserving, deduped)
-        assert mt.curriculum_standards == ["std1", "std2", "std3"]
+        assert mt.curriculum_standards == [_STD1, _STD2, _STD3]
         # evidence unioned
         assert mt.evidence == ["ev1", "ev2"]
 

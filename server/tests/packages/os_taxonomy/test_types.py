@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
+
 import pytest
 
 from packages.os_taxonomy.loaders import get_loader
 from packages.os_taxonomy.types import (
+    CurriculumStandard,
     NormalizedCluster,
     NormalizedDependency,
     NormalizedTopic,
@@ -55,7 +58,13 @@ class TestNormalizedTopic:
             assessment_prompt="Can {{name}} solve 2x + 3 = 11?",
             assessment_prompt_zh="{{name}} 能解 2x + 3 = 11 吗？",
             standards=["CCSS.MATH.CONTENT.6.EE.A.2"],
-            curriculum_standards=["Beijing.Math.6.2"],
+            curriculum_standards=[
+                CurriculumStandard(
+                    key="moe-2022-math:S1.NA.01",
+                    name="义务教育数学课程标准（2022年版）",
+                    code="S1.NA.01",
+                )
+            ],
             translation_status="reviewed",
             deprecated=False,
             age_group="upper",
@@ -90,6 +99,34 @@ class TestNormalizedTopic:
         topic1.evidence.append("test evidence")
         assert topic1.evidence == ["test evidence"]
         assert topic2.evidence == []
+
+
+class TestCurriculumStandard:
+    """CurriculumStandard dataclass tests."""
+
+    def test_carries_key_name_and_code(self):
+        """A standard carries the raw key, document title, and code."""
+        standard = CurriculumStandard(
+            key="moe-2022-math:S1.NA.01",
+            name="义务教育数学课程标准（2022年版）",
+            code="S1.NA.01",
+        )
+        assert standard.key == "moe-2022-math:S1.NA.01"
+        assert standard.name == "义务教育数学课程标准（2022年版）"
+        assert standard.code == "S1.NA.01"
+
+    def test_equal_values_compare_and_hash_equal(self):
+        """Instances with equal fields are interchangeable in sets/dicts."""
+        a = CurriculumStandard(key="k", name="N", code="C")
+        b = CurriculumStandard(key="k", name="N", code="C")
+        assert a == b
+        assert len({a, b}) == 1
+
+    def test_is_immutable(self):
+        """CurriculumStandard is frozen, so instances are hashable."""
+        standard = CurriculumStandard(key="k", name="N", code="C")
+        with pytest.raises(FrozenInstanceError):
+            standard.key = "other"  # type: ignore[misc]
 
 
 class TestNormalizedDependency:

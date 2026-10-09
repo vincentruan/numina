@@ -10,6 +10,27 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+@dataclass(frozen=True)
+class CurriculumStandard:
+    """A resolved curriculum standard reference.
+
+    ``key`` is the raw identifier as it appears in the source data (e.g.
+    ``moe-2022-math:S1.NA.02``). ``name`` is the curriculum document title
+    (e.g. ``义务教育数学课程标准（2022年版）``) and ``code`` is the standard
+    code within that document (e.g. ``S1.NA.02``). The title plus code is
+    the displayable form.
+
+    Frozen so instances are hashable: the seed script unions
+    curriculum_standards lists through a set-based dedup helper. Instances
+    sharing a ``key`` also share ``name`` and ``code``, so hashing on all
+    three fields does not change dedup behaviour.
+    """
+
+    key: str
+    name: str
+    code: str
+
+
 @dataclass
 class NormalizedTopic:
     """A learning topic normalized across taxonomy sources.
@@ -36,7 +57,7 @@ class NormalizedTopic:
     assessment_prompt: str | None = None
     assessment_prompt_zh: str | None = None
     standards: list[str] = field(default_factory=list)
-    curriculum_standards: list[str] = field(default_factory=list)
+    curriculum_standards: list[CurriculumStandard] = field(default_factory=list)
     translation_status: str | None = None
     deprecated: bool = False
     age_group: str = "mid"

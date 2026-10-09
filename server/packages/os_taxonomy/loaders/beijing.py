@@ -1,9 +1,10 @@
 """Loader for the os-taxonomy-beijing knowledge graph data.
 
 Reads topics.zh.json, cn-topics.json, dependencies.zh.json,
-cn-dependencies.json, cn-bridge-dependencies.json, and clusters.zh.json
-from the Beijing data directory and returns NormalizedTopic/NormalizedDependency/
-NormalizedCluster instances with source_taxonomy="beijing".
+cn-dependencies.json, cn-bridge-dependencies.json, clusters.zh.json, and
+cn-curriculum-standards.json from the Beijing data directory and returns
+NormalizedTopic/NormalizedDependency/NormalizedCluster instances with
+source_taxonomy="beijing".
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import os
 from pathlib import Path
 
 from packages.os_taxonomy.types import (
+    CurriculumStandard,
     NormalizedCluster,
     NormalizedDependency,
     NormalizedTopic,
@@ -118,6 +120,36 @@ class BeijingLoader:
         with open(upstream_path, encoding="utf-8") as f:
             return {t["id"]: t for t in json.load(f)["topics"]}
 
+    def _read_curriculum_standards(self) -> dict[str, CurriculumStandard]:
+        """Load cn-curriculum-standards.json as a key -> CurriculumStandard map.
+
+        The file nests standards under ``curricula[]``; each curriculum
+        carries the document title in ``name`` and its standards in
+        ``topics[]`` (each with ``key``, ``code``, ``strand``, ``note``).
+        The ``strand`` field is not usable for display — it is normally a
+        code echo like "(moe-2022-math / S4.GE.02)" — so only the curriculum
+        name and the code are carried through.
+        """
+        data = self._read_json("cn-curriculum-standards.json")
+        lookup: dict[str, CurriculumStandard] = {}
+        for curriculum in data["curricula"]:
+            name = curriculum["name"]
+            for entry in curriculum["topics"]:
+                lookup[entry["key"]] = CurriculumStandard(
+                    key=entry["key"],
+                    name=name,
+                    code=entry["code"],
+                )
+        return lookup
+
+    def _resolve_standards(
+        self,
+        keys: list[str],
+        lookup: dict[str, CurriculumStandard],
+    ) -> list[CurriculumStandard]:
+        """Resolve raw cnStandards identifiers, dropping unresolvable ones."""
+        return [lookup[key] for key in keys if key in lookup]
+
     def load_topics(self) -> list[NormalizedTopic]:
         """Load all topics from topics.zh.json and cn-topics.json.
 
@@ -129,6 +161,7 @@ class BeijingLoader:
         os-taxonomy topics.json (same topic IDs).
         """
         topics: list[NormalizedTopic] = []
+        standards_lookup = self._read_curriculum_standards()
 
         # --- topics.zh.json (mt_ prefix, Chinese-only topics) ---
         zh_data = self._read_json("topics.zh.json")
@@ -155,7 +188,9 @@ class BeijingLoader:
                     assessment_prompt=up.get("assessmentPrompt") if up else None,
                     assessment_prompt_zh=raw.get("assessmentPrompt"),
                     standards=up.get("standards", []) if up else [],
-                    curriculum_standards=raw.get("cnStandards", []),
+                    curriculum_standards=self._resolve_standards(
+                        raw.get("cnStandards", []), standards_lookup
+                    ),
                     translation_status=raw.get("translationStatus"),
                     deprecated=False,
                     age_group=_compute_age_group(age_start),
@@ -185,7 +220,9 @@ class BeijingLoader:
                     assessment_prompt=None,
                     assessment_prompt_zh=raw.get("assessmentPrompt"),
                     standards=[],
-                    curriculum_standards=raw.get("cnStandards", []),
+                    curriculum_standards=self._resolve_standards(
+                        raw.get("cnStandards", []), standards_lookup
+                    ),
                     translation_status=None,
                     deprecated=False,
                     age_group=_compute_age_group(age_start),

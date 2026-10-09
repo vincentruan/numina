@@ -1,23 +1,43 @@
 """Tests for the Beijing taxonomy loader.
 
-Verifies that BeijingLoader correctly reads the 7 JSON files from the
+Verifies that BeijingLoader correctly reads the JSON files from the
 Beijing data directory and produces NormalizedTopic/Dependency/Cluster
 instances with source_taxonomy="beijing".
 """
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from packages.os_taxonomy.loaders import get_loader
 from packages.os_taxonomy.loaders.beijing import BeijingLoader
-from packages.os_taxonomy.types import NormalizedTopic
+from packages.os_taxonomy.types import CurriculumStandard, NormalizedTopic
+
+# scripts/ is importable from the server workspace root
+from scripts.seed_learning_topics import _union_list
 
 
 @pytest.fixture(scope="module")
 def loader() -> BeijingLoader:
     """Create a BeijingLoader using the default data directory."""
     return BeijingLoader()
+
+
+def _beijing_data_dir() -> Path:
+    """Resolve the default Beijing data directory the loader would use."""
+    return BeijingLoader()._data_dir
+
+
+requires_beijing_data = pytest.mark.skipif(
+    not _beijing_data_dir().is_dir(),
+    reason=(
+        "Beijing taxonomy data directory is absent "
+        f"({_beijing_data_dir()}); server/data/ is gitignored"
+    ),
+)
 
 
 @pytest.fixture(scope="module")
@@ -64,6 +84,12 @@ class TestLoadTopics:
         # At least some topics should have non-empty curriculum_standards
         with_standards = [t for t in mt_topics if t.curriculum_standards]
         assert len(with_standards) > 0, "Expected some mt_ topics with curriculum_standards"
+        # Resolved entries carry the curriculum document title and code
+        assert all(
+            isinstance(s, CurriculumStandard) and s.name and s.code
+            for t in with_standards
+            for s in t.curriculum_standards
+        )
 
     def test_mtc_topics_subject_mapping(
         self, mtc_topics: list[NormalizedTopic]
@@ -101,6 +127,141 @@ class TestLoadTopics:
         )
         with_age = [t for t in mt_topics if t.age_range_start is not None]
         assert len(with_age) > 0
+
+
+class TestCurriculumStandardResolution:
+    """Curriculum standards are resolved from cnStandards at load time."""
+
+    @pytest.fixture()
+    def fixture_loader(self, tmp_path: Path) -> BeijingLoader:
+        """Loader over a minimal data dir with two metadata standards."""
+        (tmp_path / "topics.zh.json").write_text(
+            json.dumps({"topics": []}), encoding="utf-8"
+        )
+        (tmp_path / "cn-topics.json").write_text(
+            json.dumps(
+                {
+                    "topics": [
+                        {
+                            "id": "mtc_demo",
+                            "name": "示例主题",
+                            "cnStandards": ["demo:X.1"],
+                        },
+                        {
+                            "id": "mtc_unknown",
+                            "name": "未知标准主题",
+                            "cnStandards": ["demo:X.1", "demo:NOT-IN-METADATA"],
+                        },
+                        {"id": "mtc_none", "name": "无标准主题"},
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (tmp_path / "cn-curriculum-standards.json").write_text(
+            json.dumps(
+                {
+                    "curricula": [
+                        {
+                            "slug": "demo",
+                            "name": "示例课程标准（2022年版）",
+                            "topics": [
+                                {"key": "demo:X.1", "code": "X.1", "strand": "", "note": ""}
+                            ],
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return BeijingLoader(data_dir=tmp_path)
+
+    def test_identifier_resolves_to_document_title_and_code(
+        self, fixture_loader: BeijingLoader
+    ) -> None:
+        """A cnStandards identifier resolves to title + code."""
+        by_key = {t.topic_key: t for t in fixture_loader.load_topics()}
+
+        assert by_key["mtc_demo"].curriculum_standards == [
+            CurriculumStandard(key="demo:X.1", name="示例课程标准（2022年版）", code="X.1")
+        ]
+
+    def test_unresolvable_identifier_is_dropped(
+        self, fixture_loader: BeijingLoader
+    ) -> None:
+        """Identifiers absent from the metadata are dropped, not raised."""
+        by_key = {t.topic_key: t for t in fixture_loader.load_topics()}
+
+        assert by_key["mtc_unknown"].curriculum_standards == [
+            CurriculumStandard(key="demo:X.1", name="示例课程标准（2022年版）", code="X.1")
+        ]
+
+    def test_no_standards_yields_empty_list(
+        self, fixture_loader: BeijingLoader
+    ) -> None:
+        """A topic with no cnStandards yields an empty list."""
+        by_key = {t.topic_key: t for t in fixture_loader.load_topics()}
+
+        assert by_key["mtc_none"].curriculum_standards == []
+
+    @requires_beijing_data
+    def test_mtc_001_resolves(self, topics: list[NormalizedTopic]) -> None:
+        """mtc_001 (moe-2022-chinese:S1.RW.01) resolves to title + code."""
+        topic = next(t for t in topics if t.topic_key == "mtc_001")
+
+        assert topic.curriculum_standards == [
+            CurriculumStandard(
+                key="moe-2022-chinese:S1.RW.01",
+                name="义务教育语文课程标准（2022年版）",
+                code="S1.RW.01",
+            )
+        ]
+
+    @requires_beijing_data
+    def test_every_reference_resolves(
+        self, loader: BeijingLoader, topics: list[NormalizedTopic]
+    ) -> None:
+        """Every mt_/mtc_ cnStandards identifier resolves — zero unresolved."""
+        raw_total = 0
+        for filename in ("topics.zh.json", "cn-topics.json"):
+            data = loader._read_json(filename)
+            raw_total += sum(len(t.get("cnStandards", [])) for t in data["topics"])
+
+        resolved_total = sum(len(t.curriculum_standards) for t in topics)
+        assert raw_total == resolved_total == 2345
+
+    def test_os_taxonomy_loader_returns_empty(self) -> None:
+        """OsTaxonomyLoader still returns an empty curriculum_standards list."""
+        from packages.os_taxonomy.loaders.os_taxonomy import OsTaxonomyLoader
+
+        topics = OsTaxonomyLoader().load_topics()
+
+        assert topics
+        assert all(t.curriculum_standards == [] for t in topics)
+
+
+class TestCurriculumStandardHashability:
+    """CurriculumStandard is hashable so set-based unions work."""
+
+    def test_standard_is_hashable(self) -> None:
+        """A CurriculumStandard can be inserted into a set."""
+        standard = CurriculumStandard(key="demo:X.1", name="示例", code="X.1")
+
+        assert {standard} == {standard}
+
+    def test_union_list_over_resolved_standards(self) -> None:
+        """_union_list dedupes resolved standards instead of raising TypeError."""
+        a = [CurriculumStandard(key="k1", name="N", code="C1")]
+        b = [
+            CurriculumStandard(key="k1", name="N", code="C1"),
+            CurriculumStandard(key="k2", name="N", code="C2"),
+        ]
+
+        result = _union_list(a, b)
+
+        assert [s.key for s in result] == ["k1", "k2"]
 
 
 class TestLoadDependencies:
