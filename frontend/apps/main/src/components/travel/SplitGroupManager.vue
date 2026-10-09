@@ -500,4 +500,13 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--text-secondary);
 }
+.share-qr-wrapper {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+}
+.share-qr-img {
+  width: 200px;
+  height: 200px;
+}
 </style>
