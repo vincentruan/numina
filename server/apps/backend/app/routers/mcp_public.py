@@ -11,9 +11,27 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.services.mcp_audit import write_mcp_access_log
 from apps.backend.app.services.mcp_session import MCPSession
 from packages.core.logging import get_logger
+from packages.core.settings import settings
 
 router = APIRouter(prefix="/mcp/public", tags=["mcp-public"])
 logger = get_logger(__name__)
+
+
+async def _check_mcp_rate_limit(token_prefix: str, client_ip: str) -> None:
+    """Per-token rate limit: 30 req/min keyed by (token_prefix, client_ip).
+
+    Applied AFTER token validation so invalid tokens don't consume slots.
+    Raises AppError(429) when limit is exceeded.
+    """
+    from packages.core.cache import get_cache
+    from packages.core.cache.keys import RATE_LIMIT
+
+    cache = get_cache()
+    key = f"{RATE_LIMIT}:mcp_public:{token_prefix}:{client_ip}"
+    count = await cache.increment(key, ttl=60)
+    limit = settings.MCP_PUBLIC_RATE_LIMIT_PER_MINUTE
+    if count > limit:
+        raise AppError(ErrorCode.RATE_LIMITED)
 
 # Separate transport instance for the public path — avoids cross-contamination
 # with the internal transport's session routing.
@@ -197,8 +215,11 @@ async def mcp_public_sse(
         _validate_and_resolve, family_id, raw_token
     )
 
-    # Build audit context for connect/disconnect events
+    # Per-token rate limit (after validation so invalid tokens don't consume slots)
     client_ip = request.client.host if request.client else "unknown"
+    await _check_mcp_rate_limit(raw_token[:8], client_ip)
+
+    # Build audit context for connect/disconnect events
     user_agent = request.headers.get("user-agent", "")[:512]
     audit_ctx = {
         "family_id": family_id,
@@ -284,5 +305,9 @@ async def mcp_public_messages(
                 raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, "invalid token")
 
     await asyncio.to_thread(_validate_post)
+
+    # Per-token rate limit (after validation)
+    _client_ip = request.client.host if request.client else "unknown"
+    await _check_mcp_rate_limit(raw_token[:8], _client_ip)
 
     return PublicMCPMessageResponse()
