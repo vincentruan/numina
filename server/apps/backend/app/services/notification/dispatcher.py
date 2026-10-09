@@ -90,6 +90,7 @@ def get_reminder_summary(db: Session, family_id: int) -> ReminderSummary:
         learning_approved=counts.get("learning_approved", 0),
         learning_rejected=counts.get("learning_rejected", 0),
         learning_streak_3_failures=counts.get("learning_streak_3_failures", 0),
+        mcp_anomaly_detected=counts.get("mcp_anomaly_detected", 0),
         total=sum(counts.values()),
     )
 

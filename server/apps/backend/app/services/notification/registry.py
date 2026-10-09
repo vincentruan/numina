@@ -110,6 +110,17 @@ NOTIFICATION_CATEGORIES: dict[str, dict] = {
             },
         },
     },
+    "mcp_security": {
+        "label_key": "reminders.categories.mcp_security",
+        "icon": "shield-outline",
+        "events": {
+            "mcp_anomaly_detected": {
+                "label_key": "reminders.types.mcp_anomaly_detected",
+                "default_severity": "warning",
+                "trigger": "realtime",
+            },
+        },
+    },
 }
 
 

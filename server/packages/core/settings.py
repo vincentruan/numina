@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     LOGIN_RATE_LIMIT_LOCKOUT_SECONDS: int = 900  # 15 minutes
     GLOBAL_RATE_LIMIT_PER_MINUTE: int = 600
     MCP_PUBLIC_RATE_LIMIT_PER_MINUTE: int = 30
+    MCP_ANOMALY_FREQUENCY_THRESHOLD: int = 100  # tool calls in 5 min
+    MCP_ANOMALY_FAILURE_RATE_THRESHOLD: float = 0.5  # failure ratio in 10 min
+    MCP_ANOMALY_MIN_CALLS: int = 5  # min calls before failure-rate alert
     REGISTER_RATE_LIMIT_PER_HOUR: int = 5  # Registration rate limit per IP
 
     # Trusted proxy configuration (for X-Forwarded-For validation)
