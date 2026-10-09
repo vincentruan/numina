@@ -17,25 +17,49 @@ Usage:
     clusters = get_clusters()    # list of cluster dicts with summaryZh
 """
 
-import json
-from pathlib import Path
+from __future__ import annotations
 
-_DATA_DIR = Path(__file__).parent
+from packages.os_taxonomy.loaders.os_taxonomy import OsTaxonomyLoader
+
+__all__ = ["get_clusters", "get_dependencies", "get_topics"]
+
+_loader = OsTaxonomyLoader()
 
 
 def get_topics() -> list[dict]:
-    """Load topics with Chinese translations."""
-    with open(_DATA_DIR / "topics.json", encoding="utf-8") as f:
+    """Load topics with Chinese translations.
+
+    Returns a list of dicts for backward compatibility.
+    """
+    import json
+    from pathlib import Path
+
+    data_dir = Path(__file__).parent
+    with open(data_dir / "topics.json", encoding="utf-8") as f:
         return json.load(f)["topics"]
 
 
 def get_clusters() -> list[dict]:
-    """Load clusters with Chinese translations."""
-    with open(_DATA_DIR / "clusters.json", encoding="utf-8") as f:
+    """Load clusters with Chinese translations.
+
+    Returns a list of dicts for backward compatibility.
+    """
+    import json
+    from pathlib import Path
+
+    data_dir = Path(__file__).parent
+    with open(data_dir / "clusters.json", encoding="utf-8") as f:
         return json.load(f)["clusters"]
 
 
 def get_dependencies() -> list[dict]:
-    """Load topic dependencies (prerequisite relationships)."""
-    with open(_DATA_DIR / "dependencies.json", encoding="utf-8") as f:
+    """Load topic dependencies (prerequisite relationships).
+
+    Returns a list of dicts for backward compatibility.
+    """
+    import json
+    from pathlib import Path
+
+    data_dir = Path(__file__).parent
+    with open(data_dir / "dependencies.json", encoding="utf-8") as f:
         return json.load(f).get("dependencies", [])

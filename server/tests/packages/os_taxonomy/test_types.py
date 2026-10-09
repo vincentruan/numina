@@ -164,7 +164,14 @@ class TestLoaderRegistry:
         with pytest.raises(ValueError, match="Unknown taxonomy source"):
             get_loader("nonexistent-source")
 
-    def test_empty_registry_message(self):
-        """Error message indicates no sources are available."""
-        with pytest.raises(ValueError, match="Available sources: none"):
-            get_loader("any-source")
+    def test_empty_registry_message(self, monkeypatch):
+        """Error message indicates no sources are available when registry is empty."""
+        from packages.os_taxonomy.loaders import _LOADER_REGISTRY
+
+        saved = dict(_LOADER_REGISTRY)
+        _LOADER_REGISTRY.clear()
+        try:
+            with pytest.raises(ValueError, match="Available sources: none"):
+                get_loader("any-source")
+        finally:
+            _LOADER_REGISTRY.update(saved)
