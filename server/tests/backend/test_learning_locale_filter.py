@@ -7,6 +7,8 @@ requesting user's language:
 """
 
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -74,6 +76,7 @@ def _create_topic(
     source_taxonomy: str = "os-taxonomy",
     name: str = "Topic",
     age_group: str = "mid",
+    curriculum_standards_json: str | None = None,
 ) -> LearningTopic:
     t = LearningTopic(
         topic_key=topic_key,
@@ -86,6 +89,7 @@ def _create_topic(
         source_taxonomy=source_taxonomy,
         evidence_json="[]",
         standards_json="[]",
+        curriculum_standards_json=curriculum_standards_json or "[]",
     )
     db.add(t)
     db.flush()
@@ -459,3 +463,131 @@ def test_explicit_source_taxonomy_overrides_locale(client, db, auth_headers):
     topic_keys = {t["topic_key"] for t in data}
     assert "over_os" in topic_keys
     assert "over_bj" not in topic_keys
+
+
+# ── U2: resolved curriculum standards on the topic API ─────────────────────────
+
+_RESOLVED_STD = {
+    "key": "moe-2022-math:S1.NA.02",
+    "name": "义务教育数学课程标准（2022年版）",
+    "code": "S1.NA.02",
+}
+_LEGACY_STD = "moe-2022-chinese:S1.RW.01"
+
+
+@pytest.fixture
+def zh_child_std_setup(client, db, auth_headers):
+    """zh-CN child with a beijing topic holding resolved standards + one legacy row."""
+    child = _create_child(client, auth_headers, username="stdchild")
+    child_headers = _child_login(client, child["username"])
+    child_id = int(child["id"])
+
+    resolved_topic = _create_topic(
+        db,
+        "std_resolved",
+        source_taxonomy="beijing",
+        name="Resolved Topic",
+        curriculum_standards_json=json.dumps([_RESOLVED_STD], ensure_ascii=False),
+    )
+    legacy_topic = _create_topic(
+        db,
+        "std_legacy",
+        source_taxonomy="beijing",
+        name="Legacy Topic",
+        curriculum_standards_json=json.dumps([_LEGACY_STD]),
+    )
+
+    db.add(
+        LearningProgress(
+            child_id=child_id, topic_id=legacy_topic.id, mastery_level="learning"
+        )
+    )
+    db.flush()
+
+    return {
+        "child_headers": child_headers,
+        "child_id": child_id,
+        "resolved_topic": resolved_topic,
+        "legacy_topic": legacy_topic,
+    }
+
+
+def test_global_topic_detail_returns_resolved_curriculum_standards(
+    client, db, auth_headers, zh_child_std_setup
+):
+    """GET /learning/topics/{id} exposes the resolved title + code."""
+    topic_id = zh_child_std_setup["resolved_topic"].id
+
+    resp = client.get(f"/api/v1/learning/topics/{topic_id}", headers=auth_headers)
+
+    assert resp.status_code == 200
+    assert resp.json()["data"]["curriculum_standards"] == [_RESOLVED_STD]
+
+
+def test_child_topic_detail_returns_resolved_curriculum_standards(
+    client, zh_child_std_setup
+):
+    """The child endpoint the badge reads returns the same resolved entries."""
+    topic_id = zh_child_std_setup["resolved_topic"].id
+
+    resp = client.get(
+        f"/api/v1/child/learning/topics/{topic_id}",
+        headers=zh_child_std_setup["child_headers"],
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["data"]["curriculum_standards"] == [_RESOLVED_STD]
+
+
+def test_child_topic_detail_tolerates_legacy_standard_strings(
+    client, zh_child_std_setup
+):
+    """A pre-U2 bare-string entry must not 500 — it degrades to code=None."""
+    topic_id = zh_child_std_setup["legacy_topic"].id
+
+    resp = client.get(
+        f"/api/v1/child/learning/topics/{topic_id}",
+        headers=zh_child_std_setup["child_headers"],
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["data"]["curriculum_standards"] == [
+        {"key": _LEGACY_STD, "name": _LEGACY_STD, "code": None}
+    ]
+
+
+def test_child_today_tolerates_legacy_standards_in_nested_topics(
+    client, zh_child_std_setup
+):
+    """TodayLearningResponse.current_topic validates a legacy row."""
+    resp = client.get(
+        "/api/v1/child/learning/today",
+        headers=zh_child_std_setup["child_headers"],
+    )
+
+    assert resp.status_code == 200
+    current = resp.json()["data"]["current_topic"]
+    assert current is not None
+    assert int(current["id"]) == zh_child_std_setup["legacy_topic"].id
+    assert current["curriculum_standards"] == [
+        {"key": _LEGACY_STD, "name": _LEGACY_STD, "code": None}
+    ]
+
+
+def test_os_taxonomy_topic_returns_empty_curriculum_standards(
+    client, db, auth_headers
+):
+    """os-taxonomy topics carry no resolved standards — an empty list, not null."""
+    child = _create_child(
+        client, auth_headers, username="ostdchild", language="en-US"
+    )
+    child_headers = _child_login(client, child["username"])
+
+    os_topic = _create_topic(db, "std_os", source_taxonomy="os-taxonomy")
+
+    resp = client.get(
+        f"/api/v1/child/learning/topics/{os_topic.id}", headers=child_headers
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["data"]["curriculum_standards"] == []

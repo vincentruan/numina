@@ -11,6 +11,20 @@ from apps.backend.app.schemas.base import SnowflakeBase
 
 # --- Knowledge Graph (Global) ---
 
+class CurriculumStandard(BaseModel):
+    """A resolved curriculum standard reference.
+
+    ``key`` is the raw identifier from the source data, ``name`` the curriculum
+    document title and ``code`` the code within that document. ``code`` is
+    nullable because rows written before resolution store bare identifier
+    strings (see ``TopicResponse.normalize_curriculum_standards``).
+    """
+
+    key: str
+    name: str
+    code: str | None = None
+
+
 class TopicResponse(SnowflakeBase):
     id: int
     topic_key: str
@@ -31,9 +45,29 @@ class TopicResponse(SnowflakeBase):
     assessment_prompt_zh: str | None
     standards: list[str] = []
     ability_dimensions: list[str] | None
-    curriculum_standards: list[str] | None = None
+    curriculum_standards: list[CurriculumStandard] | None = None
     source_taxonomy: str = "os-taxonomy"
     deprecated: bool
+
+    @field_validator("curriculum_standards", mode="before")
+    @classmethod
+    def normalize_curriculum_standards(cls, v: object) -> object:
+        """Accept the legacy bare-identifier shape as well as resolved entries.
+
+        Rows written before backend resolution store plain identifier strings
+        (``["moe-2022-chinese:S1.RW.01"]``). Normalizing here rather than in a
+        router mapper is deliberate: ``learning_child.py`` and
+        ``learning_family.py`` return raw ORM objects under
+        ``response_model=TopicResponse`` and never pass through
+        ``_topic_to_response``, so a mapper-level fix would 500 on the child
+        home and today cards.
+        """
+        if not isinstance(v, list):
+            return v
+        return [
+            {"key": item, "name": item, "code": None} if isinstance(item, str) else item
+            for item in v
+        ]
 
 
 class TopicGraphResponse(BaseModel):

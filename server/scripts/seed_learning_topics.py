@@ -19,6 +19,7 @@ import re
 import subprocess
 import sys
 from collections import Counter
+from dataclasses import asdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -464,9 +465,23 @@ def _apply_normalized_to_db(row, t) -> None:
     row.assessment_prompt = t.assessment_prompt
     row.assessment_prompt_zh = t.assessment_prompt_zh
     row.standards_json = json.dumps(t.standards or [])
-    row.curriculum_standards_json = json.dumps(t.curriculum_standards or [])
+    row.curriculum_standards_json = json.dumps(
+        [_curriculum_standard_to_json(cs) for cs in t.curriculum_standards or []],
+        ensure_ascii=False,
+    )
     row.age_group = compute_age_group(t.age_range_start)
     row.deprecated = t.deprecated
+
+
+def _curriculum_standard_to_json(cs) -> object:
+    """Serialize one curriculum standard for storage.
+
+    The beijing loader resolves identifiers into ``CurriculumStandard``
+    instances; the raw os-taxonomy path (``_topic_from_raw_os_taxonomy``)
+    still yields bare identifiers, so both shapes are accepted here and
+    normalized on read by ``TopicResponse``.
+    """
+    return cs if isinstance(cs, str) else asdict(cs)
 
 
 def upsert_cluster(session, c) -> bool:

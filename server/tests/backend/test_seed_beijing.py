@@ -1,6 +1,7 @@
 """Tests for Beijing taxonomy seed script behavior (U4/U5)."""
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -368,3 +369,107 @@ class TestUpsertCluster:
             source_taxonomy=SOURCE_BEIJING,
         ).first()
         assert row.summary == "Physics v2 updated"
+
+
+class TestCurriculumStandardPersistence:
+    """U2 — resolved curriculum standards survive the seed path."""
+
+    def test_union_list_dedupes_real_curriculum_standard_instances(self):
+        """Frozen dataclass instances hash by value, so _union_list dedupes them."""
+        duplicate = CurriculumStandard(key="std1", name="Standard Set 1", code="1")
+        assert duplicate is not _STD1
+        assert duplicate == _STD1
+
+        result = _union_list([_STD1, _STD2], [duplicate, _STD3])
+
+        assert result == [_STD1, _STD2, _STD3]
+
+    def test_apply_dedup_merges_identical_standard_instances(self):
+        """Merge dedupes standards that are equal by value, not identity."""
+        mt = NormalizedTopic(
+            topic_key="mt_stdmerge",
+            source_taxonomy=SOURCE_BEIJING,
+            topic_type="CONCEPTUAL",
+            subject="mathematics",
+            curriculum_standards=[_STD1],
+        )
+        mtc = NormalizedTopic(
+            topic_key="mtc_stdmerge",
+            source_taxonomy=SOURCE_BEIJING,
+            topic_type="CONCEPTUAL",
+            subject="mathematics",
+            curriculum_standards=[
+                CurriculumStandard(key="std1", name="Standard Set 1", code="1"),
+                _STD2,
+            ],
+        )
+        topics = [mt, mtc]
+        mtc_actions = {
+            "mtc_stdmerge": {
+                "mtc_topic_key": "mtc_stdmerge",
+                "mt_topic_key": "mt_stdmerge",
+                "action": "merge",
+            }
+        }
+
+        merges = apply_dedup_to_topics(topics, mtc_actions)
+
+        assert merges == 1
+        assert mt.curriculum_standards == [_STD1, _STD2]
+
+    def test_upsert_topic_serializes_curriculum_standards_objects(self, db: Session):
+        """Resolved CurriculumStandard instances land in curriculum_standards_json."""
+        topic = NormalizedTopic(
+            topic_key="mt_stdrows",
+            source_taxonomy=SOURCE_BEIJING,
+            topic_type="CONCEPTUAL",
+            subject="mathematics",
+            name="Standards Topic",
+            curriculum_standards=[
+                CurriculumStandard(
+                    key="moe-2022-math:S1.NA.02",
+                    name="义务教育数学课程标准（2022年版）",
+                    code="S1.NA.02",
+                ),
+                _STD2,
+            ],
+        )
+
+        created = upsert_topic(db, topic)
+        db.flush()
+
+        assert created is True
+        row = db.query(LearningTopic).filter_by(
+            topic_key="mt_stdrows", source_taxonomy=SOURCE_BEIJING
+        ).first()
+        assert row is not None
+        assert json.loads(row.curriculum_standards_json) == [
+            {
+                "key": "moe-2022-math:S1.NA.02",
+                "name": "义务教育数学课程标准（2022年版）",
+                "code": "S1.NA.02",
+            },
+            {"key": "std2", "name": "Standard Set 2", "code": "2"},
+        ]
+        # Round-trips through the model accessor as plain dicts.
+        assert row.curriculum_standards == json.loads(row.curriculum_standards_json)
+
+    def test_upsert_topic_accepts_legacy_bare_identifier_standards(self, db: Session):
+        """The raw os-taxonomy path yields bare identifiers — still storable."""
+        topic = NormalizedTopic(
+            topic_key="mt_stdlegacy",
+            source_taxonomy="os-taxonomy",
+            topic_type="CONCEPTUAL",
+            subject="mathematics",
+            name="Legacy Standards Topic",
+            curriculum_standards=["moe-2022-chinese:S1.RW.01"],
+        )
+
+        upsert_topic(db, topic)
+        db.flush()
+
+        row = db.query(LearningTopic).filter_by(
+            topic_key="mt_stdlegacy", source_taxonomy="os-taxonomy"
+        ).first()
+        assert row.curriculum_standards_json == '["moe-2022-chinese:S1.RW.01"]'
+        assert row.curriculum_standards == ["moe-2022-chinese:S1.RW.01"]
