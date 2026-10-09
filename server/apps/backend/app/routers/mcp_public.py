@@ -101,10 +101,15 @@ def _validate_and_resolve(family_id: str, raw_token: str):
             raise AppError(ErrorCode.FORBIDDEN, "synthetic user not found")
 
         # Capture what we need before session close (objects detach)
+        import json as _json
+
+        raw_tools = row.allowed_tools
+        parsed_tools = _json.loads(raw_tools) if raw_tools else None
         result = (
             {
                 "allow_external": row.allow_external,
                 "allow_write": row.allow_write,
+                "allowed_tools": parsed_tools,
                 "is_active": row.is_active,
             },
             str(synthetic_user.id),
@@ -171,6 +176,7 @@ async def mcp_public_sse(
         caller_user_id=synthetic_user_id,
         caller_role="external_token",
         allow_write=token_info["allow_write"],
+        allowed_tools=token_info["allowed_tools"],
     )
     return PublicMCPSSEResponse(session=session, family_id=family_id)
 

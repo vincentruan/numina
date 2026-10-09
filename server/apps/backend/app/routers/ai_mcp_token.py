@@ -51,16 +51,26 @@ def update_token(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> MCPTokenResponse:
-    """Update allow_external, allow_write, and/or expires_at.
+    """Update allow_external, allow_write, allowed_tools, and/or expires_at.
 
     ``expires_at`` is cleared (set to NULL = never expire) only when the field is
     explicitly present in the request body; omitting it leaves the value unchanged.
+
+    ``allowed_tools``: null resets to all-available, list sets exact whitelist.
     """
+    # Build kwargs — only pass allowed_tools if it was explicitly set in the body
+    kwargs = {}
+    if body.allow_external is not None:
+        kwargs["allow_external"] = body.allow_external
+    if body.allow_write is not None:
+        kwargs["allow_write"] = body.allow_write
+    if "allowed_tools" in body.model_fields_set:
+        kwargs["allowed_tools"] = body.allowed_tools
+
     row = token_svc.update_access(
         current_user.family_id,
         db,
-        allow_external=body.allow_external,
-        allow_write=body.allow_write,
+        **kwargs,
     )
     if "expires_at" in body.model_fields_set:
         row.expires_at = body.expires_at

@@ -8,7 +8,7 @@ from apps.backend.app.services.mcp_session import MCPSession, _get_caller_user
 
 
 class TestSlotsAndConstruction:
-    def test_slots_contains_exactly_six_fields(self):
+    def test_slots_contains_exactly_seven_fields(self):
         assert MCPSession.__slots__ == (
             "_family_id",
             "_caller_user_id",
@@ -16,6 +16,7 @@ class TestSlotsAndConstruction:
             "_thread_id",
             "_server",
             "_allow_write",
+            "_allowed_tools",
         )
 
     def test_init_freezes_caller_user_id(self):

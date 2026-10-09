@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import secrets
 from datetime import UTC, datetime
 
@@ -19,6 +20,7 @@ logger = get_logger(__name__)
 
 _TOKEN_PREFIX = "mcp_"
 _TOKEN_RANDOM_BYTES = 32  # secrets.token_urlsafe(32) → 43 chars
+_SENTINEL = object()  # distinguishes "not passed" from None in update_access
 
 
 def _hash_token(plaintext: str) -> str:
@@ -137,12 +139,18 @@ def update_access(
     *,
     allow_external: bool | None = None,
     allow_write: bool | None = None,
+    allowed_tools: list[str] | None | object = _SENTINEL,
 ) -> FamilyMCPToken:
     """PATCH the active token's access flags. Raises 404 if no active token.
 
     ``expires_at`` is updated directly on the returned row by the caller when
     needed — it lives here (not in the signature) because PATCH needs to
     distinguish "field absent" from "explicit null (never expire)".
+
+    ``allowed_tools``:
+    - Not passed (sentinel): no change
+    - None: reset to all-available (NULL in DB)
+    - list[str]: exact whitelist; validated against registry
     """
     row = (
         db.query(FamilyMCPToken)
@@ -156,6 +164,22 @@ def update_access(
         row.allow_external = allow_external
     if allow_write is not None:
         row.allow_write = allow_write
+    if allowed_tools is not _SENTINEL:
+        # Type narrowing: at this point allowed_tools is list[str] | None
+        tools_value: list[str] | None = allowed_tools  # type: ignore[assignment]
+        if tools_value is not None:
+            # Validate against the tool registry
+            from apps.backend.app.services.mcp_tool_registry import _REGISTRY
+
+            invalid = set(tools_value) - set(_REGISTRY.keys())
+            if invalid:
+                raise AppError(
+                    ErrorCode.VALIDATION_ERROR,
+                    f"invalid tool names: {sorted(invalid)}",
+                )
+            row.allowed_tools = json.dumps(tools_value)
+        else:
+            row.allowed_tools = None
 
     db.flush()
     db.refresh(row)

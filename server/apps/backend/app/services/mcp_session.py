@@ -228,6 +228,7 @@ class MCPSession:
         "_thread_id",
         "_server",
         "_allow_write",
+        "_allowed_tools",
     )
 
     def __init__(
@@ -237,6 +238,7 @@ class MCPSession:
         caller_role: str,
         thread_id: str | None = None,
         allow_write: bool = False,
+        allowed_tools: list[str] | None = None,
     ) -> None:
         if not family_id:
             raise ValueError("family_id must not be empty")
@@ -249,6 +251,7 @@ class MCPSession:
         self._caller_role = caller_role
         self._thread_id = thread_id
         self._allow_write = allow_write
+        self._allowed_tools = allowed_tools
         self._server = Server(f"numina-family-{family_id}")
         self._register_tools()
 
@@ -290,6 +293,11 @@ class MCPSession:
             metas = list(_REGISTRY.values())
         else:
             metas = list_tools_for_role(self._caller_role)
+
+        # Per-tool whitelist filter for external_token callers
+        if self._caller_role == "external_token" and self._allowed_tools is not None:
+            allowed = set(self._allowed_tools)
+            metas = [m for m in metas if m.name in allowed]
 
         return [
             Tool(
@@ -338,6 +346,33 @@ class MCPSession:
                             "error": "permission_denied",
                             "retryable": False,
                             "reason": "该工具对当前角色不可用",
+                        },
+                        ensure_ascii=False,
+                    ),
+                )
+            ]
+
+        # Per-tool whitelist gate for external_token callers
+        if (
+            self._caller_role == "external_token"
+            and self._allowed_tools is not None
+            and name not in self._allowed_tools
+        ):
+            logger.warning(
+                "[mcp_session] permission_denied family=%s caller_user_id=%s caller_role=%s attempted_tool=%s (not in allowed_tools)",
+                self._family_id,
+                self._caller_user_id,
+                self._caller_role,
+                name,
+            )
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "error": "permission_denied",
+                            "retryable": False,
+                            "reason": "该工具未对外部客户端开放",
                         },
                         ensure_ascii=False,
                     ),
