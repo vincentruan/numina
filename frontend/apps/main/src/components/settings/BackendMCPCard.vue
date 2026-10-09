@@ -2,16 +2,22 @@
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { showConfirmDialog, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
   getMCPToken,
   generateMCPToken,
   updateMCPToken,
+  getMCPTools,
+  getMCPStats,
   type MCPTokenData,
+  type MCPToolCatalogItem,
+  type MCPStatsData,
 } from '@/api/mcp-token'
 import { formatDateTime } from '@/utils/format'
 
 const { t, locale } = useI18n()
+const router = useRouter()
 const authStore = useAuthStore()
 const isOwner = computed(() => authStore.user?.role === 'owner')
 
@@ -20,6 +26,15 @@ const plaintext = ref('')
 const reveal = ref(false)
 const busy = ref(false)
 let revealTimer: ReturnType<typeof setTimeout> | null = null
+
+// Tool permissions
+const showToolPicker = ref(false)
+const toolCatalog = ref<MCPToolCatalogItem[]>([])
+const selectedTools = ref<string[]>([])
+const toolsSaving = ref(false)
+
+// Usage summary
+const stats = ref<MCPStatsData | null>(null)
 
 // Expiration picker (presets + never + custom)
 const showExpirePicker = ref(false)
@@ -39,6 +54,30 @@ function fmtDate(s: string | null): string {
   return formatDateTime(s, locale.value)
 }
 
+/** Tools visible in the picker — write tools only when allow_write is on. */
+const visibleTools = computed(() =>
+  toolCatalog.value.filter(tool => !tool.requires_write || token.value?.allow_write)
+)
+
+/** Summary line for the tool permission row. */
+const toolsSummary = computed(() => {
+  if (!token.value) return ''
+  if (token.value.allowed_tools === null) return t('mcp.token.tools.allAvailable')
+  const total = visibleTools.value.length
+  const enabled = token.value.allowed_tools.filter(
+    n => visibleTools.value.some(tool => tool.name === n)
+  ).length
+  return t('mcp.token.tools.countSummary', { enabled, total })
+})
+
+const usageSummary = computed(() => {
+  if (!stats.value || stats.value.total_calls === 0) return t('mcp.token.usage.noUsage')
+  return t('mcp.token.usage.summary', {
+    count: stats.value.total_calls,
+    rate: Math.round(stats.value.success_rate * 100),
+  })
+})
+
 async function load() {
   try {
     const res = await getMCPToken()
@@ -46,6 +85,74 @@ async function load() {
   } catch {
     token.value = null
   }
+  if (token.value) {
+    void loadStats()
+  }
+}
+
+async function loadStats() {
+  try {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const res = await getMCPStats({ date_from: start.toISOString() })
+    stats.value = res.data
+  } catch {
+    stats.value = null
+  }
+}
+
+async function loadToolCatalog() {
+  if (toolCatalog.value.length > 0) return
+  try {
+    const res = await getMCPTools()
+    toolCatalog.value = res.data.tools
+  } catch {
+    toolCatalog.value = []
+  }
+}
+
+async function onOpenToolPicker() {
+  if (!isOwner.value || !token.value) return
+  await loadToolCatalog()
+  // null = all available → pre-check every visible tool
+  selectedTools.value =
+    token.value.allowed_tools === null
+      ? visibleTools.value.map(tool => tool.name)
+      : [...token.value.allowed_tools]
+  showToolPicker.value = true
+}
+
+function onEnableAll() {
+  selectedTools.value = visibleTools.value.map(tool => tool.name)
+}
+
+function onClearAll() {
+  selectedTools.value = []
+}
+
+async function onSaveTools() {
+  if (!token.value) return
+  toolsSaving.value = true
+  try {
+    // All visible tools selected → store null (unrestricted)
+    const allSelected =
+      visibleTools.value.length > 0 &&
+      visibleTools.value.every(tool => selectedTools.value.includes(tool.name))
+    const res = await updateMCPToken({
+      allowed_tools: allSelected ? null : [...selectedTools.value],
+    })
+    token.value = res.data
+    showToolPicker.value = false
+    showSuccessToast(t('toast.saved'))
+  } catch {
+    showFailToast(t('toast.saveFailed'))
+  } finally {
+    toolsSaving.value = false
+  }
+}
+
+function onOpenStats() {
+  void router.push('/settings/ai/mcp/stats')
 }
 
 onMounted(load)
@@ -106,6 +213,7 @@ async function onGenerate() {
     reveal.value = true
     armAutoRemask(30_000)
     showSuccessToast(t('mcp.token.generated'))
+    void loadStats()
   } finally {
     busy.value = false
   }
@@ -140,7 +248,6 @@ async function onExpireConfirm({ selectedValues }: { selectedValues: string[] })
   const choice = selectedValues[0]
   if (!choice || !token.value) return
   if (choice === 'custom') {
-    // Default the custom picker to today (Vant date-picker v-model is [year, month, day]).
     const today = new Date()
     customDateModel.value = [
       String(today.getFullYear()),
@@ -257,6 +364,27 @@ function onCustomDateConfirm({ selectedValues }: { selectedValues: string[] }) {
         </template>
       </van-cell>
 
+      <van-cell
+        :title="t('mcp.token.tools.label')"
+        :value="toolsSummary"
+        is-link
+        :class="{ 'cell-disabled': !isOwner }"
+        @click="onOpenToolPicker"
+      />
+
+      <van-cell
+        :title="t('mcp.token.usage.label')"
+        :value="usageSummary"
+        is-link
+        @click="onOpenStats"
+      >
+        <template #label>
+          <span v-if="stats && stats.error_count + stats.failure_count > 0" class="anomaly-flag">
+            {{ t('mcp.token.usage.anomalyFlag') }}
+          </span>
+        </template>
+      </van-cell>
+
       <van-cell v-if="isOwner" :title="t('mcp.token.expiration')">
         <template #value>
           <van-field
@@ -306,6 +434,54 @@ function onCustomDateConfirm({ selectedValues }: { selectedValues: string[] }) {
       @cancel="showCustomDatePicker = false"
     />
   </van-popup>
+
+  <!-- Tool permission picker -->
+  <van-popup v-model:show="showToolPicker" position="bottom" round destroy-on-close class="tool-picker">
+    <div class="tool-picker-header">
+      <span class="tool-picker-title">{{ t('mcp.token.tools.title') }}</span>
+      <div class="tool-picker-actions">
+        <van-button size="small" plain type="primary" @click="onEnableAll">
+          {{ t('mcp.token.tools.enableAll') }}
+        </van-button>
+        <van-button size="small" plain @click="onClearAll">
+          {{ t('mcp.token.tools.clear') }}
+        </van-button>
+      </div>
+    </div>
+    <p class="tool-picker-warning">{{ t('mcp.token.tools.warning') }}</p>
+
+    <div v-if="visibleTools.length === 0" class="tool-picker-empty">
+      {{ t('mcp.token.tools.noTools') }}
+    </div>
+
+    <van-checkbox-group v-else v-model="selectedTools" class="tool-list">
+      <van-cell
+        v-for="tool in visibleTools"
+        :key="tool.name"
+        :title="tool.name"
+        :label="tool.description"
+        clickable
+        @click="
+          selectedTools.includes(tool.name)
+            ? (selectedTools = selectedTools.filter(n => n !== tool.name))
+            : selectedTools.push(tool.name)
+        "
+      >
+        <template #right-icon>
+          <van-checkbox :name="tool.name" @click.stop />
+          <van-tag v-if="tool.requires_write" type="warning" class="write-tag">
+            {{ t('mcp.token.tools.writeBadge') }}
+          </van-tag>
+        </template>
+      </van-cell>
+    </van-checkbox-group>
+
+    <div class="tool-picker-footer">
+      <van-button round block type="primary" :loading="toolsSaving" @click="onSaveTools">
+        {{ t('mcp.token.tools.save') }}
+      </van-button>
+    </div>
+  </van-popup>
 </template>
 
 <style scoped>
@@ -338,5 +514,50 @@ function onCustomDateConfirm({ selectedValues }: { selectedValues: string[] }) {
 }
 .expire-field {
   max-width: 160px;
+}
+.cell-disabled {
+  opacity: 0.6;
+}
+.anomaly-flag {
+  color: var(--van-danger-color);
+}
+.tool-picker {
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.tool-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 8px;
+}
+.tool-picker-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.tool-picker-actions {
+  display: flex;
+  gap: 8px;
+}
+.tool-picker-warning {
+  margin: 0 16px 8px;
+  font-size: 12px;
+  color: var(--van-danger-color);
+}
+.tool-picker-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.tool-list {
+  flex: 1;
+  overflow-y: auto;
+}
+.write-tag {
+  margin-left: 8px;
+}
+.tool-picker-footer {
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
 }
 </style>

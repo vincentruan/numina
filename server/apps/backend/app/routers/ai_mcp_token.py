@@ -14,6 +14,8 @@ from apps.backend.app.schemas.mcp_access_log import (
     MCPAccessLogListResponse,
     MCPAccessLogResponse,
     MCPStatsResponse,
+    MCPToolCatalogItem,
+    MCPToolCatalogResponse,
 )
 from apps.backend.app.schemas.mcp_token import (
     MCPTokenGenerateResponse,
@@ -152,4 +154,23 @@ def get_stats(
         db,
         date_from=date_from,
         date_to=date_to,
+    )
+
+
+@router.get("/tools", response_model=MCPToolCatalogResponse)
+def get_tool_catalog(
+    current_user: User = Depends(require_owner),
+) -> MCPToolCatalogResponse:
+    """List all registered MCP tools for the whitelist checkbox UI."""
+    from apps.backend.app.services.mcp_tool_registry import _REGISTRY
+
+    return MCPToolCatalogResponse(
+        tools=[
+            MCPToolCatalogItem(
+                name=meta.name,
+                description=meta.description,
+                requires_write=meta.requires_write,
+            )
+            for meta in _REGISTRY.values()
+        ]
     )

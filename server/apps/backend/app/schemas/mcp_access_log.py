@@ -63,3 +63,17 @@ class MCPStatsResponse(BaseModel):
     hourly_buckets: list[MCPHourlyBucket]
     tool_breakdown: list[MCPToolBreakdown]
     ip_breakdown: list[MCPIPBreakdown]
+
+
+class MCPToolCatalogItem(BaseModel):
+    """A single MCP tool available for whitelist selection."""
+
+    name: str
+    description: str
+    requires_write: bool
+
+
+class MCPToolCatalogResponse(BaseModel):
+    """Tool catalogue for the per-tool permission checkboxes."""
+
+    tools: list[MCPToolCatalogItem]
