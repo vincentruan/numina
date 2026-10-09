@@ -219,5 +219,5 @@ Expected NDJSON event sequence for `deep_think=true`:
 
 ## Related Issues
 
-- [`deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md`](./deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md) — DeerFlow adapter initialization, singleton export, and concurrency patterns
+- [`deerflow-integration-historical-lessons.md`](./deerflow-integration-historical-lessons.md) — DeerFlow adapter initialization, singleton export, and concurrency patterns
 - [`mcp-chat-adapter-architecture-2026-05-21.md`](../architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md) — Current chat architecture with MCP integration, ChatAdapter pattern, and family_adapter_cache 5-tuple key extension

@@ -301,6 +301,5 @@ class MCPSession:
 ## Related
 
 - **[Two-AI-apps unified dispatch — stream_run + multi-app worker dispatch](./two-ai-apps-unified-dispatch-stream-run.md)** — the current (2026-07) dispatch architecture that supersedes the `Orchestrator`-branching model described here. The MCP/ChatAdapter engineering patterns in this doc survive; only the dispatch framing is historical.
-- [DeerFlow Adapter Stream Type Mismatch and Security Issues](../integration-issues/deerflow-adapter-stream-type-mismatch-and-security-issues-2026-05-16.md) — stream contract (`AsyncGenerator[str, None]`) and security fixes (path traversal, SSRF) that apply to any adapter layer
-- [DeerFlow Harness Silent Fallback and Concurrency Fixes](../integration-issues/deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md) — prior orchestrator/adapter integration history; the ChatAdapter pattern supersedes the singleton-export workaround
+- [DeerFlow Integration Historical Lessons](../integration-issues/deerflow-integration-historical-lessons.md) — stream contract, security fixes (path traversal, SSRF), adapter initialization, and concurrency patterns. The ChatAdapter pattern supersedes the singleton-export workaround documented there.
 - [Extraction Failure Samples](../test-failures/2026-05-19-extraction-failure-samples.md) — establishes that `SkillConfig.prompt` is dead data and DeerFlow loads SKILL.md independently

@@ -122,6 +122,41 @@ ESLint flat config + Prettier. Migration not recommended; if improvements are ne
 
 Priority: Project existing > Base template > Supplementary templates > Vant official > Simple unified
 
+## Solutions (Frontend Lessons Learned)
+
+Check these docs before working in `frontend/` — they document verified fixes for known UI/tooling pitfalls.
+
+### UI Bugs
+
+| Doc | Topic |
+|-----|-------|
+| [`nprogress-lifecycle`](../docs/solutions/ui-bugs/nprogress-lifecycle-three-failure-modes.md) | NProgress 生命周期三种故障 (闪烁/不可见/卡住) |
+| [`dark-mode-specificity`](../docs/solutions/ui-bugs/dark-mode-inline-style-specificity-2026-05-30.md) | Dark mode CSS 优先级被 inline style 覆盖 |
+| [`action-sheet-clipped`](../docs/solutions/ui-bugs/action-sheet-clipped-in-transformed-container.md) | Action-sheet 在 transform 容器中被裁剪 |
+| [`button-margin-overflow`](../docs/solutions/ui-bugs/full-width-button-margin-overflow.md) | 全宽按钮 margin 溢出 |
+| [`itinerary-picker-icon`](../docs/solutions/ui-bugs/itinerary-type-picker-icon-display-2026-10-07.md) | Vant picker #option slot 图标不显示 |
+| [`onboarding-overlay`](../docs/solutions/ui-bugs/onboarding-overlay-blocks-navigation.md) | Onboarding 遮罩阻挡导航 |
+| [`silent-error-codes`](../docs/solutions/ui-bugs/silent-error-codes-for-expected-404.md) | 预期 404 触发错误 toast |
+| [`vant4-field-binding`](../docs/solutions/ui-bugs/vant4-field-modelvalue-binding-2026-04-08.md) | Vant 4 van-field 需要 :model-value |
+| [`vue3-keepalive-blank`](../docs/solutions/ui-bugs/vue3-transition-keepalive-blank-screen.md) | Vue3 Transition+KeepAlive 白屏 |
+
+### Best Practices
+
+| Doc | Topic |
+|-----|-------|
+| [`main-app-ui-design-patterns`](../docs/solutions/best-practices/main-app-ui-design-patterns-2026-08-03.md) | Main App UI 设计模式 |
+| [`ai-chat-checkpoint-retry`](../docs/solutions/architecture-patterns/ai-chat-checkpoint-retry-architecture.md) | AI Chat checkpoint 重试架构 |
+
+### Tooling / Developer Experience
+
+| Doc | Topic |
+|-----|-------|
+| [`pnpm-duplicate-vant`](../docs/solutions/tooling-decisions/pnpm-workspace-duplicate-vant-provide-inject-broken.md) | pnpm 重复 Vant 版本破坏 provide/inject |
+| [`vite-cache-stale-vue`](../docs/solutions/developer-experience/vite-cache-stale-vue-version.md) | Vite 缓存旧 Vue 版本 |
+| [`vue-tsc-noop-typecheck`](../docs/solutions/developer-experience/vue-tsc-references-only-root-tsconfig-noop-typecheck-gate-2026-07-23.md) | vue-tsc references-only 导致 typecheck 空转 |
+| [`vue3-i18n-locale-switching`](../docs/solutions/developer-experience/vue3-i18n-locale-switching-persistence-2026-05-15.md) | Vue3 i18n 语言切换 + localStorage 持久化 |
+| [`device-fingerprint-stability`](../docs/solutions/integration-issues/device-fingerprint-stability.md) | 设备指纹稳定性问题 |
+
 ## Links
 
 - [`packages/CLAUDE.md`](packages/CLAUDE.md) — @numina/auth + @numina/math exports

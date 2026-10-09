@@ -132,8 +132,53 @@ All quality commands and `uvicorn` must be invoked from `server/`, not from indi
 9. **Docker services** — Log to stdout + file; rotation is managed by the Python handler.
 10. **No `print()` in server code** — CLI scripts (`scripts/`, `reconcile/__main__.py`) may use `print()`.
 
+## Solutions (Backend/Agent Lessons Learned)
+
+Check these docs before working in `server/` — they document verified fixes for known pitfalls.
+
+### Architecture Patterns
+
+| Doc | Topic |
+|-----|-------|
+| [`deerflow-adapter-decoupling`](../docs/solutions/architecture-patterns/deerflow-adapter-decoupling-stream-bridge-subclass.md) | DeerFlow adapter 解耦 — stream_bridge 提取 |
+| [`mcp-caller-bound-principal`](../docs/solutions/architecture-patterns/mcp-caller-bound-principal-2026-05-31.md) | MCP 调用者绑定身份 (防 confused-deputy) |
+| [`mcp-chat-adapter`](../docs/solutions/architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md) | MCP Chat Adapter 分层设计 |
+
+### Best Practices
+
+| Doc | Topic |
+|-----|-------|
+| [`db-check-constraint-pydantic-sync`](../docs/solutions/best-practices/db-check-constraint-pydantic-regex-sync.md) | DB Check 约束与 Pydantic regex 同步 |
+| [`jti-revocation-db-persistence`](../docs/solutions/best-practices/jti-revocation-requires-db-persistence-2026-04-27.md) | JWT JTI 撤销必须持久化到 DB |
+| [`logging-config`](../docs/solutions/best-practices/logging-config.md) | 日志配置 (轮转/归档/保留) |
+| [`redis-fail-fast`](../docs/solutions/best-practices/redis-fail-fast-strategy.md) | Redis 缓存快速失败策略 |
+| [`file-storage-abstraction`](../docs/solutions/best-practices/file-storage-abstraction-2026-04-10.md) | 可插拔文件存储抽象 |
+
+### Integration Issues
+
+| Doc | Topic |
+|-----|-------|
+| [`deerflow-integration-historical`](../docs/solutions/integration-issues/deerflow-integration-historical-lessons.md) | DeerFlow 历史集成教训 (adapter/harness) |
+| [`deerflow-glm5-thinking`](../docs/solutions/integration-issues/deerflow-glm5-thinking-provider-endpoint-mismatch-2026-05-16.md) | GLM-5 深度思考 provider/endpoint 不匹配 |
+| [`thinking-block-leaking`](../docs/solutions/integration-issues/thinking-block-content-leaking-into-titles.md) | Thinking block 内容泄漏到标题 |
+| [`mcp-cache-asyncio-lock`](../docs/solutions/integration-issues/mcp-cache-asyncio-lock-threading-deadlock.md) | MCP 缓存 asyncio.Lock 线程死锁 |
+| [`asr-wer-tokenization`](../docs/solutions/integration-issues/asr-wer-whitespace-stripping-tokenization.md) | ASR WER 空格剥离/分词 |
+| [`stream-closure-fix`](../docs/solutions/integration-issues/stream-closure-fix-2026-06-15.md) | AI Chat 流关闭修复 |
+
+### Database
+
+| Doc | Topic |
+|-----|-------|
+| [`auto-migrate-string-default`](../docs/solutions/database-issues/auto-migrate-string-default-quoting-postgresql.md) | SQLAlchemy auto-migrate VARCHAR 默认值引号 |
+
+### Workflow
+
+| Doc | Topic |
+|-----|-------|
+| [`server-monorepo-consolidation`](../docs/solutions/workflow-issues/server-monorepo-consolidation-phase2-2026-05-14.md) | Phase 2 服务 Monorepo 合并 |
+| [`backend-module-extraction`](../docs/solutions/workflow-issues/backend-module-extraction-workflow-2026-05-14.md) | Backend 模块提取工作流 |
+
 ## Links
 
 - Root [`CLAUDE.md`](../CLAUDE.md) — behavioral guidelines, project overview
 - Module CLAUDE.md files: [`apps/backend`](./apps/backend/CLAUDE.md), [`apps/agent`](./apps/agent/CLAUDE.md), [`apps/scheduler_worker`](./apps/scheduler_worker/CLAUDE.md), [`packages/core`](./packages/core/CLAUDE.md), [`packages/db`](./packages/db/CLAUDE.md), [`packages/domain`](./packages/domain/CLAUDE.md), [`packages/security`](./packages/security/CLAUDE.md), [`packages/storage`](./packages/storage/CLAUDE.md)
-- [`docs/solutions/`](../docs/solutions/) — documented solutions to past problems

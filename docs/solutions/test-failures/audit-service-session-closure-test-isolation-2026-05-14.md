@@ -163,4 +163,4 @@ When reviewing any function that accepts a `Session` parameter, verify it does n
 
 ## Related Issues
 
-- [deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md](../integration-issues/deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md) — Shares patterns around resource lifecycle management and silent failures masked by exception handling
+- [deerflow-integration-historical-lessons.md](../integration-issues/deerflow-integration-historical-lessons.md) — Shares patterns around resource lifecycle management and silent failures masked by exception handling

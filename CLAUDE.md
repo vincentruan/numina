@@ -69,17 +69,42 @@ JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts
 
 **Check for relevant docs before starting debugging or implementation.**
 
-### Directory Map
+### 项目级 (Project-level — spans frontend + backend)
 
-| Subdirectory | Content Type | When to Check |
-|--------------|-------------|---------------|
-| `architecture-patterns/` | Architecture design patterns | MCP integration, multi-provider AI, circuit breakers, tenant isolation |
-| `best-practices/` | Best practices | Cache key design, JWT revocation, Snowflake ID serialization, security |
-| `integration-issues/` | Integration issues | DeerFlow adapter, device fingerprints, stream type mismatches |
-| `workflow-issues/` | Development workflow issues | Module splitting, monorepo consolidation |
-| `test-failures/` | Test failure cases | SQLAlchemy session isolation, agent extraction diagnostics |
-| `ui-bugs/` | UI issues | Dark mode CSS specificity, Vant4 Field binding |
-| `developer-experience/` | Developer experience | CodeGraph usage, CLAUDE.md modularization, i18n switching |
+| Doc | Topic |
+|-----|-------|
+| [`architecture-patterns/ai-multi-currency-design`](./docs/solutions/architecture-patterns/ai-multi-currency-design-2026-07-27.md) | AI 侧多币种数据修复 |
+| [`architecture-patterns/ai-task-page-leave-continuity`](./docs/solutions/architecture-patterns/ai-task-page-leave-continuity-2026-08-21.md) | AI 任务页面离开连续性 |
+| [`architecture-patterns/gateway-worker-responsibility-separation`](./docs/solutions/architecture-patterns/gateway-worker-responsibility-separation-2026-08-15.md) | Gateway/Worker 职责分离 |
+| [`architecture-patterns/three-state-circuit-breaker`](./docs/solutions/architecture-patterns/three-state-circuit-breaker-with-cascade-retry-2026-05-20.md) | 三态熔断器 + 多 Provider 级联重试 |
+| [`architecture-patterns/two-ai-apps-unified-dispatch`](./docs/solutions/architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) | 双 AI 应用统一 dispatch |
+| [`architecture-patterns/unified-data-root-path`](./docs/solutions/architecture-patterns/unified-data-root-path-management-2026-05-17.md) | DATA_ROOT 统一路径管理 |
+| [`best-practices/altcha-captcha`](./docs/solutions/best-practices/altcha-captcha-best-practices-2026-04-03.md) | ALTCHA 验证码最佳实践 |
+| [`best-practices/cache-key-granularity`](./docs/solutions/best-practices/cache-key-granularity-matches-data-scope-2026-04-27.md) | 缓存键粒度匹配数据范围 |
+| [`best-practices/fastapi-pydantic-validation-i18n`](./docs/solutions/best-practices/fastapi-pydantic-validation-error-localization-2026-04-16.md) | Pydantic v2 验证错误国际化 |
+| [`best-practices/gamified-child-system`](./docs/solutions/best-practices/gamified-child-system-architecture-2026-04-17.md) | 儿童积分游戏化系统架构 |
+| [`best-practices/money-decimal`](./docs/solutions/best-practices/money-decimal-compute-str-wire-serialization.md) | Money: Decimal 计算, str 传输 |
+| [`best-practices/snowflake-id-serialization`](./docs/solutions/best-practices/snowflake-id-json-string-serialization-2026-04-27.md) | Snowflake ID JSON 字符串序列化 |
+| [`best-practices/security-protection`](./docs/solutions/best-practices/security-protection.md) | 安全防护 (速率限制/缓存/暴力破解) |
+| [`best-practices/security-audit`](./docs/solutions/best-practices/security-audit.md) | 安全审计 (日志/文件上传验证) |
+| [`developer-experience/monorepo-lint-format`](./docs/solutions/developer-experience/monorepo-module-level-lint-format-typecheck-2026-04-12.md) | Monorepo 模块级 lint/format/typecheck |
+| [`developer-experience/pr-merge-verification`](./docs/solutions/developer-experience/pr-merge-verification-squash.md) | PR 合并状态验证 (squash merge 陷阱) |
+| [`integration-issues/nginx-proxy-buffer`](./docs/solutions/integration-issues/nginx-proxy-buffer-sizing-frontend-assets.md) | Nginx 代理缓冲区 (大 JS/CJK 字体) |
+| [`integration-issues/nginx-stale-dns`](./docs/solutions/integration-issues/nginx-stale-dns-upstream-cache.md) | Nginx DNS 缓存过期导致 502 |
+| [`integration-issues/production-deployment-config`](./docs/solutions/integration-issues/production-deployment-config-mismatches.md) | 生产部署配置不匹配 (CSP/pool/volume) |
+| [`runtime-errors/basehttpmiddleware-exception`](./docs/solutions/runtime-errors/basehttpmiddleware-exception-bypasses-fastapi-handlers.md) | BaseHTTPMiddleware 异常绕过 FastAPI 处理器 |
+
+### 前端 (Frontend-only)
+
+See [`frontend/CLAUDE.md`](./frontend/CLAUDE.md) §Solutions for the full frontend solution index.
+
+### 后端 (Backend/Agent-only)
+
+See [`server/CLAUDE.md`](./server/CLAUDE.md) §Solutions for the full backend solution index.
+
+### 测试 (Test/Seed-only)
+
+See [`tests/CLAUDE.md`](./tests/CLAUDE.md) §Solutions for the full test solution index.
 
 ## CodeGraph
 
