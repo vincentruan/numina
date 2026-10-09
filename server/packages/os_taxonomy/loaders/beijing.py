@@ -104,40 +104,61 @@ class BeijingLoader:
         with open(filepath, encoding="utf-8") as f:
             return json.load(f)
 
+    def _read_upstream_topics(self) -> dict[str, dict]:
+        """Load upstream os-taxonomy topics.json for enriching mt_ fields.
+
+        The upstream file carries subject/type/domain/age metadata that
+        topics.zh.json omits. Returns {} if the file is not available.
+        """
+        upstream_path = (
+            Path(__file__).resolve().parent.parent / "topics.json"
+        )
+        if not upstream_path.is_file():
+            return {}
+        with open(upstream_path, encoding="utf-8") as f:
+            return {t["id"]: t for t in json.load(f)["topics"]}
+
     def load_topics(self) -> list[NormalizedTopic]:
         """Load all topics from topics.zh.json and cn-topics.json.
 
         Returns a combined list of topics from both sources, all with
         source_taxonomy="beijing".
+
+        topics.zh.json carries no subject/type/domain fields, so mt_
+        topics are enriched by cross-referencing the upstream
+        os-taxonomy topics.json (same topic IDs).
         """
         topics: list[NormalizedTopic] = []
 
         # --- topics.zh.json (mt_ prefix, Chinese-only topics) ---
         zh_data = self._read_json("topics.zh.json")
+        upstream = self._read_upstream_topics()
         for raw in zh_data["topics"]:
+            up = upstream.get(raw["id"])
+            age_start = up.get("ageRangeStart") if up else None
             topics.append(
                 NormalizedTopic(
                     topic_key=raw["id"],
                     source_taxonomy="beijing",
-                    topic_type="concept",
-                    subject="",
-                    domain=None,
-                    name=None,
+                    topic_type=(up.get("type", "concept").lower() if up else "concept"),
+                    subject=_map_subject(up["subject"]) if up else "",
+                    domain=up.get("domain") if up else None,
+                    name=up.get("name") if up else None,
                     name_zh=raw["name"],
-                    description="",
+                    description=(up.get("description", "") if up else ""),
                     description_zh=raw.get("description"),
-                    age_range_start=None,
-                    age_range_end=None,
-                    centrality=None,
+                    age_range_start=age_start,
+                    age_range_end=up.get("ageRangeEnd") if up else None,
+                    centrality=up.get("centrality") if up else None,
                     evidence=raw.get("evidence", []),
                     evidence_zh=None,
-                    assessment_prompt=None,
+                    assessment_prompt=up.get("assessmentPrompt") if up else None,
                     assessment_prompt_zh=raw.get("assessmentPrompt"),
-                    standards=[],
+                    standards=up.get("standards", []) if up else [],
                     curriculum_standards=raw.get("cnStandards", []),
                     translation_status=raw.get("translationStatus"),
                     deprecated=False,
-                    age_group="mid",
+                    age_group=_compute_age_group(age_start),
                 )
             )
 

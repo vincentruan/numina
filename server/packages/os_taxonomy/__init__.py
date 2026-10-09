@@ -19,6 +19,7 @@ Usage:
 
 from __future__ import annotations
 
+from packages.os_taxonomy.loaders.beijing import BeijingLoader  # noqa: F401 (registers "beijing")
 from packages.os_taxonomy.loaders.os_taxonomy import OsTaxonomyLoader
 
 __all__ = ["get_clusters", "get_dependencies", "get_topics"]

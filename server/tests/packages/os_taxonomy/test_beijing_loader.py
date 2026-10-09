@@ -91,11 +91,16 @@ class TestLoadTopics:
         with_centrality = [t for t in mtc_topics if t.centrality is not None]
         assert len(with_centrality) > 0
 
-    def test_mt_topics_default_age_group(
+    def test_mt_topics_enriched_from_upstream(
         self, mt_topics: list[NormalizedTopic]
     ) -> None:
-        """mt_ topics (no ageRange in source) default to age_group='mid'."""
-        assert all(t.age_group == "mid" for t in mt_topics)
+        """mt_ topics are enriched with subject/age from upstream topics.json."""
+        assert all(t.subject for t in mt_topics)
+        assert all(
+            t.age_group in ("low", "mid", "high") for t in mt_topics
+        )
+        with_age = [t for t in mt_topics if t.age_range_start is not None]
+        assert len(with_age) > 0
 
 
 class TestLoadDependencies:
