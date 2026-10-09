@@ -1,12 +1,14 @@
 """Public MCP SSE endpoint — external clients authenticate via API Token."""
 
 import asyncio
+import contextlib
 import threading
 
 from fastapi import APIRouter, Query, Request
 from starlette.responses import Response
 
 from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.services.mcp_audit import write_mcp_access_log
 from apps.backend.app.services.mcp_session import MCPSession
 from packages.core.logging import get_logger
 
@@ -111,6 +113,7 @@ def _validate_and_resolve(family_id: str, raw_token: str):
                 "allow_write": row.allow_write,
                 "allowed_tools": parsed_tools,
                 "is_active": row.is_active,
+                "token_id": row.id,
             },
             str(synthetic_user.id),
         )
@@ -121,13 +124,24 @@ def _validate_and_resolve(family_id: str, raw_token: str):
 class PublicMCPSSEResponse(Response):
     """Custom ASGI response that delegates to the public MCP SSE transport."""
 
-    def __init__(self, session: MCPSession, family_id: str):
+    def __init__(self, session: MCPSession, family_id: str, audit_ctx: dict | None = None):
         self.session = session
         self.family_id = family_id
+        self.audit_ctx = audit_ctx or {}
         super().__init__()
 
     async def __call__(self, scope, receive, send):
         transport = _get_public_transport()
+        # Write connect event
+        if self.audit_ctx:
+            write_mcp_access_log(
+                family_id=int(self.audit_ctx.get("family_id", 0)),
+                token_id=self.audit_ctx.get("token_id"),
+                event_type="connect",
+                status="success",
+                client_ip=self.audit_ctx.get("client_ip", "unknown"),
+                user_agent=self.audit_ctx.get("user_agent"),
+            )
         try:
             async with transport.connect_sse(scope, receive, send) as (
                 read_stream,
@@ -137,6 +151,18 @@ class PublicMCPSSEResponse(Response):
                 await self.session.server.run(read_stream, write_stream, init_opts)
         except Exception:
             logger.exception("[mcp_public] family=%s connection error", self.family_id)
+        finally:
+            # Best-effort disconnect event
+            if self.audit_ctx:
+                with contextlib.suppress(Exception):
+                    write_mcp_access_log(
+                        family_id=int(self.audit_ctx.get("family_id", 0)),
+                        token_id=self.audit_ctx.get("token_id"),
+                        event_type="disconnect",
+                        status="success",
+                        client_ip=self.audit_ctx.get("client_ip", "unknown"),
+                        user_agent=self.audit_ctx.get("user_agent"),
+                    )
 
 
 class PublicMCPMessageResponse(Response):
@@ -171,14 +197,44 @@ async def mcp_public_sse(
         _validate_and_resolve, family_id, raw_token
     )
 
+    # Build audit context for connect/disconnect events
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "")[:512]
+    audit_ctx = {
+        "family_id": family_id,
+        "token_id": token_info.get("token_id"),
+        "client_ip": client_ip,
+        "user_agent": user_agent,
+    }
+
+    # Build audit callback for tool_call events
+    def _audit_tool_call(
+        *, event_type: str, tool_name: str, status: str,
+        duration_ms: int = 0, args_digest: dict | None = None,
+        error_code: str | None = None,
+    ) -> None:
+        write_mcp_access_log(
+            family_id=int(family_id),
+            token_id=token_info.get("token_id"),
+            event_type=event_type,
+            tool_name=tool_name,
+            status=status,
+            duration_ms=duration_ms,
+            client_ip=client_ip,
+            user_agent=user_agent,
+            args_digest=args_digest,
+            error_code=error_code,
+        )
+
     session = MCPSession(
         family_id=family_id,
         caller_user_id=synthetic_user_id,
         caller_role="external_token",
         allow_write=token_info["allow_write"],
         allowed_tools=token_info["allowed_tools"],
+        audit_callback=_audit_tool_call,
     )
-    return PublicMCPSSEResponse(session=session, family_id=family_id)
+    return PublicMCPSSEResponse(session=session, family_id=family_id, audit_ctx=audit_ctx)
 
 
 @router.post("/messages")

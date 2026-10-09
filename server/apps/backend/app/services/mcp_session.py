@@ -5,7 +5,9 @@ Tenant + caller isolation via __slots__:
 - Tool handlers NEVER read family_id/caller from tool args — only from self
 """
 
+import contextlib
 import json
+import time
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -229,6 +231,7 @@ class MCPSession:
         "_server",
         "_allow_write",
         "_allowed_tools",
+        "_audit_callback",
     )
 
     def __init__(
@@ -239,6 +242,7 @@ class MCPSession:
         thread_id: str | None = None,
         allow_write: bool = False,
         allowed_tools: list[str] | None = None,
+        audit_callback: Any | None = None,
     ) -> None:
         if not family_id:
             raise ValueError("family_id must not be empty")
@@ -252,6 +256,7 @@ class MCPSession:
         self._thread_id = thread_id
         self._allow_write = allow_write
         self._allowed_tools = allowed_tools
+        self._audit_callback = audit_callback
         self._server = Server(f"numina-family-{family_id}")
         self._register_tools()
 
@@ -318,6 +323,7 @@ class MCPSession:
         from apps.backend.app.services import liability as liability_service
         from apps.backend.app.services.mcp_tool_registry import get_tool
 
+        _t0 = time.perf_counter()
         meta = get_tool(name)
         # Role check: external_token with allow_write bypasses the role filter
         _role_allowed = (
@@ -1042,6 +1048,15 @@ class MCPSession:
                     name,
                     arguments,
                 )
+                if self._audit_callback is not None:
+                    with contextlib.suppress(Exception):
+                        self._audit_callback(
+                            event_type="tool_call",
+                            tool_name=name,
+                            status="success",
+                            duration_ms=round((time.perf_counter() - _t0) * 1000),
+                            args_digest=arguments,
+                        )
                 return [
                     TextContent(
                         type="text",
@@ -1057,6 +1072,16 @@ class MCPSession:
                     name,
                     e,
                 )
+                if self._audit_callback is not None:
+                    with contextlib.suppress(Exception):
+                        self._audit_callback(
+                            event_type="tool_call",
+                            tool_name=name,
+                            status="error",
+                            duration_ms=round((time.perf_counter() - _t0) * 1000),
+                            args_digest=arguments,
+                            error_code="tool_execution_error",
+                        )
                 return [
                     TextContent(
                         type="text",
