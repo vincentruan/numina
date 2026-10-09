@@ -9,6 +9,18 @@ from packages.db.models.learning.topic import (
     LearningTopic,
 )
 
+#: Valid values for ``LearningTopic.source_taxonomy``.
+SOURCE_TAXONOMY_BEIJING = "beijing"
+SOURCE_TAXONOMY_OS = "os-taxonomy"
+
+
+def locale_to_source_taxonomy(language: str | None) -> str:
+    """Map user language to taxonomy source.
+
+    zh-CN -> "beijing"; en-US or any other / None -> "os-taxonomy".
+    """
+    return SOURCE_TAXONOMY_BEIJING if language == "zh-CN" else SOURCE_TAXONOMY_OS
+
 
 def list_topics(
     db: Session,
@@ -18,9 +30,16 @@ def list_topics(
     deprecated: bool = False,
     search: str | None = None,
     limit: int | None = None,
+    source_taxonomy: str | None = None,
 ) -> list[LearningTopic]:
-    """List topics with optional filters, ordered by subject/domain/centrality."""
+    """List topics with optional filters, ordered by subject/domain/centrality.
+
+    ``deprecated`` defaults to False so callers get non-deprecated topics
+    unless they explicitly request deprecated ones.
+    """
     q = db.query(LearningTopic).filter(LearningTopic.deprecated == deprecated)
+    if source_taxonomy:
+        q = q.filter(LearningTopic.source_taxonomy == source_taxonomy)
     if subject:
         q = q.filter(LearningTopic.subject == subject)
     if domain:
@@ -45,18 +64,30 @@ def get_topic_by_id(db: Session, topic_id: int) -> LearningTopic | None:
     return db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
 
 
-def list_topics_by_ids(db: Session, topic_ids: list[int]) -> list[LearningTopic]:
+def list_topics_by_ids(
+    db: Session,
+    topic_ids: list[int],
+    source_taxonomy: str | None = None,
+) -> list[LearningTopic]:
     """Fetch multiple topics by ID list, preserving input order."""
-    topics = db.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all()
+    q = db.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids))
+    if source_taxonomy:
+        q = q.filter(LearningTopic.source_taxonomy == source_taxonomy)
+    topics = q.all()
     # Preserve input order
     by_id = {t.id: t for t in topics}
     return [by_id[tid] for tid in topic_ids if tid in by_id]
 
 
-def get_topic_graph(db: Session, topic_id: int) -> dict | None:
+def get_topic_graph(
+    db: Session,
+    topic_id: int,
+    source_taxonomy: str | None = None,
+) -> dict | None:
     """Get a topic with its prerequisites and dependents.
 
-    Returns dict with keys: topic, prerequisites, dependents.
+    Prerequisites and dependents are restricted to the same source taxonomy
+    when provided. Returns dict with keys: topic, prerequisites, dependents.
     Returns None if topic not found.
     """
     topic = get_topic_by_id(db, topic_id)
@@ -76,13 +107,19 @@ def get_topic_graph(db: Session, topic_id: int) -> dict | None:
         .all()
     ]
 
+    prereq_q = db.query(LearningTopic).filter(LearningTopic.id.in_(prereq_ids))
+    dep_q = db.query(LearningTopic).filter(LearningTopic.id.in_(dep_ids))
+    if source_taxonomy:
+        prereq_q = prereq_q.filter(LearningTopic.source_taxonomy == source_taxonomy)
+        dep_q = dep_q.filter(LearningTopic.source_taxonomy == source_taxonomy)
+
     prerequisites = (
-        db.query(LearningTopic).filter(LearningTopic.id.in_(prereq_ids)).all()
+        prereq_q.all()
         if prereq_ids
         else []
     )
     dependents = (
-        db.query(LearningTopic).filter(LearningTopic.id.in_(dep_ids)).all()
+        dep_q.all()
         if dep_ids
         else []
     )
@@ -90,24 +127,32 @@ def get_topic_graph(db: Session, topic_id: int) -> dict | None:
     return {"topic": topic, "prerequisites": prerequisites, "dependents": dependents}
 
 
-def list_clusters(db: Session, subject: str | None = None) -> list[LearningCluster]:
-    """List learning clusters, optionally filtered by subject."""
+def list_clusters(
+    db: Session,
+    subject: str | None = None,
+    source_taxonomy: str | None = None,
+) -> list[LearningCluster]:
+    """List learning clusters, optionally filtered by subject/taxonomy."""
     q = db.query(LearningCluster)
     if subject:
         q = q.filter(LearningCluster.subject == subject)
+    if source_taxonomy:
+        q = q.filter(LearningCluster.source_taxonomy == source_taxonomy)
     return q.order_by(LearningCluster.subject, LearningCluster.domain).all()
 
 
-def list_subjects(db: Session) -> list[dict]:
+def list_subjects(
+    db: Session, source_taxonomy: str | None = None
+) -> list[dict]:
     """List all non-deprecated subjects with their topic counts."""
-    rows = (
+    q = (
         db.query(
             LearningTopic.subject,
             sa_func.count(LearningTopic.id).label("topic_count"),
         )
         .filter(LearningTopic.deprecated == False)  # noqa: E712
-        .group_by(LearningTopic.subject)
-        .order_by(LearningTopic.subject)
-        .all()
     )
+    if source_taxonomy:
+        q = q.filter(LearningTopic.source_taxonomy == source_taxonomy)
+    rows = q.group_by(LearningTopic.subject).order_by(LearningTopic.subject).all()
     return [{"subject": r.subject, "topic_count": r.topic_count} for r in rows]

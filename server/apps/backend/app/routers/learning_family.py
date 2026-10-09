@@ -27,6 +27,9 @@ from apps.backend.app.services.learning import (
     progress_service,
     stats_service,
 )
+from apps.backend.app.services.learning.topic_service import (
+    locale_to_source_taxonomy,
+)
 from apps.backend.app.services.notification.dispatcher import (
     notify_learning_approved,
     notify_learning_assignment_created,
@@ -128,7 +131,11 @@ def get_child_map(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    """Get child's knowledge map with mastery levels."""
+    """Get child's knowledge map with mastery levels.
+
+    Locale filter applied: progress rows for topics that no longer belong
+    to the parent's source taxonomy are hidden.
+    """
     # Verify child belongs to this family
     child = (
         db.query(User)
@@ -138,9 +145,14 @@ def get_child_map(
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
+    taxonomy = locale_to_source_taxonomy(user.language)
     return (
         db.query(LearningProgress)
-        .filter(LearningProgress.child_id == child_id)
+        .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
+        .filter(
+            LearningProgress.child_id == child_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
         .all()
     )
 
@@ -151,7 +163,11 @@ def get_child_progress(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    """Get child's progress details."""
+    """Get child's progress details.
+
+    Locale filter applied: progress rows for topics that no longer belong
+    to the parent's source taxonomy are hidden.
+    """
     child = (
         db.query(User)
         .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
@@ -160,9 +176,14 @@ def get_child_progress(
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
+    taxonomy = locale_to_source_taxonomy(user.language)
     return (
         db.query(LearningProgress)
-        .filter(LearningProgress.child_id == child_id)
+        .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
+        .filter(
+            LearningProgress.child_id == child_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
         .order_by(LearningProgress.updated_at.desc())
         .all()
     )
@@ -194,9 +215,14 @@ def get_child_sessions(
 
     # Batch-fetch topic names
     topic_ids = list({s.topic_id for s in sessions})
+    # Locale filter applied: session log topics scoped to parent's taxonomy.
+    taxonomy = locale_to_source_taxonomy(user.language)
     topics = (
         db.query(LearningTopic)
-        .filter(LearningTopic.id.in_(topic_ids))
+        .filter(
+            LearningTopic.id.in_(topic_ids),
+            LearningTopic.source_taxonomy == taxonomy,
+        )
         .all()
     ) if topic_ids else []
     topic_map = {t.id: t for t in topics}
@@ -226,8 +252,19 @@ def get_topic_detail(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    """Get topic detail (parent view — no per-child progress embedded)."""
-    topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
+    """Get topic detail (parent view — no per-child progress embedded).
+
+    Locale filter applied: topic must belong to the parent's source taxonomy.
+    """
+    taxonomy = locale_to_source_taxonomy(user.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
     if not topic:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
     return topic
@@ -251,7 +288,16 @@ def create_assignment(
     assignment = assignment_service.create_assignment(db, user, req)
     # Fire notification — child name resolved from DB
     child = db.query(User).filter(User.id == req.child_id).first()
-    topic = db.query(LearningTopic).filter(LearningTopic.id == req.topic_id).first()
+    # Locale filter applied: assignment topic scoped to parent's taxonomy.
+    taxonomy = locale_to_source_taxonomy(user.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == req.topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
     if child and topic:
         child_name = child.display_name or child.username or ""
         topic_name = topic.name_zh or topic.name or ""
@@ -306,6 +352,8 @@ def review_queue(
         return []
 
     # Batch-fetch child names and topic info to avoid N+1 queries
+    # Locale filter applied: review topics scoped to parent's taxonomy.
+    taxonomy = locale_to_source_taxonomy(user.language)
     child_ids = {p.child_id for p in progress_items}
     topic_ids = {p.topic_id for p in progress_items}
 
@@ -315,7 +363,12 @@ def review_queue(
     }
     topics = {
         t.id: t
-        for t in db.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all()
+        for t in db.query(LearningTopic)
+        .filter(
+            LearningTopic.id.in_(topic_ids),
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .all()
     }
 
     # Aggregate study duration per (child_id, topic_id) from sessions
@@ -380,8 +433,17 @@ def approve_review(
     progress = progress_service.approve_parent_review(db, progress, user.family_id)
 
     # Fire notification — child approved
+    # Locale filter applied: notification topic scoped to parent's taxonomy.
     child_name = child.display_name or child.username or ""
-    topic = db.query(LearningTopic).filter(LearningTopic.id == progress.topic_id).first()
+    taxonomy = locale_to_source_taxonomy(user.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == progress.topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
     topic_name = (topic.name_zh or topic.name or "") if topic else ""
     with contextlib.suppress(Exception):
         notify_learning_approved(db, user.family_id, child_name, topic_name)
@@ -411,8 +473,17 @@ def reject_review(
     progress_service.transition_to_learning(db, progress)
 
     # Fire notification — child rejected, needs more work
+    # Locale filter applied: notification topic scoped to parent's taxonomy.
     child_name = child.display_name or child.username or ""
-    topic = db.query(LearningTopic).filter(LearningTopic.id == progress.topic_id).first()
+    taxonomy = locale_to_source_taxonomy(user.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == progress.topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
     topic_name = (topic.name_zh or topic.name or "") if topic else ""
     with contextlib.suppress(Exception):
         notify_learning_rejected(db, user.family_id, child_name, topic_name)

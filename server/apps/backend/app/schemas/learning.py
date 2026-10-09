@@ -31,6 +31,8 @@ class TopicResponse(SnowflakeBase):
     assessment_prompt_zh: str | None
     standards: list[str] = []
     ability_dimensions: list[str] | None
+    curriculum_standards: list[str] | None = None
+    source_taxonomy: str = "os-taxonomy"
     deprecated: bool
 
 

@@ -76,7 +76,9 @@ def get_zone_for_topic(topic_age_group: str, child_age_group: str) -> str:
 
 
 def get_zone_recommended_topic(
-    db: Session, child_id: int
+    db: Session,
+    child_id: int,
+    source_taxonomy: str | None = None,
 ) -> tuple[LearningTopic | None, str]:
     """Zone-aware topic recommendation.
 
@@ -90,7 +92,10 @@ def get_zone_recommended_topic(
         from apps.backend.app.services.learning.progress_service import (
             find_recommended_topic,
         )
-        return find_recommended_topic(db, child_id), "growth"
+        return (
+            find_recommended_topic(db, child_id, source_taxonomy=source_taxonomy),
+            "growth",
+        )
 
     growth_age = get_growth_zone_age_group(child_age_group)
     comfort_age = get_comfort_zone_age_group(child_age_group)
@@ -104,12 +109,16 @@ def get_zone_recommended_topic(
     }
 
     # Try Growth Zone first
-    growth_topic = _find_zone_topic(db, child_id, growth_age, mastered_topic_ids)
+    growth_topic = _find_zone_topic(
+        db, child_id, growth_age, mastered_topic_ids, source_taxonomy
+    )
     if growth_topic:
         return growth_topic, "growth"
 
     # Fallback to Comfort Zone
-    comfort_topic = _find_zone_topic(db, child_id, comfort_age, mastered_topic_ids)
+    comfort_topic = _find_zone_topic(
+        db, child_id, comfort_age, mastered_topic_ids, source_taxonomy
+    )
     if comfort_topic:
         return comfort_topic, "comfort"
 
@@ -121,6 +130,7 @@ def _find_zone_topic(
     child_id: int,
     age_group: str,
     mastered_ids: set[int],
+    source_taxonomy: str | None = None,
 ) -> LearningTopic | None:
     """Find the best available topic in a zone (by centrality, not mastered).
 
@@ -131,6 +141,8 @@ def _find_zone_topic(
         LearningTopic.deprecated == False,  # noqa: E712
         LearningProgress.mastery_level.in_(["available", "learning", "locked"]),
     ]
+    if source_taxonomy:
+        filters.append(LearningTopic.source_taxonomy == source_taxonomy)
     if mastered_ids:
         filters.append(LearningTopic.id.notin_(mastered_ids))
 

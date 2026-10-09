@@ -58,6 +58,7 @@ def topic_for_sessions(db: Session):
         name_zh="测试知识点",
         description="Test",
         age_group="mid",
+        source_taxonomy="beijing",  # matches default user language (zh-CN)
         evidence_json="[]",
         standards_json="[]",
     )

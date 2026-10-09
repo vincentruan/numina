@@ -439,28 +439,29 @@ def record_failed_assessment(
 
 
 def find_recommended_topic(
-    db: Session, child_id: int
+    db: Session,
+    child_id: int,
+    source_taxonomy: str | None = None,
 ) -> LearningTopic | None:
     """Find a locked topic whose hard prereqs are all met — recommended next.
 
     Returns the first such topic sorted by topic_id (stable ordering),
     or None if no locked topics qualify.
     """
-    locked_progresses = (
+    locked_q = (
         db.query(LearningProgress)
         .filter(
             LearningProgress.child_id == child_id,
             LearningProgress.mastery_level == "locked",
         )
-        .all()
     )
+    locked_progresses = locked_q.all()
     for lp in sorted(locked_progresses, key=lambda p: p.topic_id):
         if _all_hard_prereqs_met(db, child_id, lp.topic_id):
-            return (
-                db.query(LearningTopic)
-                .filter(LearningTopic.id == lp.topic_id)
-                .first()
-            )
+            q = db.query(LearningTopic).filter(LearningTopic.id == lp.topic_id)
+            if source_taxonomy:
+                q = q.filter(LearningTopic.source_taxonomy == source_taxonomy)
+            return q.first()
     return None
 
 
@@ -482,7 +483,10 @@ def _age_to_group(age: int) -> str:
 
 
 def find_age_appropriate_topic(
-    db: Session, child_id: int, subject: str
+    db: Session,
+    child_id: int,
+    subject: str,
+    source_taxonomy: str | None = None,
 ) -> LearningTopic | None:
     """Find a topic in the same subject matching the child's age group.
 
@@ -499,7 +503,7 @@ def find_age_appropriate_topic(
     child_age_group = _age_to_group(age)
 
     # Find available/learning topics in same subject and age group
-    candidate = (
+    candidate_q = (
         db.query(LearningTopic)
         .join(
             LearningProgress,
@@ -512,22 +516,25 @@ def find_age_appropriate_topic(
             LearningTopic.deprecated == False,  # noqa: E712
             LearningProgress.mastery_level.in_(["available", "learning"]),
         )
-        .order_by(LearningTopic.centrality.desc())
-        .first()
     )
+    if source_taxonomy:
+        candidate_q = candidate_q.filter(
+            LearningTopic.source_taxonomy == source_taxonomy
+        )
+    candidate = candidate_q.order_by(LearningTopic.centrality.desc()).first()
 
     if not candidate:
         # Fallback: any non-deprecated topic in the subject at child's level
-        candidate = (
-            db.query(LearningTopic)
-            .filter(
-                LearningTopic.subject == subject,
-                LearningTopic.age_group == child_age_group,
-                LearningTopic.deprecated == False,  # noqa: E712
-            )
-            .order_by(LearningTopic.centrality.desc())
-            .first()
+        fallback_q = db.query(LearningTopic).filter(
+            LearningTopic.subject == subject,
+            LearningTopic.age_group == child_age_group,
+            LearningTopic.deprecated == False,  # noqa: E712
         )
+        if source_taxonomy:
+            fallback_q = fallback_q.filter(
+                LearningTopic.source_taxonomy == source_taxonomy
+            )
+        candidate = fallback_q.order_by(LearningTopic.centrality.desc()).first()
 
     return candidate
 
