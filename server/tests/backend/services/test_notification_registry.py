@@ -7,17 +7,24 @@ from apps.backend.app.services.notification.registry import (
 )
 
 
-def test_get_categorized_events_returns_five_categories():
+def test_get_categorized_events_returns_six_categories():
     result = get_categorized_events()
-    assert len(result) == 5
+    assert len(result) == 6
     categories = [c["category"] for c in result]
-    assert categories == ["asset", "ai_task", "children", "wish", "learning"]
+    assert categories == [
+        "asset",
+        "ai_task",
+        "children",
+        "wish",
+        "learning",
+        "mcp_security",
+    ]
 
 
-def test_get_categorized_events_has_fifteen_total_events():
+def test_get_categorized_events_has_sixteen_total_events():
     result = get_categorized_events()
     total = sum(len(c["events"]) for c in result)
-    assert total == 15
+    assert total == 16
 
 
 def test_get_categorized_events_structure():
