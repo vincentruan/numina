@@ -154,7 +154,7 @@ The child topic detail page will surface two new visual signals. First, next to 
 - **Codes-only standards source:** `cn-curriculum-standards.json` deliberately omits standard text for licensing reasons (its own note reads "codes-only：只收录编号/映射键和我们的分类标签，不收录课标原文条款"). Only `name`, `code`, and (rarely) `note` are usable. The plan's display form depends on this constraint holding.
 - **Existing curriculum_standards storage:** Backend already stores curriculum standard identifiers per topic in `curriculum_standards_json`. This plan builds on that existing storage; no schema change needed.
 - **Graph API extensibility:** The current `TopicGraphResponse` returns flat topic lists. Adding edge metadata requires a shape change to the graph response — the exact shape (parallel edges array vs per-topic edge metadata) is a planning decision, not a product decision.
-- **No live PostgreSQL yet:** The Alembic migration is SQLite-verified; PostgreSQL verification is deferred (separate concern).
+- **Deploy sequencing:** code deploys before the re-seed (U6). Between the two, existing rows hold the legacy shape, which the API tolerates and the UI renders as no badge (see the assumption below). No schema migration is involved — `curriculum_standards_json` stays `Text`; only its content shape changes.
 - **Edge review_status default:** Existing os-taxonomy edges have `review_status=null`; these render as the baseline solid-border style per R7.
 
 ---
@@ -267,10 +267,13 @@ The dotted path is the independent half of the change (R6, R7): edge `review_sta
   - `server/tests/backend/test_seed_beijing.py`
   - `server/tests/backend/test_learning_locale_filter.py`
 - **Approach:**
-  1. The seed's `_apply_normalized_to_db` already JSON-serializes `t.curriculum_standards`; confirm it serializes the new dataclass shape (`dataclasses.asdict` or equivalent is needed for the object form).
-  2. Add a `CurriculumStandard` response schema (`key`, `name`, `code: str | None`) and type `TopicResponse.curriculum_standards` as `list[CurriculumStandard] | None`.
-  3. **Normalize in the schema, not in a router mapper.** Add a `@field_validator("curriculum_standards", mode="before")` on `TopicResponse` that maps a bare-string entry to `{key: s, name: s, code: None}`. This placement is load-bearing: `learning_child.py` and `learning_family.py` return raw ORM objects under `response_model=TopicResponse` and never call `_topic_to_response`, so a router-level mapper would leave those paths validating a legacy `["moe-2022-chinese:S1.RW.01"]` against `list[CurriculumStandard]` — which Pydantic rejects with `ResponseValidationError`, surfacing as HTTP 500 on the child home and today cards. The schema validator covers every topic endpoint at once, including the nested `current_topic` / `recommended_topic` fields on `TodayLearningResponse`.
-  4. `code` stays nullable because the legacy shape has no code; the badge is not rendered for such entries (see U4), so the raw identifier is never shown to a child.
+  1. Update the seed for the object shape at both call sites that touch the field:
+     - `_apply_normalized_to_db` JSON-serializes `t.curriculum_standards`; the object form needs `dataclasses.asdict` (or equivalent) rather than a bare `json.dumps` of dataclass instances.
+     - `apply_dedup_to_topics` unions standards through `_union_list`, which dedupes by inserting each item into a `set`. U1's `CurriculumStandard` is frozen so this works, but confirm the merge path on real objects rather than assuming it — a seed-time `TypeError` here is a hard failure of the re-seed that R1/R2 depend on.
+  2. Fix the existing dedup-merge assertion in `server/tests/backend/test_seed_beijing.py`, which currently compares `curriculum_standards` against identifier strings and will fail against the object shape.
+  3. Add a `CurriculumStandard` response schema (`key`, `name`, `code: str | None`) and type `TopicResponse.curriculum_standards` as `list[CurriculumStandard] | None`.
+  4. **Normalize in the schema, not in a router mapper.** Add a `@field_validator("curriculum_standards", mode="before")` on `TopicResponse` that maps a bare-string entry to `{key: s, name: s, code: None}`. This placement is load-bearing: `learning_child.py` and `learning_family.py` return raw ORM objects under `response_model=TopicResponse` and never call `_topic_to_response`, so a router-level mapper would leave those paths validating a legacy `["moe-2022-chinese:S1.RW.01"]` against `list[CurriculumStandard]` — which Pydantic rejects with `ResponseValidationError`, surfacing as HTTP 500 on the child home and today cards. The schema validator covers every topic endpoint at once, including the nested `current_topic` / `recommended_topic` fields on `TodayLearningResponse`.
+  5. `code` stays nullable because the legacy shape has no code; the badge is not rendered for such entries (see U4), so the raw identifier is never shown to a child.
 - **Patterns to follow:** The existing `json_text` accessor pattern on `LearningTopic` and the `_topic_to_response` mapper in `server/apps/backend/app/routers/learning.py` — note that the mapper is a convenience for the no-auth endpoints, not the compatibility seam.
 - **Test scenarios:**
   - Seeding a Beijing topic writes resolved objects to `curriculum_standards_json`.
@@ -291,6 +294,7 @@ The dotted path is the independent half of the change (R6, R7): edge `review_sta
   - `server/apps/backend/app/services/learning/topic_service.py`
   - `server/apps/backend/app/schemas/learning.py`
   - `server/tests/backend/test_learning_locale_filter.py`
+  - `server/tests/backend/test_learning_topic_service.py` — its existing `test_get_topic_graph` asserts `graph["prerequisites"][0].topic_key`, which the shape change breaks; update the assertion to reach through the edge object.
 - **Approach:**
   1. Add a `TopicEdge` schema (`topic: TopicResponse`, `review_status: str | None`) and change `TopicGraphResponse.prerequisites` / `.dependents` to `list[TopicEdge]` (KTD3).
   2. `get_topic_graph` currently selects prerequisite/dependent ids and then queries topics separately. Select the dependency rows themselves (`topic_id`, `prerequisite_id`, `review_status`) so each edge's status is available, then pair each edge with its loaded topic.
@@ -313,6 +317,7 @@ The dotted path is the independent half of the change (R6, R7): edge `review_sta
 - **Files:**
   - `frontend/apps/child/src/api/learning.ts`
   - `frontend/apps/child/src/pages/learning/LearningTopicPage.vue`
+  - `frontend/apps/child/src/pages/learning/LearningTopicPage.test.ts` (create — no spec exists for this page today)
   - `frontend/apps/child/src/i18n/locales/zh-CN.ts`
   - `frontend/apps/child/src/i18n/locales/en-US.ts`
 - **Approach:**
@@ -339,6 +344,7 @@ The dotted path is the independent half of the change (R6, R7): edge `review_sta
 - **Dependencies:** U3, U4
 - **Files:**
   - `frontend/apps/child/src/pages/learning/LearningTopicPage.vue`
+  - `frontend/apps/child/src/pages/learning/LearningTopicPage.test.ts`
   - `frontend/apps/child/src/api/learning.ts`
   - `frontend/apps/child/src/i18n/locales/zh-CN.ts`
   - `frontend/apps/child/src/i18n/locales/en-US.ts`
