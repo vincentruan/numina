@@ -9,6 +9,7 @@ in ``learning_family.py`` and ``learning_child.py`` respectively.
 """
 
 import json
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Query
@@ -31,6 +32,9 @@ from apps.backend.app.services.learning.topic_service import (
 )
 from packages.core.logging import get_logger
 from packages.db.models.learning.topic import LearningTopic
+
+#: Valid values for the ``source_taxonomy`` query parameter.
+SourceTaxonomy = Literal["beijing", "os-taxonomy"]
 
 logger = get_logger(__name__)
 
@@ -69,7 +73,7 @@ def _topic_to_response(topic: LearningTopic) -> dict:
 @router.get("/topics/batch", response_model=list[TopicResponse])
 def get_topics_batch(
     ids: str = Query(..., description="Comma-separated topic IDs"),
-    source_taxonomy: str | None = None,
+    source_taxonomy: SourceTaxonomy | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
 ):
@@ -90,7 +94,7 @@ def get_topics_batch(
 
 @router.get("/topics/index")
 def get_topic_index(
-    source_taxonomy: str | None = None,
+    source_taxonomy: SourceTaxonomy | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
 ):
@@ -132,7 +136,7 @@ def list_topics(
     age_group: str | None = None,
     search: str | None = None,
     limit: int = 20,
-    source_taxonomy: str | None = None,
+    source_taxonomy: SourceTaxonomy | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
 ):
@@ -152,7 +156,7 @@ def list_topics(
 @router.get("/topics/{topic_id}", response_model=TopicResponse)
 def get_topic(
     topic_id: int,
-    source_taxonomy: str | None = None,
+    source_taxonomy: SourceTaxonomy | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
 ):
@@ -169,7 +173,7 @@ def get_topic(
 @router.get("/topics/{topic_id}/graph", response_model=TopicGraphResponse)
 def get_topic_graph(
     topic_id: int,
-    source_taxonomy: str | None = None,
+    source_taxonomy: SourceTaxonomy | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
 ):
@@ -184,7 +188,7 @@ def get_topic_graph(
 @router.get("/clusters", response_model=list[ClusterResponse])
 def list_clusters(
     subject: str | None = None,
-    source_taxonomy: str | None = None,
+    source_taxonomy: SourceTaxonomy | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
 ):
@@ -197,7 +201,7 @@ def list_clusters(
 
 @router.get("/subjects", response_model=list[SubjectSummary])
 def list_subjects(
-    source_taxonomy: str | None = None,
+    source_taxonomy: SourceTaxonomy | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
 ):

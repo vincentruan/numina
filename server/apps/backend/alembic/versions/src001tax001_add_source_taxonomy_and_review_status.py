@@ -3,6 +3,13 @@
 Revision ID: src001tax001
 Revises: lrnst001
 Create Date: 2026-10-09
+
+Downgrade caveat: reverting this migration restores a single-column unique
+constraint on ``topic_key``. Once Beijing data has been seeded, the table
+legitimately holds the same ``topic_key`` under two ``source_taxonomy`` values,
+so the downgrade will fail on the uniqueness check. Downgrade is therefore only
+safe before the first ``--source beijing`` seed, or after deleting the
+duplicate-``topic_key`` rows the composite constraint allowed.
 """
 from collections.abc import Sequence
 
@@ -43,14 +50,39 @@ def upgrade() -> None:
     )
 
     # LearningTopic: replace unique constraint on topic_key with composite
-    # (topic_key, source_taxonomy)
+    # (topic_key, source_taxonomy).
+    #
+    # The original unique constraint name varies by dialect:
+    #   - SQLite: uses batch_alter_table which rebuilds the table
+    #   - PostgreSQL: SQLAlchemy renders unique=True as an unnamed UNIQUE clause
+    #     which PostgreSQL auto-names as "<table>_<column>_key"
+    #     (i.e. "learning_topics_topic_key_key"), NOT the SQLAlchemy convention
+    #     name "uq_learning_topics_topic_key".
+    # Drop whichever exists to keep both backends working.
     bind = op.get_bind()
-    # Drop existing unique constraint on topic_key (SQLite uses batch mode)
-    with op.batch_alter_table("learning_topics") as batch_op:
-        batch_op.drop_constraint("uq_learning_topics_topic_key", type_="unique")
-        batch_op.create_unique_constraint(
-            "uq_topic_key_source", ["topic_key", "source_taxonomy"]
+    if bind.dialect.name == "postgresql":
+        op.execute(
+            "ALTER TABLE learning_topics "
+            "DROP CONSTRAINT IF EXISTS learning_topics_topic_key_key"
         )
+        op.execute(
+            "ALTER TABLE learning_topics "
+            "DROP CONSTRAINT IF EXISTS uq_learning_topics_topic_key"
+        )
+        op.create_unique_constraint(
+            "uq_topic_key_source",
+            "learning_topics",
+            ["topic_key", "source_taxonomy"],
+        )
+    else:
+        # SQLite: batch_alter_table rebuilds the table
+        with op.batch_alter_table("learning_topics") as batch_op:
+            batch_op.drop_constraint(
+                "uq_learning_topics_topic_key", type_="unique"
+            )
+            batch_op.create_unique_constraint(
+                "uq_topic_key_source", ["topic_key", "source_taxonomy"]
+            )
 
     # LearningDependency: add review_status
     op.add_column(
@@ -74,9 +106,23 @@ def downgrade() -> None:
     op.drop_column("learning_clusters", "source_taxonomy")
     op.drop_column("learning_dependencies", "review_status")
 
-    with op.batch_alter_table("learning_topics") as batch_op:
-        batch_op.drop_constraint("uq_topic_key_source", type_="unique")
-        batch_op.create_unique_constraint("uq_learning_topics_topic_key", ["topic_key"])
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute(
+            "ALTER TABLE learning_topics "
+            "DROP CONSTRAINT IF EXISTS uq_topic_key_source"
+        )
+        op.create_unique_constraint(
+            "learning_topics_topic_key_key",
+            "learning_topics",
+            ["topic_key"],
+        )
+    else:
+        with op.batch_alter_table("learning_topics") as batch_op:
+            batch_op.drop_constraint("uq_topic_key_source", type_="unique")
+            batch_op.create_unique_constraint(
+                "uq_learning_topics_topic_key", ["topic_key"]
+            )
 
     op.drop_index("ix_learning_topics_source_taxonomy", table_name="learning_topics")
     op.drop_column("learning_topics", "curriculum_standards_json")
