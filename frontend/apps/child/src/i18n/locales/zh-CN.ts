@@ -573,6 +573,7 @@ export default {
     },
     curriculum: {
       ariaLabel: '对应课程标准',
+      badgeGlyph: '课',
     },
     machineEdge: {
       ariaLabel: '{name}（AI 推荐）',

@@ -572,6 +572,7 @@ export default {
     },
     curriculum: {
       ariaLabel: 'Mapped to curriculum standard',
+      badgeGlyph: '课',
     },
     machineEdge: {
       ariaLabel: '{name} (AI suggested)',

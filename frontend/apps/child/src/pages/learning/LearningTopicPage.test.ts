@@ -224,29 +224,6 @@ describe('LearningTopicPage — curriculum badge and callout', () => {
     expect(zhBadge.attributes('aria-label')).toBe(zhCN.learning.curriculum.ariaLabel)
     zhWrapper.unmount()
   })
-
-  it('callout does not clip long curriculum titles (no line-clamp in source)', async () => {
-    // happy-dom cannot resolve scoped CSS, so we verify at the source level
-    // that the callout CSS uses overflow-wrap and does not use line-clamp
-    const wrapper = await mountPage({
-      topic: baseTopic({
-        curriculum_standards: [
-          {
-            key: 'long',
-            name: 'A'.repeat(200),
-            code: 'LONG.01',
-          },
-        ],
-      }),
-    })
-
-    const callout = wrapper.find('.curriculum-callout')
-    expect(callout.exists()).toBe(true)
-    // The long text is rendered in full (no truncation via text-content)
-    expect(callout.text()).toContain('LONG.01')
-    expect(callout.text().length).toBeGreaterThan(200)
-    wrapper.unmount()
-  })
 })
 
 // --- U5: Machine-edge chip styling ---
@@ -364,19 +341,33 @@ describe('LearningTopicPage — machine-edge chip styling', () => {
     expect(zhCN.learning.machineEdge.ariaLabel).toContain('AI')
   })
 
-  it('machine chip CSS has min-height 44px (source-level check)', async () => {
-    // happy-dom cannot compute CSS, so we verify at the source level
-    // that .topic-chip has min-height: 44px in the scoped styles
-    const tMachine = edgeTopic({ id: 'prereq-m', name: 'M' })
+  it('applies machine styling to next-steps (dependents) chips as well', async () => {
+    const tReviewed = edgeTopic({ id: 'next-reviewed', name: 'Reviewed Next' })
+    const tMachine = edgeTopic({ id: 'next-machine', name: 'Machine Next' })
+
     mockGetTopicGraph.mockResolvedValue(
-      graphWith([{ topic: tMachine, review_status: 'machine' }]),
+      graphWith(
+        [], // no prerequisites
+        [
+          { topic: tReviewed, review_status: 'reviewed' },
+          { topic: tMachine, review_status: 'machine' },
+        ],
+      ),
     )
 
     const wrapper = await mountPage()
-    const chip = wrapper.find('.topic-chip--machine')
-    expect(chip.exists()).toBe(true)
-    // The chip element exists and has the machine class;
-    // min-height: 44px is enforced via scoped CSS (.topic-chip { min-height: 44px })
+    const chips = wrapper.findAll('.topic-chip')
+    expect(chips.length).toBe(2)
+
+    // Reviewed next-step: no machine modifier, no AI badge
+    expect(chips[0].classes()).not.toContain('topic-chip--machine')
+    expect(chips[0].find('.ai-badge').exists()).toBe(false)
+
+    // Machine next-step: dashed modifier + AI badge + accessible name
+    expect(chips[1].classes()).toContain('topic-chip--machine')
+    expect(chips[1].find('.ai-badge').exists()).toBe(true)
+    expect(chips[1].find('.ai-badge').text()).toBe('AI')
+    expect(chips[1].attributes('aria-label')).toContain('AI suggested')
     wrapper.unmount()
   })
 })

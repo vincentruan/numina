@@ -19,7 +19,7 @@
           v-if="firstResolvedStandard"
           class="curriculum-badge"
           :aria-label="t('learning.curriculum.ariaLabel')"
-        >课</span>
+        >{{ t('learning.curriculum.badgeGlyph') }}</span>
       </div>
 
       <!-- Curriculum standard callout -->
@@ -713,8 +713,14 @@ onMounted(async () => {
 }
 
 .topic-chip--machine {
-  border-style: dashed !important;
+  /* opacity: 1 ensures the dashed-border chip never reads as disabled (R7 intent) */
   opacity: 1;
+}
+
+.topic-chip--machine::before {
+  /* Vant 4.10.2 draws the plain-tag border on ::before (not the element),
+     so border-style on the element itself never reaches the visible border. */
+  border-style: dashed;
 }
 
 .ai-badge {
