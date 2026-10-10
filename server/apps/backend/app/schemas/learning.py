@@ -11,6 +11,7 @@ from apps.backend.app.schemas.base import SnowflakeBase
 
 # --- Knowledge Graph (Global) ---
 
+
 class CurriculumStandard(BaseModel):
     """A resolved curriculum standard reference.
 
@@ -70,11 +71,24 @@ class TopicResponse(SnowflakeBase):
         ]
 
 
+class TopicEdge(BaseModel):
+    """A prerequisite or dependent edge with its review status.
+
+    ``review_status`` is ``"reviewed"`` for human-reviewed edges, ``"machine"``
+    for AI-generated edges, or ``None`` for os-taxonomy edges that carry no
+    review status.
+    """
+
+    topic: TopicResponse
+    review_status: str | None = None
+
+
 class TopicGraphResponse(BaseModel):
     """Local subgraph: prerequisites + dependents of a topic."""
+
     topic: TopicResponse
-    prerequisites: list[TopicResponse]
-    dependents: list[TopicResponse]
+    prerequisites: list[TopicEdge]
+    dependents: list[TopicEdge]
 
 
 class ClusterResponse(SnowflakeBase):
@@ -94,6 +108,7 @@ class SubjectSummary(BaseModel):
 
 # --- Progress (Per-Family) ---
 
+
 class ProgressResponse(SnowflakeBase):
     id: int
     child_id: int
@@ -111,6 +126,7 @@ class ProgressResponse(SnowflakeBase):
 
 
 # --- Assignment ---
+
 
 class AssignmentCreate(BaseModel):
     child_id: int
@@ -184,6 +200,7 @@ class AssessStreamRequest(BaseModel):
 
 # --- Session ---
 
+
 class SessionCreate(BaseModel):
     topic_id: int
     assignment_id: int | None = None
@@ -206,6 +223,7 @@ class SessionResponse(SnowflakeBase):
 
 # --- Assessment Attempt ---
 
+
 class AssessmentAttemptResponse(SnowflakeBase):
     id: int
     child_id: int
@@ -220,6 +238,7 @@ class AssessmentAttemptResponse(SnowflakeBase):
 
 
 # --- Composite / Dashboard ---
+
 
 class ChildLearningOverview(SnowflakeBase):
     child_id: int
@@ -239,6 +258,7 @@ class ChildLearningOverview(SnowflakeBase):
 
 class ChildSessionLogResponse(SnowflakeBase):
     """AI session log for parent review."""
+
     session_id: int
     topic_id: int
     topic_name: str
@@ -252,6 +272,7 @@ class ChildSessionLogResponse(SnowflakeBase):
 
 class ReviewItemResponse(SnowflakeBase):
     """For parent review queue."""
+
     progress_id: int
     child_id: int
     child_name: str
@@ -267,6 +288,7 @@ class ReviewItemResponse(SnowflakeBase):
 
 class ChildProgressOverview(BaseModel):
     """Aggregated progress overview for a child."""
+
     mastered_count: int
     learning_count: int
     available_count: int
@@ -279,6 +301,7 @@ class ChildProgressOverview(BaseModel):
 
 
 # --- Learning Path ---
+
 
 class PathCreate(BaseModel):
     child_id: int
@@ -312,7 +335,11 @@ class PathCreate(BaseModel):
                 raise ValueError("Each milestone must have 'threshold' and 'bonus'")
             threshold = entry["threshold"]
             bonus = entry["bonus"]
-            if not isinstance(threshold, int) or threshold < 1 or threshold > max_threshold:
+            if (
+                not isinstance(threshold, int)
+                or threshold < 1
+                or threshold > max_threshold
+            ):
                 raise ValueError(
                     f"threshold must be integer in [1, {max_threshold}], got {threshold}"
                 )

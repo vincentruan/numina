@@ -100,18 +100,25 @@ def get_topic_graph(
     if not topic:
         return None
 
-    prereq_ids = [
-        row.prerequisite_id
-        for row in db.query(LearningDependency.prerequisite_id)
+    prereq_rows = (
+        db.query(
+            LearningDependency.prerequisite_id,
+            LearningDependency.review_status,
+        )
         .filter(LearningDependency.topic_id == topic_id)
         .all()
-    ]
-    dep_ids = [
-        row.topic_id
-        for row in db.query(LearningDependency.topic_id)
+    )
+    dep_rows = (
+        db.query(
+            LearningDependency.topic_id,
+            LearningDependency.review_status,
+        )
         .filter(LearningDependency.prerequisite_id == topic_id)
         .all()
-    ]
+    )
+
+    prereq_ids = [row.prerequisite_id for row in prereq_rows]
+    dep_ids = [row.topic_id for row in dep_rows]
 
     prereq_q = db.query(LearningTopic).filter(LearningTopic.id.in_(prereq_ids))
     dep_q = db.query(LearningTopic).filter(LearningTopic.id.in_(dep_ids))
@@ -119,16 +126,19 @@ def get_topic_graph(
         prereq_q = prereq_q.filter(LearningTopic.source_taxonomy == source_taxonomy)
         dep_q = dep_q.filter(LearningTopic.source_taxonomy == source_taxonomy)
 
-    prerequisites = (
-        prereq_q.all()
-        if prereq_ids
-        else []
-    )
-    dependents = (
-        dep_q.all()
-        if dep_ids
-        else []
-    )
+    prereq_topics = {t.id: t for t in (prereq_q.all() if prereq_ids else [])}
+    dep_topics = {t.id: t for t in (dep_q.all() if dep_ids else [])}
+
+    prerequisites = [
+        {"topic": prereq_topics[row.prerequisite_id], "review_status": row.review_status}
+        for row in prereq_rows
+        if row.prerequisite_id in prereq_topics
+    ]
+    dependents = [
+        {"topic": dep_topics[row.topic_id], "review_status": row.review_status}
+        for row in dep_rows
+        if row.topic_id in dep_topics
+    ]
 
     return {"topic": topic, "prerequisites": prerequisites, "dependents": dependents}
 
