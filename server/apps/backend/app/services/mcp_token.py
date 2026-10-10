@@ -47,7 +47,7 @@ def _get_or_create_synthetic_user(family_id: int, db: Session) -> User:
     user = User(
         id=next_id(),
         family_id=family_id,
-        username=f"__mcp_service_{family_id}",
+        username="mcp_svc",  # Short synthetic username for external token access
         display_name="MCP Service",
         password_hash="",  # no password — login is rejected by role guard
         role=UserRole.EXTERNAL_TOKEN,
