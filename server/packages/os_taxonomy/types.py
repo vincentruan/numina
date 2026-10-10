@@ -93,3 +93,17 @@ class NormalizedCluster:
     summary: str = ""
     summary_zh: str | None = None
     source_taxonomy: str = "os-taxonomy"
+
+
+def compute_age_group(age_range_start: int | None) -> str:
+    """Compute age group from age_range_start.
+
+    <=7 -> "low", <=10 -> "mid", else -> "high", None -> "mid".
+    """
+    if age_range_start is None:
+        return "mid"
+    if age_range_start <= 7:
+        return "low"
+    if age_range_start <= 10:
+        return "mid"
+    return "high"

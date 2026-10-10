@@ -13,12 +13,16 @@ import json
 import os
 from pathlib import Path
 
+from packages.core.logging import get_logger
 from packages.os_taxonomy.types import (
     CurriculumStandard,
     NormalizedCluster,
     NormalizedDependency,
     NormalizedTopic,
+    compute_age_group,
 )
+
+_logger = get_logger(__name__)
 
 # Subject name -> slug mapping for Chinese curriculum subjects
 SUBJECT_MAP_ZH: dict[str, str] = {
@@ -48,20 +52,6 @@ SUBJECT_MAP_EN: dict[str, str] = {
     name: name.lower().replace(" & ", "_").replace(" ", "_")
     for name in SUBJECT_MAP_ZH
 }
-
-
-def _compute_age_group(age_range_start: int | None) -> str:
-    """Compute age group from age_range_start.
-
-    <=7 -> "low", <=10 -> "mid", else -> "high", None -> "mid".
-    """
-    if age_range_start is None:
-        return "mid"
-    if age_range_start <= 7:
-        return "low"
-    if age_range_start <= 10:
-        return "mid"
-    return "high"
 
 
 def _map_subject(name: str) -> str:
@@ -199,7 +189,7 @@ class BeijingLoader:
                     ),
                     translation_status=raw.get("translationStatus"),
                     deprecated=False,
-                    age_group=_compute_age_group(age_start),
+                    age_group=compute_age_group(age_start),
                 )
             )
 
@@ -209,8 +199,7 @@ class BeijingLoader:
             age_start = raw.get("ageRangeStart")
             subject = _map_subject(raw.get("subject", ""))
             if not subject:
-                import logging
-                logging.getLogger(__name__).warning(
+                _logger.warning(
                     "cn-topic %r has empty or unrecognized subject %r; "
                     "topic will be seeded but may be unreachable via subject queries",
                     raw["id"],
@@ -240,7 +229,7 @@ class BeijingLoader:
                     ),
                     translation_status=None,
                     deprecated=False,
-                    age_group=_compute_age_group(age_start),
+                    age_group=compute_age_group(age_start),
                 )
             )
 
@@ -309,7 +298,7 @@ class BeijingLoader:
                 subject=_map_subject(raw["subject"]),
                 domain=raw["domain"],
                 age_range_start=raw.get("ageRangeStart"),
-                age_group=_compute_age_group(raw.get("ageRangeStart")),
+                age_group=compute_age_group(raw.get("ageRangeStart")),
                 summary="",
                 summary_zh=raw.get("summary"),
                 source_taxonomy="beijing",

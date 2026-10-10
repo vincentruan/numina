@@ -14,23 +14,10 @@ from packages.os_taxonomy.types import (
     NormalizedCluster,
     NormalizedDependency,
     NormalizedTopic,
+    compute_age_group,
 )
 
 _DATA_DIR = Path(__file__).parent.parent
-
-
-def _compute_age_group(age_range_start: int | None) -> str:
-    """Compute age group from age_range_start.
-
-    <=7 -> "low", <=10 -> "mid", else -> "high", None -> "mid".
-    """
-    if age_range_start is None:
-        return "mid"
-    if age_range_start <= 7:
-        return "low"
-    if age_range_start <= 10:
-        return "mid"
-    return "high"
 
 
 class OsTaxonomyLoader:
@@ -70,7 +57,7 @@ class OsTaxonomyLoader:
                     curriculum_standards=[],
                     translation_status=None,
                     deprecated=False,
-                    age_group=_compute_age_group(age_start),
+                    age_group=compute_age_group(age_start),
                 )
             )
         return topics
@@ -101,7 +88,7 @@ class OsTaxonomyLoader:
                 subject=raw["subject"],
                 domain=raw["domain"],
                 age_range_start=raw.get("ageRangeStart"),
-                age_group=_compute_age_group(raw.get("ageRangeStart")),
+                age_group=compute_age_group(raw.get("ageRangeStart")),
                 summary=raw.get("summary", ""),
                 summary_zh=raw.get("summaryZh"),
                 source_taxonomy="os-taxonomy",
