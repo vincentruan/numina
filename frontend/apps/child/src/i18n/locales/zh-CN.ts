@@ -571,6 +571,12 @@ export default {
       bonus: '全部完成: +{score}分',
       dueDate: '截止',
     },
+    curriculum: {
+      ariaLabel: '对应课程标准',
+    },
+    machineEdge: {
+      ariaLabel: '{name}（AI 推荐）',
+    },
   },
   empty: {
     noTasks: '今天没有任务，好好休息吧 🌟',

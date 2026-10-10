@@ -570,6 +570,12 @@ export default {
       bonus: 'Complete all: +{score} pts',
       dueDate: 'Due',
     },
+    curriculum: {
+      ariaLabel: 'Mapped to curriculum standard',
+    },
+    machineEdge: {
+      ariaLabel: '{name} (AI suggested)',
+    },
   },
   empty: {
     noTasks: 'No tasks today, enjoy your rest 🌟',

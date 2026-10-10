@@ -5,6 +5,12 @@ import http from './index'
 
 // --- Interfaces (IDs as string — Snowflake serialization) ---
 
+export interface CurriculumStandard {
+  key: string
+  name: string
+  code: string | null
+}
+
 export interface TopicResponse {
   id: string
   topic_key: string
@@ -26,6 +32,7 @@ export interface TopicResponse {
   standards: string[]
   ability_dimensions: string[] | null
   deprecated: boolean
+  curriculum_standards: CurriculumStandard[] | null
 }
 
 export interface ProgressResponse {
@@ -133,10 +140,15 @@ export interface LearningStatsResponse {
   onboarding_completed: boolean
 }
 
+export interface TopicEdge {
+  topic: TopicResponse
+  review_status: string | null
+}
+
 export interface TopicGraphResponse {
   topic: TopicResponse
-  prerequisites: TopicResponse[]
-  dependents: TopicResponse[]
+  prerequisites: TopicEdge[]
+  dependents: TopicEdge[]
 }
 
 // Composite type: progress with topic detail for the map view
