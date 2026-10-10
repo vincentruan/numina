@@ -5,7 +5,7 @@ See root [`CLAUDE.md`](../../../CLAUDE.md) for behavioral guidelines and cross-c
 
 ## Key Invariants
 
-1. **Import direction** — `packages/core` must never import from `apps/`. Dependency flow is one-way: `apps/` → `packages/`. Violating this creates circular imports.
+1. **Import direction** — `packages/core` must never import from `apps/` (see [server/CLAUDE.md](../../CLAUDE.md) §Import Direction).
 2. **`settings` is a singleton** — always import the pre-built instance: `from packages.core.settings import settings`. Never instantiate `Settings()` directly — it re-reads the environment and breaks singleton guarantees.
 3. **`get_logger(__name__)` is the only approved logger** — never call `logging.getLogger()` directly. `get_logger` applies the project's log format, level, and rotation configuration.
 

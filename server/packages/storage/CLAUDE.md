@@ -5,7 +5,7 @@ See root [`CLAUDE.md`](../../../CLAUDE.md) for behavioral guidelines and cross-c
 
 ## Key Invariants
 
-1. **Import direction** — `packages/storage` must never import from `apps/`. Dependency flow is one-way: `apps/` → `packages/`. Violating this creates circular imports.
+1. **Import direction** — `packages/storage` must never import from `apps/` (see [server/CLAUDE.md](../../CLAUDE.md) §Import Direction).
 2. **Always use the factory** — obtain backends via `get_backend_for_type()` or `get_local_backend()`. Never instantiate `LocalStorageBackend`, `GitHubStorageBackend`, `WebDAVStorageBackend`, or any other backend class directly. The factory manages singleton instances and configuration.
 3. **Catch `StorageError` at the app boundary** — `StorageError` and its subclasses (`StorageRateLimitError`, `StorageConflictError`) must be caught at the app layer (router or job) and converted to appropriate HTTP responses or logged. Never let storage exceptions propagate unwrapped to API responses.
 

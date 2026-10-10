@@ -92,7 +92,7 @@ For the following issues, refer to the corresponding solution document:
 
 | Problem | Reference |
 |---------|-----------|
-| NProgress bar stuck spinning / bypassed guard flag | [`nprogress-stuck-child`](../../../docs/solutions/ui-bugs/nprogress-stuck-spinning-bypassed-guard.md) |
+| NProgress bar stuck spinning / bypassed guard flag | [`nprogress-lifecycle`](../../../docs/solutions/ui-bugs/nprogress-lifecycle-three-failure-modes.md) |
 | Device fingerprint stability / authentication | [`device-fingerprint-stability`](../../../docs/solutions/integration-issues/device-fingerprint-stability.md) |
 | Child gamification system architecture | [`gamified-child-system`](../../../docs/solutions/best-practices/gamified-child-system-architecture-2026-04-17.md) |
 

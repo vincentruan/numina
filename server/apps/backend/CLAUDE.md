@@ -16,69 +16,16 @@ Controlled by `CACHE_BACKEND` env var (default: `"memory"`). Set to `"redis"` to
 
 ## Snowflake ID Serialization
 
-All response schemas containing IDs inherit from `SnowflakeBase` (app/schemas/base.py).
+See [`server/CLAUDE.md`](../../CLAUDE.md) §Snowflake ID Serialization for the full pattern. Backend-specific pitfalls:
 
-### Pattern
-
-```python
-from apps.backend.app.schemas.base import SnowflakeBase
-
-class MyResponse(SnowflakeBase):
-    id: int  # Define as int (matches DB)
-    family_id: int
-    other_id: int
-    name: str
-```
-
-JSON output automatically converts IDs to strings:
-```json
-{"id": "123456789012345", "family_id": "987654321098765"}
-```
-
-### Key Points
-
-- Schemas define IDs as `int` (internal representation matches SQLAlchemy)
-- **`EnvelopeResponse.render()`** auto-converts all `id`/`*_id` int fields to `str` at the JSON boundary — this is the primary defense and covers all normal endpoints (raw dict returns, Pydantic models, nested lists)
-- `SnowflakeBase.model_serializer` provides defense-in-depth for endpoints with `response_model`
-- No manual `str()` calls needed in routers — return int values directly
-- Request schemas (Create/Update) don't need SnowflakeBase — input comes as string
-
-### Common Pitfalls
-
-1. **Don't use plain BaseModel for schemas with IDs** → Use SnowflakeBase
-2. **Don't manually define `id: str`** → Define `id: int`, let serializer convert
-3. **Don't add field_validator for ID coercion** → SnowflakeBase handles it
-4. **Don't call str() in routers** → Return int, `EnvelopeResponse` handles conversion
-5. **Request schemas don't need SnowflakeBase** → Input validation handles string→int
-6. **SSE endpoints bypass `EnvelopeResponse`** → Use `SnowflakeResponse` (from `app.responses`) instead of raw `JSONResponse` for endpoints that return BigInteger IDs outside the envelope (e.g. queued-task 202 responses). `SnowflakeResponse` has the same `_convert_snowflake_ids` logic but no envelope wrapping.
-
-### Why
-
-JavaScript loses precision for integers > 2^53. Snowflake IDs are 18-19 digits.
-Serializing as strings preserves exact values across the API boundary.
+- **SSE endpoints bypass `EnvelopeResponse`** → Use `SnowflakeResponse` (from `app.responses`) instead of raw `JSONResponse` for endpoints that return BigInteger IDs outside the envelope (e.g. queued-task 202 responses). `SnowflakeResponse` has the same `_convert_snowflake_ids` logic but no envelope wrapping.
+- **Don't use plain BaseModel for schemas with IDs** → Use `SnowflakeBase`
+- **Don't manually define `id: str`** → Define `id: int`, let serializer convert
+- **Don't call str() in routers** → Return int, `EnvelopeResponse` handles conversion
 
 ## Backend Troubleshooting Guide
 
-For the following issues, refer to the corresponding solution document:
-
-| Problem | Reference |
-|---------|-----------|
-| Snowflake ID serialization / JS precision loss | [`snowflake-id-serialization`](../../../docs/solutions/best-practices/snowflake-id-json-string-serialization-2026-04-27.md) |
-| Amount calculation precision / Decimal vs Float / money-as-str | [`money-decimal-compute`](../../../docs/solutions/best-practices/money-decimal-compute-str-wire-serialization.md) |
-| Cache key granularity / multi-user data isolation | [`cache-key-granularity`](../../../docs/solutions/best-practices/cache-key-granularity-matches-data-scope-2026-04-27.md) |
-| JWT JTI revocation / token security | [`jti-revocation`](../../../docs/solutions/best-practices/jti-revocation-requires-db-persistence-2026-04-27.md) |
-| Pydantic validation error localization | [`fastapi-pydantic-validation`](../../../docs/solutions/best-practices/fastapi-pydantic-validation-error-localization-2026-04-16.md) |
-| Redis fail-fast / cluster deployment | [`redis-fail-fast`](../../../docs/solutions/best-practices/redis-fail-fast-strategy.md) |
-| Log configuration / rotation / archival | [`logging-config`](../../../docs/solutions/best-practices/logging-config.md) |
-| Security audit / file upload magic bytes | [`security-audit`](../../../docs/solutions/best-practices/security-audit.md) |
-| Security protection / rate-limiting / brute-force | [`security-protection`](../../../docs/solutions/best-practices/security-protection.md) |
-| Altcha CAPTCHA integration | [`altcha-captcha`](../../../docs/solutions/best-practices/altcha-captcha-best-practices-2026-04-03.md) |
-| File storage abstraction / GitHub API / WebDAV | [`file-storage-abstraction`](../../../docs/solutions/best-practices/file-storage-abstraction-2026-04-10.md) |
-| Nginx DNS upstream cache / stale DNS | [`nginx-stale-dns`](../../../docs/solutions/integration-issues/nginx-stale-dns-upstream-cache.md) |
-| Unified data root path management / Docker volume | [`unified-data-root-path`](../../../docs/solutions/architecture-patterns/unified-data-root-path-management-2026-05-17.md) |
-| MCP caller-bound principal / tenant isolation | [`mcp-caller-bound-principal`](../../../docs/solutions/architecture-patterns/mcp-caller-bound-principal-2026-05-31.md) |
-| DB check constraint vs Pydantic regex mismatch | [`db-check-constraint-pydantic-regex-sync`](../../../docs/solutions/best-practices/db-check-constraint-pydantic-regex-sync.md) |
-| ASR WER/CER 100% error rate / text normalization | [`asr-wer-whitespace-stripping-tokenization`](../../../docs/solutions/integration-issues/asr-wer-whitespace-stripping-tokenization.md) |
+For backend-specific troubleshooting, see [`server/CLAUDE.md`](../../CLAUDE.md) §Solutions (Backend/Agent Lessons Learned).
 
 ## App Layout
 

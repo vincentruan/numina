@@ -5,7 +5,7 @@ See root [`CLAUDE.md`](../../../CLAUDE.md) for behavioral guidelines and cross-c
 
 ## Key Invariants
 
-1. **Import direction** — `packages/security` must never import from `apps/`. Dependency flow is one-way: `apps/` → `packages/`. Violating this creates circular imports.
+1. **Import direction** — `packages/security` must never import from `apps/` (see [server/CLAUDE.md](../../CLAUDE.md) §Import Direction).
 2. **JTI revocation interface** — `revoke_jti`, `revoke_all_user_tokens`, and `cleanup_expired_revoked_tokens` are the only approved functions for JWT revocation. Never query the `RevokedToken` model directly from app code, and never call the private `_is_jti_revoked` or `_is_token_revoked_for_user` functions — these are internal implementation details.
 3. **Auth contexts are separate** — `frontend_auth` and `service_auth` are distinct auth subsystems. Do not mix their middleware, dependencies, or token validation logic.
 

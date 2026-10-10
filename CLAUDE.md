@@ -6,9 +6,9 @@ This file provides guidance to AI coding assistants when working with code in th
 
 These supersede general defaults in this repo:
 
-- **State assumptions before coding.** If multiple interpretations of a request exist, present them — don't pick silently.
+- **State assumptions before coding.** If multiple interpretations exist, present them — don't pick silently. If a simpler approach exists, say so. If something is unclear, stop and ask.
 - **Match user language.** Respond in the language used by the user in their prompt (e.g., Chinese if asked in Chinese, English if asked in English).
-- **Surgical changes.** Touch only what the request requires. Don't refactor adjacent code, "improve" formatting, or delete pre-existing dead code. Do remove imports/variables that *your* changes left unused.
+- **Surgical changes.** Touch only what the request requires. Don't refactor adjacent code, "improve" formatting, or delete pre-existing dead code. Match existing style, even if you'd do it differently. Do remove imports/variables that *your* changes left unused.
 - **Goal-driven verification.** "Fix bug" → reproduce with a failing test, then make it pass. "Refactor X" → tests pass before and after. "Add validation" → invalid-input test first.
 - **No work claimed done without evidence.** Run the module's quality commands (`pytest`, `typecheck`, `ruff check`) and confirm they pass. "Looks right" is not verification.
 - **Never run dev servers from automated agents.** `uvicorn` and `pnpm dev` block indefinitely. Use `pytest` and `typecheck` for verification.
@@ -61,50 +61,25 @@ JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts
 ## Cross-Cutting Conventions
 
 - **Incremental formatting** — format only files you touch. Do not run formatters on entire modules in a single commit.
-- **No speculative code** — don't add features, abstractions, or error handling beyond what was asked.
+- **No speculative code** — don't add features, abstractions, or error handling beyond what was asked. No abstractions for single-use code. No error handling for impossible scenarios.
 
 ## Solutions (Lessons Learned)
 
-`docs/solutions/` contains verified solutions and best practices to help avoid repeating past mistakes. Each document includes YAML frontmatter (`date`, `module`, `problem_type`, `tags`, `applies_when`) and a standard structure (Problem/Context → Solution → Prevention).
-
-**Check for relevant docs before starting debugging or implementation.**
-
-### 项目级 (Project-level — spans frontend + backend)
+`docs/solutions/` contains verified solutions and best practices. Check relevant docs before debugging or implementation.
 
 | Doc | Topic |
 |-----|-------|
-| [`architecture-patterns/ai-multi-currency-design`](./docs/solutions/architecture-patterns/ai-multi-currency-design-2026-07-27.md) | AI 侧多币种数据修复 |
-| [`architecture-patterns/ai-task-page-leave-continuity`](./docs/solutions/architecture-patterns/ai-task-page-leave-continuity-2026-08-21.md) | AI 任务页面离开连续性 |
-| [`architecture-patterns/gateway-worker-responsibility-separation`](./docs/solutions/architecture-patterns/gateway-worker-responsibility-separation-2026-08-15.md) | Gateway/Worker 职责分离 |
-| [`architecture-patterns/three-state-circuit-breaker`](./docs/solutions/architecture-patterns/three-state-circuit-breaker-with-cascade-retry-2026-05-20.md) | 三态熔断器 + 多 Provider 级联重试 |
-| [`architecture-patterns/two-ai-apps-unified-dispatch`](./docs/solutions/architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) | 双 AI 应用统一 dispatch |
-| [`architecture-patterns/unified-data-root-path`](./docs/solutions/architecture-patterns/unified-data-root-path-management-2026-05-17.md) | DATA_ROOT 统一路径管理 |
-| [`best-practices/altcha-captcha`](./docs/solutions/best-practices/altcha-captcha-best-practices-2026-04-03.md) | ALTCHA 验证码最佳实践 |
-| [`best-practices/cache-key-granularity`](./docs/solutions/best-practices/cache-key-granularity-matches-data-scope-2026-04-27.md) | 缓存键粒度匹配数据范围 |
-| [`best-practices/fastapi-pydantic-validation-i18n`](./docs/solutions/best-practices/fastapi-pydantic-validation-error-localization-2026-04-16.md) | Pydantic v2 验证错误国际化 |
-| [`best-practices/gamified-child-system`](./docs/solutions/best-practices/gamified-child-system-architecture-2026-04-17.md) | 儿童积分游戏化系统架构 |
-| [`best-practices/money-decimal`](./docs/solutions/best-practices/money-decimal-compute-str-wire-serialization.md) | Money: Decimal 计算, str 传输 |
-| [`best-practices/snowflake-id-serialization`](./docs/solutions/best-practices/snowflake-id-json-string-serialization-2026-04-27.md) | Snowflake ID JSON 字符串序列化 |
-| [`best-practices/security-protection`](./docs/solutions/best-practices/security-protection.md) | 安全防护 (速率限制/缓存/暴力破解) |
-| [`best-practices/security-audit`](./docs/solutions/best-practices/security-audit.md) | 安全审计 (日志/文件上传验证) |
-| [`developer-experience/monorepo-lint-format`](./docs/solutions/developer-experience/monorepo-module-level-lint-format-typecheck-2026-04-12.md) | Monorepo 模块级 lint/format/typecheck |
-| [`developer-experience/pr-merge-verification`](./docs/solutions/developer-experience/pr-merge-verification-squash.md) | PR 合并状态验证 (squash merge 陷阱) |
-| [`integration-issues/nginx-proxy-buffer`](./docs/solutions/integration-issues/nginx-proxy-buffer-sizing-frontend-assets.md) | Nginx 代理缓冲区 (大 JS/CJK 字体) |
-| [`integration-issues/nginx-stale-dns`](./docs/solutions/integration-issues/nginx-stale-dns-upstream-cache.md) | Nginx DNS 缓存过期导致 502 |
-| [`integration-issues/production-deployment-config`](./docs/solutions/integration-issues/production-deployment-config-mismatches.md) | 生产部署配置不匹配 (CSP/pool/volume) |
-| [`runtime-errors/basehttpmiddleware-exception`](./docs/solutions/runtime-errors/basehttpmiddleware-exception-bypasses-fastapi-handlers.md) | BaseHTTPMiddleware 异常绕过 FastAPI 处理器 |
+| [`three-state-circuit-breaker`](./docs/solutions/architecture-patterns/three-state-circuit-breaker-with-cascade-retry-2026-05-20.md) | 三态熔断器 + 多 Provider 级联重试 |
+| [`gateway-worker-responsibility-separation`](./docs/solutions/architecture-patterns/gateway-worker-responsibility-separation-2026-08-15.md) | Gateway/Worker 职责分离 |
+| [`two-ai-apps-unified-dispatch`](./docs/solutions/architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) | 双 AI 应用统一 dispatch |
+| [`unified-data-root-path`](./docs/solutions/architecture-patterns/unified-data-root-path-management-2026-05-17.md) | DATA_ROOT 统一路径管理 |
+| [`ai-task-page-leave-continuity`](./docs/solutions/architecture-patterns/ai-task-page-leave-continuity-2026-08-21.md) | AI 任务页面离开连续性 |
+| [`nginx-proxy-buffer`](./docs/solutions/integration-issues/nginx-proxy-buffer-sizing-frontend-assets.md) | Nginx 代理缓冲区 (大 JS/CJK 字体) |
+| [`nginx-stale-dns`](./docs/solutions/integration-issues/nginx-stale-dns-upstream-cache.md) | Nginx DNS 缓存过期导致 502 |
+| [`production-deployment-config`](./docs/solutions/integration-issues/production-deployment-config-mismatches.md) | 生产部署配置不匹配 (CSP/pool/volume) |
+| [`basehttpmiddleware-exception`](./docs/solutions/runtime-errors/basehttpmiddleware-exception-bypasses-fastapi-handlers.md) | BaseHTTPMiddleware 异常绕过 FastAPI 处理器 |
 
-### 前端 (Frontend-only)
-
-See [`frontend/CLAUDE.md`](./frontend/CLAUDE.md) §Solutions for the full frontend solution index.
-
-### 后端 (Backend/Agent-only)
-
-See [`server/CLAUDE.md`](./server/CLAUDE.md) §Solutions for the full backend solution index.
-
-### 测试 (Test/Seed-only)
-
-See [`tests/CLAUDE.md`](./tests/CLAUDE.md) §Solutions for the full test solution index.
+Domain-specific solutions: see [`server/CLAUDE.md`](./server/CLAUDE.md) §Solutions, [`frontend/CLAUDE.md`](./frontend/CLAUDE.md) §Solutions, [`tests/CLAUDE.md`](./tests/CLAUDE.md) §Solutions.
 
 ## CodeGraph
 

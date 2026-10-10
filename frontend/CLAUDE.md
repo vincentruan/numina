@@ -124,7 +124,14 @@ Priority: Project existing > Base template > Supplementary templates > Vant offi
 
 ## Solutions (Frontend Lessons Learned)
 
-Check these docs before working in `frontend/` — they document verified fixes for known UI/tooling pitfalls.
+Check these docs before working in `frontend/` — they document verified fixes and patterns for known pitfalls.
+
+### Architecture Patterns
+
+| Doc | Topic |
+|-----|-------|
+| [`gamified-child-system`](../docs/solutions/best-practices/gamified-child-system-architecture-2026-04-17.md) | 儿童积分游戏化系统架构 |
+| [`ai-task-page-leave-continuity`](../docs/solutions/architecture-patterns/ai-task-page-leave-continuity-2026-08-21.md) | AI 任务页面离开连续性 |
 
 ### UI Bugs
 
@@ -147,10 +154,12 @@ Check these docs before working in `frontend/` — they document verified fixes 
 | [`main-app-ui-design-patterns`](../docs/solutions/best-practices/main-app-ui-design-patterns-2026-08-03.md) | Main App UI 设计模式 |
 | [`ai-chat-checkpoint-retry`](../docs/solutions/architecture-patterns/ai-chat-checkpoint-retry-architecture.md) | AI Chat checkpoint 重试架构 |
 
-### Tooling / Developer Experience
+### Developer Experience
 
 | Doc | Topic |
 |-----|-------|
+| [`monorepo-lint-format`](../docs/solutions/developer-experience/monorepo-module-level-lint-format-typecheck-2026-04-12.md) | Monorepo 模块级 lint/format/typecheck |
+| [`pr-merge-verification`](../docs/solutions/developer-experience/pr-merge-verification-squash.md) | PR 合并状态验证 (squash merge 陷阱) |
 | [`pnpm-duplicate-vant`](../docs/solutions/tooling-decisions/pnpm-workspace-duplicate-vant-provide-inject-broken.md) | pnpm 重复 Vant 版本破坏 provide/inject |
 | [`vite-cache-stale-vue`](../docs/solutions/developer-experience/vite-cache-stale-vue-version.md) | Vite 缓存旧 Vue 版本 |
 | [`vue-tsc-noop-typecheck`](../docs/solutions/developer-experience/vue-tsc-references-only-root-tsconfig-noop-typecheck-gate-2026-07-23.md) | vue-tsc references-only 导致 typecheck 空转 |

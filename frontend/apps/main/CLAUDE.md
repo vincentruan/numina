@@ -99,7 +99,7 @@ For the following issues, refer to the corresponding solution document:
 | Problem | Reference |
 |---------|-----------|
 | Dark mode styles not applying / `!important` specificity issues | [`dark-mode-inline-style-specificity`](../../../docs/solutions/ui-bugs/dark-mode-inline-style-specificity-2026-05-30.md) |
-| NProgress bar flickering / stuck and not disappearing | [`nprogress-flicker`](../../../docs/solutions/ui-bugs/nprogress-flicker-page-navigation.md) |
+| NProgress bar flickering / stuck and not disappearing | [`nprogress-lifecycle`](../../../docs/solutions/ui-bugs/nprogress-lifecycle-three-failure-modes.md) |
 | Vant 4 `van-field` binding not working / picker state issues | [`vant4-field-binding`](../../../docs/solutions/ui-bugs/vant4-field-modelvalue-binding-2026-04-08.md) |
 | Vue 3 Transition + KeepAlive blank screen / page switch issues | [`vue3-transition-keepalive-blank-screen`](../../../docs/solutions/ui-bugs/vue3-transition-keepalive-blank-screen.md) |
 | Onboarding overlay blocking navigation / scroll leak | [`onboarding-overlay-blocks-navigation`](../../../docs/solutions/ui-bugs/onboarding-overlay-blocks-navigation.md) |

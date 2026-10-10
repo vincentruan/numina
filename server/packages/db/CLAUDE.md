@@ -5,7 +5,7 @@ See root [`CLAUDE.md`](../../../CLAUDE.md) for behavioral guidelines and cross-c
 
 ## Key Invariants
 
-1. **Import direction** — `packages/db` must never import from `apps/`. Dependency flow is one-way: `apps/` → `packages/`. Violating this creates circular imports.
+1. **Import direction** — `packages/db` must never import from `apps/` (see [server/CLAUDE.md](../../CLAUDE.md) §Import Direction).
 2. **`SessionLocal` is the only approved session factory** — never create a new `sessionmaker()` anywhere else in the codebase. All session creation goes through `SessionLocal` from this package.
 3. **`Base` is the only approved ORM base class** — all models must inherit from `packages.db.session.Base`. Never subclass `DeclarativeBase` directly in an app or another package.
 4. **Always close sessions in a `finally` block** — every `db = SessionLocal()` call must be paired with `db.close()` in a `finally` block, or use a context manager. Never leave a session open outside a `finally` block.

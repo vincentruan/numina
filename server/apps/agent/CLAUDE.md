@@ -16,27 +16,7 @@ These must hold in every code path — never bypass them:
 
 ## DeerFlow Troubleshooting Guide
 
-For the following issues, refer to the corresponding solution document:
-
-| Problem | Reference |
-|---------|-----------|
-| DeerFlow stream type mismatch / SSE security issues | [`deerflow-stream-type-mismatch`](../../../docs/solutions/integration-issues/deerflow-adapter-stream-type-mismatch-and-security-issues-2026-05-16.md) |
-| GLM5 thinking provider endpoint mismatch | [`deerflow-glm5-thinking-mismatch`](../../../docs/solutions/integration-issues/deerflow-glm5-thinking-provider-endpoint-mismatch-2026-05-16.md) |
-| DeerFlow harness silent fallback / concurrency issues | [`deerflow-harness-fixes`](../../../docs/solutions/integration-issues/deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md) |
-| MCP tools loading failure / cross-thread asyncio.Lock deadlock | [`mcp-cache-asyncio-lock-threading-deadlock`](../../../docs/solutions/integration-issues/mcp-cache-asyncio-lock-threading-deadlock.md) |
-| Thread title displaying thinking-block raw content | [`thinking-block-content-leaking-into-titles`](../../../docs/solutions/integration-issues/thinking-block-content-leaking-into-titles.md) |
-| Stream premature closure / connection interruption | [`stream-closure-fix`](../../../docs/solutions/integration-issues/stream-closure-fix-2026-06-15.md) |
-| Multi-provider circuit breaker / cascade retry | [`three-state-circuit-breaker`](../../../docs/solutions/architecture-patterns/three-state-circuit-breaker-with-cascade-retry-2026-05-20.md) |
-| MCP caller-bound principal / tenant isolation | [`mcp-caller-bound-principal`](../../../docs/solutions/architecture-patterns/mcp-caller-bound-principal-2026-05-31.md) |
-| MCP chat adapter architecture | [`mcp-chat-adapter-architecture`](../../../docs/solutions/architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md) |
-| Multi-app dispatch (stream_run) | [`two-ai-apps-unified-dispatch`](../../../docs/solutions/architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) |
-
-## Cross-Cutting Invariants
-
-1. **DeerFlow-only execution** — covered in §Key Invariants above.
-2. **Auth** — agent uses `X-Agent-Token` (shared secret), not JWT auth endpoints.
-
-See [server/CLAUDE.md](../../CLAUDE.md) for import direction, URL style, Snowflake ID, and other cross-module conventions.
+For agent-specific troubleshooting, see [`server/CLAUDE.md`](../../CLAUDE.md) §Solutions (Backend/Agent Lessons Learned).
 
 ## DeerFlow Execution
 

@@ -148,11 +148,16 @@ Check these docs before working in `server/` — they document verified fixes fo
 
 | Doc | Topic |
 |-----|-------|
+| [`altcha-captcha`](../docs/solutions/best-practices/altcha-captcha-best-practices-2026-04-03.md) | ALTCHA 验证码最佳实践 |
+| [`cache-key-granularity`](../docs/solutions/best-practices/cache-key-granularity-matches-data-scope-2026-04-27.md) | 缓存键粒度匹配数据范围 |
 | [`db-check-constraint-pydantic-sync`](../docs/solutions/best-practices/db-check-constraint-pydantic-regex-sync.md) | DB Check 约束与 Pydantic regex 同步 |
+| [`fastapi-pydantic-validation-i18n`](../docs/solutions/best-practices/fastapi-pydantic-validation-error-localization-2026-04-16.md) | Pydantic v2 验证错误国际化 |
 | [`jti-revocation-db-persistence`](../docs/solutions/best-practices/jti-revocation-requires-db-persistence-2026-04-27.md) | JWT JTI 撤销必须持久化到 DB |
 | [`logging-config`](../docs/solutions/best-practices/logging-config.md) | 日志配置 (轮转/归档/保留) |
 | [`redis-fail-fast`](../docs/solutions/best-practices/redis-fail-fast-strategy.md) | Redis 缓存快速失败策略 |
 | [`file-storage-abstraction`](../docs/solutions/best-practices/file-storage-abstraction-2026-04-10.md) | 可插拔文件存储抽象 |
+| [`security-protection`](../docs/solutions/best-practices/security-protection.md) | 安全防护 (速率限制/缓存/暴力破解) |
+| [`security-audit`](../docs/solutions/best-practices/security-audit.md) | 安全审计 (日志/文件上传验证) |
 
 ### Integration Issues
 
@@ -177,6 +182,13 @@ Check these docs before working in `server/` — they document verified fixes fo
 |-----|-------|
 | [`server-monorepo-consolidation`](../docs/solutions/workflow-issues/server-monorepo-consolidation-phase2-2026-05-14.md) | Phase 2 服务 Monorepo 合并 |
 | [`backend-module-extraction`](../docs/solutions/workflow-issues/backend-module-extraction-workflow-2026-05-14.md) | Backend 模块提取工作流 |
+
+### Developer Experience
+
+| Doc | Topic |
+|-----|-------|
+| [`monorepo-lint-format`](../docs/solutions/developer-experience/monorepo-module-level-lint-format-typecheck-2026-04-12.md) | Monorepo 模块级 lint/format/typecheck |
+| [`pr-merge-verification`](../docs/solutions/developer-experience/pr-merge-verification-squash.md) | PR 合并状态验证 (squash merge 陷阱) |
 
 ## Links
 
