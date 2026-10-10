@@ -13,10 +13,10 @@ execution: code
 
 ## Goal Capsule
 
-- **Objective:** Surface two pieces of backend-curated metadata on the child topic detail page: (1) the MOE 2022 curriculum standard each topic maps to, rendered as a human-readable badge + callout showing the curriculum document title and standard code; (2) the `review_status` of each dependency edge in the prerequisites / next-steps chip lists, rendered as dashed-border + "AI" icon for machine-generated edges.
+- **Objective:** Surface two pieces of backend-curated metadata on the child topic detail page: (1) the MOE 2022 curriculum standard each topic maps to, rendered as a human-readable badge + callout showing the curriculum document title and standard code; (2) the `review_status` of each dependency edge in the prerequisites / next-steps chip lists, rendered as dashed-border + "AI" badge for machine-generated edges.
 - **Authority:** Product Contract below.
 - **Execution profile:** Frontend display + backend data exposure (both sides need changes; the backend gap is a necessary consequence of the user's edge-review intent, not separate scope).
-- **Stop conditions:** Callout renders the resolved curriculum document title + code for at least one standard per topic; dashed-border + AI icon appears on every `review_status="machine"` edge in the topic detail chips.
+- **Stop conditions:** Callout renders the resolved curriculum document title + code for at least one standard per topic; dashed-border + AI badge appears on every `review_status="machine"` edge in the topic detail chips.
 - **Tail ownership:** Implementer owns tests, verification, and PR.
 
 ---
@@ -25,13 +25,13 @@ execution: code
 
 ### Summary
 
-The child topic detail page will surface two new visual signals. First, next to the topic title, a circular "课" badge accompanied by a warm-yellow callout shows the curriculum standard the topic maps to, as the MOE 2022 curriculum document title plus the standard code. Second, each prerequisite and next-step chip will indicate whether its dependency edge is `reviewed` (solid border) or `machine`-generated (dashed border plus a small "AI" suffix icon). `rejected` edges are already excluded at seed time and do not reach the UI. The backend exposes the resolved curriculum title + code in the topic payload and the `review_status` in the graph edge payload; the frontend consumes both.
+The child topic detail page will surface two new visual signals. First, next to the topic title, a circular "课" badge accompanied by a warm-yellow callout shows the curriculum standard the topic maps to, as the MOE 2022 curriculum document title plus the standard code. Second, each prerequisite and next-step chip will indicate whether its dependency edge is `reviewed` (solid border) or `machine`-generated (dashed border plus a small "AI" suffix badge). `rejected` edges are already excluded at seed time and do not reach the UI. The backend exposes the resolved curriculum title + code in the topic payload and the `review_status` in the graph edge payload; the frontend consumes both.
 
 ### Key Decisions
 
 - **KD-1. Curriculum names resolved at backend** (session-settled: user-directed — chosen over frontend i18n lookup table: single source of truth, frontend just renders). The backend resolves each `moe-2022-math:S1.NA.02`-style identifier into `{curriculum name, code}` using `cn-curriculum-standards.json`, and exposes the resolved form via the topic API. Governs R1, R2, R3.
 
-- **KD-6. Curriculum document title + code is the displayable form** (session-settled: user-directed — chosen over strand/note display, over best-effort fallback, over dropping the feature: `cn-curriculum-standards.json` is a codes-only source with no strand data and notes on 5% of entries, so title + code is the only 100%-covered readable form). The callout carries the curriculum document title and the standard code. Strand names and official standard text are out of scope. Governs R1, R4.
+- **KD-6. Curriculum document title + code is the displayable form** (session-settled: user-directed — chosen over strand/note display, over best-effort fallback, over dropping the feature: `cn-curriculum-standards.json` is a codes-only source with no strand data and notes on 5% of entries, so title + code is the only 100%-covered readable form). The callout carries the curriculum document title and the standard code. Strand names and official standard text are out of scope. **Scope reduction call-out:** the original user request included "注释" (notes) alongside the readable name, but `cn-curriculum-standards.json` carries `note` on only ~5% of entries — rendering notes would produce a visually empty callout for 95% of topics. This plan drops notes from the callout; surfacing them requires a richer standards source and is explicitly deferred. Governs R1, R4.
 
 - **KD-2. Badge + callout placement** (session-settled: user-directed — chosen over inline tag, metadata card, standalone section: visually distinctive without consuming a full section). The circular "课" badge sits next to the topic title; a warm-yellow callout underneath shows the resolved curriculum title + code (per KD-6). Governs R4.
 
@@ -51,7 +51,7 @@ The child topic detail page will surface two new visual signals. First, next to 
 
 **Curriculum display (frontend)**
 
-- R3. The child topic detail page displays a circular "课" badge adjacent to the topic title when the topic has at least one curriculum standard entry. Topics with no curriculum standard (including all os-taxonomy topics) render without the badge.
+- R3. The child topic detail page displays a circular "课" badge adjacent to the topic title when the topic has at least one curriculum standard entry with a non-null `code`. Topics with no resolved curriculum standard (including all os-taxonomy topics, and legacy bare-string rows where `code` is null) render without the badge.
 
 - R4. The callout shows the first resolved standard's curriculum document title and code, formatted as `<title> · <code>` (e.g. `义务教育数学课程标准（2022年版）· S1.NA.02`). The callout is inline (always visible, not tooltip-only) so it reads without interaction on desktop and is reachable via scroll on mobile.
 
@@ -70,7 +70,7 @@ The child topic detail page will surface two new visual signals. First, next to 
 
 **Localization & i18n**
 
-- R8. All new user-facing strings (the "课" badge aria label, the AI icon tooltip if any, callout header) are i18n-keyed via the existing `useI18n()` mechanism. `zh-CN` and `en-US` locale files must both carry the new keys.
+- R8. All new user-facing strings (the "课" badge aria label, the AI badge tooltip if any, callout header) are i18n-keyed via the existing `useI18n()` mechanism. `zh-CN` and `en-US` locale files must both carry the new keys.
 
 ### Key Flows
 
@@ -217,7 +217,8 @@ flowchart LR
     DB --> API
     API --> UI
 
-    CNT -.->|"reviewStatus on edges"| EDGE["TopicGraphResponse<br/>prerequisites: TopicEdge[]<br/>{topic, review_status}"]
+    CNT -.->|"curriculum_standards keys"| RES
+    EDGE_DB[("learning_dependencies<br/>review_status on edges")] -.-> EDGE["TopicGraphResponse<br/>prerequisites: TopicEdge[]<br/>{topic, review_status}"]
     EDGE --> UI
 ```
 
@@ -389,9 +390,9 @@ The dotted path is the independent half of the change (R6, R7): edge `review_sta
 | Gate | Command | Scope | Pass criteria |
 |------|---------|-------|---------------|
 | Loader tests | `cd server && uv run pytest tests/packages/os_taxonomy/ -v` | U1 | All pass, including the hashability and union cases |
-| Seed + API tests | `cd server && uv run pytest tests/backend/test_seed_beijing.py tests/backend/test_learning_locale_filter.py -v` | U2, U3 | All pass, including the child endpoint and today-card paths against a legacy row |
+| Seed + API tests | `cd server && uv run pytest tests/backend/test_seed_beijing.py tests/backend/test_learning_locale_filter.py tests/backend/test_learning_topic_service.py -v` | U2, U3 | All pass, including the child endpoint and today-card paths against a legacy row |
 | Backend regression | `cd server && uv run pytest tests/backend/ -k "learning" --tb=line` | U1–U3 | No regressions in the existing learning suite |
-| Backend lint/types | `cd server && uv run ruff check packages/os_taxonomy/ apps/backend/app/ scripts/seed_learning_topics.py` | U1–U3 | Clean |
+| Backend lint/types | `cd server && uv run ruff check packages/os_taxonomy/ apps/backend/app/ scripts/seed_learning_topics.py tests/backend/test_seed_beijing.py tests/backend/test_learning_locale_filter.py tests/backend/test_learning_topic_service.py tests/packages/os_taxonomy/test_beijing_loader.py` | U1–U3 | Clean |
 | Re-seed | `cd server && uv run python scripts/seed_learning_topics.py --source beijing` | U6 | Completes; `curriculum_standards_json` holds objects with non-null `code` |
 | Frontend component tests | `cd frontend/apps/child && pnpm test:run` | U4, U5 | New cases pass |
 | Frontend typecheck | `cd frontend && pnpm -r typecheck` | U4, U5 | No new errors |
@@ -410,3 +411,17 @@ The dotted path is the independent half of the change (R6, R7): edge `review_sta
 7. Every new user-facing string has keys in both `zh-CN` and `en-US` child locale files.
 8. No residual strand/note display logic — the codes-only constraint is respected end to end.
 9. Cleanup: no dead-end or experimental code left in the diff.
+
+---
+
+## Deferred / Open Questions
+
+### From 2026-10-10 doc-review
+
+- **Dark-mode callout colors (P1, U4):** The ochre callout background and border-left use fixed alpha values (`0.12` / `0.45`). No dark-mode override is specified. The child app's iron rule requires new tokens in both `:root` and `[data-theme="dark"]`. Verify WCAG AA contrast at the specified alphas against the dark canvas (`#0a1a1a`); if the values fail, define adjusted dark-mode alphas and add a dark-theme test scenario. *(design-lens, deferred)*
+
+- **Dark-mode machine chip colors (P1, U5):** Dashed border and "AI" suffix badge have no dark-mode color values or test scenarios. The treatment may vanish against the dark card surface or produce unreadable badge text. Specify explicit dark-mode border-color and badge background/text tokens, and add a dark-theme rendering test scenario. *(design-lens, deferred)*
+
+- **`source_taxonomy` filter mechanism (P2, U3):** After restructuring the dependency query from ID-only to full `LearningDependency` rows (to obtain `review_status`), the `source_taxonomy` filter must be preserved. The dependency table has no `source_taxonomy` column, so the implementer must choose between a SQL JOIN or a Python post-filter. Add one sentence to U3 Approach naming the chosen mechanism; the existing test scenario ("`source_taxonomy` filter still excludes cross-source edges") guards the outcome. *(feasibility, deferred)*
+
+- **AI badge placement within chip (P2, U5):** The "AI" suffix badge position inside the chip is unspecified — inline within `van-tag`, adjacent element, or corner marker. With CJK topic names (8+ characters), adding inline content increases chip width; at 375px viewport this risks chips that cannot fit two per row. Specify the badge as an inline element separated from the topic name by a fixed gap, and add a test scenario for a machine chip with a long CJK topic name. *(design-lens, deferred)*
