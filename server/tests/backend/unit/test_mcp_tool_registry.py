@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from apps.backend.app.services.mcp_tool_registry import (
-    _REGISTRY,
+    TOOL_REGISTRY,
     MCPToolMeta,
     get_tool,
     list_tools_for_role,
@@ -40,17 +40,17 @@ class TestRegistryContents:
             "get_child_learning_profile",
             "record_learning_result",
         }
-        assert set(_REGISTRY.keys()) == expected_names
+        assert set(TOOL_REGISTRY.keys()) == expected_names
 
     def test_each_tool_has_name_description_input_schema(self):
-        for name, meta in _REGISTRY.items():
+        for name, meta in TOOL_REGISTRY.items():
             assert meta.name == name
             assert meta.description
             assert isinstance(meta.input_schema, dict)
             assert "type" in meta.input_schema
 
     def test_registry_meta_immutable(self):
-        meta = _REGISTRY["get_family_overview"]
+        meta = TOOL_REGISTRY["get_family_overview"]
         with pytest.raises(FrozenInstanceError):
             meta.name = "hacked"  # type: ignore[misc]
 
@@ -98,7 +98,7 @@ class TestValidateRegistry:
             requires_write=False,
         )
         with (
-            patch.dict(_REGISTRY, {"broken_tool": broken}),
+            patch.dict(TOOL_REGISTRY, {"broken_tool": broken}),
             pytest.raises(RuntimeError, match="empty allowed_roles"),
         ):
             validate_registry()
@@ -112,7 +112,7 @@ class TestValidateRegistry:
             requires_write=False,
         )
         with (
-            patch.dict(_REGISTRY, {"broken_tool": broken}),
+            patch.dict(TOOL_REGISTRY, {"broken_tool": broken}),
             pytest.raises(RuntimeError, match="unknown roles"),
         ):
             validate_registry()

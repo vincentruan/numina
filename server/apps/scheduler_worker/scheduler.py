@@ -15,7 +15,7 @@ scheduler = AsyncIOScheduler()
 
 
 def setup_all_jobs() -> None:
-    """Register all 8 scheduled jobs."""
+    """Register all 9 scheduled jobs."""
     from apps.scheduler_worker.jobs import (
         audit_log_purge_job,
         auto_report_job,
@@ -23,6 +23,7 @@ def setup_all_jobs() -> None:
         fetch_rates_job,
         file_sync_job,
         literacy_report_weekly_job,
+        mcp_anomaly_scan_job,
         notification_digest_job,
         reminder_job,
         revoked_token_cleanup_job,
@@ -70,6 +71,19 @@ def setup_all_jobs() -> None:
         coalesce=True,
     )
     logger.info("审计日志清理任务已配置（每日 03:00）")
+
+    # Job 3b: MCP anomaly scan — every 5 minutes
+    scheduler.add_job(
+        mcp_anomaly_scan_job,
+        trigger="interval",
+        minutes=5,
+        id="mcp_anomaly_scan",
+        name="mcp_anomaly_scan_job",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("MCP 异常检测任务已配置（每 5 分钟）")
 
     # Job 4: Revoked token cleanup — hourly at :30
     scheduler.add_job(

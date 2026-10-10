@@ -5,7 +5,9 @@ Tenant + caller isolation via __slots__:
 - Tool handlers NEVER read family_id/caller from tool args — only from self
 """
 
+import contextlib
 import json
+import time
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -227,6 +229,9 @@ class MCPSession:
         "_caller_role",
         "_thread_id",
         "_server",
+        "_allow_write",
+        "_allowed_tools",
+        "_audit_callback",
     )
 
     def __init__(
@@ -235,6 +240,9 @@ class MCPSession:
         caller_user_id: str,
         caller_role: str,
         thread_id: str | None = None,
+        allow_write: bool = False,
+        allowed_tools: list[str] | None = None,
+        audit_callback: Any | None = None,
     ) -> None:
         if not family_id:
             raise ValueError("family_id must not be empty")
@@ -246,6 +254,9 @@ class MCPSession:
         self._caller_user_id = caller_user_id
         self._caller_role = caller_role
         self._thread_id = thread_id
+        self._allow_write = allow_write
+        self._allowed_tools = allowed_tools
+        self._audit_callback = audit_callback
         self._server = Server(f"numina-family-{family_id}")
         self._register_tools()
 
@@ -277,7 +288,21 @@ class MCPSession:
             return await self.call_tool(name, arguments)
 
     async def list_tools(self) -> list[Tool]:
-        from apps.backend.app.services.mcp_tool_registry import list_tools_for_role
+        from apps.backend.app.services.mcp_tool_registry import (
+            TOOL_REGISTRY,
+            list_tools_for_role,
+        )
+
+        if self._caller_role == "external_token" and self._allow_write:
+            # External token with write access: include all tools
+            metas = list(TOOL_REGISTRY.values())
+        else:
+            metas = list_tools_for_role(self._caller_role)
+
+        # Per-tool whitelist filter for external_token callers
+        if self._caller_role == "external_token" and self._allowed_tools is not None:
+            allowed = set(self._allowed_tools)
+            metas = [m for m in metas if m.name in allowed]
 
         return [
             Tool(
@@ -285,7 +310,7 @@ class MCPSession:
                 description=meta.description,
                 inputSchema=meta.input_schema,
             )
-            for meta in list_tools_for_role(self._caller_role)
+            for meta in metas
         ]
 
     async def call_tool(
@@ -298,8 +323,20 @@ class MCPSession:
         from apps.backend.app.services import liability as liability_service
         from apps.backend.app.services.mcp_tool_registry import get_tool
 
+        _t0 = time.perf_counter()
         meta = get_tool(name)
-        if not meta or self._caller_role not in meta.allowed_roles:
+        # Role check: external_token with allow_write bypasses the role filter
+        _role_allowed = (
+            self._caller_role in meta.allowed_roles
+            if meta
+            else False
+        )
+        _write_bypass = (
+            meta is not None
+            and self._caller_role == "external_token"
+            and self._allow_write
+        )
+        if not meta or (not _role_allowed and not _write_bypass):
             logger.warning(
                 "[mcp_session] permission_denied family=%s caller_user_id=%s caller_role=%s attempted_tool=%s",
                 self._family_id,
@@ -315,6 +352,33 @@ class MCPSession:
                             "error": "permission_denied",
                             "retryable": False,
                             "reason": "该工具对当前角色不可用",
+                        },
+                        ensure_ascii=False,
+                    ),
+                )
+            ]
+
+        # Per-tool whitelist gate for external_token callers
+        if (
+            self._caller_role == "external_token"
+            and self._allowed_tools is not None
+            and name not in self._allowed_tools
+        ):
+            logger.warning(
+                "[mcp_session] permission_denied family=%s caller_user_id=%s caller_role=%s attempted_tool=%s (not in allowed_tools)",
+                self._family_id,
+                self._caller_user_id,
+                self._caller_role,
+                name,
+            )
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "error": "permission_denied",
+                            "retryable": False,
+                            "reason": "该工具未对外部客户端开放",
                         },
                         ensure_ascii=False,
                     ),
@@ -984,6 +1048,15 @@ class MCPSession:
                     name,
                     arguments,
                 )
+                if self._audit_callback is not None:
+                    with contextlib.suppress(Exception):
+                        self._audit_callback(
+                            event_type="tool_call",
+                            tool_name=name,
+                            status="success",
+                            duration_ms=round((time.perf_counter() - _t0) * 1000),
+                            args_digest=arguments,
+                        )
                 return [
                     TextContent(
                         type="text",
@@ -999,6 +1072,16 @@ class MCPSession:
                     name,
                     e,
                 )
+                if self._audit_callback is not None:
+                    with contextlib.suppress(Exception):
+                        self._audit_callback(
+                            event_type="tool_call",
+                            tool_name=name,
+                            status="error",
+                            duration_ms=round((time.perf_counter() - _t0) * 1000),
+                            args_digest=arguments,
+                            error_code="tool_execution_error",
+                        )
                 return [
                     TextContent(
                         type="text",

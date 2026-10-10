@@ -186,6 +186,15 @@ def audit_log_purge_job() -> None:
     purge_old_audit_logs(retention_days=90)
 
 
+def mcp_anomaly_scan_job() -> None:
+    """Scan MCP access logs for anomalies and alert the owner."""
+    from apps.backend.app.services.mcp_anomaly import (  # noqa: PLC0415
+        scan_mcp_anomalies,
+    )
+
+    scan_mcp_anomalies()
+
+
 # ── Job 4: Revoked token cleanup ──────────────────────────────────────────────
 
 

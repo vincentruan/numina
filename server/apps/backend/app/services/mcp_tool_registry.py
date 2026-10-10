@@ -7,7 +7,7 @@ list_tools_for_role() filters at protocol layer; call_tool() re-checks at enforc
 from dataclasses import dataclass
 from typing import Any
 
-_VALID_ROLES = frozenset({"owner", "member", "child"})
+_VALID_ROLES = frozenset({"owner", "member", "child", "external_token"})
 
 
 @dataclass(frozen=True)
@@ -19,12 +19,12 @@ class MCPToolMeta:
     requires_write: bool
 
 
-_REGISTRY: dict[str, MCPToolMeta] = {
+TOOL_REGISTRY: dict[str, MCPToolMeta] = {
     "get_family_overview": MCPToolMeta(
         name="get_family_overview",
         description="获取家庭财务总览：净资产、总资产、总负债、配置占比、近期变化。",
         input_schema={"type": "object", "properties": {}, "required": []},
-        allowed_roles=frozenset({"owner", "member"}),
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
     "get_assets": MCPToolMeta(
@@ -43,7 +43,7 @@ _REGISTRY: dict[str, MCPToolMeta] = {
             },
             "required": [],
         },
-        allowed_roles=frozenset({"owner", "member"}),
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
     "get_liabilities": MCPToolMeta(
@@ -61,14 +61,14 @@ _REGISTRY: dict[str, MCPToolMeta] = {
             },
             "required": [],
         },
-        allowed_roles=frozenset({"owner", "member"}),
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
     "get_members": MCPToolMeta(
         name="get_members",
         description="查询家庭成员列表。",
         input_schema={"type": "object", "properties": {}, "required": []},
-        allowed_roles=frozenset({"owner", "member"}),
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
     "get_recent_alerts": MCPToolMeta(
@@ -86,7 +86,7 @@ _REGISTRY: dict[str, MCPToolMeta] = {
             },
             "required": [],
         },
-        allowed_roles=frozenset({"owner", "member"}),
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
     # Resolved-3 (U5 cleanup): the domain-specific ``write_numina_report`` /
@@ -256,7 +256,7 @@ _REGISTRY: dict[str, MCPToolMeta] = {
             },
             "required": [],
         },
-        allowed_roles=frozenset({"owner", "member"}),
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
     "get_literacy_weekly_data": MCPToolMeta(
@@ -279,7 +279,7 @@ _REGISTRY: dict[str, MCPToolMeta] = {
             },
             "required": ["child_id"],
         },
-        allowed_roles=frozenset({"owner", "member"}),
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
     "get_travel_trips": MCPToolMeta(
@@ -301,7 +301,7 @@ _REGISTRY: dict[str, MCPToolMeta] = {
             },
             "required": [],
         },
-        allowed_roles=frozenset({"owner", "member"}),
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
     "get_travel_expenses": MCPToolMeta(
@@ -320,7 +320,7 @@ _REGISTRY: dict[str, MCPToolMeta] = {
             },
             "required": ["trip_id"],
         },
-        allowed_roles=frozenset({"owner", "member"}),
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
     "get_travel_split_balances": MCPToolMeta(
@@ -333,7 +333,7 @@ _REGISTRY: dict[str, MCPToolMeta] = {
             },
             "required": ["trip_id"],
         },
-        allowed_roles=frozenset({"owner", "member"}),
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
     # ── Learning-tutor skill (Task 4 SDD) ──────────────────────────────
@@ -351,7 +351,7 @@ _REGISTRY: dict[str, MCPToolMeta] = {
             },
             "required": ["topic_id", "child_id"],
         },
-        allowed_roles=frozenset({"owner", "member"}),
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
     "get_child_learning_profile": MCPToolMeta(
@@ -368,7 +368,7 @@ _REGISTRY: dict[str, MCPToolMeta] = {
             },
             "required": ["child_id"],
         },
-        allowed_roles=frozenset({"owner", "member"}),
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
     "record_learning_result": MCPToolMeta(
@@ -416,15 +416,15 @@ _REGISTRY: dict[str, MCPToolMeta] = {
 
 
 def get_tool(name: str) -> MCPToolMeta | None:
-    return _REGISTRY.get(name)
+    return TOOL_REGISTRY.get(name)
 
 
 def list_tools_for_role(role: str) -> list[MCPToolMeta]:
-    return [meta for meta in _REGISTRY.values() if role in meta.allowed_roles]
+    return [meta for meta in TOOL_REGISTRY.values() if role in meta.allowed_roles]
 
 
 def validate_registry() -> None:
-    for name, meta in _REGISTRY.items():
+    for name, meta in TOOL_REGISTRY.items():
         if not meta.allowed_roles:
             raise RuntimeError(
                 f"MCP tool registry invalid: '{name}' has empty allowed_roles"

@@ -271,6 +271,11 @@ const router = createRouter({
           component: () => import('@/pages/MCPManagePage.vue')
         },
         {
+          path: 'settings/ai/mcp/stats',
+          name: 'MCPStats',
+          component: () => import('@/pages/MCPStatsPage.vue')
+        },
+        {
           path: 'settings/ai/web-search',
           name: 'WebSearch',
           component: () => import('@/pages/WebSearchPage.vue'),

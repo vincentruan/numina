@@ -102,6 +102,7 @@ from apps.backend.app.routers import ai_input_polish as ai_input_polish_router
 from apps.backend.app.routers import ai_internal as ai_internal_router
 from apps.backend.app.routers import ai_literacy_report as ai_literacy_report_router
 from apps.backend.app.routers import ai_mcp as ai_mcp_router
+from apps.backend.app.routers import ai_mcp_token as ai_mcp_token_router
 from apps.backend.app.routers import ai_report as ai_report_router
 from apps.backend.app.routers import ai_skills as ai_skills_router
 from apps.backend.app.routers import ai_suggest as ai_suggest_router
@@ -150,6 +151,7 @@ from apps.backend.app.routers import literacy_child as literacy_child_router
 from apps.backend.app.routers import literacy_parent as literacy_parent_router
 from apps.backend.app.routers import manifesto as manifesto_router
 from apps.backend.app.routers import mcp_internal as mcp_internal_router
+from apps.backend.app.routers import mcp_public as mcp_public_router
 from apps.backend.app.routers import milestones as milestones_router
 from apps.backend.app.routers import (
     notification_channels as notification_channels_router,
@@ -591,6 +593,7 @@ app.include_router(ai_config_router.router, prefix="/api/v1")
 app.include_router(ai_asr_router.router, prefix="/api/v1")
 app.include_router(ai_internal_router.router, prefix="/api/v1")
 app.include_router(mcp_internal_router.router, prefix="/api/v1")
+app.include_router(mcp_public_router.router, prefix="/api/v1")
 app.include_router(ai_report_router.router, prefix="/api/v1")
 app.include_router(ai_finance_coach_router.router, prefix="/api/v1")
 app.include_router(ai_suggest_router.router, prefix="/api/v1")
@@ -622,6 +625,7 @@ app.include_router(notification_config_router.router, prefix="/api/v1")
 app.include_router(notification_push_router.router, prefix="/api/v1")
 app.include_router(reminders_router.router, prefix="/api/v1")
 app.include_router(ai_mcp_router.router, prefix="/api/v1")
+app.include_router(ai_mcp_token_router.router, prefix="/api/v1")
 app.include_router(ai_skills_router.router, prefix="/api/v1")
 app.include_router(ai_agents_router.router, prefix="/api/v1")
 app.include_router(ai_agents_internal_router.router, prefix="/api/v1")

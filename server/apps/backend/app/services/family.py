@@ -13,7 +13,13 @@ def get_family_info(db: Session, user: User) -> Family:
 
 
 def get_family_members(db: Session, user: User) -> list[User]:
-    return db.query(User).filter(User.family_id == user.family_id).all()
+    from packages.core.roles import UserRole
+
+    return (
+        db.query(User)
+        .filter(User.family_id == user.family_id, User.role != UserRole.EXTERNAL_TOKEN)
+        .all()
+    )
 
 
 def is_root(db: Session, user: User) -> bool:
@@ -149,8 +155,16 @@ def update_member_status(
 
 def list_members(db: Session, family_id: int) -> list[dict]:
     """List members for a family."""
+    from packages.core.roles import UserRole
+
     rows = (
-        db.query(User).filter(User.family_id == family_id, User.is_active).all()
+        db.query(User)
+        .filter(
+            User.family_id == family_id,
+            User.is_active,
+            User.role != UserRole.EXTERNAL_TOKEN,
+        )
+        .all()
     )
     return [
         {
