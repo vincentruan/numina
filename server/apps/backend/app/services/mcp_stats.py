@@ -82,10 +82,16 @@ def get_mcp_stats(
         for ip, count, ua in ip_rows
     ]
 
-    # Hourly buckets — use strftime for SQLite/Postgres compatibility
+    # Hourly buckets — dialect-aware: PostgreSQL uses to_char, SQLite uses strftime
+    bind = db.get_bind()
+    if bind.dialect.name == "postgresql":
+        hour_expr = func.to_char(MCPAccessLog.created_at, "YYYY-MM-DD HH24:00")
+    else:
+        hour_expr = func.strftime("%Y-%m-%d %H:00", MCPAccessLog.created_at)
+
     hourly_rows = (
         base_q.with_entities(
-            func.strftime("%Y-%m-%d %H:00", MCPAccessLog.created_at).label("hour"),
+            hour_expr.label("hour"),
             func.count(MCPAccessLog.id),
         )
         .group_by("hour")

@@ -95,7 +95,7 @@ def get_reminder_summary(db: Session, family_id: int) -> ReminderSummary:
     )
 
 
-def _check_reminder_dedup(
+def check_reminder_dedup(
     db: Session, family_id: int, reminder_type: str, title: str, hours: int = 1
 ) -> bool:
     """Check if a similar reminder was created recently (deduplication)."""
@@ -123,7 +123,7 @@ def notify_ai_task_complete(
     reminder_type = f"ai_{task_type}_complete"
     title = f"AI 任务完成：{task_title}"
 
-    if _check_reminder_dedup(db, family_id, reminder_type, title, hours=1):
+    if check_reminder_dedup(db, family_id, reminder_type, title, hours=1):
         return
 
     template_vars = {"task_title": task_title}

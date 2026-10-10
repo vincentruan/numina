@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 from packages.core.logging import get_logger
 
@@ -33,28 +34,34 @@ def _redact_value(v: str) -> str:
     return v
 
 
+def _redact_obj(obj: Any, depth: int = 0) -> Any:
+    """Recursively redact secrets from nested dicts/lists/values."""
+    if depth > 10:
+        return "[MAX_DEPTH]"
+    if isinstance(obj, dict):
+        redacted = {}
+        for k, v in obj.items():
+            if any(sn in k.lower() for sn in _SECRET_KEY_NAMES):
+                redacted[k] = "[REDACTED]"
+            else:
+                redacted[k] = _redact_obj(v, depth + 1)
+        return redacted
+    if isinstance(obj, list):
+        return [_redact_obj(item, depth + 1) for item in obj]
+    if isinstance(obj, str):
+        return _redact_value(obj)
+    return obj
+
+
 def _redact_args(args: dict | None) -> str | None:
     """Serialize and redact tool arguments for the audit digest."""
     if not args:
         return None
     try:
-        text = json.dumps(args, ensure_ascii=False, default=str)
+        redacted = _redact_obj(args)
+        text = json.dumps(redacted, ensure_ascii=False, default=str)
     except (TypeError, ValueError):
         text = str(args)
-    # Redact values for known-secret key names
-    if isinstance(args, dict):
-        redacted = {}
-        for k, v in args.items():
-            if any(sn in k.lower() for sn in _SECRET_KEY_NAMES):
-                redacted[k] = "[REDACTED]"
-            elif isinstance(v, str):
-                redacted[k] = _redact_value(v)
-            else:
-                redacted[k] = v
-        try:
-            text = json.dumps(redacted, ensure_ascii=False, default=str)
-        except (TypeError, ValueError):
-            text = str(redacted)
     # Also scan the full text for embedded secrets
     text = _redact_value(text)
     # Truncate

@@ -22,16 +22,26 @@ async def _check_mcp_rate_limit(token_prefix: str, client_ip: str) -> None:
 
     Applied AFTER token validation so invalid tokens don't consume slots.
     Raises AppError(429) when limit is exceeded.
+    Fails open when the cache backend is unavailable.
     """
     from packages.core.cache import get_cache
     from packages.core.cache.keys import RATE_LIMIT
 
-    cache = get_cache()
-    key = f"{RATE_LIMIT}:mcp_public:{token_prefix}:{client_ip}"
-    count = await cache.increment(key, ttl=60)
-    limit = settings.MCP_PUBLIC_RATE_LIMIT_PER_MINUTE
-    if count > limit:
-        raise AppError(ErrorCode.RATE_LIMITED)
+    try:
+        cache = get_cache()
+        key = f"{RATE_LIMIT}:mcp_public:{token_prefix}:{client_ip}"
+        count = await cache.increment(key, ttl=60)
+        limit = settings.MCP_PUBLIC_RATE_LIMIT_PER_MINUTE
+        if count > limit:
+            raise AppError(ErrorCode.RATE_LIMITED)
+    except AppError:
+        raise
+    except Exception:
+        logger.warning(
+            "[mcp_rate_limit] cache backend unavailable, failing open for token_prefix=%s",
+            token_prefix,
+            exc_info=True,
+        )
 
 # Separate transport instance for the public path — avoids cross-contamination
 # with the internal transport's session routing.

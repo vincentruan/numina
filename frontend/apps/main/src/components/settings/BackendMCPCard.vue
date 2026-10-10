@@ -134,12 +134,15 @@ async function onSaveTools() {
   if (!token.value) return
   toolsSaving.value = true
   try {
+    // Only keep tools that are currently visible (write tools hidden when allow_write is off)
+    const visibleNames = new Set(visibleTools.value.map(t => t.name))
+    const effectiveSelection = selectedTools.value.filter(n => visibleNames.has(n))
     // All visible tools selected → store null (unrestricted)
     const allSelected =
       visibleTools.value.length > 0 &&
-      visibleTools.value.every(tool => selectedTools.value.includes(tool.name))
+      visibleTools.value.every(tool => effectiveSelection.includes(tool.name))
     const res = await updateMCPToken({
-      allowed_tools: allSelected ? null : [...selectedTools.value],
+      allowed_tools: allSelected ? null : [...effectiveSelection],
     })
     token.value = res.data
     showToolPicker.value = false

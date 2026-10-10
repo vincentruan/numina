@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import secrets
 from datetime import UTC, datetime
@@ -116,7 +117,7 @@ def verify_token(family_id: int, raw_token: str, db: Session) -> FamilyMCPToken 
     if row is None:
         return None
 
-    if _hash_token(raw_token) != row.token_hash:
+    if not hmac.compare_digest(_hash_token(raw_token), row.token_hash):
         return None
 
     # Expiration check
@@ -229,7 +230,7 @@ def verify_token_by_prefix(raw_token: str, db: Session) -> FamilyMCPToken | None
     if row is None:
         return None
 
-    if _hash_token(raw_token) != row.token_hash:
+    if not hmac.compare_digest(_hash_token(raw_token), row.token_hash):
         return None
 
     # Expiration check — critical for POST path which doesn't re-validate at SSE connect
