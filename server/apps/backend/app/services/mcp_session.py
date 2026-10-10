@@ -289,13 +289,13 @@ class MCPSession:
 
     async def list_tools(self) -> list[Tool]:
         from apps.backend.app.services.mcp_tool_registry import (
-            _REGISTRY,
+            TOOL_REGISTRY,
             list_tools_for_role,
         )
 
         if self._caller_role == "external_token" and self._allow_write:
             # External token with write access: include all tools
-            metas = list(_REGISTRY.values())
+            metas = list(TOOL_REGISTRY.values())
         else:
             metas = list_tools_for_role(self._caller_role)
 

@@ -19,7 +19,7 @@ class MCPToolMeta:
     requires_write: bool
 
 
-_REGISTRY: dict[str, MCPToolMeta] = {
+TOOL_REGISTRY: dict[str, MCPToolMeta] = {
     "get_family_overview": MCPToolMeta(
         name="get_family_overview",
         description="获取家庭财务总览：净资产、总资产、总负债、配置占比、近期变化。",
@@ -416,15 +416,15 @@ _REGISTRY: dict[str, MCPToolMeta] = {
 
 
 def get_tool(name: str) -> MCPToolMeta | None:
-    return _REGISTRY.get(name)
+    return TOOL_REGISTRY.get(name)
 
 
 def list_tools_for_role(role: str) -> list[MCPToolMeta]:
-    return [meta for meta in _REGISTRY.values() if role in meta.allowed_roles]
+    return [meta for meta in TOOL_REGISTRY.values() if role in meta.allowed_roles]
 
 
 def validate_registry() -> None:
-    for name, meta in _REGISTRY.items():
+    for name, meta in TOOL_REGISTRY.items():
         if not meta.allowed_roles:
             raise RuntimeError(
                 f"MCP tool registry invalid: '{name}' has empty allowed_roles"

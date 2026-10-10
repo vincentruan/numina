@@ -42,7 +42,7 @@ def scan_mcp_anomalies() -> None:
         now = datetime.now(UTC)
 
         # Threshold 1: frequency spike (>100 tool calls in 5 minutes)
-        freq_threshold = getattr(settings, "MCP_ANOMALY_FREQUENCY_THRESHOLD", 100)
+        freq_threshold = settings.MCP_ANOMALY_FREQUENCY_THRESHOLD
         freq_window = now - timedelta(minutes=5)
         freq_rows = (
             db.query(
@@ -64,7 +64,7 @@ def scan_mcp_anomalies() -> None:
                     db,
                     family_id,
                     "frequency_spike",
-                    f"5 分钟内 {count} 次工具调用（阈值: {freq_threshold}）",
+                    f"5 分钟内工具调用过高（{count} 次，阈值 {freq_threshold}）",
                     f"{count} tool calls in 5 minutes (threshold: {freq_threshold})",
                 )
                 db.commit()
@@ -76,8 +76,8 @@ def scan_mcp_anomalies() -> None:
                 db.rollback()
 
         # Threshold 2: high failure rate (>50% in 10 minutes, min 5 calls)
-        fail_threshold = getattr(settings, "MCP_ANOMALY_FAILURE_RATE_THRESHOLD", 0.5)
-        min_calls = getattr(settings, "MCP_ANOMALY_MIN_CALLS", 5)
+        fail_threshold = settings.MCP_ANOMALY_FAILURE_RATE_THRESHOLD
+        min_calls = settings.MCP_ANOMALY_MIN_CALLS
         fail_window = now - timedelta(minutes=10)
         fail_rows = (
             db.query(
@@ -132,22 +132,30 @@ def _emit_anomaly_alert(
     title_zh: str,
     title_en: str,
 ) -> None:
-    """Emit a deduplicated anomaly alert for the family owner."""
+    """Emit a deduplicated anomaly alert for the family owner.
+
+    Dedup uses a stable key derived from anomaly_type so that the dynamic
+    count/failure detail in the displayed title does not defeat deduplication
+    (otherwise each scan's different count would create a new alert).
+    """
     from apps.backend.app.services.notification.dispatcher import (
         check_reminder_dedup,
         ensure_reminder,
     )
 
-    title = f"MCP 异常: {title_zh}"
-    if check_reminder_dedup(db, family_id, "mcp_anomaly_detected", title, hours=1):
+    # Stable dedup key — varies only by anomaly_type, not by dynamic numbers.
+    stable_dedup_title = f"MCP 异常: {anomaly_type}"
+    if check_reminder_dedup(db, family_id, "mcp_anomaly_detected", stable_dedup_title, hours=1):
         return
 
+    # User-facing title keeps the dynamic detail for clarity.
+    display_title = f"MCP 异常 [{anomaly_type}]: {title_zh}"
     ensure_reminder(
         db,
         {
             "family_id": family_id,
             "reminder_type": "mcp_anomaly_detected",
-            "title": title,
+            "title": display_title,
             "body": title_en,
             "severity": "warning",
             "template_vars": {

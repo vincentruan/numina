@@ -170,9 +170,9 @@ def update_access(
         tools_value: list[str] | None = allowed_tools  # type: ignore[assignment]
         if tools_value is not None:
             # Validate against the tool registry
-            from apps.backend.app.services.mcp_tool_registry import _REGISTRY
+            from apps.backend.app.services.mcp_tool_registry import TOOL_REGISTRY
 
-            invalid = set(tools_value) - set(_REGISTRY.keys())
+            invalid = set(tools_value) - set(TOOL_REGISTRY.keys())
             if invalid:
                 raise AppError(
                     ErrorCode.VALIDATION_ERROR,

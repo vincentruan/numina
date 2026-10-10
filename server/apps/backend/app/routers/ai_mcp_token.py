@@ -162,7 +162,7 @@ def get_tool_catalog(
     current_user: User = Depends(require_owner),
 ) -> MCPToolCatalogResponse:
     """List all registered MCP tools for the whitelist checkbox UI."""
-    from apps.backend.app.services.mcp_tool_registry import _REGISTRY
+    from apps.backend.app.services.mcp_tool_registry import TOOL_REGISTRY
 
     return MCPToolCatalogResponse(
         tools=[
@@ -171,6 +171,6 @@ def get_tool_catalog(
                 description=meta.description,
                 requires_write=meta.requires_write,
             )
-            for meta in _REGISTRY.values()
+            for meta in TOOL_REGISTRY.values()
         ]
     )

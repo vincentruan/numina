@@ -231,6 +231,9 @@ async def mcp_public_sse(
 
     # Build audit context for connect/disconnect events
     user_agent = request.headers.get("user-agent", "")[:512]
+    # Strip control characters to prevent log injection via crafted User-Agent.
+    user_agent = user_agent.replace("\n", " ").replace("\r", " ")
+    user_agent = "".join(ch for ch in user_agent if ch == " " or (32 <= ord(ch) < 127) or ord(ch) > 127)
     audit_ctx = {
         "family_id": family_id,
         "token_id": token_info.get("token_id"),

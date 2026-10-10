@@ -7,7 +7,7 @@ rejects malformed LLM output.
 
 import pytest
 from apps.backend.app.services.mcp_tool_registry import (
-    _REGISTRY,
+    TOOL_REGISTRY,
     get_tool,
     validate_registry,
 )
@@ -54,7 +54,7 @@ class TestLearningToolRegistry:
             "get_child_learning_profile",
             "record_learning_result",
         }
-        registered = {name for name in _REGISTRY if name in expected}
+        registered = {name for name in TOOL_REGISTRY if name in expected}
         assert registered == expected
 
     def test_get_learning_topic_required_fields(self):
