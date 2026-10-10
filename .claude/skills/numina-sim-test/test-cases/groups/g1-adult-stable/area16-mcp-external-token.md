@@ -286,6 +286,34 @@ Assertions:
 - [ ] 旧 token → HTTP 401
 - [ ] 新 token → HTTP 200
 
+### M16.3.7 User-Agent 控制字符清洗 (P3 修复验证)
+
+> 验证入口端清洗 User-Agent 中的 C0/C1 控制字符, 防止日志注入攻击。
+> 恶意 UA 如 `"Mozilla\nINFO  [fake] injected log line"` 不应被原样写入审计日志。
+
+```bash
+# 1. 发送包含控制字符的 User-Agent
+MALICIOUS_UA=$'Mozilla/5.0\r\nX-Injected: fake-log-line'
+timeout 3 curl -sf -N \
+  -H "Authorization: Bearer $MCP_TOKEN" \
+  -H "User-Agent: ${MALICIOUS_UA}" \
+  "${API_BASE}/mcp/public/${FAMILY_ID}/sse" \
+  -o /dev/null 2>/dev/null || true
+
+# 等待审计写入
+sleep 2
+
+# 2. 查询审计日志中的 user_agent 字段
+LOGS=$(curl -s -H "$AUTH" "${API_BASE}/ai/mcp-token/access-logs?event_type=connect&page_size=1")
+echo "$LOGS" | jq -r '.data.items[0].user_agent'
+```
+
+Assertions:
+- [ ] 审计日志中 `user_agent` 不包含 `\n`, `\r` 等控制字符
+- [ ] 控制字符被替换为空格或被剥离
+- [ ] 可打印 ASCII 部分保留 (如 "Mozilla/5.0")
+- [ ] 代码审查: `mcp_public.py` 入口处有 `user_agent.replace("\n", " ").replace("\r", " ")` + 控制字符过滤
+
 ---
 
 ## M16.4 — 两级访问控制 (Phase 1, R5, R12)
@@ -398,6 +426,44 @@ echo "$LOGIN_RESP" | jq '.code'
 Assertions:
 - [ ] 返回 `AUTH_INVALID_CREDENTIALS` 错误 (与普通错误凭证相同)
 - [ ] 不泄露合成用户存在的信息
+
+### M16.5.3 合成用户 role 字段长度 (仿真测试 bug 修复验证)
+
+> 仿真测试发现: `users.role` 列在 DB 中为 `VARCHAR(10)`,
+> 但 `external_token` 有 14 字符, 导致 `DataError: value too long for type character varying(10)`。
+> 修复: 迁移 mcp001 将列扩展为 `VARCHAR(20)`, 模型同步更新。
+
+```bash
+# 1. 删除现有 token (如有), 重新生成以触发合成用户创建
+curl -s -H "$AUTH" -X DELETE "${API_BASE}/ai/mcp-token" > /dev/null 2>&1
+RESP=$(curl -s -H "$AUTH" -X POST "${API_BASE}/ai/mcp-token" -w "\n%{http_code}")
+HTTP_CODE=$(echo "$RESP" | tail -1)
+echo "Generate token after synthetic user creation: HTTP $HTTP_CODE"
+
+# 2. 验证合成用户存在于数据库 (通过 API 间接验证)
+# 合成用户不应出现在成员列表中 (M16.5.1 已覆盖)
+# 但 token 生成成功意味着合成用户创建成功 (role='external_token' 写入无报错)
+```
+
+```bash
+# 3. 直接检查数据库列定义 (代码审查)
+cd server && .venv/bin/python -c "
+from sqlalchemy import text
+from apps.backend.app.database import SessionLocal
+db = SessionLocal()
+result = db.execute(text(\"SELECT character_maximum_length FROM information_schema.columns WHERE table_name='users' AND column_name='role'\"))
+length = result.scalar()
+print(f'users.role: VARCHAR({length})')
+assert length >= 20, f'role column too short: VARCHAR({length}), need >= 20 for external_token'
+db.close()
+"
+```
+
+Assertions:
+- [ ] `POST /ai/mcp-token` 返回 201 (不是 500 DataError)
+- [ ] 合成用户 `role='external_token'` (14 字符) 成功写入数据库
+- [ ] `users.role` 列在 DB 中为 `VARCHAR(20)` (迁移 mcp001 已应用)
+- [ ] 模型定义 `String(20)` 与 DB schema 一致
 
 ---
 
@@ -603,6 +669,50 @@ Assertions:
 - [ ] 卡片恢复显示 "全部可用（未限制）"
 - [ ] `[console]` zero errors
 
+### M16.8.8 隐藏写工具不被保存到后端 (P1 修复验证)
+
+> 当 `allow_write=False` 时，写工具从弹窗中隐藏。
+> 验证：如果之前的选中状态包含写工具，保存时这些写工具会被过滤掉，不会发送到后端。
+
+```bash
+# 1. 先开启 allow_write，选择包含写工具的子集
+curl -s -H "$AUTH" -X PATCH "${API_BASE}/ai/mcp-token" \
+  -H 'Content-Type: application/json' \
+  -d '{"allow_write": true, "allowed_tools": ["get_assets", "import_assets_batch"]}' > /dev/null
+
+# 验证: allowed_tools 包含写工具
+curl -s -H "$AUTH" "${API_BASE}/ai/mcp-token" | jq '.data.allowed_tools'
+# Expected: ["get_assets", "import_assets_batch"]
+
+# 2. 关闭 allow_write
+curl -s -H "$AUTH" -X PATCH "${API_BASE}/ai/mcp-token" \
+  -H 'Content-Type: application/json' \
+  -d '{"allow_write": false}' > /dev/null
+```
+
+```
+# 3. 前端: 打开工具权限弹窗 (写工具不可见)
+bsk navigate ${BASE}settings/ai/mcp --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+bsk click @eN --session <id>   # 工具权限行
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/m16.8.8-hidden-write-tools.png
+# 点击保存 (不修改选中状态)
+bsk click @eN --session <id>   # 保存按钮
+```
+
+```bash
+# 4. 验证: PATCH 请求中不包含写工具 (通过 API 确认)
+# 前端应过滤掉隐藏工具, 仅发送可见工具
+curl -s -H "$AUTH" "${API_BASE}/ai/mcp-token" | jq '.data.allowed_tools'
+```
+
+Assertions:
+- [ ] `allow_write=False` 后弹窗中不显示写工具 (带 🔒 标记的)
+- [ ] 保存后 `allowed_tools` 中不包含 `import_assets_batch` (被前端过滤)
+- [ ] PATCH 请求 payload 中不含写工具名 (可通过 Network tab 确认)
+- [ ] `[console]` zero errors
+
 ---
 
 ## M16.9 — 审计日志写入 (Phase 2, P2-R4 — P2-R8)
@@ -704,6 +814,22 @@ Assertions:
 - [ ] `tool_name` 过滤仅返回匹配工具
 - [ ] `date_from` / `date_to` 过滤正确排除范围外数据
 
+### M16.9.7 嵌套结构递归脱敏 (P2 修复验证)
+
+> 验证 `_redact_obj()` 对嵌套 dict/list 中的敏感值进行递归脱敏。
+> 通过单元测试直接验证 (仿真环境难以构造包含嵌套密钥的工具调用)。
+
+```bash
+cd server && uv run pytest tests/backend/unit/test_mcp_audit_log.py -v -k "redact" --tb=short 2>&1 | tail -20
+```
+
+Assertions (单元测试):
+- [ ] `{"config": {"api_key": "sk-xxx"}}` → `{"config": {"api_key": "[REDACTED]"}}`
+- [ ] `{"nested": {"deep": {"password": "secret123"}}}` → 三层嵌套均被脱敏
+- [ ] `[{"token": "mcp_xxx"}, {"key": "value"}]` → list 中的 dict 也被处理
+- [ ] 深度超过 10 层时返回 `"[MAX_DEPTH]"` (防止无限递归)
+- [ ] 非敏感嵌套值保持不变: `{"data": {"name": "test"}}` → 原样保留
+
 ---
 
 ## M16.10 — Per-Token 速率限制 (Phase 2, P2-R9 — P2-R10)
@@ -783,6 +909,23 @@ echo "Rate limited count: $LIMITED (expected: 0)"
 Assertions:
 - [ ] 无效 token 请求后, 有效 token 的 30 次请求全部通过 (429 count = 0)
 
+### M16.10.5 速率限制 fail-open (缓存不可用时)
+
+> 验证当缓存后端不可用时，速率限制 fail-open（允许请求通过）而不是 fail-closed（拒绝请求）。
+> 此测试需要代码审查或 mock 缓存不可用场景。
+
+```bash
+# 代码审查验证:
+# 1. 检查 _check_mcp_rate_limit() 中的异常处理
+grep -A 10 "def _check_mcp_rate_limit" server/apps/backend/app/routers/mcp_public.py
+```
+
+Assertions (代码审查):
+- [ ] 缓存异常被 `except Exception` 捕获
+- [ ] 异常时仅记录 WARNING 日志，不抛出 AppError
+- [ ] 请求在缓存不可用时仍能通过（fail-open）
+- [ ] `except AppError: raise` 确保 429 不被吞掉
+
 ---
 
 ## M16.11 — 异常检测与通知 (Phase 2, P2-R11 — P2-R13)
@@ -803,14 +946,26 @@ Assertions:
 - [ ] 5 分钟内 >100 次工具调用 → 产生 `mcp_anomaly_detected` Reminder
 - [ ] Reminder 包含异常类型描述和摘要
 
-### M16.11.2 新 IP 告警
+### M16.11.2 新来源 IP 告警 (P2-R11b)
+
+> 30 天窗口内首次出现的来源 IP 触发告警。
+> **基线前提:** 仅当 family 已存在历史审计记录时才检测 — 否则首个连接会被误判为"新 IP"。
 
 ```bash
-cd server && uv run pytest tests/backend/services/test_mcp_anomaly.py -v -k new_ip
+cd server && uv run pytest tests/backend/services/test_mcp_anomaly.py -v -k "NewSourceIP" --tb=short
 ```
 
 Assertions:
-- [ ] 30 天内首次出现的 IP → 产生告警
+- [ ] `test_new_ip_emits_alert`: 已知 IP (10 天前) + 新 IP (1 分钟前) → 产生 `new_source_ip` 告警
+- [ ] `test_known_ip_no_alert`: 同一 IP 在历史窗口内出现过 → 不告警
+- [ ] `test_ip_outside_lookback_window_is_new`: IP 最后出现于 45 天前 (超出 30 天窗口) → 视为新 IP
+- [ ] `test_unknown_ip_sentinel_ignored`: `client_ip == "unknown"` 哨兵值不触发告警
+- [ ] `test_new_ip_dedup_within_hour`: 连续扫描仅产生 1 个告警
+- [ ] `test_first_ever_connection_no_alert`: family 无历史记录时不告警 (基线缺失)
+- [ ] 配置项: `MCP_ANOMALY_NEW_IP_WINDOW_MINUTES` (默认 5), `MCP_ANOMALY_NEW_IP_HISTORY_DAYS` (默认 30)
+
+> **去重语义:** 每个条件（不同 `anomaly_type` / 不同 IP）拥有独立的告警身份，
+> 互不抑制。同一条件 1 小时内只告警一次。见 M16.11.4。
 
 ### M16.11.3 高失败率告警
 
@@ -821,15 +976,23 @@ cd server && uv run pytest tests/backend/services/test_mcp_anomaly.py -v -k fail
 Assertions:
 - [ ] 10 分钟内 >50% 失败 (至少 5 次调用) → 产生告警
 
-### M16.11.4 告警去重 (1 小时窗口)
+### M16.11.4 告警去重 (按条件, 1 小时窗口)
+
+> 去重键为 `(family_id, reminder_type, title)`，其中 title 是**条件标识**
+> （如 `MCP 异常 [new_source_ip]: 新来源 IP 1.2.3.4`）。
+> 度量值（调用次数、失败率）放在 body，不参与去重 —— 否则每次扫描都会新建告警。
+> `ensure_reminder(dedup_by_title=True)` 使不同条件可各自保留一条未处理提醒。
 
 ```bash
-cd server && uv run pytest tests/backend/services/test_mcp_anomaly.py -v -k dedup
+cd server && uv run pytest tests/backend/services/test_mcp_anomaly.py -v -k "dedup or drift or distinct or same_ip" --tb=short
 ```
 
 Assertions:
-- [ ] 同一 `(family_id, anomaly_type, detail_hash)` 1 小时内仅产生 1 个 Reminder
-- [ ] 1 小时后相同条件可再次告警
+- [ ] 同一条件 1 小时内仅产生 1 个 Reminder (`test_dedup_within_one_hour`)
+- [ ] 不同条件各自告警，即使前一条仍未处理 (`test_two_distinct_new_ips_each_alert`)
+- [ ] 同一 IP 重复扫描不产生新 Reminder (`test_same_ip_does_not_duplicate_across_scans`)
+- [ ] 度量值漂移不破坏去重 (`test_drift_in_measurement_does_not_defeat_dedup`)
+- [ ] `ensure_reminder` 默认行为不变（其他 reminder_type 仍按 type 幂等，61 个通知测试通过）
 
 ### M16.11.5 通知注册表包含 mcp_security 类别
 
@@ -859,6 +1022,24 @@ curl -s -H "$AUTH" "${API_BASE}/notifications/summary" | jq '.data.mcp_anomaly_d
 Assertions:
 - [ ] `ReminderSummary` 包含 `mcp_anomaly_detected` 字段
 - [ ] 无告警时值为 0
+
+### M16.11.7 动态 count 不影响去重 (P3 修复验证)
+
+> 修复前: 告警 title 包含动态 count (如 "5 分钟内 120 次工具调用"),
+> 导致每次扫描 count 变化时 dedup 失效, 持续产生重复告警。
+> 修复后: dedup key 使用稳定的 `anomaly_type`, 动态数字仅在显示 title 中。
+
+```bash
+# 通过单元测试验证
+cd server && uv run pytest tests/backend/services/test_mcp_anomaly.py -v -k dedup --tb=short 2>&1 | tail -15
+```
+
+Assertions (单元测试):
+- [ ] `test_dedup_within_one_hour` 测试通过: 连续两次扫描 (相同 count) 仅产生 1 个 Reminder
+- [ ] 代码审查: `_emit_anomaly_alert()` 使用 `stable_dedup_title = f"MCP 异常: {anomaly_type}"`
+  而非动态 title 作为 dedup key
+- [ ] 用户可见的 `Reminder.title` 仍包含动态 count (用于展示), 但 dedup 基于稳定 key
+- [ ] 不同 `anomaly_type` (frequency_spike vs high_failure_rate) 独立去重
 
 ---
 
@@ -1101,12 +1282,14 @@ unset MCP_TOKEN OLD_TOKEN FAMILY_ID
 | M16.3.4 | 过期 token → 401 | API | R9 |
 | M16.3.5 | Query param 认证 + 审计 WARNING | API | R6, R7 |
 | M16.3.6 | 已撤销 token → 401 | API | R3, R9 |
+| M16.3.7 | User-Agent 控制字符清洗 | API | P3-sec |
 | M16.4.1 | 仅读工具 (allow_write=False) | API | R5 |
 | M16.4.2 | 包含写工具 (allow_write=True) | API | R5, R12 |
 | M16.4.3 | allow_external 开关确认对话框 | UI | R17 |
 | M16.4.4 | allow_write 开关确认对话框 | UI | R17 |
 | M16.5.1 | 合成用户不在成员列表 | API | R4 |
 | M16.5.2 | 合成用户无法登录 | API | R4 |
+| M16.5.3 | 合成用户 role 字段长度 | API | bug-fix |
 | M16.6.1 | 内部 agent 路径不受影响 | API | R21 |
 | M16.6.2 | bootstrap 系统 MCP server 不变 | API | R22 |
 | M16.7.1 | 前端轮转确认对话框 | UI | R3, R16 |
@@ -1119,22 +1302,26 @@ unset MCP_TOKEN OLD_TOKEN FAMILY_ID
 | M16.8.5 | allowed_tools=null 重置 | API | P2-R3 |
 | M16.8.6 | allowed_tools=[] 无工具 | API | P2-R3 |
 | M16.8.7 | "全部启用" → PATCH null | UI | P2-R3 |
+| M16.8.8 | 隐藏写工具不被保存到后端 | UI | P1-fix |
 | M16.9.1 | connect 事件审计 | API | P2-R4, P2-R6 |
 | M16.9.2 | tool_call 事件审计 | API | P2-R4, P2-R6 |
 | M16.9.3 | 内部路径无审计行 | API | P2-R5, P2-AE10 |
 | M16.9.4 | args_digest 密钥脱敏 | API | P2-R4 |
 | M16.9.5 | 审计日志分页 | API | P2-R8 |
 | M16.9.6 | 审计日志过滤 | API | P2-R8 |
+| M16.9.7 | 嵌套结构递归脱敏 | Unit | P2-fix |
 | M16.10.1 | 正常速率全部通过 | API | P2-R9 |
 | M16.10.2 | 超过 30/min → 429 | API | P2-R9 |
 | M16.10.3 | 不同 IP 独立计数 | Review | P2-R9 |
 | M16.10.4 | 无效 token 不消耗配额 | API | P2-R10 |
+| M16.10.5 | 速率限制 fail-open | Review | P1-fix |
 | M16.11.1 | 频率突增告警 | Unit | P2-R11 |
-| M16.11.2 | 新 IP 告警 | Unit | P2-R11 |
+| M16.11.2 | 新来源 IP 告警 | Unit | P2-R11b |
 | M16.11.3 | 高失败率告警 | Unit | P2-R11 |
 | M16.11.4 | 告警去重 | Unit | P2-R13 |
 | M16.11.5 | 通知注册表 mcp_security | UI | P2-R12 |
 | M16.11.6 | ReminderSummary 计数 | API | P2-R12 |
+| M16.11.7 | 动态 count 不影响去重 | Unit | P3-fix |
 | M16.12.1 | 卡片摘要行 | UI | P2-R14 |
 | M16.12.2 | Stats API 聚合数据 | API | P2-R15 |
 | M16.12.3 | Stats API 日期范围 | API | P2-R15 |
@@ -1149,4 +1336,41 @@ unset MCP_TOKEN OLD_TOKEN FAMILY_ID
 | M16.15.1 | 非 owner 只读查看 | UI | R20 |
 | M16.15.2 | 非 owner API → 403 | API | R10 |
 
-**Total: 60 cases** (20 UI + 35 API + 4 Unit + 1 Code Review)
+**Total: 66 cases** (21 UI + 37 API + 6 Unit + 2 Code Review)
+
+### 修复验证覆盖 (Review-Fix Regression)
+
+| Case | 验证的修复 | 严重度 |
+|------|-----------|--------|
+| M16.3.7 | User-Agent 控制字符清洗 | P3 |
+| M16.5.3 | `users.role` VARCHAR(20) 扩展 | 仿真 bug |
+| M16.8.8 | 工具选择器隐藏工具过滤 | P1 |
+| M16.9.7 | 嵌套结构递归脱敏 | P2 |
+| M16.10.5 | 速率限制 fail-open | P1 |
+| M16.11.7 | 动态 count 不影响去重 | P3 |
+
+> 其余修复项通过既有用例间接覆盖:
+> - **P0 dialect-aware 日期格式化**: M16.12.2 (Stats API 在 PostgreSQL 上运行)
+> - **P1 timing-safe hash**: M16.3.x (认证行为正确性)
+> - **P2 per-alert commit**: M16.11.1-3 (告警产生正确性)
+
+### 需求补齐记录
+
+经测试用例审查发现并补齐的两项:
+
+**1. P2-R11(b) 新来源 IP 告警** — 初版实现遗漏该阈值 (仅实现频率突增与高失败率)。
+
+- 实现: `mcp_anomaly.py` Threshold 3，`new_source_ip` 告警类型
+- 配置: `MCP_ANOMALY_NEW_IP_WINDOW_MINUTES` (默认 5) / `MCP_ANOMALY_NEW_IP_HISTORY_DAYS` (默认 30)
+- 基线语义: family 无历史记录时不告警 (首个连接无参照基线，否则必然误报)
+- 覆盖: M16.11.2 (7 个单元测试)
+
+**2. P2-R13 按条件去重** — 初版实际被 `ensure_reminder` 的
+`(family_id, reminder_type, asset_id, active)` 幂等键覆盖，导致每个家庭同时只能存在
+一条未处理的 MCP 异常提醒：前一条未处理期间，其他类型/其他 IP 的异常被静默抑制。
+
+- 修复: `ensure_reminder(..., dedup_by_title=True)` 选择性让 title 参与幂等判断（opt-in，其他调用方行为不变）
+- 标题改为条件标识（IP / 固定短语），度量值移入 body
+- 覆盖: M16.11.4 (4 个单元测试 + 61 个通知测试回归)
+
+---

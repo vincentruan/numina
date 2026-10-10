@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     MCP_ANOMALY_FREQUENCY_THRESHOLD: int = 100  # tool calls in 5 min
     MCP_ANOMALY_FAILURE_RATE_THRESHOLD: float = 0.5  # failure ratio in 10 min
     MCP_ANOMALY_MIN_CALLS: int = 5  # min calls before failure-rate alert
+    MCP_ANOMALY_NEW_IP_WINDOW_MINUTES: int = 5  # recent window scanned for new IPs
+    MCP_ANOMALY_NEW_IP_HISTORY_DAYS: int = 30  # lookback that defines a "known" IP
     REGISTER_RATE_LIMIT_PER_HOUR: int = 5  # Registration rate limit per IP
 
     # Trusted proxy configuration (for X-Forwarded-For validation)

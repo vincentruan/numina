@@ -64,7 +64,7 @@ def scan_mcp_anomalies() -> None:
                     db,
                     family_id,
                     "frequency_spike",
-                    f"5 分钟内工具调用过高（{count} 次，阈值 {freq_threshold}）",
+                    "5 分钟内工具调用过高",
                     f"{count} tool calls in 5 minutes (threshold: {freq_threshold})",
                 )
                 db.commit()
@@ -107,13 +107,84 @@ def scan_mcp_anomalies() -> None:
                         db,
                         family_id,
                         "high_failure_rate",
-                        f"10 分钟内失败率 {pct}%（{failures}/{total}，阈值: {int(fail_threshold * 100)}%）",
-                        f"{pct}% failure rate in 10 minutes ({failures}/{total}, threshold: {int(fail_threshold * 100)}%)",
+                        "10 分钟内失败率过高",
+                        f"{pct}% failure rate in 10 minutes "
+                        f"({failures}/{total}, threshold: {int(fail_threshold * 100)}%)",
                     )
                     db.commit()
                 except Exception:
                     logger.exception(
                         "[mcp_anomaly] failed to emit high_failure_rate alert family_id=%s",
+                        family_id,
+                    )
+                    db.rollback()
+
+        # Threshold 3: new source IP (first appearance in the lookback window)
+        ip_window = now - timedelta(minutes=settings.MCP_ANOMALY_NEW_IP_WINDOW_MINUTES)
+        ip_history = now - timedelta(days=settings.MCP_ANOMALY_NEW_IP_HISTORY_DAYS)
+
+        # IPs observed in the recent window
+        recent_ips = (
+            db.query(MCPAccessLog.family_id, MCPAccessLog.client_ip)
+            .filter(
+                MCPAccessLog.family_id.in_(family_ids),
+                MCPAccessLog.created_at >= ip_window,
+                MCPAccessLog.client_ip.isnot(None),
+                MCPAccessLog.client_ip != "unknown",
+            )
+            .group_by(MCPAccessLog.family_id, MCPAccessLog.client_ip)
+            .all()
+        )
+
+        if recent_ips:
+            # IPs already seen earlier in the lookback window — those are "known"
+            known_ips = {
+                (fam_id, ip)
+                for fam_id, ip in db.query(
+                    MCPAccessLog.family_id, MCPAccessLog.client_ip
+                )
+                .filter(
+                    MCPAccessLog.family_id.in_(family_ids),
+                    MCPAccessLog.created_at >= ip_history,
+                    MCPAccessLog.created_at < ip_window,
+                    MCPAccessLog.client_ip.isnot(None),
+                )
+                .group_by(MCPAccessLog.family_id, MCPAccessLog.client_ip)
+                .all()
+            }
+
+            # New-IP detection needs a baseline: without any prior history a family's
+            # very first connection would always look "new" and alert spuriously.
+            families_with_history = {
+                fam_id
+                for (fam_id,) in db.query(MCPAccessLog.family_id)
+                .filter(
+                    MCPAccessLog.family_id.in_(family_ids),
+                    MCPAccessLog.created_at < ip_window,
+                )
+                .group_by(MCPAccessLog.family_id)
+                .all()
+            }
+
+            for family_id, client_ip in recent_ips:
+                if family_id not in families_with_history:
+                    continue
+                if (family_id, client_ip) in known_ips:
+                    continue
+                try:
+                    _emit_anomaly_alert(
+                        db,
+                        family_id,
+                        "new_source_ip",
+                        # IP in the condition keeps per-IP dedup distinct
+                        f"新来源 IP {client_ip}",
+                        f"New source IP detected: {client_ip} "
+                        f"(not seen in the past {settings.MCP_ANOMALY_NEW_IP_HISTORY_DAYS} days)",
+                    )
+                    db.commit()
+                except Exception:
+                    logger.exception(
+                        "[mcp_anomaly] failed to emit new_source_ip alert family_id=%s",
                         family_id,
                     )
                     db.rollback()
@@ -129,39 +200,42 @@ def _emit_anomaly_alert(
     db,
     family_id: int,
     anomaly_type: str,
-    title_zh: str,
-    title_en: str,
+    condition: str,
+    detail: str,
 ) -> None:
-    """Emit a deduplicated anomaly alert for the family owner.
+    """Emit an anomaly alert for the family owner.
 
-    Dedup uses a stable key derived from anomaly_type so that the dynamic
-    count/failure detail in the displayed title does not defeat deduplication
-    (otherwise each scan's different count would create a new alert).
+    *condition* identifies **what happened** and must be stable across scans
+    (``new_source_ip`` embeds the IP; the threshold alerts use a fixed phrase).
+    *detail* carries the per-scan measurement and goes in the body, never the
+    title — a drifting value in the title would break deduplication.
+
+    Alerts are deduplicated per condition: an identical condition stays quiet for
+    an hour, while a different one still surfaces even if an earlier alert is
+    still unread (``dedup_by_title``).
     """
     from apps.backend.app.services.notification.dispatcher import (
         check_reminder_dedup,
         ensure_reminder,
     )
 
-    # Stable dedup key — varies only by anomaly_type, not by dynamic numbers.
-    stable_dedup_title = f"MCP 异常: {anomaly_type}"
-    if check_reminder_dedup(db, family_id, "mcp_anomaly_detected", stable_dedup_title, hours=1):
+    title = f"MCP 异常 [{anomaly_type}]: {condition}"
+    if check_reminder_dedup(db, family_id, "mcp_anomaly_detected", title, hours=1):
         return
 
-    # User-facing title keeps the dynamic detail for clarity.
-    display_title = f"MCP 异常 [{anomaly_type}]: {title_zh}"
     ensure_reminder(
         db,
         {
             "family_id": family_id,
             "reminder_type": "mcp_anomaly_detected",
-            "title": display_title,
-            "body": title_en,
+            "title": title,
+            "body": detail,
             "severity": "warning",
             "template_vars": {
                 "anomaly_type": anomaly_type,
             },
         },
+        dedup_by_title=True,
     )
     logger.info(
         "[mcp_anomaly] alert emitted family_id=%s type=%s",
