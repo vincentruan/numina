@@ -22,6 +22,9 @@ def _build_difficulty_warning(db: Session, child_id: int, topic) -> dict | None:
         find_age_appropriate_topic,
         get_unmet_prerequisites,
     )
+    from apps.backend.app.services.learning.topic_service import (
+        locale_to_source_taxonomy,
+    )
     from packages.db.models.user import User
 
     child = db.query(User).filter(User.id == child_id).first()
@@ -30,11 +33,14 @@ def _build_difficulty_warning(db: Session, child_id: int, topic) -> dict | None:
 
     child_age = _compute_age(child.birthday)
     child_age_group = _age_to_group(child_age)
+    source_taxonomy = locale_to_source_taxonomy(child.language)
 
     # Age difficulty check
     age_warning = None
     if AGE_GROUP_ORDER.get(topic.age_group, 1) > AGE_GROUP_ORDER.get(child_age_group, 1):
-        suggested = find_age_appropriate_topic(db, child_id, topic.subject)
+        suggested = find_age_appropriate_topic(
+            db, child_id, topic.subject, source_taxonomy=source_taxonomy
+        )
         age_warning = {
             "level": topic.age_group,
             "child_level": child_age_group,

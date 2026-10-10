@@ -1,20 +1,22 @@
-"""Global learning knowledge graph endpoints (no auth required).
+"""Global learning knowledge graph endpoints.
 
 These endpoints expose the shared, read-only knowledge graph (topics, subjects,
-clusters) that is the same for all families.  No family-specific data is served
-here, so authentication is intentionally omitted — the data is equivalent to a
-public curriculum reference.  All write endpoints and any endpoint that touches
-family-scoped progress live behind ``require_adult`` / ``get_current_child_user``
-in ``learning_family.py`` and ``learning_child.py`` respectively.
+clusters) that is the same for all families.  Authentication is required so the
+backend can determine the user's locale (``user.language``) and filter topics
+by ``source_taxonomy`` — but no family-scoped data is served here.  All write
+endpoints and any endpoint that touches family-scoped progress live behind
+``require_adult`` / ``get_current_child_user`` in ``learning_family.py`` and
+``learning_child.py`` respectively.
 """
 
 import json
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.deps import require_adult
+from apps.backend.app.auth.deps import get_current_user_or_child, require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
@@ -26,8 +28,14 @@ from apps.backend.app.schemas.learning import (
 )
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.learning import topic_service
+from apps.backend.app.services.learning.topic_service import (
+    locale_to_source_taxonomy,
+)
 from packages.core.logging import get_logger
 from packages.db.models.learning.topic import LearningTopic
+
+#: Valid values for the ``source_taxonomy`` query parameter.
+SourceTaxonomy = Literal["beijing", "os-taxonomy"]
 
 logger = get_logger(__name__)
 
@@ -52,6 +60,8 @@ def _topic_to_response(topic: LearningTopic) -> dict:
         "assessment_prompt": topic.assessment_prompt,
         "standards": topic.standards or [],
         "ability_dimensions": topic.ability_dimensions,
+        "curriculum_standards": topic.curriculum_standards,
+        "source_taxonomy": topic.source_taxonomy,
         "deprecated": topic.deprecated,
         # Expose raw fields so frontend can detect translation status
         "name_zh": topic.name_zh,
@@ -64,7 +74,9 @@ def _topic_to_response(topic: LearningTopic) -> dict:
 @router.get("/topics/batch", response_model=list[TopicResponse])
 def get_topics_batch(
     ids: str = Query(..., description="Comma-separated topic IDs"),
+    source_taxonomy: SourceTaxonomy | None = None,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
 ):
     """Batch-fetch multiple topics by ID."""
     try:
@@ -73,32 +85,38 @@ def get_topics_batch(
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND) from None
     if not topic_ids:
         return []
-    topics = topic_service.list_topics_by_ids(db, topic_ids)
+    if source_taxonomy is None:
+        source_taxonomy = locale_to_source_taxonomy(user.language)
+    topics = topic_service.list_topics_by_ids(
+        db, topic_ids, source_taxonomy=source_taxonomy
+    )
     return [_topic_to_response(t) for t in topics]
 
 
 @router.get("/topics/index")
 def get_topic_index(
+    source_taxonomy: SourceTaxonomy | None = None,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
 ):
     """Lightweight index of all topics for browse UI (index bar).
 
     Returns only the fields needed to build subject → domain → topic navigation.
     Much smaller payload than the full topic list (~100KB vs ~800KB for 1600 topics).
     """
-    rows = (
-        db.query(
-            LearningTopic.id,
-            LearningTopic.subject,
-            LearningTopic.domain,
-            LearningTopic.name,
-            LearningTopic.name_zh,
-            LearningTopic.age_group,
-        )
-        .filter(LearningTopic.deprecated == False)  # noqa: E712
-        .order_by(LearningTopic.subject, LearningTopic.domain, LearningTopic.name)
-        .all()
-    )
+    if source_taxonomy is None:
+        source_taxonomy = locale_to_source_taxonomy(user.language)
+    q = db.query(
+        LearningTopic.id,
+        LearningTopic.subject,
+        LearningTopic.domain,
+        LearningTopic.name,
+        LearningTopic.name_zh,
+        LearningTopic.age_group,
+    ).filter(LearningTopic.deprecated == False)  # noqa: E712
+    if source_taxonomy:
+        q = q.filter(LearningTopic.source_taxonomy == source_taxonomy)
+    rows = q.order_by(LearningTopic.subject, LearningTopic.domain, LearningTopic.name).all()
     return [
         {
             "id": r.id,
@@ -119,39 +137,78 @@ def list_topics(
     age_group: str | None = None,
     search: str | None = None,
     limit: int = 20,
+    source_taxonomy: SourceTaxonomy | None = None,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
 ):
+    """List topics. ``source_taxonomy`` filters by taxonomy source; when
+    omitted the requesting user's language selects it
+    (zh-CN -> beijing, otherwise -> os-taxonomy).
+    """
+    if source_taxonomy is None:
+        source_taxonomy = locale_to_source_taxonomy(user.language)
     topics = topic_service.list_topics(
         db, subject=subject, domain=domain, age_group=age_group,
-        search=search, limit=limit,
+        search=search, limit=limit, source_taxonomy=source_taxonomy,
     )
     return [_topic_to_response(t) for t in topics]
 
 
 @router.get("/topics/{topic_id}", response_model=TopicResponse)
-def get_topic(topic_id: int, db: Session = Depends(get_db)):
+def get_topic(
+    topic_id: int,
+    source_taxonomy: SourceTaxonomy | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
     topic = topic_service.get_topic_by_id(db, topic_id)
     if not topic:
+        raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
+    if source_taxonomy is None:
+        source_taxonomy = locale_to_source_taxonomy(user.language)
+    if source_taxonomy and topic.source_taxonomy != source_taxonomy:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
     return _topic_to_response(topic)
 
 
 @router.get("/topics/{topic_id}/graph", response_model=TopicGraphResponse)
-def get_topic_graph(topic_id: int, db: Session = Depends(get_db)):
-    graph = topic_service.get_topic_graph(db, topic_id)
+def get_topic_graph(
+    topic_id: int,
+    source_taxonomy: SourceTaxonomy | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    if source_taxonomy is None:
+        source_taxonomy = locale_to_source_taxonomy(user.language)
+    graph = topic_service.get_topic_graph(db, topic_id, source_taxonomy=source_taxonomy)
     if not graph:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
     return graph
 
 
 @router.get("/clusters", response_model=list[ClusterResponse])
-def list_clusters(subject: str | None = None, db: Session = Depends(get_db)):
-    return topic_service.list_clusters(db, subject=subject)
+def list_clusters(
+    subject: str | None = None,
+    source_taxonomy: SourceTaxonomy | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    if source_taxonomy is None:
+        source_taxonomy = locale_to_source_taxonomy(user.language)
+    return topic_service.list_clusters(
+        db, subject=subject, source_taxonomy=source_taxonomy
+    )
 
 
 @router.get("/subjects", response_model=list[SubjectSummary])
-def list_subjects(db: Session = Depends(get_db)):
-    return topic_service.list_subjects(db)
+def list_subjects(
+    source_taxonomy: SourceTaxonomy | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    if source_taxonomy is None:
+        source_taxonomy = locale_to_source_taxonomy(user.language)
+    return topic_service.list_subjects(db, source_taxonomy=source_taxonomy)
 
 
 @router.post("/topics/{topic_id}/translate")

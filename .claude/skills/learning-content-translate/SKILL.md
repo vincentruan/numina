@@ -3,12 +3,15 @@ name: learning-content-translate
 description: >
   Sync os-taxonomy upstream data, translate learning content EN→ZH in parallel,
   and maintain translated JSON files in server/packages/os_taxonomy/.
+  Also manages the os-taxonomy-beijing zh-CN data source (pre-translated,
+  curriculum-aligned, no LLM translation needed).
   Covers: upstream git sync, incremental change detection, parallel translation,
   JSON file update, DB seeding, and cross-environment transfer.
   Triggers: "翻译学习", "translate learning", "sync taxonomy", "同步知识图谱",
   "batch translate", "retranslate", "翻译知识点", "incremental update",
   "增量更新", "seed translation", "learning translation", "os-taxonomy",
-  "更新taxonomy", "检测变更", "change detection", "翻译知识图谱".
+  "更新taxonomy", "检测变更", "change detection", "翻译知识图谱",
+  "beijing taxonomy", "北京知识图谱", "sync beijing".
 disable-model-invocation: true
 ---
 
@@ -16,6 +19,10 @@ disable-model-invocation: true
 
 Maintain the Chinese-localized os-taxonomy data pipeline: pull upstream English data,
 detect changes, translate in parallel, and update the translated JSON package.
+
+**Two data sources:**
+- **os-taxonomy** (en-US): English knowledge graph, LLM-translated to Chinese. Described below.
+- **os-taxonomy-beijing** (zh-CN): Pre-translated, curriculum-aligned Beijing data. No LLM translation needed — data is used directly for zh-CN users. See [§Beijing Taxonomy](#beijing-taxonomy-os-taxonomy-beijing) below.
 
 ## ⚠ 每次执行前：同步 os-taxonomy 上游
 
@@ -195,6 +202,51 @@ For translatable field tables (Topic, Cluster, Path), see [references/data-model
 ## Adding New Translatable Content
 
 → Checklist for DB + pipeline + frontend: [references/extension-guide.md](references/extension-guide.md)
+
+## Beijing Taxonomy (os-taxonomy-beijing)
+
+The Beijing data source provides pre-translated, curriculum-aligned zh-CN content.
+It replaces the LLM-translation pipeline for Chinese users — zh-CN learners see
+Beijing data; en-US learners see the translated os-taxonomy data.
+
+### Data Location
+
+```
+server/data/os-taxonomy-beijing/   ← git submodule
+  data/
+    topics.zh.json          (1,590 mt_ translated topics)
+    cn-topics.json           (2,008 mtc_ China-specific topics)
+    dependencies.zh.json     (mt_→mt_ edges)
+    cn-dependencies.json     (mtc_→mtc_ edges)
+    cn-bridge-dependencies.json (mt_→mtc_ bridge edges)
+    clusters.zh.json         (topic clusters)
+    cn-curriculum-standards.json (MOE 2022 curriculum metadata)
+```
+
+### Syncing Beijing Data
+
+```bash
+# Update the submodule
+git submodule update --remote server/data/os-taxonomy-beijing
+
+# Re-seed the database (applies dedup mapping if present)
+cd server
+uv run python scripts/seed_learning_topics.py --source beijing
+```
+
+→ Full sync workflow: [references/os-taxonomy-beijing-sync.md](references/os-taxonomy-beijing-sync.md)
+→ Sync script: [`scripts/sync-beijing-taxonomy.py`](scripts/sync-beijing-taxonomy.py)
+
+### Key Differences from os-taxonomy
+
+| Aspect | os-taxonomy (en) | os-taxonomy-beijing (zh) |
+|--------|------------------|--------------------------|
+| Translation | LLM-translated EN→ZH | Pre-translated, no LLM needed |
+| Curriculum alignment | NGSS / Common Core / UK NC | China MOE 2022 standards |
+| China-specific subjects | None | 语文, 道德与法治, 历史 |
+| Topic prefixes | `mt_` | `mt_` + `mtc_` (China-specific) |
+| Dedup | Not needed | LLM-based dedup merges `mtc_`↔`mt_` overlap |
+| Seed command | `--source os-taxonomy` (default) | `--source beijing` |
 
 ## Debugging
 

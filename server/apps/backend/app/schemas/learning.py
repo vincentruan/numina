@@ -11,6 +11,21 @@ from apps.backend.app.schemas.base import SnowflakeBase
 
 # --- Knowledge Graph (Global) ---
 
+
+class CurriculumStandard(BaseModel):
+    """A resolved curriculum standard reference.
+
+    ``key`` is the raw identifier from the source data, ``name`` the curriculum
+    document title and ``code`` the code within that document. ``code`` is
+    nullable because rows written before resolution store bare identifier
+    strings (see ``TopicResponse.normalize_curriculum_standards``).
+    """
+
+    key: str
+    name: str
+    code: str | None = None
+
+
 class TopicResponse(SnowflakeBase):
     id: int
     topic_key: str
@@ -31,14 +46,49 @@ class TopicResponse(SnowflakeBase):
     assessment_prompt_zh: str | None
     standards: list[str] = []
     ability_dimensions: list[str] | None
+    curriculum_standards: list[CurriculumStandard] | None = None
+    source_taxonomy: str = "os-taxonomy"
     deprecated: bool
+
+    @field_validator("curriculum_standards", mode="before")
+    @classmethod
+    def normalize_curriculum_standards(cls, v: object) -> object:
+        """Accept the legacy bare-identifier shape as well as resolved entries.
+
+        Rows written before backend resolution store plain identifier strings
+        (``["moe-2022-chinese:S1.RW.01"]``). Normalizing here rather than in a
+        router mapper is deliberate: ``learning_child.py`` and
+        ``learning_family.py`` return raw ORM objects under
+        ``response_model=TopicResponse`` and never pass through
+        ``_topic_to_response``, so a mapper-level fix would 500 on the child
+        home and today cards.
+        """
+        if not isinstance(v, list):
+            return v
+        return [
+            {"key": item, "name": item, "code": None} if isinstance(item, str) else item
+            for item in v
+        ]
+
+
+class TopicEdge(BaseModel):
+    """A prerequisite or dependent edge with its review status.
+
+    ``review_status`` is ``"reviewed"`` for human-reviewed edges, ``"machine"``
+    for AI-generated edges, or ``None`` for os-taxonomy edges that carry no
+    review status.
+    """
+
+    topic: TopicResponse
+    review_status: str | None = None
 
 
 class TopicGraphResponse(BaseModel):
     """Local subgraph: prerequisites + dependents of a topic."""
+
     topic: TopicResponse
-    prerequisites: list[TopicResponse]
-    dependents: list[TopicResponse]
+    prerequisites: list[TopicEdge]
+    dependents: list[TopicEdge]
 
 
 class ClusterResponse(SnowflakeBase):
@@ -58,6 +108,7 @@ class SubjectSummary(BaseModel):
 
 # --- Progress (Per-Family) ---
 
+
 class ProgressResponse(SnowflakeBase):
     id: int
     child_id: int
@@ -75,6 +126,7 @@ class ProgressResponse(SnowflakeBase):
 
 
 # --- Assignment ---
+
 
 class AssignmentCreate(BaseModel):
     child_id: int
@@ -148,6 +200,7 @@ class AssessStreamRequest(BaseModel):
 
 # --- Session ---
 
+
 class SessionCreate(BaseModel):
     topic_id: int
     assignment_id: int | None = None
@@ -170,6 +223,7 @@ class SessionResponse(SnowflakeBase):
 
 # --- Assessment Attempt ---
 
+
 class AssessmentAttemptResponse(SnowflakeBase):
     id: int
     child_id: int
@@ -184,6 +238,7 @@ class AssessmentAttemptResponse(SnowflakeBase):
 
 
 # --- Composite / Dashboard ---
+
 
 class ChildLearningOverview(SnowflakeBase):
     child_id: int
@@ -203,6 +258,7 @@ class ChildLearningOverview(SnowflakeBase):
 
 class ChildSessionLogResponse(SnowflakeBase):
     """AI session log for parent review."""
+
     session_id: int
     topic_id: int
     topic_name: str
@@ -216,6 +272,7 @@ class ChildSessionLogResponse(SnowflakeBase):
 
 class ReviewItemResponse(SnowflakeBase):
     """For parent review queue."""
+
     progress_id: int
     child_id: int
     child_name: str
@@ -231,6 +288,7 @@ class ReviewItemResponse(SnowflakeBase):
 
 class ChildProgressOverview(BaseModel):
     """Aggregated progress overview for a child."""
+
     mastered_count: int
     learning_count: int
     available_count: int
@@ -243,6 +301,7 @@ class ChildProgressOverview(BaseModel):
 
 
 # --- Learning Path ---
+
 
 class PathCreate(BaseModel):
     child_id: int
@@ -276,7 +335,11 @@ class PathCreate(BaseModel):
                 raise ValueError("Each milestone must have 'threshold' and 'bonus'")
             threshold = entry["threshold"]
             bonus = entry["bonus"]
-            if not isinstance(threshold, int) or threshold < 1 or threshold > max_threshold:
+            if (
+                not isinstance(threshold, int)
+                or threshold < 1
+                or threshold > max_threshold
+            ):
                 raise ValueError(
                     f"threshold must be integer in [1, {max_threshold}], got {threshold}"
                 )

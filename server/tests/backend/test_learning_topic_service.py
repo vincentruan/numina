@@ -112,7 +112,7 @@ def test_get_topic_graph(db: Session, sample_topics):
     graph = get_topic_graph(db, t2.id)
     assert graph is not None
     assert len(graph["prerequisites"]) == 1
-    assert graph["prerequisites"][0].topic_key == "mt_001"
+    assert graph["prerequisites"][0]["topic"].topic_key == "mt_001"
     assert len(graph["dependents"]) == 0
 
 
@@ -144,3 +144,312 @@ def test_list_subjects(db: Session, sample_topics):
 def test_list_subjects_empty(db: Session):
     subjects = list_subjects(db)
     assert subjects == []
+
+
+# ── review_status on graph edges ─────────────────────────────────────────────
+
+
+@pytest.fixture
+def review_status_topics(db: Session):
+    """Three topics: one reviewed prereq, one machine prereq, one os-taxonomy (None)."""
+    t_main = LearningTopic(
+        topic_key="mt_main",
+        topic_type="PROCEDURAL",
+        subject="mathematics",
+        domain="Fractions",
+        name="Main topic",
+        description="Has multiple prereqs",
+        age_group="mid",
+        source_taxonomy="beijing",
+        evidence_json="[]",
+        standards_json="[]",
+    )
+    t_reviewed = LearningTopic(
+        topic_key="mt_reviewed",
+        topic_type="CONCEPTUAL",
+        subject="mathematics",
+        domain="Fractions",
+        name="Reviewed prereq",
+        description="Human-reviewed",
+        age_group="mid",
+        source_taxonomy="beijing",
+        evidence_json="[]",
+        standards_json="[]",
+    )
+    t_machine = LearningTopic(
+        topic_key="mt_machine",
+        topic_type="CONCEPTUAL",
+        subject="mathematics",
+        domain="Fractions",
+        name="Machine prereq",
+        description="AI-generated",
+        age_group="mid",
+        source_taxonomy="beijing",
+        evidence_json="[]",
+        standards_json="[]",
+    )
+    t_os = LearningTopic(
+        topic_key="mt_os",
+        topic_type="CONCEPTUAL",
+        subject="mathematics",
+        domain="Fractions",
+        name="OS taxonomy prereq",
+        description="No review status",
+        age_group="mid",
+        source_taxonomy="os-taxonomy",
+        evidence_json="[]",
+        standards_json="[]",
+    )
+    db.add_all([t_main, t_reviewed, t_machine, t_os])
+    db.flush()
+
+    # Edges with different review_status values
+    db.add(
+        LearningDependency(
+            topic_id=t_main.id,
+            prerequisite_id=t_reviewed.id,
+            review_status="reviewed",
+            strength="hard",
+            reason="Must know first",
+        )
+    )
+    db.add(
+        LearningDependency(
+            topic_id=t_main.id,
+            prerequisite_id=t_machine.id,
+            review_status="machine",
+            strength="soft",
+            reason="Suggested",
+        )
+    )
+    db.add(
+        LearningDependency(
+            topic_id=t_main.id,
+            prerequisite_id=t_os.id,
+            review_status=None,  # os-taxonomy edges carry no review status
+            strength="hard",
+            reason="Foundation",
+        )
+    )
+    db.flush()
+    return t_main, t_reviewed, t_machine, t_os
+
+
+def test_graph_exposes_reviewed_edge_status(db: Session, review_status_topics):
+    """A prerequisite edge with review_status='reviewed' returns that value."""
+    t_main, t_reviewed, _, _ = review_status_topics
+    graph = get_topic_graph(db, t_main.id)
+    assert graph is not None
+
+    reviewed_edge = next(
+        e for e in graph["prerequisites"] if e["topic"].topic_key == "mt_reviewed"
+    )
+    assert reviewed_edge["review_status"] == "reviewed"
+
+
+def test_graph_exposes_machine_edge_status(db: Session, review_status_topics):
+    """A machine-generated edge returns review_status='machine'."""
+    t_main, _, t_machine, _ = review_status_topics
+    graph = get_topic_graph(db, t_main.id)
+
+    machine_edge = next(
+        e for e in graph["prerequisites"] if e["topic"].topic_key == "mt_machine"
+    )
+    assert machine_edge["review_status"] == "machine"
+
+
+def test_graph_exposes_null_review_status_for_os_taxonomy(
+    db: Session, review_status_topics
+):
+    """An os-taxonomy edge with no review_status returns None."""
+    t_main, _, _, t_os = review_status_topics
+    graph = get_topic_graph(db, t_main.id)
+
+    os_edge = next(e for e in graph["prerequisites"] if e["topic"].topic_key == "mt_os")
+    assert os_edge["review_status"] is None
+
+
+def test_graph_edge_ordering_matches_fixture(db: Session, review_status_topics):
+    """Edge ordering preserves the dependency query order."""
+    t_main, t_reviewed, t_machine, t_os = review_status_topics
+    graph = get_topic_graph(db, t_main.id)
+
+    # The order should match the insertion order in the fixture
+    edge_keys = [e["topic"].topic_key for e in graph["prerequisites"]]
+    assert edge_keys == ["mt_reviewed", "mt_machine", "mt_os"]
+
+
+def test_graph_source_taxonomy_filter_excludes_cross_source_edges(
+    db: Session, review_status_topics
+):
+    """source_taxonomy filter excludes edges from other taxonomies."""
+    t_main, _, _, _ = review_status_topics
+
+    # Filter to beijing only — should exclude the os-taxonomy edge
+    graph_bj = get_topic_graph(db, t_main.id, source_taxonomy="beijing")
+    assert graph_bj is not None
+    edge_keys = [e["topic"].topic_key for e in graph_bj["prerequisites"]]
+    assert "mt_os" not in edge_keys
+    assert "mt_reviewed" in edge_keys
+    assert "mt_machine" in edge_keys
+
+    # Filter to os-taxonomy only — should exclude beijing edges
+    graph_os = get_topic_graph(db, t_main.id, source_taxonomy="os-taxonomy")
+    assert graph_os is not None
+    edge_keys_os = [e["topic"].topic_key for e in graph_os["prerequisites"]]
+    assert edge_keys_os == ["mt_os"]
+
+
+def test_graph_ae3_mixed_review_statuses(db: Session, review_status_topics):
+    """AE3: A topic with reviewed + machine prereqs returns both with distinct statuses."""
+    t_main, _, _, _ = review_status_topics
+    graph = get_topic_graph(db, t_main.id)
+
+    assert len(graph["prerequisites"]) == 3
+
+    statuses = {
+        e["topic"].topic_key: e["review_status"] for e in graph["prerequisites"]
+    }
+    assert statuses["mt_reviewed"] == "reviewed"
+    assert statuses["mt_machine"] == "machine"
+    assert statuses["mt_os"] is None
+
+    # Verify distinct statuses
+    assert len({statuses["mt_reviewed"], statuses["mt_machine"]}) == 2
+
+
+# ── dependents branch + deterministic ordering ───────────────────────────────
+
+
+@pytest.fixture
+def dependent_topics(db: Session):
+    """A main topic with two dependents (one reviewed, one machine)."""
+    t_main = LearningTopic(
+        topic_key="mt_dep_main",
+        topic_type="PROCEDURAL",
+        subject="mathematics",
+        domain="Fractions",
+        name="Main (dep target)",
+        description="Has multiple dependents",
+        age_group="mid",
+        source_taxonomy="beijing",
+        evidence_json="[]",
+        standards_json="[]",
+    )
+    t_rev = LearningTopic(
+        topic_key="mt_dep_reviewed",
+        topic_type="CONCEPTUAL",
+        subject="mathematics",
+        domain="Fractions",
+        name="Reviewed dependent",
+        description="Human-reviewed follow-on",
+        age_group="mid",
+        source_taxonomy="beijing",
+        evidence_json="[]",
+        standards_json="[]",
+    )
+    t_mach = LearningTopic(
+        topic_key="mt_dep_machine",
+        topic_type="CONCEPTUAL",
+        subject="mathematics",
+        domain="Fractions",
+        name="Machine dependent",
+        description="AI-suggested follow-on",
+        age_group="mid",
+        source_taxonomy="beijing",
+        evidence_json="[]",
+        standards_json="[]",
+    )
+    db.add_all([t_main, t_rev, t_mach])
+    db.flush()
+    # Edges: main is the PREREQUISITE of t_rev and t_mach (so they are its dependents)
+    db.add(
+        LearningDependency(
+            topic_id=t_rev.id,
+            prerequisite_id=t_main.id,
+            review_status="reviewed",
+            strength="hard",
+            reason="Must know first",
+        )
+    )
+    db.add(
+        LearningDependency(
+            topic_id=t_mach.id,
+            prerequisite_id=t_main.id,
+            review_status="machine",
+            strength="soft",
+            reason="Suggested",
+        )
+    )
+    db.flush()
+    return t_main, t_rev, t_mach
+
+
+def test_graph_dependents_pair_with_review_status(db: Session, dependent_topics):
+    """get_topic_graph returns dependents as TopicEdge dicts with review_status."""
+    t_main, t_rev, t_mach = dependent_topics
+    graph = get_topic_graph(db, t_main.id)
+    assert graph is not None
+
+    assert len(graph["dependents"]) == 2
+    keys = [e["topic"].topic_key for e in graph["dependents"]]
+    assert "mt_dep_reviewed" in keys
+    assert "mt_dep_machine" in keys
+
+    reviewed = next(e for e in graph["dependents"] if e["topic"].topic_key == "mt_dep_reviewed")
+    machine = next(e for e in graph["dependents"] if e["topic"].topic_key == "mt_dep_machine")
+    assert reviewed["review_status"] == "reviewed"
+    assert machine["review_status"] == "machine"
+
+
+def test_graph_dependents_source_taxonomy_filter(db: Session, dependent_topics):
+    """source_taxonomy filter also excludes cross-source dependents."""
+    t_main, t_rev, t_mach = dependent_topics
+    # Flip one dependent to os-taxonomy so the filter excludes it
+    t_mach.source_taxonomy = "os-taxonomy"
+    db.flush()
+
+    graph_bj = get_topic_graph(db, t_main.id, source_taxonomy="beijing")
+    keys = [e["topic"].topic_key for e in graph_bj["dependents"]]
+    assert "mt_dep_reviewed" in keys
+    assert "mt_dep_machine" not in keys
+
+    graph_os = get_topic_graph(db, t_main.id, source_taxonomy="os-taxonomy")
+    keys_os = [e["topic"].topic_key for e in graph_os["dependents"]]
+    assert keys_os == ["mt_dep_machine"]
+
+
+def test_graph_ordering_is_deterministic_by_dependency_id(db: Session):
+    """Prereq/dependent ordering follows the dependency row id, not dict hash."""
+    t_a = LearningTopic(
+        topic_key="mt_ord_a", topic_type="CONCEPTUAL", subject="mathematics",
+        domain="D", name="A", description="", age_group="mid", source_taxonomy="beijing",
+        evidence_json="[]", standards_json="[]",
+    )
+    t_b = LearningTopic(
+        topic_key="mt_ord_b", topic_type="CONCEPTUAL", subject="mathematics",
+        domain="D", name="B", description="", age_group="mid", source_taxonomy="beijing",
+        evidence_json="[]", standards_json="[]",
+    )
+    t_c = LearningTopic(
+        topic_key="mt_ord_c", topic_type="CONCEPTUAL", subject="mathematics",
+        domain="D", name="C", description="", age_group="mid", source_taxonomy="beijing",
+        evidence_json="[]", standards_json="[]",
+    )
+    db.add_all([t_a, t_b, t_c])
+    db.flush()
+    # Insert in c, b, a order — the deterministic ordering should return a, b, c.
+    db.add(LearningDependency(topic_id=t_c.id, prerequisite_id=t_a.id, review_status="reviewed", strength="hard", reason=""))
+    db.add(LearningDependency(topic_id=t_b.id, prerequisite_id=t_a.id, review_status="machine", strength="hard", reason=""))
+    db.add(LearningDependency(topic_id=t_a.id, prerequisite_id=t_c.id, review_status="reviewed", strength="hard", reason=""))
+    db.flush()
+
+    graph = get_topic_graph(db, t_a.id)
+    # t_a has one prereq (t_c) and two dependents (t_b, t_c)
+    prereq_keys = [e["topic"].topic_key for e in graph["prerequisites"]]
+    dep_keys = [e["topic"].topic_key for e in graph["dependents"]]
+    # Deterministic: prereq ordered by dependency id (single row here).
+    assert prereq_keys == ["mt_ord_c"]
+    # Dependents: t_b edge created after t_c edge (t_c is prereq of t_a — different edge),
+    # so dep edge ids are t_b's (later) and t_c's (earlier) → t_c first, t_b second.
+    assert dep_keys == ["mt_ord_c", "mt_ord_b"]

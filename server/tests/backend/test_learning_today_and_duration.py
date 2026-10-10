@@ -43,6 +43,7 @@ def _create_topic(db: Session, topic_key: str = "dur_topic", name: str = "Dur To
         name=name,
         description="Test topic",
         age_group="mid",
+        source_taxonomy="beijing",  # matches default child language (zh-CN)
         evidence_json="[]",
         standards_json="[]",
     )

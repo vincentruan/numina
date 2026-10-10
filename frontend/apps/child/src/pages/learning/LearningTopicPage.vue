@@ -12,8 +12,20 @@
         <span v-if="topic.domain" class="breadcrumb__item breadcrumb__item--active">{{ topic.domain }}</span>
       </div>
 
-      <!-- Topic title -->
-      <h1 class="topic-title">{{ displayName }}</h1>
+      <!-- Topic title row with curriculum badge -->
+      <div class="topic-title-row">
+        <h1 class="topic-title">{{ displayName }}</h1>
+        <span
+          v-if="firstResolvedStandard"
+          class="curriculum-badge"
+          :aria-label="t('learning.curriculum.ariaLabel')"
+        >{{ t('learning.curriculum.badgeGlyph') }}</span>
+      </div>
+
+      <!-- Curriculum standard callout -->
+      <div v-if="firstResolvedStandard" class="curriculum-callout">
+        {{ firstResolvedStandard.name }} · {{ firstResolvedStandard.code }}
+      </div>
 
       <!-- Mastery progress bar -->
       <div v-if="progress" class="mastery-section">
@@ -66,20 +78,24 @@
         <h3 class="section-title">{{ t('learning.prerequisites') }}</h3>
         <div class="topic-chips">
           <van-tag
-            v-for="prereq in graphData.prerequisites"
-            :key="prereq.id"
-            :type="prereqStatusTagType(prereq)"
+            v-for="edge in graphData.prerequisites"
+            :key="edge.topic.id"
+            :type="prereqStatusTagType(edge.topic)"
             plain
             size="medium"
-            class="topic-chip"
-            @click="navigateToTopic(prereq.id)"
+            :class="['topic-chip', { 'topic-chip--machine': edge.review_status === 'machine' }]"
+            :aria-label="edge.review_status === 'machine'
+              ? t('learning.machineEdge.ariaLabel', { name: topicDisplayName(edge.topic) })
+              : undefined"
+            @click="navigateToTopic(edge.topic.id)"
           >
             <van-icon
-              :name="prereqStatusIconName(prereq.id)"
+              :name="prereqStatusIconName(edge.topic.id)"
               size="12"
-              :aria-label="t(`learning.status.${getProgressLevel(prereq.id)}`)"
+              :aria-label="t(`learning.status.${getProgressLevel(edge.topic.id)}`)"
             />
-            {{ topicDisplayName(prereq) }}
+            {{ topicDisplayName(edge.topic) }}
+            <span v-if="edge.review_status === 'machine'" class="ai-badge">{{ t('learning.machineEdge.aiBadge') }}</span>
           </van-tag>
         </div>
       </div>
@@ -88,20 +104,24 @@
         <h3 class="section-title">{{ t('learning.nextSteps') }}</h3>
         <div class="topic-chips">
           <van-tag
-            v-for="dep in graphData.dependents"
-            :key="dep.id"
-            :type="prereqStatusTagType(dep)"
+            v-for="edge in graphData.dependents"
+            :key="edge.topic.id"
+            :type="prereqStatusTagType(edge.topic)"
             plain
             size="medium"
-            class="topic-chip"
-            @click="navigateToTopic(dep.id)"
+            :class="['topic-chip', { 'topic-chip--machine': edge.review_status === 'machine' }]"
+            :aria-label="edge.review_status === 'machine'
+              ? t('learning.machineEdge.ariaLabel', { name: topicDisplayName(edge.topic) })
+              : undefined"
+            @click="navigateToTopic(edge.topic.id)"
           >
             <van-icon
-              :name="prereqStatusIconName(dep.id)"
+              :name="prereqStatusIconName(edge.topic.id)"
               size="12"
-              :aria-label="t(`learning.status.${getProgressLevel(dep.id)}`)"
+              :aria-label="t(`learning.status.${getProgressLevel(edge.topic.id)}`)"
             />
-            {{ topicDisplayName(dep) }}
+            {{ topicDisplayName(edge.topic) }}
+            <span v-if="edge.review_status === 'machine'" class="ai-badge">{{ t('learning.machineEdge.aiBadge') }}</span>
           </van-tag>
         </div>
       </div>
@@ -229,6 +249,11 @@ const displayEvidence = computed(() => {
   if (!topic.value) return []
   if (locale.value.startsWith('zh') && topic.value.evidence_zh) return topic.value.evidence_zh as string[]
   return topic.value.evidence
+})
+
+const firstResolvedStandard = computed(() => {
+  if (!topic.value?.curriculum_standards) return null
+  return topic.value.curriculum_standards.find((s) => s.code != null) ?? null
 })
 
 const difficultyDialogTitle = computed(() => {
@@ -462,13 +487,51 @@ onMounted(async () => {
   opacity: 0.5;
 }
 
+.topic-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
 .topic-title {
   font-family: Inter, sans-serif;
   font-size: 22px;
   font-weight: 700;
   color: var(--color-ink);
-  margin: 0 0 16px;
+  margin: 0;
   line-height: 1.3;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.curriculum-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(var(--color-brand-ochre-rgb), 0.18);
+  color: var(--color-brand-ochre);
+  font-family: Inter, "PingFang SC", sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.curriculum-callout {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  background: rgba(var(--color-brand-ochre-rgb), 0.12);
+  border-left: 3px solid rgba(var(--color-brand-ochre-rgb), 0.45);
+  border-radius: var(--radius-md);
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
 }
 
 /* Mastery section */
@@ -639,10 +702,39 @@ onMounted(async () => {
 .topic-chip {
   cursor: pointer;
   padding: 6px 12px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .topic-chip:active {
   opacity: 0.7;
+}
+
+.topic-chip--machine {
+  /* opacity: 1 ensures the dashed-border chip never reads as disabled (R7 intent) */
+  opacity: 1;
+}
+
+.topic-chip--machine::before {
+  /* Vant 4.10.2 draws the plain-tag border on ::before (not the element),
+     so border-style on the element itself never reaches the visible border. */
+  border-style: dashed;
+}
+
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  margin-left: 2px;
+  border-radius: 3px;
+  background: rgba(var(--color-brand-ochre-rgb), 0.18);
+  color: var(--color-brand-ochre);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.5px;
 }
 
 /* Path context bar */

@@ -32,6 +32,9 @@ from apps.backend.app.services.learning import (
     stats_service,
     zone_service,
 )
+from apps.backend.app.services.learning.topic_service import (
+    locale_to_source_taxonomy,
+)
 from apps.backend.app.services.notification.dispatcher import (
     notify_learning_submitted_for_review,
 )
@@ -64,10 +67,20 @@ def my_knowledge_map(
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
-    """Get my knowledge map with mastery levels."""
+    """Get my knowledge map with mastery levels.
+
+    Locale filter applied: progress rows for topics that no longer belong to
+    the child's source taxonomy are hidden (taxonomy switched since the
+    progress was created, or topic was deprecated).
+    """
+    taxonomy = locale_to_source_taxonomy(child.language)
     return (
         db.query(LearningProgress)
-        .filter(LearningProgress.child_id == child.id)
+        .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
+        .filter(
+            LearningProgress.child_id == child.id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
         .all()
     )
 
@@ -87,7 +100,13 @@ def today_learning(
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
-    """Today's learning summary — drives the TodayLearningCard on ChildHomePage."""
+    """Today's learning summary — drives the TodayLearningCard on ChildHomePage.
+
+    Locale filter applied: current topic, pending assignment topic, and
+    recommended topic are scoped to the child's source taxonomy
+    (zh-CN -> beijing, otherwise -> os-taxonomy).
+    """
+    taxonomy = locale_to_source_taxonomy(child.language)
     # 1. current_topic: first progress with mastery_level=="learning", ORDER BY updated_at DESC
     current_progress = (
         db.query(LearningProgress)
@@ -102,7 +121,10 @@ def today_learning(
     if current_progress:
         current_topic = (
             db.query(LearningTopic)
-            .filter(LearningTopic.id == current_progress.topic_id)
+            .filter(
+                LearningTopic.id == current_progress.topic_id,
+                LearningTopic.source_taxonomy == taxonomy,
+            )
             .first()
         )
 
@@ -120,14 +142,19 @@ def today_learning(
     if pending_assignment_orm:
         a_topic = (
             db.query(LearningTopic)
-            .filter(LearningTopic.id == pending_assignment_orm.topic_id)
+            .filter(
+                LearningTopic.id == pending_assignment_orm.topic_id,
+                LearningTopic.source_taxonomy == taxonomy,
+            )
             .first()
         )
         pending_assignment = AssignmentResponse.model_validate(pending_assignment_orm)
         pending_assignment.topic = a_topic
 
     # 3. recommended_topic: zone-aware recommendation (Growth > Comfort by centrality)
-    recommended_topic, _zone_label = zone_service.get_zone_recommended_topic(db, child.id)
+    recommended_topic, _zone_label = zone_service.get_zone_recommended_topic(
+        db, child.id, source_taxonomy=taxonomy
+    )
 
     # 4. study_minutes_today
     study_minutes = progress_service.aggregate_study_minutes(db, child.id)
@@ -185,8 +212,21 @@ def get_topic_detail(
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
-    """Get topic detail — public topic info (no per-child progress embedded)."""
-    topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
+    """Get topic detail — public topic info (no per-child progress embedded).
+
+    Locale filter applied: topic must belong to the taxonomy matching the
+    child's language (zh-CN -> beijing, otherwise -> os-taxonomy).
+    """
+    taxonomy = locale_to_source_taxonomy(child.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+            LearningTopic.deprecated == False,  # noqa: E712
+        )
+        .first()
+    )
     if not topic:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
     return topic
@@ -262,7 +302,16 @@ def submit_assignment(
         .first()
     )
     if assignment:
-        topic = db.query(LearningTopic).filter(LearningTopic.id == assignment.topic_id).first()
+        # Locale filter applied: topic lookup scoped to child's taxonomy.
+        taxonomy = locale_to_source_taxonomy(child.language)
+        topic = (
+            db.query(LearningTopic)
+            .filter(
+                LearningTopic.id == assignment.topic_id,
+                LearningTopic.source_taxonomy == taxonomy,
+            )
+            .first()
+        )
         child_name = child.display_name or child.username or ""
         topic_name = (topic.name_zh or topic.name or "") if topic else ""
         with contextlib.suppress(Exception):
@@ -375,7 +424,18 @@ async def stream_assessment(
         session.thread_id = thread_id
 
     # 2. Build agent trigger body
-    topic = db.query(LearningTopic).filter(LearningTopic.id == session.topic_id).first()
+    # Locale filter applied: session topic must belong to the child's
+    # source taxonomy; sessions referencing a deprecated/switched topic
+    # are rejected.
+    taxonomy = locale_to_source_taxonomy(child.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == session.topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
     if not topic:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
 

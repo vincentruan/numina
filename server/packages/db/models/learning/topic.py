@@ -22,10 +22,12 @@ from packages.db.session import Base, UTCDateTime
 class LearningTopic(Base):
     __tablename__ = "learning_topics"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
-    topic_key: Mapped[str] = mapped_column(
-        String(50), unique=True, nullable=False, index=True
+    __table_args__ = (
+        UniqueConstraint("topic_key", "source_taxonomy", name="uq_topic_key_source"),
     )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    topic_key: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     topic_type: Mapped[str] = mapped_column(String(20), nullable=False)
     subject: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     domain: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -45,6 +47,12 @@ class LearningTopic(Base):
     ability_dimensions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     age_group: Mapped[str] = mapped_column(String(10), nullable=False, default="mid")
     deprecated: Mapped[bool] = mapped_column(default=False, nullable=False)
+    source_taxonomy: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="os-taxonomy", index=True
+    )
+    curriculum_standards_json: Mapped[str] = mapped_column(
+        Text, nullable=True, default="[]"
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now()
     )
@@ -57,6 +65,7 @@ class LearningTopic(Base):
     evidence_zh: list | None = json_text("evidence_zh_json")
     standards: list = json_text("standards_json")
     ability_dimensions: list | None = json_text("ability_dimensions_json")
+    curriculum_standards: list | None = json_text("curriculum_standards_json")
 
 
 class LearningDependency(Base):
@@ -77,6 +86,7 @@ class LearningDependency(Base):
     )
     strength: Mapped[str] = mapped_column(String(10), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    review_status: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
 
 class LearningCluster(Base):
@@ -89,3 +99,6 @@ class LearningCluster(Base):
     age_group: Mapped[str] = mapped_column(String(10), nullable=False, default="mid")
     summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
     summary_zh: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_taxonomy: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="os-taxonomy"
+    )

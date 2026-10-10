@@ -3,23 +3,24 @@ name: numina-sim-test
 description: >
   Use when the user wants to run full-stack functional verification tests,
   audit the interface, capture screenshots, or verify deployed UI flows for
-  the Numina project. Covers 15 areas: child app, financial management, AI
+  the Numina project. Covers 16 areas: child app, financial management, AI
   capabilities, currency, regression, expanded features, security/notification,
-  AI report, adversarial security, task resilience, AI config, travel, and UI
-  quality/design system. Triggers on: "run sim test", "ui audit", "截图测试",
+  AI report, adversarial security, task resilience, AI config, travel, UI
+  quality/design system, and learning OS taxonomy. Triggers on: "run sim test", "ui audit", "截图测试",
   "仿真测试", "全栈验收", "功能验收", "ui检查", "界面审查", "check the UI",
   "test the app visually", "儿童测试", "child frontend test",
   "test AI chat/report/PDF import", "ui quality", "设计审查", "UI 质量检查",
   "dark mode test", "深色模式测试", "mobile test", "移动端测试",
   "accessibility test", "无障碍测试", "security test", "安全测试",
+  "learning test", "学习测试", "curriculum test", "课标测试",
   or any request to verify the deployed app's features.
 ---
 
 # Numina Full-Stack Functional Verification Pipeline
 
 End-to-end pipeline for browser-based full-stack functional verification. The pipeline
-covers 15 test areas (UI flows, AI capabilities, security adversarial, design system
-quality, and more). It detects the best available browser driver at startup (priority:
+covers 16 test areas (UI flows, AI capabilities, security adversarial, design system
+quality, learning OS taxonomy, and more). It detects the best available browser driver at startup (priority:
 **browser-use** → **bsk** → **Chrome DevTools MCP**) and drives the user's real browser
 through authenticated flows, screenshot capture, and test report generation.
 
@@ -33,7 +34,7 @@ through authenticated flows, screenshot capture, and test report generation.
 > environment must already contain the test accounts below (see
 > "Prerequisites").
 
-Covers **fifteen** feature areas (detailed cases split by area under
+Covers **sixteen** feature areas (detailed cases split by area under
 [`test-cases/`](./test-cases/), shared conventions in
 [`test-cases/_common.md`](./test-cases/_common.md), role matrix in
 [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md)):
@@ -52,6 +53,7 @@ Covers **fifteen** feature areas (detailed cases split by area under
 13. **AI 资产报告深度验证** — Hub 弹窗内容/z-index、报告重入步骤去重/SSE 重连/取消按钮、narrative 缓存推导 (C13.1–C13.5) ([`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md))
 14. **Travel module (家庭旅行管理)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float / 行程规划时间线 / 跨天行程 + 购买日期 (C14.1–C14.40) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md))
 15. **UI quality & design system audit** — 移动端 H5/PWA 适配 / 深色模式 / Vant4 组件规范 / 无障碍 / 安全区域 / 跨应用风格一致性 (UIQ.1–UIQ.10) ([`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md))
+16. **Learning OS taxonomy Beijing + curriculum/edge-status** — 课标徽章/callout / AI 生成边标识别 / locale 知识图谱过滤 / 深色模式可读性 (C16.1–C16.14) ([`test-cases/groups/g3-child/area16-learning-os-taxonomy.md`](./test-cases/groups/g3-child/area16-learning-os-taxonomy.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching

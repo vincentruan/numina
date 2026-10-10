@@ -16,6 +16,12 @@ export interface ChildLearningOverview {
   total_study_minutes: number
 }
 
+export interface CurriculumStandard {
+  key: string
+  name: string
+  code: string | null
+}
+
 export interface TopicResponse {
   id: string
   topic_key: string
@@ -37,6 +43,8 @@ export interface TopicResponse {
   standards: string[]
   ability_dimensions: string[] | null
   deprecated: boolean
+  source_taxonomy: string
+  curriculum_standards: CurriculumStandard[] | null
 }
 
 export interface ProgressResponse {
