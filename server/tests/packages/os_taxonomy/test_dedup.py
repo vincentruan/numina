@@ -98,10 +98,11 @@ class TestFallbackDedup:
         required_keys = {"mtc_topic_key", "mt_topic_key", "overlap_type", "action"}
         for m in mappings:
             assert required_keys <= set(m.keys())
+            # NOTE: "complementary" is reserved for future LLM mode.
+            # Fallback mode only produces equivalent/subset/none.
             assert m["overlap_type"] in (
                 "equivalent",
                 "subset",
-                "complementary",
                 "none",
             )
             assert m["action"] in ("merge", "hide_mtc", "keep_both")

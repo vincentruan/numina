@@ -473,3 +473,124 @@ class TestCurriculumStandardPersistence:
         ).first()
         assert row.curriculum_standards_json == '["moe-2022-chinese:S1.RW.01"]'
         assert row.curriculum_standards == ["moe-2022-chinese:S1.RW.01"]
+
+
+# ---------------------------------------------------------------------------
+# Bridge dependency rerouting integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestBridgeDependencyRerouting:
+    """Verify that dependency edges referencing deprecated mtc_ topics are
+    rerouted to their merged mt_ counterparts (seed_learning_topics.py:612-628).
+    """
+
+    def test_reroute_dict_from_merge_mapping(self):
+        """build_dedup_views produces a reroute dict that maps deprecated
+        mtc_ keys to their merged mt_ counterparts."""
+        mapping = [
+            {
+                "mtc_topic_key": "mtc_geo_china",
+                "mt_topic_key": "mt_geography_china",
+                "action": "merge",
+            },
+            {
+                "mtc_topic_key": "mtc_poetry_tang",
+                "mt_topic_key": "mt_poetry_tang",
+                "action": "merge",
+            },
+            {
+                "mtc_topic_key": "mtc_calligraphy",
+                "mt_topic_key": None,
+                "action": "hide_mtc",
+            },
+        ]
+        _, reroute = build_dedup_views(mapping)
+
+        # merge actions populate the reroute dict
+        assert reroute == {
+            "mtc_geo_china": "mt_geography_china",
+            "mtc_poetry_tang": "mt_poetry_tang",
+        }
+        # hide_mtc does NOT populate reroute (no merge target)
+        assert "mtc_calligraphy" not in reroute
+
+    def test_reroute_applied_to_dependency_keys(self):
+        """Simulate the rerouting logic from seed_source_dependencies:
+        both topic_key and prerequisite_key should be rerouted when they
+        reference a deprecated mtc_ topic."""
+        mapping = [
+            {
+                "mtc_topic_key": "mtc_a",
+                "mt_topic_key": "mt_a",
+                "action": "merge",
+            },
+            {
+                "mtc_topic_key": "mtc_b",
+                "mt_topic_key": "mt_b",
+                "action": "merge",
+            },
+        ]
+        _, reroute = build_dedup_views(mapping)
+
+        # Simulate a dependency: mtc_a -> mtc_b (both deprecated)
+        raw_topic_key = "mtc_a"
+        raw_prereq_key = "mtc_b"
+        rerouted_topic = reroute.get(raw_topic_key, raw_topic_key)
+        rerouted_prereq = reroute.get(raw_prereq_key, raw_prereq_key)
+
+        assert rerouted_topic == "mt_a"
+        assert rerouted_prereq == "mt_b"
+
+    def test_reroute_preserves_non_deprecated_keys(self):
+        """Dependencies between non-deprecated mt_ topics pass through unchanged."""
+        mapping = [
+            {
+                "mtc_topic_key": "mtc_x",
+                "mt_topic_key": "mt_x",
+                "action": "merge",
+            },
+        ]
+        _, reroute = build_dedup_views(mapping)
+
+        # mt_ -> mt_ dependency should not be affected
+        assert reroute.get("mt_foo", "mt_foo") == "mt_foo"
+        assert reroute.get("mt_bar", "mt_bar") == "mt_bar"
+
+    def test_reroute_mixed_bridge_edge(self):
+        """Bridge dependency mt_ -> mtc_ where mtc_ is deprecated:
+        only the prerequisite side gets rerouted."""
+        mapping = [
+            {
+                "mtc_topic_key": "mtc_prereq",
+                "mt_topic_key": "mt_prereq",
+                "action": "merge",
+            },
+        ]
+        _, reroute = build_dedup_views(mapping)
+
+        # mt_topic depends on mtc_prereq (deprecated) -> rerouted to mt_prereq
+        topic_key = "mt_topic"
+        prereq_key = "mtc_prereq"
+        rerouted_topic = reroute.get(topic_key, topic_key)
+        rerouted_prereq = reroute.get(prereq_key, prereq_key)
+
+        assert rerouted_topic == "mt_topic"  # unchanged
+        assert rerouted_prereq == "mt_prereq"  # rerouted
+
+    def test_empty_mapping_produces_empty_reroute(self):
+        """No dedup mapping means no rerouting — edges pass through unchanged."""
+        _, reroute = build_dedup_views([])
+        assert reroute == {}
+
+    def test_keep_both_produces_empty_reroute(self):
+        """keep_both actions don't populate the reroute dict."""
+        mapping = [
+            {
+                "mtc_topic_key": "mtc_unique",
+                "mt_topic_key": None,
+                "action": "keep_both",
+            },
+        ]
+        _, reroute = build_dedup_views(mapping)
+        assert reroute == {}

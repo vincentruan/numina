@@ -65,7 +65,13 @@ def _compute_age_group(age_range_start: int | None) -> str:
 
 
 def _map_subject(name: str) -> str:
-    """Map subject display name to slug via SUBJECT_MAP_ZH, fallback to lowercase."""
+    """Map subject display name to slug via SUBJECT_MAP_ZH, fallback to lowercase.
+
+    Returns an empty string when *name* is empty or whitespace-only, so
+    callers can detect and skip orphan topics with no meaningful subject.
+    """
+    if not name or not name.strip():
+        return ""
     return SUBJECT_MAP_ZH.get(name, name.lower().replace(" ", "_"))
 
 
@@ -201,12 +207,21 @@ class BeijingLoader:
         cn_data = self._read_json("cn-topics.json")
         for raw in cn_data["topics"]:
             age_start = raw.get("ageRangeStart")
+            subject = _map_subject(raw.get("subject", ""))
+            if not subject:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "cn-topic %r has empty or unrecognized subject %r; "
+                    "topic will be seeded but may be unreachable via subject queries",
+                    raw["id"],
+                    raw.get("subject", ""),
+                )
             topics.append(
                 NormalizedTopic(
                     topic_key=raw["id"],
                     source_taxonomy="beijing",
                     topic_type=raw.get("type", "concept").lower(),
-                    subject=_map_subject(raw.get("subject", "")),
+                    subject=subject,
                     domain=raw.get("domain"),
                     name=None,
                     name_zh=raw["name"],

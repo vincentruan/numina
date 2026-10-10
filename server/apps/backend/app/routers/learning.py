@@ -1,11 +1,12 @@
-"""Global learning knowledge graph endpoints (no auth required).
+"""Global learning knowledge graph endpoints.
 
 These endpoints expose the shared, read-only knowledge graph (topics, subjects,
-clusters) that is the same for all families.  No family-specific data is served
-here, so authentication is intentionally omitted — the data is equivalent to a
-public curriculum reference.  All write endpoints and any endpoint that touches
-family-scoped progress live behind ``require_adult`` / ``get_current_child_user``
-in ``learning_family.py`` and ``learning_child.py`` respectively.
+clusters) that is the same for all families.  Authentication is required so the
+backend can determine the user's locale (``user.language``) and filter topics
+by ``source_taxonomy`` — but no family-scoped data is served here.  All write
+endpoints and any endpoint that touches family-scoped progress live behind
+``require_adult`` / ``get_current_child_user`` in ``learning_family.py`` and
+``learning_child.py`` respectively.
 """
 
 import json

@@ -577,6 +577,7 @@ export default {
     },
     machineEdge: {
       ariaLabel: '{name}（AI 推荐）',
+      aiBadge: 'AI',
     },
   },
   empty: {

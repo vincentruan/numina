@@ -56,6 +56,7 @@ function baseTopic(overrides: Partial<TopicResponse> = {}): TopicResponse {
     standards: [],
     ability_dimensions: null,
     deprecated: false,
+    source_taxonomy: 'beijing',
     curriculum_standards: null,
     ...overrides,
   }

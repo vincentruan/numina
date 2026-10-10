@@ -32,6 +32,7 @@ export interface TopicResponse {
   standards: string[]
   ability_dimensions: string[] | null
   deprecated: boolean
+  source_taxonomy: string
   curriculum_standards: CurriculumStandard[] | null
 }
 

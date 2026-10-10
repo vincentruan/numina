@@ -52,15 +52,18 @@ def upgrade() -> None:
     # LearningTopic: replace unique constraint on topic_key with composite
     # (topic_key, source_taxonomy).
     #
-    # The original unique constraint name varies by dialect:
-    #   - SQLite: uses batch_alter_table which rebuilds the table
-    #   - PostgreSQL: SQLAlchemy renders unique=True as an unnamed UNIQUE clause
-    #     which PostgreSQL auto-names as "<table>_<column>_key"
-    #     (i.e. "learning_topics_topic_key_key"), NOT the SQLAlchemy convention
-    #     name "uq_learning_topics_topic_key".
-    # Drop whichever exists to keep both backends working.
+    # The original uniqueness mechanism varies by dialect:
+    #   - PostgreSQL: the original migration (7fc4e7ea69ca) created a unique
+    #     INDEX named ix_learning_topics_topic_key via create_index(unique=True).
+    #     It also auto-names inline UNIQUE clauses as "<table>_<column>_key".
+    #     Drop both the index and any constraint to cover all cases.
+    #   - SQLite: uses batch_alter_table which rebuilds the table from the
+    #     current model definition (index=True, not unique=True).
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
+        # Drop the original unique INDEX (created by create_index unique=True)
+        op.execute("DROP INDEX IF EXISTS ix_learning_topics_topic_key")
+        # Also drop any constraint variants (defense in depth)
         op.execute(
             "ALTER TABLE learning_topics "
             "DROP CONSTRAINT IF EXISTS learning_topics_topic_key_key"

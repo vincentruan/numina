@@ -230,7 +230,21 @@ def summarize(mappings: list[dict[str, Any]], subjects_analyzed: int = 0) -> Ded
 
 
 def _default_output_path() -> Path:
-    """Default output path: dedup_mapping.json in the package data directory."""
+    """Default output path: dedup_mapping.json in the Beijing data directory.
+
+    Writes to ``server/data/os-taxonomy-beijing/data/dedup_mapping.json``
+    (matching where the seed script's ``load_dedup_mapping()`` searches).
+    Falls back to the package directory if the Beijing data dir is absent.
+    """
+    # Match BeijingLoader's default data dir resolution
+    beijing_data_dir = (
+        Path(__file__).resolve().parent.parent.parent.parent
+        / "data"
+        / "os-taxonomy-beijing"
+        / "data"
+    )
+    if beijing_data_dir.is_dir():
+        return beijing_data_dir / "dedup_mapping.json"
     return _DATA_DIR / "dedup_mapping.json"
 
 

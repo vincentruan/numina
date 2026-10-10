@@ -95,7 +95,7 @@
               :aria-label="t(`learning.status.${getProgressLevel(edge.topic.id)}`)"
             />
             {{ topicDisplayName(edge.topic) }}
-            <span v-if="edge.review_status === 'machine'" class="ai-badge">AI</span>
+            <span v-if="edge.review_status === 'machine'" class="ai-badge">{{ t('learning.machineEdge.aiBadge') }}</span>
           </van-tag>
         </div>
       </div>
@@ -121,7 +121,7 @@
               :aria-label="t(`learning.status.${getProgressLevel(edge.topic.id)}`)"
             />
             {{ topicDisplayName(edge.topic) }}
-            <span v-if="edge.review_status === 'machine'" class="ai-badge">AI</span>
+            <span v-if="edge.review_status === 'machine'" class="ai-badge">{{ t('learning.machineEdge.aiBadge') }}</span>
           </van-tag>
         </div>
       </div>
