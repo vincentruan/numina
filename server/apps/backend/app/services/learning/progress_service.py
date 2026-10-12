@@ -99,7 +99,7 @@ def transition_to_mastered(
 ) -> LearningProgress:
     """Transition progress to 'mastered' state and update stability/review schedule."""
     validate_transition(progress.mastery_level, "mastered")
-    if completed_via not in ("ai_assessment", "parent_approval"):
+    if completed_via not in ("ai_assessment", "parent_approval", "practice_session"):
         raise ValueError(f"Invalid completed_via: {completed_via}")
     now = datetime.now(UTC)
     progress.mastery_level = "mastered"
