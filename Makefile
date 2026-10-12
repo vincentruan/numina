@@ -692,6 +692,10 @@ setup-os-taxonomy-data:
 	@echo "✓ os-taxonomy 数据已就绪"
 	@echo "  使用: cd server && uv run python scripts/seed_learning_topics.py"
 
+seed-questions:
+	@echo "从模板生成题目到题库..."
+	cd server && uv run python -m apps.backend.scripts.seed_questions
+
 setup: setup-data setup-env setup-db
 	@echo ""
 	@echo "========================================"
