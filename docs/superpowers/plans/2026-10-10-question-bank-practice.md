@@ -1604,10 +1604,10 @@ def select_questions(
 class MasteryEstimator(Protocol):
     """Protocol for knowledge mastery estimation.
 
-    Note: Aligned with spec Section 4.4 signature — caller passes attempts list.
+    Implementation queries attempts directly from DB — caller provides db session.
     """
 
-    def estimate(self, child_id: int, topic_id: int, attempts: list) -> float:
+    def estimate(self, db: Session, child_id: int, topic_id: int) -> float:
         """Return 0.0-1.0 mastery estimate."""
         ...
 
@@ -1615,11 +1615,17 @@ class MasteryEstimator(Protocol):
 class RuleBasedMasteryEstimator:
     """Simple mastery estimate based on recent attempt accuracy."""
 
-    def estimate(self, child_id: int, topic_id: int, attempts: list) -> float:
+    def estimate(self, db: Session, child_id: int, topic_id: int) -> float:
         """Estimate mastery as ratio of correct attempts in last 10 tries."""
-        if not attempts:
+        recent = (
+            db.query(PracticeAttempt)
+            .filter_by(child_id=child_id, topic_id=topic_id)
+            .order_by(PracticeAttempt.created_at.desc())
+            .limit(10)
+            .all()
+        )
+        if not recent:
             return 0.0
-        recent = attempts[-10:]  # Last 10 attempts (ordered by caller)
         correct = sum(1 for a in recent if a.is_correct)
         return correct / len(recent)
 ```
@@ -2591,12 +2597,12 @@ def finish_practice_session(
     user: User = Depends(get_current_user_or_child),
 ):
     """Finish a practice session and calculate final score."""
-    result = finish_session(db=db, session_id=session_id, child_id=user.id)
-
-    # Verify ownership
+    # Verify ownership BEFORE modifying session
     session = get_session(db, session_id)
     if not session or session.child_id != user.id:
         raise AppError(ErrorCode.PRACTICE_SESSION_NOT_FOUND)
+
+    result = finish_session(db=db, session_id=session_id, child_id=user.id)
 
     # TODO Phase 2: trigger progress state machine update + XP/coin rewards
     return PracticeResultResponse(
@@ -2951,3 +2957,901 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Result page shows score, XP earned, mastery change
 - All strings via i18n `t()` function
 - Snowflake IDs typed as `string` in TypeScript
+
+---
+
+## Phase 5: Weak Points API + Prerequisite Practice + Progress Page Enhancement
+
+> **Phase 5 目标**: 让儿童和家长能看到薄弱环节、查看练习历史，并在练习后获得先修知识点复习推荐。
+>
+> **进入条件**: Phase 1 (Tasks 1-16) 已完成，51 tests pass。
+>
+> **执行顺序**: 5a → 5b → 5c（严格顺序，5b 依赖 5a 的 API，5c 依赖 5a+5b 的接口）。
+
+### Phase 5 File Structure (新增/修改)
+
+```
+server/
+├── apps/backend/app/
+│   ├── routers/practice.py                    # MODIFY: 新增 3 个 GET endpoints + 1 个 recommend
+│   ├── schemas/practice.py                    # MODIFY: 新增 response schemas
+│   ├── services/learning/
+│   │   ├── practice_service.py                # MODIFY: 新增 list_sessions, get_session_detail, get_weak_topics
+│   │   └── adaptive_service.py                # MODIFY: 新增 find_weak_prerequisites, remedial select_questions
+│   └── errors/codes.py                        # MODIFY: 新增 PRACTICE_SESSION_NOT_FOUND 复用
+└── tests/backend/
+    ├── routers/test_practice_phase5.py        # CREATE: GET endpoint tests
+    └── services/
+        ├── test_practice_service_phase5.py    # CREATE: weak topics + history tests
+        └── test_adaptive_service_phase5.py    # CREATE: prerequisite weak tests
+
+frontend/apps/child/src/
+├── api/practice.ts                            # MODIFY: 新增 weak/sessions/recommend API
+├── pages/learning/
+│   ├── LearningProgressPage.vue               # MODIFY: 替换 "Coming soon" 为薄弱知识点卡片
+│   └── PracticeSessionPage.vue                # MODIFY: 练习后推荐先修复习卡片
+└── i18n/locales/zh-CN.ts, en-US.ts            # MODIFY: 新增 Phase 5 i18n keys
+```
+
+---
+
+### Task 5a: Weak Points + History API (Backend)
+
+**Goal**: 提供薄弱知识点发现、练习历史列表、练习详情查询能力。
+
+**Files:**
+- Modify: `server/apps/backend/app/schemas/practice.py`
+- Modify: `server/apps/backend/app/services/learning/practice_service.py`
+- Modify: `server/apps/backend/app/routers/practice.py`
+- Create: `server/tests/backend/routers/test_practice_phase5.py`
+- Create: `server/tests/backend/services/test_practice_service_phase5.py`
+
+**Interfaces:**
+- Consumes: `PracticeSession, PracticeAttempt, Question, LearningTopic, LearningProgress`
+- Produces: `WeakTopicResponse, SessionListResponse, SessionDetailResponse`
+
+- [ ] **Step 1: Add response schemas**
+
+```python
+# server/apps/backend/app/schemas/practice.py — 追加
+
+class WeakTopicResponse(SnowflakeBase):
+    """A topic where the child has low accuracy."""
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    total_attempts: int
+    correct_attempts: int
+    accuracy: float            # 0.0-1.0
+    last_practice_at: datetime | None
+    mastery_level: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SessionListItem(SnowflakeBase):
+    """Summary of a practice session for list view."""
+    id: int
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    session_mode: str
+    total_score: float | None
+    completed_count: int
+    total_count: int
+    started_at: datetime
+    ended_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AttemptDetail(SnowflakeBase):
+    """Single attempt with question context."""
+    id: int
+    question_id: int
+    question_stem: str
+    question_type: str
+    user_answer: dict
+    is_correct: bool
+    time_spent_seconds: int | None
+    attempt_number: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SessionDetailResponse(SnowflakeBase):
+    """Full session detail with attempts."""
+    id: int
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    session_mode: str
+    total_score: float | None
+    completed_count: int
+    total_count: int
+    started_at: datetime
+    ended_at: datetime | None
+    attempts: list[AttemptDetail]
+```
+
+- [ ] **Step 2: Write failing tests**
+
+```python
+# server/tests/backend/services/test_practice_service_phase5.py
+"""Tests for Phase 5 practice service additions."""
+import json
+import pytest
+from datetime import UTC, datetime, timedelta
+from sqlalchemy.orm import Session
+
+from packages.db.models.learning.topic import LearningTopic
+from packages.db.models.learning.question import Question
+from packages.db.models.learning.practice import PracticeSession, PracticeAttempt
+from packages.db.models.learning.progress import LearningProgress
+from apps.backend.app.services.learning.practice_service import (
+    get_weak_topics,
+    list_sessions,
+    get_session_detail,
+)
+
+
+@pytest.fixture
+def topic(db: Session):
+    t = LearningTopic(
+        topic_key="mt_test_add", topic_type="concept", subject="mathematics",
+        domain="arithmetic", name="Addition", name_zh="加法",
+        age_group="mid", evidence_json="[]", standards_json="[]",
+    )
+    db.add(t)
+    db.flush()
+    return t
+
+
+@pytest.fixture
+def question(db: Session, topic):
+    q = Question(
+        topic_id=topic.id, question_type="calculation",
+        stem="1 + 1 = ?", answer_json='{"answer": 2}',
+        difficulty=1, bloom_level="apply", source="template",
+        review_status="approved", age_group="mid",
+    )
+    db.add(q)
+    db.flush()
+    return q
+
+
+@pytest.fixture
+def session_with_attempts(db: Session, topic, question):
+    """Create a completed session with mixed correct/wrong attempts."""
+    s = PracticeSession(
+        child_id=1, topic_id=topic.id, session_mode="practice",
+        question_ids_json=json.dumps([question.id]),
+        source="adaptive",
+        started_at=datetime.now(UTC) - timedelta(hours=1),
+        ended_at=datetime.now(UTC),
+        total_score=0.5, completed_count=2,
+    )
+    db.add(s)
+    db.flush()
+    # Correct attempt
+    db.add(PracticeAttempt(
+        session_id=s.id, question_id=question.id, child_id=1,
+        topic_id=topic.id, user_answer_json='{"answer": 2}',
+        is_correct=True, time_spent_seconds=10, attempt_number=1,
+    ))
+    db.flush()
+    return s
+
+
+def test_get_weak_topics_returns_accuracy(db: Session, topic, session_with_attempts):
+    weak = get_weak_topics(db, child_id=1, limit=10)
+    assert len(weak) >= 1
+    w = weak[0]
+    assert w["topic_id"] == topic.id
+    assert w["total_attempts"] == 1
+    assert w["accuracy"] == 1.0  # 1 correct out of 1
+
+
+def test_list_sessions_returns_ordered(db: Session, topic, session_with_attempts):
+    sessions = list_sessions(db, child_id=1, limit=10)
+    assert len(sessions) >= 1
+    assert sessions[0].id == session_with_attempts.id
+
+
+def test_get_session_detail_includes_attempts(db: Session, topic, session_with_attempts):
+    detail = get_session_detail(db, session_id=session_with_attempts.id, child_id=1)
+    assert detail is not None
+    assert len(detail["attempts"]) == 1
+    assert detail["attempts"][0]["is_correct"] is True
+```
+
+- [ ] **Step 3: Implement service functions**
+
+```python
+# server/apps/backend/app/services/learning/practice_service.py — 追加
+
+from sqlalchemy import func as sa_func
+
+from packages.db.models.learning.topic import LearningTopic
+from packages.db.models.learning.progress import LearningProgress
+
+
+def get_weak_topics(db: Session, child_id: int, limit: int = 10, min_attempts: int = 3) -> list[dict]:
+    """Find topics where the child has low accuracy (sorted by accuracy ASC).
+
+    Only includes topics with >= min_attempts total attempts.
+    """
+    rows = (
+        db.query(
+            PracticeAttempt.topic_id,
+            sa_func.count(PracticeAttempt.id).label("total"),
+            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)).label("correct"),
+            sa_func.max(PracticeAttempt.created_at).label("last_at"),
+        )
+        .filter(PracticeAttempt.child_id == child_id)
+        .group_by(PracticeAttempt.topic_id)
+        .having(sa_func.count(PracticeAttempt.id) >= min_attempts)
+        .all()
+    )
+
+    results = []
+    for row in rows:
+        topic = db.query(LearningTopic).filter_by(id=row.topic_id).first()
+        progress = (
+            db.query(LearningProgress)
+            .filter_by(child_id=child_id, topic_id=row.topic_id)
+            .first()
+        )
+        accuracy = row.correct / row.total if row.total > 0 else 0.0
+        results.append({
+            "topic_id": row.topic_id,
+            "topic_name": topic.name if topic else "",
+            "topic_name_zh": topic.name_zh if topic else None,
+            "total_attempts": row.total,
+            "correct_attempts": row.correct,
+            "accuracy": accuracy,
+            "last_practice_at": row.last_at,
+            "mastery_level": progress.mastery_level if progress else "available",
+        })
+
+    results.sort(key=lambda r: r["accuracy"])
+    return results[:limit]
+
+
+def list_sessions(db: Session, child_id: int, limit: int = 20, offset: int = 0) -> list[PracticeSession]:
+    """List practice sessions for a child, most recent first."""
+    return (
+        db.query(PracticeSession)
+        .filter(PracticeSession.child_id == child_id)
+        .order_by(PracticeSession.started_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+
+def get_session_detail(db: Session, session_id: int, child_id: int) -> dict | None:
+    """Get full session detail with attempts and question context."""
+    session = (
+        db.query(PracticeSession)
+        .filter_by(id=session_id, child_id=child_id)
+        .first()
+    )
+    if not session:
+        return None
+
+    topic = db.query(LearningTopic).filter_by(id=session.topic_id).first()
+    attempts = (
+        db.query(PracticeAttempt)
+        .filter_by(session_id=session_id)
+        .order_by(PracticeAttempt.created_at.asc())
+        .all()
+    )
+
+    attempt_details = []
+    for a in attempts:
+        q = db.query(Question).filter_by(id=a.question_id).first()
+        attempt_details.append({
+            "id": a.id,
+            "question_id": a.question_id,
+            "question_stem": q.stem if q else "",
+            "question_type": q.question_type if q else "",
+            "user_answer": a.user_answer,
+            "is_correct": a.is_correct,
+            "time_spent_seconds": a.time_spent_seconds,
+            "attempt_number": a.attempt_number,
+            "created_at": a.created_at,
+        })
+
+    return {
+        "id": session.id,
+        "topic_id": session.topic_id,
+        "topic_name": topic.name if topic else "",
+        "topic_name_zh": topic.name_zh if topic else None,
+        "session_mode": session.session_mode,
+        "total_score": session.total_score,
+        "completed_count": session.completed_count,
+        "total_count": len(session.question_ids),
+        "started_at": session.started_at,
+        "ended_at": session.ended_at,
+        "attempts": attempt_details,
+    }
+```
+
+- [ ] **Step 4: Add GET endpoints to router**
+
+```python
+# server/apps/backend/app/routers/practice.py — 追加
+
+from apps.backend.app.schemas.practice import (
+    WeakTopicResponse,
+    SessionListItem,
+    SessionDetailResponse,
+)
+from apps.backend.app.services.learning.practice_service import (
+    get_weak_topics,
+    list_sessions,
+    get_session_detail,
+)
+
+
+@router.get("/weak-topics", response_model=list[WeakTopicResponse])
+def get_weak_topics_endpoint(
+    limit: int = 10,
+    min_attempts: int = 3,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    """Get topics where the child has low accuracy, sorted weakest first."""
+    return get_weak_topics(db, child_id=user.id, limit=limit, min_attempts=min_attempts)
+
+
+@router.get("/sessions", response_model=list[SessionListItem])
+def list_practice_sessions(
+    limit: int = 20,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    """List practice sessions for the current child."""
+    sessions = list_sessions(db, child_id=user.id, limit=limit, offset=offset)
+    results = []
+    for s in sessions:
+        topic = db.query(LearningTopic).filter_by(id=s.topic_id).first()
+        question_ids = json.loads(s.question_ids_json) if s.question_ids_json else []
+        results.append(SessionListItem(
+            id=s.id,
+            topic_id=s.topic_id,
+            topic_name=topic.name if topic else "",
+            topic_name_zh=topic.name_zh if topic else None,
+            session_mode=s.session_mode,
+            total_score=s.total_score,
+            completed_count=s.completed_count,
+            total_count=len(question_ids),
+            started_at=s.started_at,
+            ended_at=s.ended_at,
+        ))
+    return results
+
+
+@router.get("/sessions/{session_id}", response_model=SessionDetailResponse)
+def get_practice_session_detail(
+    session_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    """Get full practice session detail with question-level attempts."""
+    detail = get_session_detail(db, session_id=session_id, child_id=user.id)
+    if not detail:
+        raise AppError(ErrorCode.PRACTICE_SESSION_NOT_FOUND)
+    return SessionDetailResponse(**detail)
+```
+
+- [ ] **Step 5: Run tests and commit**
+
+```bash
+cd server && uv run pytest tests/backend/services/test_practice_service_phase5.py tests/backend/routers/test_practice_phase5.py -v
+```
+
+```bash
+git add -A
+git commit -m "feat(learning): add weak points, session history, and detail APIs (Phase 5a)
+
+- GET /practice/weak-topics: topics sorted by accuracy ASC
+- GET /practice/sessions: paginated session history
+- GET /practice/sessions/{id}: full detail with per-question attempts
+- get_weak_topics: GROUP BY topic_id HAVING min_attempts
+- list_sessions: ordered by started_at DESC
+- get_session_detail: session + attempts + question context
+- Full test coverage
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+### Task 5b: Prerequisite Weak Practice (Backend)
+
+**Goal**: 当儿童在某知识点表现不佳时，检测先修知识点是否也存在薄弱环节，推荐针对性复习。
+
+**Files:**
+- Modify: `server/apps/backend/app/services/learning/adaptive_service.py`
+- Modify: `server/apps/backend/app/services/learning/practice_service.py`
+- Modify: `server/apps/backend/app/routers/practice.py`
+- Create: `server/tests/backend/services/test_adaptive_service_phase5.py`
+
+**Interfaces:**
+- Consumes: `LearningDependency, LearningProgress, PracticeAttempt, get_unmet_prerequisites()`
+- Produces: `PrerequisiteRecommendation, remedial select_questions mode`
+
+- [ ] **Step 1: Write failing tests**
+
+```python
+# server/tests/backend/services/test_adaptive_service_phase5.py
+"""Tests for Phase 5b: prerequisite weak practice."""
+import pytest
+from sqlalchemy.orm import Session
+
+from packages.db.models.learning.topic import LearningTopic
+from packages.db.models.learning.progress import LearningProgress
+from packages.db.models.learning.dependency import LearningDependency
+from apps.backend.app.services.learning.adaptive_service import (
+    find_weak_prerequisites,
+)
+
+
+@pytest.fixture
+def parent_topic(db: Session):
+    t = LearningTopic(
+        topic_key="mt_parent", topic_type="concept", subject="mathematics",
+        domain="arithmetic", name="Multi-digit Addition", name_zh="多位数加法",
+        age_group="mid", evidence_json="[]", standards_json="[]",
+    )
+    db.add(t)
+    db.flush()
+    return t
+
+
+@pytest.fixture
+def prereq_topic(db: Session):
+    t = LearningTopic(
+        topic_key="mt_prereq", topic_type="concept", subject="mathematics",
+        domain="arithmetic", name="Single-digit Addition", name_zh="一位数加法",
+        age_group="mid", evidence_json="[]", standards_json="[]",
+    )
+    db.add(t)
+    db.flush()
+    return t
+
+
+@pytest.fixture
+def dependency(db: Session, parent_topic, prereq_topic):
+    d = LearningDependency(
+        topic_id=parent_topic.id,
+        prerequisite_id=prereq_topic.id,
+        dependency_type="hard",
+    )
+    db.add(d)
+    db.flush()
+    return d
+
+
+def test_find_weak_prerequisites_returns_unmet(db, parent_topic, prereq_topic, dependency):
+    # Child has progress on prereq but not mastered
+    progress = LearningProgress(
+        child_id=1, topic_id=prereq_topic.id,
+        mastery_level="learning",
+    )
+    db.add(progress)
+    db.flush()
+
+    weak_prereqs = find_weak_prerequisites(db, topic_id=parent_topic.id, child_id=1)
+    assert len(weak_prereqs) == 1
+    assert weak_prereqs[0]["topic_id"] == prereq_topic.id
+```
+
+- [ ] **Step 2: Implement find_weak_prerequisites**
+
+```python
+# server/apps/backend/app/services/learning/adaptive_service.py — 追加
+
+from packages.db.models.learning.progress import LearningProgress
+from packages.db.models.learning.topic import LearningTopic
+from apps.backend.app.services.learning.progress_service import get_unmet_prerequisites
+
+
+def find_weak_prerequisites(
+    db: Session, topic_id: int, child_id: int
+) -> list[dict]:
+    """Find prerequisite topics that are weak (not mastered) for the child.
+
+    Uses existing get_unmet_prerequisites() to find unmet prereqs,
+    then enriches with accuracy data from PracticeAttempt.
+    """
+    unmet = get_unmet_prerequisites(db, topic_id=topic_id, child_id=child_id)
+
+    results = []
+    for prereq in unmet:
+        # Get accuracy for this prereq
+        attempts = (
+            db.query(PracticeAttempt)
+            .filter_by(child_id=child_id, topic_id=prereq.id)
+            .all()
+        )
+        total = len(attempts)
+        correct = sum(1 for a in attempts if a.is_correct) if attempts else 0
+        accuracy = correct / total if total > 0 else 0.0
+
+        progress = (
+            db.query(LearningProgress)
+            .filter_by(child_id=child_id, topic_id=prereq.id)
+            .first()
+        )
+
+        results.append({
+            "topic_id": prereq.id,
+            "topic_name": prereq.name,
+            "topic_name_zh": prereq.name_zh,
+            "mastery_level": progress.mastery_level if progress else "available",
+            "total_attempts": total,
+            "accuracy": accuracy,
+        })
+
+    # Sort by accuracy ASC (weakest first)
+    results.sort(key=lambda r: r["accuracy"])
+    return results
+```
+
+- [ ] **Step 3: Add recommend endpoint**
+
+```python
+# server/apps/backend/app/routers/practice.py — 追加
+
+from apps.backend.app.services.learning.adaptive_service import find_weak_prerequisites
+
+
+class RecommendResponse(SnowflakeBase):
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    mastery_level: str
+    accuracy: float
+    is_prerequisite: bool
+    prerequisite_of_topic_id: int | None
+
+
+@router.get("/recommend", response_model=list[RecommendResponse])
+def get_practice_recommendations(
+    topic_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    """Recommend topics for practice — weak prerequisites or weak topics.
+
+    If topic_id is provided, checks for weak prerequisites of that topic.
+    Otherwise, returns the child's overall weakest topics.
+    """
+    if topic_id:
+        # Check weak prerequisites
+        weak_prereqs = find_weak_prerequisites(db, topic_id=topic_id, child_id=user.id)
+        return [
+            RecommendResponse(
+                topic_id=r["topic_id"],
+                topic_name=r["topic_name"],
+                topic_name_zh=r["topic_name_zh"],
+                mastery_level=r["mastery_level"],
+                accuracy=r["accuracy"],
+                is_prerequisite=True,
+                prerequisite_of_topic_id=topic_id,
+            )
+            for r in weak_prereqs
+        ]
+    else:
+        # Overall weak topics
+        from apps.backend.app.services.learning.practice_service import get_weak_topics
+        weak = get_weak_topics(db, child_id=user.id, limit=5, min_attempts=1)
+        return [
+            RecommendResponse(
+                topic_id=r["topic_id"],
+                topic_name=r["topic_name"],
+                topic_name_zh=r["topic_name_zh"],
+                mastery_level=r["mastery_level"],
+                accuracy=r["accuracy"],
+                is_prerequisite=False,
+                prerequisite_of_topic_id=None,
+            )
+            for r in weak
+        ]
+```
+
+- [ ] **Step 4: Run tests and commit**
+
+```bash
+cd server && uv run pytest tests/backend/services/test_adaptive_service_phase5.py -v
+```
+
+```bash
+git add -A
+git commit -m "feat(learning): add prerequisite weak practice and recommend API (Phase 5b)
+
+- find_weak_prerequisites: unmet prereqs enriched with accuracy data
+- GET /practice/recommend: weak prereqs or overall weak topics
+- Reuses existing get_unmet_prerequisites() from progress_service
+- Full test coverage
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+### Task 5c: Frontend Progress Page Enhancement
+
+**Goal**: 将 LearningProgressPage 的 "Coming soon" 占位符替换为薄弱知识点卡片、练习历史列表、以及练习后先修复习推荐。
+
+**Files:**
+- Modify: `frontend/apps/child/src/api/practice.ts`
+- Modify: `frontend/apps/child/src/pages/learning/LearningProgressPage.vue`
+- Modify: `frontend/apps/child/src/pages/learning/PracticeSessionPage.vue`
+- Modify: `frontend/apps/child/src/i18n/locales/zh-CN.ts`, `en-US.ts`
+
+- [ ] **Step 1: Add API functions to practice.ts**
+
+```typescript
+// frontend/apps/child/src/api/practice.ts — 追加
+
+export interface WeakTopicResponse {
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string | null
+  total_attempts: number
+  correct_attempts: number
+  accuracy: number
+  last_practice_at: string | null
+  mastery_level: string
+}
+
+export interface SessionListItem {
+  id: string
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string | null
+  session_mode: string
+  total_score: number | null
+  completed_count: number
+  total_count: number
+  started_at: string
+  ended_at: string | null
+}
+
+export interface SessionDetailResponse {
+  id: string
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string | null
+  session_mode: string
+  total_score: number | null
+  completed_count: number
+  total_count: number
+  started_at: string
+  ended_at: string | null
+  attempts: Array<{
+    id: string
+    question_id: string
+    question_stem: string
+    question_type: string
+    user_answer: Record<string, unknown>
+    is_correct: boolean
+    time_spent_seconds: number | null
+    attempt_number: number
+    created_at: string
+  }>
+}
+
+export interface RecommendResponse {
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string | null
+  mastery_level: string
+  accuracy: number
+  is_prerequisite: boolean
+  prerequisite_of_topic_id: string | null
+}
+
+export async function getWeakTopics(
+  limit = 10,
+  minAttempts = 3,
+): Promise<WeakTopicResponse[]> {
+  const resp = await http.get('/api/v1/practice/weak-topics', {
+    params: { limit, min_attempts: minAttempts },
+  })
+  return resp.data.data
+}
+
+export async function listPracticeSessions(
+  limit = 20,
+  offset = 0,
+): Promise<SessionListItem[]> {
+  const resp = await http.get('/api/v1/practice/sessions', {
+    params: { limit, offset },
+  })
+  return resp.data.data
+}
+
+export async function getPracticeSessionDetail(
+  sessionId: string,
+): Promise<SessionDetailResponse> {
+  const resp = await http.get(`/api/v1/practice/sessions/${sessionId}`)
+  return resp.data.data
+}
+
+export async function getPracticeRecommendations(
+  topicId?: string,
+): Promise<RecommendResponse[]> {
+  const params = topicId ? { topic_id: topicId } : {}
+  const resp = await http.get('/api/v1/practice/recommend', { params })
+  return resp.data.data
+}
+```
+
+- [ ] **Step 2: Replace "Coming soon" in LearningProgressPage.vue**
+
+在 `LearningProgressPage.vue` 的 `<!-- Coming soon placeholder -->` 处替换为：
+
+```vue
+<!-- Weak topics card -->
+<div v-if="weakTopics.length > 0" class="weak-topics-section">
+  <h2 class="section-title">{{ t('learning.progress.weakTopics') }}</h2>
+  <div class="weak-topics-list">
+    <div
+      v-for="topic in weakTopics"
+      :key="topic.topic_id"
+      class="weak-topic-card"
+      @click="navigateToPractice(topic.topic_id)"
+    >
+      <div class="weak-topic-card__header">
+        <span class="weak-topic-card__name">{{ getTopicDisplayName(topic) }}</span>
+        <span class="weak-topic-card__accuracy">{{ Math.round(topic.accuracy * 100) }}%</span>
+      </div>
+      <div class="weak-topic-card__footer">
+        <span class="weak-topic-card__attempts">
+          {{ topic.total_attempts }} {{ t('learning.progress.attempts') }}
+        </span>
+        <span :class="['weak-topic-card__mastery', `mastery--${topic.mastery_level}`]">
+          {{ t(`learning.status.${topic.mastery_level}`) }}
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent practice sessions -->
+<div v-if="recentSessions.length > 0" class="sessions-section">
+  <h2 class="section-title">{{ t('learning.progress.recentSessions') }}</h2>
+  <div class="sessions-list">
+    <div
+      v-for="session in recentSessions"
+      :key="session.id"
+      class="session-card"
+      @click="navigateToSessionDetail(session.id)"
+    >
+      <div class="session-card__header">
+        <span class="session-card__topic">{{ getTopicDisplayName(session) }}</span>
+        <span v-if="session.total_score != null" class="session-card__score">
+          {{ Math.round(session.total_score * 100) }}%
+        </span>
+      </div>
+      <div class="session-card__meta">
+        <span>{{ session.completed_count }}/{{ session.total_count }}</span>
+        <span>{{ formatDate(session.started_at) }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+Script 部分新增：
+
+```typescript
+import { getWeakTopics, listPracticeSessions, type WeakTopicResponse, type SessionListItem } from '@/api/practice'
+
+const weakTopics = ref<WeakTopicResponse[]>([])
+const recentSessions = ref<SessionListItem[]>([])
+
+onMounted(async () => {
+  const [weak, sessions] = await Promise.all([
+    getWeakTopics(10, 1),  // min_attempts=1 以显示更多
+    listPracticeSessions(10),
+  ])
+  weakTopics.value = weak
+  recentSessions.value = sessions
+})
+
+function getTopicDisplayName(item: { topic_name: string; topic_name_zh: string | null }) {
+  return locale.value === 'en-US' ? item.topic_name : (item.topic_name_zh || item.topic_name)
+}
+
+function navigateToPractice(topicId: string) {
+  router.push(`/learning/practice/${topicId}`)
+}
+
+function navigateToSessionDetail(sessionId: string) {
+  // Phase 5c: navigate to session detail page or modal
+  router.push(`/learning/practice/sessions/${sessionId}`)
+}
+```
+
+- [ ] **Step 3: Add post-practice recommendation in PracticeSessionPage.vue**
+
+在练习结果汇总后添加先修复习推荐卡片：
+
+```vue
+<!-- Post-practice prerequisite recommendation -->
+<div v-if="score < 0.8 && recommendations.length > 0" class="prereq-recommend">
+  <h3>{{ t('learning.practice.prereqReview') }}</h3>
+  <div
+    v-for="rec in recommendations"
+    :key="rec.topic_id"
+    class="prereq-card"
+    @click="startPrereqPractice(rec.topic_id)"
+  >
+    <span class="prereq-card__name">{{ getRecDisplayName(rec) }}</span>
+    <span class="prereq-card__reason">
+      {{ t('learning.practice.prereqReason', { accuracy: Math.round(rec.accuracy * 100) }) }}
+    </span>
+  </div>
+</div>
+```
+
+- [ ] **Step 4: Add i18n keys**
+
+```typescript
+// zh-CN.ts 追加
+'learning.progress.weakTopics': '薄弱知识点',
+'learning.progress.attempts': '次练习',
+'learning.progress.recentSessions': '最近练习',
+'learning.practice.prereqReview': '建议复习先修知识点',
+'learning.practice.prereqReason': '正确率 {accuracy}%，建议先巩固',
+
+// en-US.ts 追加
+'learning.progress.weakTopics': 'Weak Topics',
+'learning.progress.attempts': 'attempts',
+'learning.progress.recentSessions': 'Recent Sessions',
+'learning.practice.prereqReview': 'Recommended Prerequisite Review',
+'learning.practice.prereqReason': '{accuracy}% accuracy — review first',
+```
+
+- [ ] **Step 5: Verify and commit**
+
+```bash
+cd frontend && pnpm -r typecheck && pnpm -r lint
+```
+
+```bash
+git add -A
+git commit -m "feat(learning): enhance progress page with weak topics and session history (Phase 5c)
+
+- Replace 'Coming soon' placeholder with weak topics card
+- Add recent practice sessions list
+- Add post-practice prerequisite review recommendation
+- API functions: getWeakTopics, listPracticeSessions, getPracticeRecommendations
+- Full i18n coverage (zh-CN + en-US)
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+### Phase 5 Verification
+
+**Acceptance criteria:**
+- [ ] 儿童在 LearningProgressPage 能看到薄弱知识点卡片（按正确率升序）
+- [ ] 儿童能查看练习历史列表（时间倒序）
+- [ ] 练习得分 < 80% 时，结果页显示先修知识点复习推荐
+- [ ] `GET /practice/weak-topics` 返回正确的准确率统计
+- [ ] `GET /practice/sessions` 返回分页会话列表
+- [ ] `GET /practice/sessions/{id}` 返回完整作答详情
+- [ ] `GET /practice/recommend?topic_id=X` 返回薄弱先修知识点
+- [ ] 所有新增 API 测试通过
+- [ ] 前端 typecheck + lint 通过
+- [ ] i18n 全覆盖，无硬编码中文
