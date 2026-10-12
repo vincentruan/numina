@@ -638,21 +638,21 @@ def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
     # ── 学习数据 ────────────────────────────────────────────────────────────
     # 需要预先运行: cd server && uv run python scripts/seed_learning_topics.py --source beijing
     topic_keys = [
-        "bj_mt_S1_NUM_N_01",    # 一年级数学：数的认识
-        "bj_mt_S1_NUM_N_02",    # 一年级数学：数的运算
-        "bj_mt_S1_G_N_01",      # 一年级数学：图形与几何
-        "bj_cn_S1_R_N_01",      # 一年级语文：识字与写字
-        "bj_cn_S1_RD_N_01",     # 一年级语文：阅读
-        "bj_en_S1_L_N_01",      # 一年级英语：听说
+        "mt_OvyoRo47K-",     # 数学：加法（将两组物品合并）
+        "mt_zuKAX6lcYR",     # 数学：减法理解为"拿走"
+        "mt_KJeEeTutJI",     # 数学：二维图形
+        "mtc_007",           # 语文：识字方法·看图识字
+        "mtc_012",           # 语文：朗读·正确流利有感情
+        "mt_mB7DVai-Uf",     # 英语：倾听与回应
     ]
     topic_ids = LearningFactory.find_topic_ids_by_keys(db, topic_keys)
 
     if topic_ids:
         # 大宝: 数学 progressed (mastered + in-progress), 语文 started
-        dabao_math_01 = topic_ids.get("bj_mt_S1_NUM_N_01")
-        dabao_math_02 = topic_ids.get("bj_mt_S1_NUM_N_02")
-        dabao_math_03 = topic_ids.get("bj_mt_S1_G_N_01")
-        dabao_cn_01 = topic_ids.get("bj_cn_S1_R_N_01")
+        dabao_math_01 = topic_ids.get("mt_OvyoRo47K-")
+        dabao_math_02 = topic_ids.get("mt_zuKAX6lcYR")
+        dabao_math_03 = topic_ids.get("mt_KJeEeTutJI")
+        dabao_cn_01 = topic_ids.get("mtc_007")
 
         # Progress: 1 mastered, 2 learning
         if dabao_math_01:
