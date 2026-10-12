@@ -75,6 +75,21 @@
         @again="onAgain"
         @back="goBack"
       />
+      <!-- Post-practice prerequisite recommendation -->
+      <div v-if="sessionResult && sessionResult.total_score < 0.8 && recommendations.length > 0" class="prereq-recommend">
+        <h3 class="prereq-recommend__title">{{ t('learning.practice.prereqReview') }}</h3>
+        <div
+          v-for="rec in recommendations"
+          :key="rec.topic_id"
+          class="prereq-card"
+          @click="startPrereqPractice(rec.topic_id)"
+        >
+          <span class="prereq-card__name">{{ getRecDisplayName(rec) }}</span>
+          <span class="prereq-card__reason">
+            {{ t('learning.practice.prereqReason', { accuracy: Math.round(rec.accuracy * 100) }) }}
+          </span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -87,11 +102,13 @@ import {
   batchGetQuestions,
   createPracticeSession,
   finishPracticeSession,
+  getPracticeRecommendations,
   submitPracticeAnswer,
   type PracticeAttemptResponse,
   type PracticeResultResponse,
   type PracticeSessionResponse,
   type QuestionResponse,
+  type RecommendResponse,
 } from '@/api/practice'
 import PracticeQuestionCard from '@/components/learning/PracticeQuestionCard.vue'
 import PracticeAnswerInput from '@/components/learning/PracticeAnswerInput.vue'
@@ -117,6 +134,7 @@ const currentIndex = ref(0)
 const lastAttempt = ref<PracticeAttemptResponse | null>(null)
 const feedbackShown = ref(false)
 const sessionResult = ref<PracticeResultResponse | null>(null)
+const recommendations = ref<RecommendResponse[]>([])
 
 const answerInputRef = ref<InstanceType<typeof PracticeAnswerInput> | null>(null)
 
@@ -197,6 +215,14 @@ async function doFinish() {
   try {
     sessionResult.value = await finishPracticeSession(session.value.id)
     phase.value = 'result'
+    // Load prerequisite recommendations if score is low
+    if (sessionResult.value.total_score < 0.8) {
+      try {
+        recommendations.value = await getPracticeRecommendations(topicId.value)
+      } catch {
+        // Non-critical — silently ignore
+      }
+    }
   } catch {
     error.value = t('practice.errors.finishFailed')
   }
@@ -210,10 +236,19 @@ function onAgain() {
   lastAttempt.value = null
   feedbackShown.value = false
   sessionResult.value = null
+  recommendations.value = []
 }
 
 function goBack() {
   router.back()
+}
+
+function getRecDisplayName(rec: { topic_name: string; topic_name_zh: string | null }): string {
+  return locale.value === 'en-US' ? rec.topic_name : (rec.topic_name_zh || rec.topic_name)
+}
+
+function startPrereqPractice(prereqTopicId: string) {
+  router.push(`/learning/practice/${prereqTopicId}`)
 }
 
 function load() {
@@ -329,5 +364,49 @@ function load() {
   border: 1px solid var(--color-border, #e5e0d5);
   background: var(--color-surface-card);
   color: var(--color-ink);
+}
+
+/* Post-practice prerequisite recommendation */
+.prereq-recommend {
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-lg);
+}
+
+.prereq-recommend__title {
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 12px;
+}
+
+.prereq-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.prereq-card:last-child {
+  margin-bottom: 0;
+}
+
+.prereq-card__name {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.prereq-card__reason {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  color: var(--color-body);
 }
 </style>

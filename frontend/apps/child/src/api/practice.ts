@@ -116,3 +116,98 @@ export async function finishPracticeSession(
   const resp = await http.post(`/api/v1/practice/sessions/${sessionId}/finish`)
   return resp.data.data
 }
+
+// --- Phase 5: Weak points + history + recommend ---
+
+export interface WeakTopicResponse {
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string | null
+  total_attempts: number
+  correct_attempts: number
+  accuracy: number
+  last_practice_at: string | null
+  mastery_level: string
+}
+
+export interface SessionListItem {
+  id: string
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string | null
+  session_mode: string
+  total_score: number | null
+  completed_count: number
+  total_count: number
+  started_at: string
+  ended_at: string | null
+}
+
+export interface SessionDetailResponse {
+  id: string
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string | null
+  session_mode: string
+  total_score: number | null
+  completed_count: number
+  total_count: number
+  started_at: string
+  ended_at: string | null
+  attempts: Array<{
+    id: string
+    question_id: string
+    question_stem: string
+    question_type: string
+    user_answer: Record<string, unknown>
+    is_correct: boolean
+    time_spent_seconds: number | null
+    attempt_number: number
+    created_at: string
+  }>
+}
+
+export interface RecommendResponse {
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string | null
+  mastery_level: string
+  accuracy: number
+  is_prerequisite: boolean
+  prerequisite_of_topic_id: string | null
+}
+
+export async function getWeakTopics(
+  limit = 10,
+  minAttempts = 3,
+): Promise<WeakTopicResponse[]> {
+  const resp = await http.get('/api/v1/practice/weak-topics', {
+    params: { limit, min_attempts: minAttempts },
+  })
+  return resp.data.data
+}
+
+export async function listPracticeSessions(
+  limit = 20,
+  offset = 0,
+): Promise<SessionListItem[]> {
+  const resp = await http.get('/api/v1/practice/sessions', {
+    params: { limit, offset },
+  })
+  return resp.data.data
+}
+
+export async function getPracticeSessionDetail(
+  sessionId: string,
+): Promise<SessionDetailResponse> {
+  const resp = await http.get(`/api/v1/practice/sessions/${sessionId}`)
+  return resp.data.data
+}
+
+export async function getPracticeRecommendations(
+  topicId?: string,
+): Promise<RecommendResponse[]> {
+  const params = topicId ? { topic_id: topicId } : {}
+  const resp = await http.get('/api/v1/practice/recommend', { params })
+  return resp.data.data
+}

@@ -466,6 +466,7 @@ export default {
     status: {
       available: 'Available',
       learning: 'Learning',
+      assessing: 'Assessing',
       mastered: 'Mastered',
       locked: 'Locked',
       review: 'Review',
@@ -507,6 +508,9 @@ export default {
       comingSoon: 'More learning stats coming soon...',
       totalMinutes: 'min (total)',
       todayMinutes: 'min (today)',
+      weakTopics: 'Weak Topics',
+      attempts: 'attempts',
+      recentSessions: 'Recent Sessions',
     },
     todayCard: {
       assignment: 'Submit Assignment',
@@ -608,6 +612,8 @@ export default {
       startFailed: 'Could not start practice, please try again',
       finishFailed: 'Could not finish practice',
     },
+    prereqReview: 'Recommended Prerequisite Review',
+    prereqReason: '{accuracy}% accuracy — review first',
   },
   empty: {
     noTasks: 'No tasks today, enjoy your rest 🌟',

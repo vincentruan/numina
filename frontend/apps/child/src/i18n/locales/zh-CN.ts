@@ -467,6 +467,7 @@ export default {
     status: {
       available: '可学习',
       learning: '学习中',
+      assessing: '评估中',
       mastered: '已掌握',
       locked: '未解锁',
       review: '待复习',
@@ -508,6 +509,9 @@ export default {
       comingSoon: '更多学习统计即将推出...',
       totalMinutes: '分钟（总计）',
       todayMinutes: '分钟（今日）',
+      weakTopics: '薄弱知识点',
+      attempts: '次练习',
+      recentSessions: '最近练习',
     },
     todayCard: {
       assignment: '提交作业',
@@ -609,6 +613,8 @@ export default {
       startFailed: '开始练习失败了，再试一次吧',
       finishFailed: '结束练习失败了',
     },
+    prereqReview: '建议复习先修知识点',
+    prereqReason: '正确率 {accuracy}%，建议先巩固',
   },
   empty: {
     noTasks: '今天没有任务，好好休息吧 🌟',
