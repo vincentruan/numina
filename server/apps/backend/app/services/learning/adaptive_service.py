@@ -101,3 +101,52 @@ class RuleBasedMasteryEstimator:
             return 0.0
         correct = sum(1 for a in attempts if a.is_correct)
         return correct / len(attempts)
+
+
+# --- Phase 5b: Prerequisite weak practice ---
+
+
+def find_weak_prerequisites(
+    db: Session, topic_id: int, child_id: int
+) -> list[dict]:
+    """Find prerequisite topics that are weak (not mastered) for the child.
+
+    Uses existing get_unmet_prerequisites() to find unmet prereqs,
+    then enriches with accuracy data from PracticeAttempt.
+    """
+    from apps.backend.app.services.learning.progress_service import (
+        get_unmet_prerequisites,
+    )
+    from packages.db.models.learning.progress import LearningProgress
+
+    unmet = get_unmet_prerequisites(db, topic_id=topic_id, child_id=child_id)
+
+    results = []
+    for prereq in unmet:
+        attempts = (
+            db.query(PracticeAttempt)
+            .filter_by(child_id=child_id, topic_id=prereq.id)
+            .all()
+        )
+        total = len(attempts)
+        correct = sum(1 for a in attempts if a.is_correct) if attempts else 0
+        accuracy = correct / total if total > 0 else 0.0
+
+        progress = (
+            db.query(LearningProgress)
+            .filter_by(child_id=child_id, topic_id=prereq.id)
+            .first()
+        )
+
+        results.append({
+            "topic_id": prereq.id,
+            "topic_name": prereq.name,
+            "topic_name_zh": prereq.name_zh,
+            "mastery_level": progress.mastery_level if progress else "available",
+            "total_attempts": total,
+            "accuracy": accuracy,
+        })
+
+    # Sort by accuracy ASC (weakest first)
+    results.sort(key=lambda r: r["accuracy"])
+    return results

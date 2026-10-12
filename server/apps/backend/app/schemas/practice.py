@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
@@ -96,3 +96,82 @@ class PracticeResultResponse(SnowflakeBase):
     coins_earned: int
     mastery_changed: bool
     new_mastery_level: str | None
+
+
+# --- Phase 5: Weak points + history response schemas ---
+
+
+class WeakTopicResponse(SnowflakeBase):
+    """A topic where the child has low accuracy."""
+
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    total_attempts: int
+    correct_attempts: int
+    accuracy: float
+    last_practice_at: datetime | None
+    mastery_level: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SessionListItem(SnowflakeBase):
+    """Summary of a practice session for list view."""
+
+    id: int
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    session_mode: str
+    total_score: float | None
+    completed_count: int
+    total_count: int
+    started_at: datetime
+    ended_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AttemptDetail(SnowflakeBase):
+    """Single attempt with question context."""
+
+    id: int
+    question_id: int
+    question_stem: str
+    question_type: str
+    user_answer: dict
+    is_correct: bool
+    time_spent_seconds: int | None
+    attempt_number: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SessionDetailResponse(SnowflakeBase):
+    """Full session detail with attempts."""
+
+    id: int
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    session_mode: str
+    total_score: float | None
+    completed_count: int
+    total_count: int
+    started_at: datetime
+    ended_at: datetime | None
+    attempts: list[AttemptDetail]
+
+
+class RecommendResponse(SnowflakeBase):
+    """Recommended topic for practice."""
+
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    mastery_level: str
+    accuracy: float
+    is_prerequisite: bool
+    prerequisite_of_topic_id: int | None

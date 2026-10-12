@@ -1,5 +1,7 @@
 """Practice system API endpoints."""
 
+import json
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -13,14 +15,21 @@ from apps.backend.app.schemas.practice import (
     PracticeResultResponse,
     PracticeSessionResponse,
     QuestionPublicResponse,
+    RecommendResponse,
     SessionCreateRequest,
+    SessionDetailResponse,
+    SessionListItem,
     SubmitAnswerRequest,
+    WeakTopicResponse,
 )
 from apps.backend.app.services.learning.adaptive_service import select_questions
 from apps.backend.app.services.learning.practice_service import (
     create_session,
     finish_session,
     get_session,
+    get_session_detail,
+    get_weak_topics,
+    list_sessions,
     submit_answer,
 )
 from apps.backend.app.services.learning.progress_service import (
@@ -182,3 +191,105 @@ def finish_practice_session(
         mastery_changed=mastery_changed,
         new_mastery_level=new_mastery_level,
     )
+
+
+# --- Phase 5: Weak points + history + recommend ---
+
+
+@router.get("/weak-topics", response_model=list[WeakTopicResponse])
+def get_weak_topics_endpoint(
+    limit: int = 10,
+    min_attempts: int = 3,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    """Get topics where the child has low accuracy, sorted weakest first."""
+    return get_weak_topics(db, child_id=user.id, limit=limit, min_attempts=min_attempts)
+
+
+@router.get("/sessions", response_model=list[SessionListItem])
+def list_practice_sessions(
+    limit: int = 20,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    """List practice sessions for the current child."""
+    sessions = list_sessions(db, child_id=user.id, limit=limit, offset=offset)
+    results = []
+    for s in sessions:
+        topic = db.query(LearningTopic).filter_by(id=s.topic_id).first()
+        question_ids = json.loads(s.question_ids_json) if s.question_ids_json else []
+        results.append(SessionListItem(
+            id=s.id,
+            topic_id=s.topic_id,
+            topic_name=topic.name if topic else "",
+            topic_name_zh=topic.name_zh if topic else None,
+            session_mode=s.session_mode,
+            total_score=s.total_score,
+            completed_count=s.completed_count,
+            total_count=len(question_ids),
+            started_at=s.started_at,
+            ended_at=s.ended_at,
+        ))
+    return results
+
+
+@router.get("/sessions/{session_id}", response_model=SessionDetailResponse)
+def get_practice_session_detail(
+    session_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    """Get full practice session detail with question-level attempts."""
+    detail = get_session_detail(db, session_id=session_id, child_id=user.id)
+    if not detail:
+        raise AppError(ErrorCode.PRACTICE_SESSION_NOT_FOUND)
+    return SessionDetailResponse(**detail)
+
+
+@router.get("/recommend", response_model=list[RecommendResponse])
+def get_practice_recommendations(
+    topic_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    """Recommend topics for practice — weak prerequisites or weak topics.
+
+    If topic_id is provided, checks for weak prerequisites of that topic.
+    Otherwise, returns the child's overall weakest topics.
+    """
+    if topic_id:
+        from apps.backend.app.services.learning.adaptive_service import (
+            find_weak_prerequisites,
+        )
+
+        weak_prereqs = find_weak_prerequisites(
+            db, topic_id=topic_id, child_id=user.id
+        )
+        return [
+            RecommendResponse(
+                topic_id=r["topic_id"],
+                topic_name=r["topic_name"],
+                topic_name_zh=r["topic_name_zh"],
+                mastery_level=r["mastery_level"],
+                accuracy=r["accuracy"],
+                is_prerequisite=True,
+                prerequisite_of_topic_id=topic_id,
+            )
+            for r in weak_prereqs
+        ]
+    else:
+        weak = get_weak_topics(db, child_id=user.id, limit=5, min_attempts=1)
+        return [
+            RecommendResponse(
+                topic_id=r["topic_id"],
+                topic_name=r["topic_name"],
+                topic_name_zh=r["topic_name_zh"],
+                mastery_level=r["mastery_level"],
+                accuracy=r["accuracy"],
+                is_prerequisite=False,
+                prerequisite_of_topic_id=None,
+            )
+            for r in weak
+        ]
