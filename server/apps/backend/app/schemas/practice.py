@@ -175,3 +175,22 @@ class RecommendResponse(SnowflakeBase):
     accuracy: float
     is_prerequisite: bool
     prerequisite_of_topic_id: int | None
+
+
+class SubjectCoverageItem(BaseModel):
+    """Per-subject coverage breakdown."""
+
+    subject: str
+    total: int
+    covered: int
+    rate: float
+
+
+class CoverageResponse(BaseModel):
+    """Knowledge point coverage statistics."""
+
+    total_topics: int
+    covered_topics: int
+    coverage_rate: float
+    by_subject: list[SubjectCoverageItem]
+    by_difficulty: dict[str, int]

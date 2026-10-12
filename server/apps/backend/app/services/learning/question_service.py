@@ -143,3 +143,97 @@ def list_questions(
 def get_question(db: Session, question_id: int) -> Question | None:
     """Get a question by ID."""
     return db.query(Question).filter_by(id=question_id).first()
+
+
+def check_duplicate(db: Session, stem: str, answer: dict) -> bool:
+    """Check if a question with same stem+answer already exists.
+
+    Uses content hashing (SHA256 of stem + sorted answer JSON).
+    """
+    import hashlib
+
+    raw = f"{stem}||{json.dumps(answer, sort_keys=True, ensure_ascii=False)}"
+    content_hash = hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+    for q in db.query(Question.stem, Question.answer_json).all():
+        existing_raw = f"{q.stem}||{q.answer_json}"
+        existing_hash = hashlib.sha256(existing_raw.encode()).hexdigest()[:32]
+        if existing_hash == content_hash:
+            return True
+    return False
+
+
+def get_coverage_stats(db: Session) -> dict:
+    """Compute knowledge point coverage statistics.
+
+    Returns a dict with:
+    - total_topics: total number of learning topics
+    - covered_topics: number of topics with at least one approved question
+    - coverage_rate: covered / total
+    - by_subject: per-subject breakdown
+    - by_difficulty: count per difficulty level
+    """
+    total_topics = db.query(LearningTopic).filter_by(deprecated=False).count()
+
+    # Topics with at least one approved question
+    covered_topic_ids = (
+        db.query(Question.topic_id)
+        .filter(Question.review_status == "approved")
+        .distinct()
+        .subquery()
+    )
+    covered_topics = db.query(covered_topic_ids).count()
+    coverage_rate = covered_topics / total_topics if total_topics > 0 else 0.0
+
+    # By subject
+    from sqlalchemy import func as sa_func
+
+    subject_stats = (
+        db.query(
+            LearningTopic.subject,
+            sa_func.count(LearningTopic.id).label("total"),
+        )
+        .filter(LearningTopic.deprecated == False)  # noqa: E712
+        .group_by(LearningTopic.subject)
+        .all()
+    )
+
+    # Count covered per subject
+    covered_by_subject_query = (
+        db.query(LearningTopic.subject, sa_func.count(sa_func.distinct(Question.topic_id)).label("covered"))
+        .join(Question, Question.topic_id == LearningTopic.id)
+        .filter(
+            LearningTopic.deprecated == False,  # noqa: E712
+            Question.review_status == "approved",
+        )
+        .group_by(LearningTopic.subject)
+        .all()
+    )
+    covered_by_subject = {row[0]: row[1] for row in covered_by_subject_query}
+
+    by_subject = [
+        {
+            "subject": row.subject,
+            "total": row.total,
+            "covered": covered_by_subject.get(row.subject, 0),
+            "rate": covered_by_subject.get(row.subject, 0) / row.total if row.total > 0 else 0.0,
+        }
+        for row in subject_stats
+    ]
+
+    # By difficulty
+    difficulty_stats = (
+        db.query(Question.difficulty, sa_func.count(Question.id))
+        .filter(Question.review_status == "approved")
+        .group_by(Question.difficulty)
+        .all()
+    )
+    by_difficulty = {str(row[0]): row[1] for row in difficulty_stats}
+
+    return {
+        "total_topics": total_topics,
+        "covered_topics": covered_topics,
+        "coverage_rate": round(coverage_rate, 4),
+        "by_subject": by_subject,
+        "by_difficulty": by_difficulty,
+    }

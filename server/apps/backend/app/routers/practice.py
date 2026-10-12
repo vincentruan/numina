@@ -11,6 +11,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.practice import (
+    CoverageResponse,
     PracticeAttemptResponse,
     PracticeResultResponse,
     PracticeSessionResponse,
@@ -36,6 +37,7 @@ from apps.backend.app.services.learning.progress_service import (
     get_or_create_progress,
 )
 from apps.backend.app.services.learning.question_service import (
+    get_coverage_stats,
     get_question,
     list_questions,
 )
@@ -293,3 +295,12 @@ def get_practice_recommendations(
             )
             for r in weak
         ]
+
+
+@router.get("/coverage", response_model=CoverageResponse)
+def get_practice_coverage(
+    db: Session = Depends(get_db),
+):
+    """Get knowledge point coverage statistics for the question bank."""
+    stats = get_coverage_stats(db)
+    return CoverageResponse(**stats)
