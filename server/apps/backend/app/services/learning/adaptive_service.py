@@ -4,11 +4,13 @@ import random
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+from sqlalchemy import Integer as sa_Integer
 from sqlalchemy.orm import Session
 
 from packages.core.logging import get_logger
 from packages.db.models.learning.practice import PracticeAttempt
 from packages.db.models.learning.question import Question
+from packages.db.models.learning.topic import LearningTopic
 
 logger = get_logger(__name__)
 
@@ -261,4 +263,114 @@ def find_weak_prerequisites(
 
     # Sort by accuracy ASC (weakest first)
     results.sort(key=lambda r: r["accuracy"])
+    return results
+
+
+# --- Phase 6d: Explainable learning progress ---
+
+
+def get_ability_dimensions(db: Session, child_id: int) -> list[dict]:
+    """Get per-domain accuracy breakdown for a child.
+
+    Returns list of {domain, total_attempts, correct_count, accuracy}.
+    """
+    from sqlalchemy import func as sa_func
+
+    rows = (
+        db.query(
+            LearningTopic.domain,
+            sa_func.count(PracticeAttempt.id).label("total"),
+            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)).label("correct"),
+        )
+        .join(PracticeAttempt, PracticeAttempt.topic_id == LearningTopic.id)
+        .filter(PracticeAttempt.child_id == child_id)
+        .group_by(LearningTopic.domain)
+        .all()
+    )
+
+    return [
+        {
+            "domain": row.domain,
+            "total_attempts": row.total,
+            "correct_count": row.correct or 0,
+            "accuracy": (row.correct or 0) / row.total if row.total > 0 else 0.0,
+        }
+        for row in rows
+    ]
+
+
+def get_progress_trend(
+    db: Session, child_id: int, topic_id: int
+) -> list[dict]:
+    """Get chronological attempt history for a child+topic.
+
+    Returns list of {attempt_number, is_correct, created_at}.
+    """
+    attempts = (
+        db.query(PracticeAttempt)
+        .filter_by(child_id=child_id, topic_id=topic_id)
+        .order_by(PracticeAttempt.created_at.asc())
+        .all()
+    )
+
+    return [
+        {
+            "attempt_number": a.attempt_number,
+            "is_correct": a.is_correct,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in attempts
+    ]
+
+
+def get_recommend_with_reason(
+    db: Session, child_id: int, limit: int = 5
+) -> list[dict]:
+    """Get practice recommendations with explainable reasons.
+
+    Each recommendation includes a 'reason' field explaining why
+    this topic is recommended.
+    """
+    from sqlalchemy import func as sa_func
+
+    # Get topics with attempts, ordered by accuracy (weakest first)
+    rows = (
+        db.query(
+            LearningTopic.id,
+            LearningTopic.name,
+            LearningTopic.name_zh,
+            LearningTopic.domain,
+            sa_func.count(PracticeAttempt.id).label("total"),
+            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)).label("correct"),
+        )
+        .join(PracticeAttempt, PracticeAttempt.topic_id == LearningTopic.id)
+        .filter(PracticeAttempt.child_id == child_id)
+        .group_by(LearningTopic.id)
+        .order_by(sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)) / sa_func.count(PracticeAttempt.id))
+        .limit(limit)
+        .all()
+    )
+
+    results = []
+    for row in rows:
+        accuracy = (row.correct or 0) / row.total if row.total > 0 else 0.0
+
+        # Generate explainable reason
+        if accuracy < 0.5:
+            reason = f"该知识点正确率仅 {accuracy:.0%}，建议加强练习"
+        elif accuracy < 0.7:
+            reason = f"该知识点正确率 {accuracy:.0%}，仍有提升空间"
+        else:
+            reason = f"该知识点掌握良好（{accuracy:.0%}），建议巩固"
+
+        results.append({
+            "topic_id": row.id,
+            "topic_name": row.name,
+            "topic_name_zh": row.name_zh,
+            "domain": row.domain,
+            "total_attempts": row.total,
+            "accuracy": accuracy,
+            "reason": reason,
+        })
+
     return results
