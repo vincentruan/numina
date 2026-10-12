@@ -2967,6 +2967,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 > **进入条件**: Phase 1 (Tasks 1-16) 已完成，51 tests pass。
 >
 > **执行顺序**: 5a → 5b → 5c（严格顺序，5b 依赖 5a 的 API，5c 依赖 5a+5b 的接口）。
+>
+> **状态**: ✅ **完成** (2026-10-12) — 19 new tests, 40 total practice tests pass, 4 GET endpoints, 6 new schemas, frontend weak topics + session history + prereq recommendation.
 
 ### Phase 5 File Structure (新增/修改)
 
@@ -3010,7 +3012,7 @@ frontend/apps/child/src/
 - Consumes: `PracticeSession, PracticeAttempt, Question, LearningTopic, LearningProgress`
 - Produces: `WeakTopicResponse, SessionListResponse, SessionDetailResponse`
 
-- [ ] **Step 1: Add response schemas**
+- [x] **Step 1: Add response schemas**
 
 ```python
 # server/apps/backend/app/schemas/practice.py — 追加
@@ -3075,7 +3077,7 @@ class SessionDetailResponse(SnowflakeBase):
     attempts: list[AttemptDetail]
 ```
 
-- [ ] **Step 2: Write failing tests**
+- [x] **Step 2: Write failing tests**
 
 ```python
 # server/tests/backend/services/test_practice_service_phase5.py
@@ -3166,7 +3168,7 @@ def test_get_session_detail_includes_attempts(db: Session, topic, session_with_a
     assert detail["attempts"][0]["is_correct"] is True
 ```
 
-- [ ] **Step 3: Implement service functions**
+- [x] **Step 3: Implement service functions**
 
 ```python
 # server/apps/backend/app/services/learning/practice_service.py — 追加
@@ -3279,7 +3281,7 @@ def get_session_detail(db: Session, session_id: int, child_id: int) -> dict | No
     }
 ```
 
-- [ ] **Step 4: Add GET endpoints to router**
+- [x] **Step 4: Add GET endpoints to router**
 
 ```python
 # server/apps/backend/app/routers/practice.py — 追加
@@ -3348,7 +3350,7 @@ def get_practice_session_detail(
     return SessionDetailResponse(**detail)
 ```
 
-- [ ] **Step 5: Run tests and commit**
+- [x] **Step 5: Run tests and commit**
 
 ```bash
 cd server && uv run pytest tests/backend/services/test_practice_service_phase5.py tests/backend/routers/test_practice_phase5.py -v
@@ -3385,7 +3387,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: `LearningDependency, LearningProgress, PracticeAttempt, get_unmet_prerequisites()`
 - Produces: `PrerequisiteRecommendation, remedial select_questions mode`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # server/tests/backend/services/test_adaptive_service_phase5.py
@@ -3451,7 +3453,7 @@ def test_find_weak_prerequisites_returns_unmet(db, parent_topic, prereq_topic, d
     assert weak_prereqs[0]["topic_id"] == prereq_topic.id
 ```
 
-- [ ] **Step 2: Implement find_weak_prerequisites**
+- [x] **Step 2: Implement find_weak_prerequisites**
 
 ```python
 # server/apps/backend/app/services/learning/adaptive_service.py — 追加
@@ -3503,7 +3505,7 @@ def find_weak_prerequisites(
     return results
 ```
 
-- [ ] **Step 3: Add recommend endpoint**
+- [x] **Step 3: Add recommend endpoint**
 
 ```python
 # server/apps/backend/app/routers/practice.py — 追加
@@ -3565,7 +3567,7 @@ def get_practice_recommendations(
         ]
 ```
 
-- [ ] **Step 4: Run tests and commit**
+- [x] **Step 4: Run tests and commit**
 
 ```bash
 cd server && uv run pytest tests/backend/services/test_adaptive_service_phase5.py -v
@@ -3595,7 +3597,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Modify: `frontend/apps/child/src/pages/learning/PracticeSessionPage.vue`
 - Modify: `frontend/apps/child/src/i18n/locales/zh-CN.ts`, `en-US.ts`
 
-- [ ] **Step 1: Add API functions to practice.ts**
+- [x] **Step 1: Add API functions to practice.ts**
 
 ```typescript
 // frontend/apps/child/src/api/practice.ts — 追加
@@ -3694,7 +3696,7 @@ export async function getPracticeRecommendations(
 }
 ```
 
-- [ ] **Step 2: Replace "Coming soon" in LearningProgressPage.vue**
+- [x] **Step 2: Replace "Coming soon" in LearningProgressPage.vue**
 
 在 `LearningProgressPage.vue` 的 `<!-- Coming soon placeholder -->` 处替换为：
 
@@ -3781,7 +3783,7 @@ function navigateToSessionDetail(sessionId: string) {
 }
 ```
 
-- [ ] **Step 3: Add post-practice recommendation in PracticeSessionPage.vue**
+- [x] **Step 3: Add post-practice recommendation in PracticeSessionPage.vue**
 
 在练习结果汇总后添加先修复习推荐卡片：
 
@@ -3803,7 +3805,7 @@ function navigateToSessionDetail(sessionId: string) {
 </div>
 ```
 
-- [ ] **Step 4: Add i18n keys**
+- [x] **Step 4: Add i18n keys**
 
 ```typescript
 // zh-CN.ts 追加
@@ -3821,7 +3823,7 @@ function navigateToSessionDetail(sessionId: string) {
 'learning.practice.prereqReason': '{accuracy}% accuracy — review first',
 ```
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 cd frontend && pnpm -r typecheck && pnpm -r lint
@@ -3845,13 +3847,13 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ### Phase 5 Verification
 
 **Acceptance criteria:**
-- [ ] 儿童在 LearningProgressPage 能看到薄弱知识点卡片（按正确率升序）
-- [ ] 儿童能查看练习历史列表（时间倒序）
-- [ ] 练习得分 < 80% 时，结果页显示先修知识点复习推荐
-- [ ] `GET /practice/weak-topics` 返回正确的准确率统计
-- [ ] `GET /practice/sessions` 返回分页会话列表
-- [ ] `GET /practice/sessions/{id}` 返回完整作答详情
-- [ ] `GET /practice/recommend?topic_id=X` 返回薄弱先修知识点
-- [ ] 所有新增 API 测试通过
-- [ ] 前端 typecheck + lint 通过
-- [ ] i18n 全覆盖，无硬编码中文
+- [x] 儿童在 LearningProgressPage 能看到薄弱知识点卡片（按正确率升序）
+- [x] 儿童能查看练习历史列表（时间倒序）
+- [x] 练习得分 < 80% 时，结果页显示先修知识点复习推荐
+- [x] `GET /practice/weak-topics` 返回正确的准确率统计
+- [x] `GET /practice/sessions` 返回分页会话列表
+- [x] `GET /practice/sessions/{id}` 返回完整作答详情
+- [x] `GET /practice/recommend?topic_id=X` 返回薄弱先修知识点
+- [x] 所有新增 API 测试通过
+- [x] 前端 typecheck + lint 通过
+- [x] i18n 全覆盖，无硬编码中文
