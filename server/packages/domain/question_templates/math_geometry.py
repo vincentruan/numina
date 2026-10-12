@@ -21,7 +21,7 @@ def _gen_rectangle_perimeter(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="mt_geometry_perimeter",
+        topic_key="mt_hRZyKvz1KN",
         age_group="mid",
         parameters={"length": length, "width": width},
     )
@@ -42,7 +42,7 @@ def _gen_rectangle_area(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="mt_geometry_area",
+        topic_key="mt_hRZyKvz1KN",
         age_group="mid",
         parameters={"length": length, "width": width},
     )
@@ -64,7 +64,7 @@ def _gen_triangle_area(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="mt_geometry_triangle",
+        topic_key="mt_h0CVtqI2xo",
         age_group="mid",
         parameters={"base": base, "height": height},
     )
@@ -84,7 +84,7 @@ def _gen_supplementary_angle(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=1,
         bloom_level="apply",
-        topic_key="mt_geometry_angles",
+        topic_key="mt_8OAGVdeTJ_",
         age_group="mid",
         parameters={"angle": angle},
     )
@@ -104,7 +104,7 @@ def _gen_circle_circumference(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=3,
         bloom_level="apply",
-        topic_key="mt_geometry_circle",
+        topic_key="mt_xq3YHZ2zeR",
         age_group="high",
         parameters={"radius": radius},
     )

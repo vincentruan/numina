@@ -46,10 +46,12 @@ Numina is a fully self-hosted family asset visualization and management system. 
 - **AI Learning OS** — Children's learning system built on the os-taxonomy knowledge graph, covering 1,590 topics across 8 subjects (math, science, English, etc.)
   - **Knowledge Map** — Subject and domain-organized knowledge graph with prerequisite/dependent relationships
   - **AI Tutoring** — DeerFlow-powered streaming AI tutor with Chinese-first dialogue, interactive assessment, and safety-filtered output
-  - **Mastery Tracking** — 7-level state machine (locked → available → learning → assessing → mastered → review) with spaced repetition
+  - **Adaptive Practice** — Programmatic question bank (math: 4 categories, 24 templates — arithmetic, fractions, geometry, word problems) with intelligent question selection that auto-adjusts difficulty based on mastery
+  - **Mastery Tracking** — 7-level state machine (locked → available → learning → assessing → mastered → review) + Bayesian Knowledge Tracing (BKT) + enhanced SM-2 spaced repetition (adaptive ease_factor)
   - **Learning Paths & Growth** — Parent-assigned tasks auto-sorted by prerequisites, XP/level system (🌱 Seed → 🌟 Master) with milestone rewards; children can also explore freely with age-difficulty warnings
+  - **Explainable Progress** — Multi-dimensional mastery analysis, learning trends, weak-point diagnosis, and progress attribution
   - **Bilingual Support** — English originals + on-demand LLM Chinese translation with technical terms preserved
-  - **Parent Dashboard** — Children's learning overview, task assignment, review queue, study duration tracking
+  - **Parent Dashboard** — Children's learning overview, task assignment, review queue, study duration tracking, topic coverage stats
   - **Failure Streak Alerts** — Auto-notifies parents after 3 consecutive failed assessments on the same topic
 - **Family Manifesto** — Signable family financial goals and commitments with calligraphy signatures, family crest, and signing ceremony visualization
 

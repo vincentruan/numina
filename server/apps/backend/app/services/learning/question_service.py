@@ -149,16 +149,19 @@ def check_duplicate(db: Session, stem: str, answer: dict) -> bool:
     """Check if a question with same stem+answer already exists.
 
     Uses content hashing (SHA256 of stem + sorted answer JSON).
+    Canonicalizes both sides with sort_keys=True for consistent comparison.
     """
     import hashlib
 
-    raw = f"{stem}||{json.dumps(answer, sort_keys=True, ensure_ascii=False)}"
-    content_hash = hashlib.sha256(raw.encode()).hexdigest()[:32]
+    def _hash(s: str, a: dict) -> str:
+        raw = f"{s}||{json.dumps(a, sort_keys=True, ensure_ascii=False)}"
+        return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+    target_hash = _hash(stem, answer)
 
     for q in db.query(Question.stem, Question.answer_json).all():
-        existing_raw = f"{q.stem}||{q.answer_json}"
-        existing_hash = hashlib.sha256(existing_raw.encode()).hexdigest()[:32]
-        if existing_hash == content_hash:
+        existing_answer = json.loads(q.answer_json)
+        if _hash(q.stem, existing_answer) == target_hash:
             return True
     return False
 

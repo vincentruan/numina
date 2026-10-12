@@ -91,6 +91,91 @@ def transition_to_learning(db: Session, progress: LearningProgress) -> LearningP
     return progress
 
 
+def compute_sm2_quality(score: float) -> int:
+    """Convert practice session score (0.0-1.0) to SM-2 quality (0-5).
+
+    0-2: blackout/failure, 3: correct with difficulty, 4-5: easy/perfect.
+    """
+    if score >= 0.95:
+        return 5
+    elif score >= 0.8:
+        return 4
+    elif score >= 0.6:
+        return 3
+    elif score >= 0.3:
+        return 2
+    else:
+        return 1
+
+
+def compute_next_review(progress: LearningProgress) -> datetime:
+    """Compute next review date using enhanced SM-2 with ease_factor.
+
+    Classic SM-2 interval recursion:
+    - I₁ = 1 day, I₂ = 6 days
+    - Iₙ = Iₙ₋₁ × ease_factor (when quality >= 3)
+    - quality < 3: reset interval to 1, don't update ease_factor
+    - ease_factor' = ease_factor + 0.1 - (5-q)(0.08 + (5-q)*0.02)
+    - ease_factor minimum: 1.3
+    """
+    ease = progress.ease_factor or 2.5
+    stability = progress.stability or 1.0
+
+    # Use stability as a proxy for current interval number
+    # stability tracks the "repetition depth" — higher = further along
+    if stability <= 1.0:
+        interval_days = 1
+    elif stability <= 2.0:
+        interval_days = 6
+    else:
+        # Iₙ = Iₙ₋₁ × ease_factor, approximated via stability exponent
+        interval_days = max(1, int(6 * (ease ** (stability - 2))))
+
+    return datetime.now(UTC) + timedelta(days=interval_days)
+
+
+def update_stability(progress: LearningProgress, score: float) -> float:
+    """Backward-compatible stability update (used by mcp_session and transition_to_mastered).
+
+    Delegates to the SM-2 rules internally.
+    """
+    quality = compute_sm2_quality(score)
+    current = progress.stability or 1.0
+    ease = progress.ease_factor or 2.5
+
+    if quality >= 3:
+        # Advance using ease_factor
+        if current <= 1.0:
+            return 2.0
+        elif current <= 2.0:
+            return 3.0
+        else:
+            return min(current * ease, 30.0)
+    else:
+        return max(current * 0.6, 1.0)
+
+
+def update_sm2_after_session(progress: LearningProgress, score: float) -> None:
+    """Update ease_factor and stability after a practice session.
+
+    Applies classic SM-2 update rules:
+    - quality >= 3: advance interval, update ease_factor
+    - quality < 3: reset interval to 1, don't change ease_factor
+    """
+    quality = compute_sm2_quality(score)
+    current_ease = progress.ease_factor or 2.5
+
+    if quality >= 3:
+        # Update ease_factor
+        diff = 5 - quality
+        progress.ease_factor = max(1.3, current_ease + 0.1 - diff * (0.08 + diff * 0.02))
+        # Advance stability (acts as repetition counter)
+        progress.stability = (progress.stability or 1.0) + 1
+    else:
+        # Reset: interval goes back to 1, ease_factor unchanged
+        progress.stability = 1.0
+
+
 def transition_to_mastered(
     db: Session,
     progress: LearningProgress,
@@ -111,29 +196,6 @@ def transition_to_mastered(
     progress.next_review_at = compute_next_review(progress)
     db.flush()
     return progress
-
-
-def compute_next_review(progress: LearningProgress) -> datetime:
-    """Compute next review date using simplified SM-2 algorithm.
-
-    interval_days = max(1, int(3 * stability))
-    """
-    stability = progress.stability or 1.0
-    interval_days = max(1, int(3 * stability))
-    return datetime.now(UTC) + timedelta(days=interval_days)
-
-
-def update_stability(progress: LearningProgress, score: float) -> float:
-    """Update stability based on assessment score.
-
-    High score (>= 0.8): multiply by 1.3, capped at 10.0
-    Low score (< 0.8): multiply by 0.6, floored at 1.0
-    """
-    current = progress.stability or 1.0
-    if score >= 0.8:
-        return min(current * 1.3, 10.0)
-    else:
-        return max(current * 0.6, 1.0)
 
 
 def recheck_prerequisites(

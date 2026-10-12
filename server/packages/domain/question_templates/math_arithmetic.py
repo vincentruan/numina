@@ -20,7 +20,7 @@ def _gen_addition_2digit(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=1,
         bloom_level="apply",
-        topic_key="mt_arithmetic_addition",
+        topic_key="mt_glPPG-kTQY",
         age_group="mid",
         parameters={"a": a, "b": b},
     )
@@ -41,7 +41,7 @@ def _gen_subtraction_2digit(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=1,
         bloom_level="apply",
-        topic_key="mt_arithmetic_subtraction",
+        topic_key="mt_SrrsLiJkr3",
         age_group="mid",
         parameters={"a": a, "b": b},
     )
@@ -60,7 +60,7 @@ def _gen_multiplication_table(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=1,
         bloom_level="apply",
-        topic_key="mt_arithmetic_multiplication",
+        topic_key="mt_HhuSDxwDNM",
         age_group="mid",
         parameters={"a": a, "b": b},
     )
@@ -81,7 +81,7 @@ def _gen_division_basic(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=1,
         bloom_level="apply",
-        topic_key="mt_arithmetic_division",
+        topic_key="mt_DyGBW3ZHh3",
         age_group="mid",
         parameters={"dividend": dividend, "divisor": divisor, "quotient": quotient},
     )
@@ -102,7 +102,7 @@ def _gen_addition_3digit(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="mt_arithmetic_addition",
+        topic_key="mt_mpS-JK_p_m",
         age_group="mid",
         parameters={"a": a, "b": b},
     )
@@ -123,7 +123,7 @@ def _gen_subtraction_3digit(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="mt_arithmetic_subtraction",
+        topic_key="mt_mpS-JK_p_m",
         age_group="mid",
         parameters={"a": a, "b": b},
     )
@@ -131,11 +131,12 @@ def _gen_subtraction_3digit(params: dict) -> GeneratedQuestion:
 
 @register_template("math.arithmetic.multiplication_estimate")
 def _gen_multiplication_estimate(params: dict) -> GeneratedQuestion:
-    """Estimate product by rounding to nearest 10."""
+    """Estimate product by rounding to nearest 10 (四舍五入)."""
     a = random.randint(11, 99)
     b = random.randint(11, 99)
-    a_round = round(a / 10) * 10
-    b_round = round(b / 10) * 10
+    # Use floor-based rounding: 四舍五入 (half-up)
+    a_round = int(a / 10 + 0.5) * 10
+    b_round = int(b / 10 + 0.5) * 10
     return GeneratedQuestion(
         template_id="math.arithmetic.multiplication_estimate",
         stem=f"估算：{a} × {b} ≈ ?（将两个数四舍五入到最近的整十数再相乘）",
@@ -145,7 +146,7 @@ def _gen_multiplication_estimate(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="mt_arithmetic_estimation",
+        topic_key="mt_QaYfeVL-0C",
         age_group="mid",
         parameters={"a": a, "b": b},
     )
@@ -162,12 +163,12 @@ def _gen_division_with_remainder(params: dict) -> GeneratedQuestion:
         template_id="math.arithmetic.division_with_remainder",
         stem=f"计算：{dividend} ÷ {divisor} = ?……?",
         stem_zh=f"计算：{dividend} ÷ {divisor} = ?……?（写出商和余数）",
-        answer={"quotient": quotient, "remainder": remainder},
+        answer={"answer": f"{quotient}……{remainder}"},
         solution={"steps": [f"{dividend} ÷ {divisor}", f"= {quotient}……{remainder}", f"验证：{divisor} × {quotient} + {remainder} = {dividend}"]},
-        question_type="calculation",
+        question_type="fill_blank",
         difficulty=3,
         bloom_level="apply",
-        topic_key="mt_arithmetic_division",
+        topic_key="mt_p-nbe0w_lf",
         age_group="mid",
         parameters={"dividend": dividend, "divisor": divisor},
     )
@@ -205,7 +206,7 @@ def _gen_mixed_operations(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=3,
         bloom_level="apply",
-        topic_key="mt_arithmetic_mixed",
+        topic_key="mt_AR-K72OIIO",
         age_group="mid",
         parameters={"a": a, "b": b, "c": c, "op": op},
     )

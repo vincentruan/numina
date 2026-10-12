@@ -1,6 +1,11 @@
 """Question template engine — programmatic question generation."""
 # Bootstrap: import template modules to trigger @register_template decorators
-from packages.domain.question_templates import math_arithmetic  # noqa: F401
+from packages.domain.question_templates import (
+    math_arithmetic,
+    math_fractions,
+    math_geometry,
+    math_word_problems,
+)  # noqa: F401
 from packages.domain.question_templates.base import GeneratedQuestion
 from packages.domain.question_templates.registry import (
     TEMPLATE_REGISTRY,

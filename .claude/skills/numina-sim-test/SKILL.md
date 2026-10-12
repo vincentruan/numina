@@ -3,10 +3,11 @@ name: numina-sim-test
 description: >
   Use when the user wants to run full-stack functional verification tests,
   audit the interface, capture screenshots, or verify deployed UI flows for
-  the Numina project. Covers 16 areas: child app, financial management, AI
+  the Numina project. Covers 18 areas: child app, financial management, AI
   capabilities, currency, regression, expanded features, security/notification,
   AI report, adversarial security, task resilience, AI config, travel, UI
-  quality/design system, and learning OS taxonomy. Triggers on: "run sim test", "ui audit", "截图测试",
+  quality/design system, learning OS taxonomy, learning OS core flows, and
+  learning OS parent management. Triggers on: "run sim test", "ui audit", "截图测试",
   "仿真测试", "全栈验收", "功能验收", "ui检查", "界面审查", "check the UI",
   "test the app visually", "儿童测试", "child frontend test",
   "test AI chat/report/PDF import", "ui quality", "设计审查", "UI 质量检查",
@@ -34,7 +35,7 @@ through authenticated flows, screenshot capture, and test report generation.
 > environment must already contain the test accounts below (see
 > "Prerequisites").
 
-Covers **sixteen** feature areas (detailed cases split by area under
+Covers **eighteen** feature areas (detailed cases split by area under
 [`test-cases/`](./test-cases/), shared conventions in
 [`test-cases/_common.md`](./test-cases/_common.md), role matrix in
 [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md)):
@@ -54,6 +55,8 @@ Covers **sixteen** feature areas (detailed cases split by area under
 14. **Travel module (家庭旅行管理)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float / 行程规划时间线 / 跨天行程 + 购买日期 (C14.1–C14.40) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md))
 15. **UI quality & design system audit** — 移动端 H5/PWA 适配 / 深色模式 / Vant4 组件规范 / 无障碍 / 安全区域 / 跨应用风格一致性 (UIQ.1–UIQ.10) ([`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md))
 16. **Learning OS taxonomy Beijing + curriculum/edge-status** — 课标徽章/callout / AI 生成边标识别 / locale 知识图谱过滤 / 深色模式可读性 (C16.1–C16.14) ([`test-cases/groups/g3-child/area16-learning-os-taxonomy.md`](./test-cases/groups/g3-child/area16-learning-os-taxonomy.md))
+17. **Learning OS core flows (child)** — 知识地图 / Topic 详情 / AI 导师对话 / 学习进度 / 今日学习卡片 / 自选学习难度提示 (C17.1–C17.21) ([`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md))
+18. **Learning OS parent management** — 学习概览 / 任务派发 / 学习路径 / 审核队列 / BabyPage 入口 (C18.1–C18.16) ([`test-cases/groups/g1-adult-stable/area18-learning-os-parent.md`](./test-cases/groups/g1-adult-stable/area18-learning-os-parent.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching
@@ -82,14 +85,14 @@ schedule + verified browser concurrency evidence.
 | Group | Dir | Areas | Session | State domain | Parallel with |
 |-------|-----|-------|---------|--------------|---------------|
 | **G0** preconditions | [`g0-preconditions/`](./test-cases/groups/g0-preconditions/) | Phase 0/1/1.5/2 | serial | establishes login | none — first |
-| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 9, 12, 13, 14, 15 | `$SID` (adult) | reads global; per-entity writes | **G3** |
+| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 9, 12, 13, 14, 15, 18 | `$SID` (adult) | reads global; per-entity writes | **G3** |
 | **G2** adult-currency | [`g2-adult-currency/`](./test-cases/groups/g2-adult-currency/) | 4 | adult (own) | **mutates `default_currency`** | **G3** |
-| **G3** child | [`g3-child/`](./test-cases/groups/g3-child/) | 1, 5, 10 | `$SID_CHILD` | child origin (isolated dev) | **G1 or G2** |
+| **G3** child | [`g3-child/`](./test-cases/groups/g3-child/) | 1, 5, 10, 16, 17 | `$SID_CHILD` | child origin (isolated dev) | **G1 or G2** |
 
 **Schedule:** `G0 (serial) → G1 ‖ G3 (parallel) → G2 (after G1)`. Three agents
 cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
-> **G1 internal order:** area2 → area14 → area8 → area3 → area6 → area13 → area12 → area15 → area9 → area7 → area11. Area 7
+> **G1 internal order:** area2 → area14 → area18 → area8 → area3 → area6 → area13 → area12 → area15 → area9 → area7 → area11. Area 7
 > (regression) runs just before Area 11, with R6 (auth expiry) destroying the
 > session **last** so earlier areas have a live session. Area 14 (travel) runs
 > after area2 since both create financial entities. Area 13 (AI report deep)
@@ -133,7 +136,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
 | Mode | 触发词 | 覆盖范围 | 预计耗时 |
 |------|--------|----------|----------|
-| **full** | "run sim test", "全量测试" | Area 1–15 (所有用例) | ~180-220 min |
+| **full** | "run sim test", "全量测试" | Area 1–18 (所有用例) | ~200-250 min |
 | **smoke** | "smoke test", "快速检查" | C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2, C9.4 | ~18-25 min |
 | **child** | "child test", "儿童测试" | Area 1 + Area 5 (G3 only) | ~20-30 min |
 | **finance** | "finance test", "财务测试" | Area 2 only (G1 subset, C2.1–C2.25) | ~20-25 min |
@@ -142,6 +145,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 | **security** | "security test", "安全测试" | Area 9 (C9.1–C9.7) + Area 11 (C11.1–C11.20) + R6 | ~25-35 min |
 | **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.40) | ~45-55 min |
 | **ui-quality** | "ui quality", "设计审查", "UI 质量检查" | Area 15 only (UIQ.1–UIQ.10) | ~25-35 min |
+| **learning** | "learning test", "学习测试" | Area 16 + Area 17 (G3) + Area 18 (G1) | ~45-60 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
 
 **选择逻辑:**
@@ -1215,6 +1219,9 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | **13 — AI 资产报告深度验证 (Hub 弹窗/重入去重/SSE 重连)** | **G1** | **C13.1–C13.5** | [`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md) |
 | **14 — Travel module (旅行管理: 行程/费用/分摊/转化/行程规划/跨天+购买日期)** | **G1** | **C14.1–C14.40** | [`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md) |
 | **15 — UI quality & design system (H5/PWA/深色模式/无障碍/一致性)** | **G1** | **UIQ.1–UIQ.10** | [`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md) |
+| **16 — Learning OS taxonomy Beijing (课标徽章/边标/locale)** | **G3** | **C16.1–C16.14** | [`test-cases/groups/g3-child/area16-learning-os-taxonomy.md`](./test-cases/groups/g3-child/area16-learning-os-taxonomy.md) |
+| **17 — Learning OS core flows (child: 知识地图/Topic/AI 导师/进度/自选学习)** | **G3** | **C17.1–C17.21** | [`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md) |
+| **18 — Learning OS parent management (概览/派发/路径/审核)** | **G1** | **C18.1–C18.16** | [`test-cases/groups/g1-adult-stable/area18-learning-os-parent.md`](./test-cases/groups/g1-adult-stable/area18-learning-os-parent.md) |
 
 ### Supporting References
 

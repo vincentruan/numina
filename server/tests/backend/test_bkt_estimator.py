@@ -104,11 +104,10 @@ class TestBayesianKnowledgeTracingEstimator:
         assert bkt_score == rb_score  # Both fallback
 
     def test_correct_answers_increase_mastery(self, db: Session, bkt_setup):
-        """Consecutive correct answers should increase P(L) toward equilibrium.
+        """Consecutive correct answers should monotonically increase P(L).
 
-        With P(T)=0.3, BKT equilibrium is ~0.647 (not 1.0) because
-        the forget probability limits the ceiling. We verify monotonic
-        increase until equilibrium is reached.
+        Standard BKT (no forgetting): P(L) is monotonically non-decreasing
+        with correct observations, converging toward 1.0.
         """
         est = BayesianKnowledgeTracingEstimator()
         scores = []
@@ -117,9 +116,11 @@ class TestBayesianKnowledgeTracingEstimator:
             score = est.estimate(db, child_id=bkt_setup["user"].id, topic_id=bkt_setup["topic"].id)
             scores.append(score)
 
-        # P(L) should increase from initial value, converging toward ~0.647
-        assert scores[0] < scores[-1]  # First score < last score
-        assert scores[-1] > 0.5  # Reached meaningful mastery
+        # P(L) should be monotonically non-decreasing (allow float jitter up to 0.01)
+        for i in range(1, len(scores)):
+            assert scores[i] >= scores[i - 1] - 0.01
+        # Should reach meaningful mastery after 10 correct
+        assert scores[-1] > 0.8
 
     def test_mistake_does_not_zero_mastery(self, db: Session, bkt_setup):
         """A single mistake after correct answers should not zero out mastery."""
@@ -141,10 +142,10 @@ class TestBayesianKnowledgeTracingEstimator:
         assert score_after < score_before
 
     def test_convergence_after_many_correct(self, db: Session, bkt_setup):
-        """After many correct attempts, P(L) converges to equilibrium.
+        """After many correct attempts, P(L) converges close to 1.0.
 
-        With default params (P(T)=0.3), equilibrium ≈ 0.647.
-        Verify convergence by checking score stabilizes.
+        Standard BKT (no forgetting in transition): P(L|correct) increases
+        monotonically toward 1.0. After 50 correct answers, should be > 0.95.
         """
         est = BayesianKnowledgeTracingEstimator()
 
@@ -152,8 +153,7 @@ class TestBayesianKnowledgeTracingEstimator:
             _add_attempt(db, bkt_setup, is_correct=True)
 
         score = est.estimate(db, child_id=bkt_setup["user"].id, topic_id=bkt_setup["topic"].id)
-        # BKT equilibrium with P(T)=0.3 is ~0.647
-        assert 0.55 < score < 0.75
+        assert score > 0.95
 
     def test_below_threshold_fallback(self, db: Session, bkt_setup):
         """< 5 attempts → fallback to RuleBased."""

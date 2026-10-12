@@ -58,38 +58,24 @@ def _persist_generated_question(
     gq: GeneratedQuestion,
     topic_id: int,
 ) -> Question:
-    """Convert GeneratedQuestion to Question ORM and persist."""
-    question = Question(
+    """Convert GeneratedQuestion to Question ORM via quality gate."""
+    from apps.backend.app.services.learning.question_service import create_question
+
+    return create_question(
+        db=db,
         topic_id=topic_id,
         question_type=gq.question_type,
         stem=gq.stem,
-        stem_zh=gq.stem_zh,
-        options_json=json.dumps(gq.options) if gq.options else None,
-        answer_json=json.dumps(gq.answer),
-        solution_json=json.dumps(gq.solution) if gq.solution else None,
+        answer=gq.answer,
         difficulty=gq.difficulty,
         bloom_level=gq.bloom_level,
         source="template",
-        source_version=gq.template_id,
-        review_status="approved",
         age_group=gq.age_group,
-        parameters_json=json.dumps(gq.parameters) if gq.parameters else None,
+        stem_zh=gq.stem_zh,
+        options=gq.options,
+        solution=gq.solution,
+        parameters=gq.parameters,
     )
-    db.add(question)
-    db.flush()
-
-    # Create primary knowledge point link
-    from packages.db.models.learning.question import QuestionKnowledgePoint
-
-    qkp = QuestionKnowledgePoint(
-        question_id=question.id,
-        topic_id=topic_id,
-        role="primary",
-    )
-    db.add(qkp)
-    db.flush()
-
-    return question
 
 
 def seed_questions_from_templates(

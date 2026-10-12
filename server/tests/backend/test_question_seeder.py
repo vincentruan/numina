@@ -13,12 +13,12 @@ from packages.db.models.learning.topic import LearningTopic
 
 @pytest.fixture
 def math_topics(db: Session):
-    """Create LearningTopic records matching template topic_keys."""
+    """Create LearningTopic records matching template topic_keys (real taxonomy IDs)."""
     topics_data = [
-        ("mt_arithmetic_addition", "mathematics", "Addition"),
-        ("mt_arithmetic_subtraction", "mathematics", "Subtraction"),
-        ("mt_arithmetic_multiplication", "mathematics", "Multiplication"),
-        ("mt_arithmetic_division", "mathematics", "Division"),
+        ("mt_glPPG-kTQY", "mathematics", "Addition"),
+        ("mt_SrrsLiJkr3", "mathematics", "Subtraction"),
+        ("mt_HhuSDxwDNM", "mathematics", "Multiplication"),
+        ("mt_DyGBW3ZHh3", "mathematics", "Division"),
     ]
     topics = []
     for key, subject, name in topics_data:
@@ -43,7 +43,7 @@ def math_topics(db: Session):
 def partial_topics(db: Session):
     """Create only some topics — addition only, others missing."""
     t = LearningTopic(
-        topic_key="mt_arithmetic_addition",
+        topic_key="mt_glPPG-kTQY",
         topic_type="procedural",
         subject="mathematics",
         domain="Number & Operations",
@@ -156,11 +156,10 @@ def test_seed_returns_stats(db: Session, math_topics):
 def test_seed_with_topic_filter(db: Session, math_topics):
     """--topic filter limits which templates are seeded."""
     result = seed_questions_from_templates(
-        db, count_per_template=3, topic_filter="math.arithmetic.addition"
+        db, count_per_template=3, topic_filter="math.arithmetic.addition_2digit"
     )
-    # Matches addition_2digit + addition_3digit, both link to addition topic
-    assert result.generated == 6  # 2 templates × 3 each
-    assert result.skipped_no_topic == 0
+    # Only the addition_2digit template should run (exact match)
+    assert result.generated == 3
 
 
 def test_seed_dry_run(db: Session, math_topics):

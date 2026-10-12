@@ -89,11 +89,10 @@ def test_fractions_comparison_correct():
         params = gq.parameters
         a_num, a_den = params["a_num"], params["a_den"]
         b_num, b_den = params["b_num"], params["b_den"]
-        # Cross-multiply to compare
         lhs = a_num * b_den
         rhs = b_num * a_den
         expected = ">" if lhs > rhs else ("<" if lhs < rhs else "=")
-        return gq.answer["answer"] == expected
+        return gq.answer["value"] == expected
 
     _verify_template_correctness("math.fractions.comparison", verify)
 
@@ -130,9 +129,8 @@ def test_fractions_simple_reduction_correct():
         params = gq.parameters
         from math import gcd
         g = gcd(params["numerator"], params["denominator"])
-        expected_num = params["numerator"] // g
-        expected_den = params["denominator"] // g
-        return gq.answer["numerator"] == expected_num and gq.answer["denominator"] == expected_den
+        expected = f"{params['numerator'] // g}/{params['denominator'] // g}"
+        return gq.answer["answer"] == expected
 
     _verify_template_correctness("math.fractions.simple_reduction", verify)
 
@@ -203,11 +201,12 @@ def test_word_problems_price_correct():
 
 def test_word_problems_ratio_correct():
     def verify(gq):
+        # Answer is now a single string "甲X个，乙Y个"
         params = gq.parameters
         total_parts = params["ratio_a"] + params["ratio_b"]
         expected_a = params["total"] * params["ratio_a"] / total_parts
         expected_b = params["total"] * params["ratio_b"] / total_parts
-        return gq.answer["a"] == expected_a and gq.answer["b"] == expected_b
+        return f"甲{int(expected_a)}个" in gq.answer["answer"] and f"乙{int(expected_b)}个" in gq.answer["answer"]
 
     _verify_template_correctness("math.word_problems.ratio_distribution", verify)
 
@@ -225,10 +224,9 @@ def test_word_problems_work_rate_correct():
 def test_word_problems_age_correct():
     def verify(gq):
         params = gq.parameters
-        # In `years_later` years: child = child_age + years_later, parent = parent_age + years_later
         future_child = params["child_age"] + params["years_later"]
         future_parent = params["parent_age"] + params["years_later"]
-        return gq.answer["child_future"] == future_child and gq.answer["parent_future"] == future_parent
+        return f"小明{future_child}岁" in gq.answer["answer"] and f"爸爸{future_parent}岁" in gq.answer["answer"]
 
     _verify_template_correctness("math.word_problems.age_problem", verify)
 
@@ -252,9 +250,9 @@ def test_arithmetic_3digit_subtraction_correct():
 def test_arithmetic_multiplication_estimate_correct():
     def verify(gq):
         params = gq.parameters
-        # Estimate is rounding to nearest 10 or 100
-        a_round = round(params["a"] / 10) * 10
-        b_round = round(params["b"] / 10) * 10
+        # Half-up rounding (四舍五入)
+        a_round = int(params["a"] / 10 + 0.5) * 10
+        b_round = int(params["b"] / 10 + 0.5) * 10
         return gq.answer["answer"] == a_round * b_round
 
     _verify_template_correctness("math.arithmetic.multiplication_estimate", verify)
@@ -265,7 +263,8 @@ def test_arithmetic_division_remainder_correct():
         params = gq.parameters
         expected_q = params["dividend"] // params["divisor"]
         expected_r = params["dividend"] % params["divisor"]
-        return gq.answer["quotient"] == expected_q and gq.answer["remainder"] == expected_r
+        expected_str = f"{expected_q}……{expected_r}"
+        return gq.answer["answer"] == expected_str
 
     _verify_template_correctness("math.arithmetic.division_with_remainder", verify)
 

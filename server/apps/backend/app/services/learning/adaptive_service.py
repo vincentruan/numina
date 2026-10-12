@@ -4,6 +4,7 @@ import random
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+from sqlalchemy import Float as sa_Float
 from sqlalchemy import Integer as sa_Integer
 from sqlalchemy.orm import Session
 
@@ -153,8 +154,9 @@ class BayesianKnowledgeTracingEstimator:
                     p_l * self.p_s
                     / (p_l * self.p_s + (1 - p_l) * (1 - self.p_g))
                 )
-            # Transition: P(L_{n+1}) = P(L|obs)(1-P(T)) + (1-P(L|obs))*P(T)
-            p_l = p_l_given_obs * (1 - self.p_t) + (1 - p_l_given_obs) * self.p_t
+            # Transition: P(L_{n+1}) = P(L|obs) + (1 - P(L|obs)) * P(T)
+            # Standard BKT: knowledge can only grow, never unlearn
+            p_l = p_l_given_obs + (1 - p_l_given_obs) * self.p_t
 
         return p_l
 
@@ -346,7 +348,7 @@ def get_recommend_with_reason(
         .join(PracticeAttempt, PracticeAttempt.topic_id == LearningTopic.id)
         .filter(PracticeAttempt.child_id == child_id)
         .group_by(LearningTopic.id)
-        .order_by(sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)) / sa_func.count(PracticeAttempt.id))
+        .order_by(sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Float)) / sa_func.count(PracticeAttempt.id))
         .limit(limit)
         .all()
     )

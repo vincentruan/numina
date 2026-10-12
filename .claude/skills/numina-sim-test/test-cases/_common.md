@@ -13,6 +13,8 @@ Shared conventions used by all area case files:
 - [`area11-ai-security-adversarial.md`](./area11-ai-security-adversarial.md) — AI/agent adversarial security testing (prompt injection, tenant isolation, tool escalation)
 - [`area12-ai-task-resilience.md`](./area12-ai-task-resilience.md) — AI task resilience (前端不稳定处理：离开/刷新恢复、失败/中断重试、用户取消)
 - [`area16-learning-os-taxonomy.md`](./groups/g3-child/area16-learning-os-taxonomy.md) — Learning OS taxonomy Beijing localization + curriculum badge/edge-status UI (C16.1–C16.14)
+- [`area17-learning-os-core.md`](./groups/g3-child/area17-learning-os-core.md) — Learning OS core flows: knowledge map, topic detail, AI tutor, progress, self-selected learning (C17.1–C17.21)
+- [`area18-learning-os-parent.md`](./groups/g1-adult-stable/area18-learning-os-parent.md) — Learning OS parent management: overview, assignment, paths, reviews (C18.1–C18.16)
 
 **角色能力矩阵 (Role Capabilities Matrix):** [`role-capabilities.md`](./role-capabilities.md)
 — 每个角色 (owner/member/child) 的权限边界和可见页面清单。

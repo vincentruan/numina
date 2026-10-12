@@ -23,7 +23,13 @@ from apps.backend.app.schemas.practice import (
     SubmitAnswerRequest,
     WeakTopicResponse,
 )
-from apps.backend.app.services.learning.adaptive_service import select_questions
+from apps.backend.app.services.learning.adaptive_service import (
+    RuleBasedMasteryEstimator,
+    get_ability_dimensions,
+    get_progress_trend,
+    get_recommend_with_reason,
+    select_questions,
+)
 from apps.backend.app.services.learning.practice_service import (
     create_session,
     finish_session,
@@ -101,7 +107,7 @@ def create_practice_session(
     if progress.mastery_level == "locked":
         raise AppError(ErrorCode.PRACTICE_TOPIC_LOCKED)
 
-    # Select questions
+    # Select questions — use dynamic mastery estimator for adaptive difficulty
     questions = select_questions(
         db=db,
         topic_id=req.topic_id,
@@ -110,6 +116,7 @@ def create_practice_session(
         exclude_question_ids=[],
         exclude_recent_days=7,
         child_id=user.id,
+        estimator=RuleBasedMasteryEstimator(),
     )
 
     if not questions:
@@ -299,8 +306,28 @@ def get_practice_recommendations(
 
 @router.get("/coverage", response_model=CoverageResponse)
 def get_practice_coverage(
+    _user: User = Depends(get_current_user_or_child),
     db: Session = Depends(get_db),
 ):
     """Get knowledge point coverage statistics for the question bank."""
     stats = get_coverage_stats(db)
     return CoverageResponse(**stats)
+
+
+@router.get("/ability-dimensions")
+def get_child_ability_dimensions(
+    user: User = Depends(get_current_user_or_child),
+    db: Session = Depends(get_db),
+):
+    """Get per-domain accuracy breakdown for the current child."""
+    return get_ability_dimensions(db, child_id=user.id)
+
+
+@router.get("/progress-trend")
+def get_child_progress_trend(
+    topic_id: int,
+    user: User = Depends(get_current_user_or_child),
+    db: Session = Depends(get_db),
+):
+    """Get chronological attempt history for a child+topic."""
+    return get_progress_trend(db, child_id=user.id, topic_id=topic_id)
