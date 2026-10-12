@@ -144,6 +144,7 @@ def create_session(
     db.add(session)
     db.flush()
     db.refresh(session)
+    db.commit()
 
     return {
         "id": session.id,
@@ -186,6 +187,7 @@ def end_session(
         session.duration_seconds = int(delta.total_seconds())
 
     db.flush()
+    db.commit()
     return session
 
 
@@ -221,6 +223,7 @@ def start_assessment(
     progress_service.validate_transition(progress.mastery_level, "assessing")
     progress.mastery_level = "assessing"
     db.flush()
+    db.commit()
     return progress
 
 

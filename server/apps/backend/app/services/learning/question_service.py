@@ -111,6 +111,7 @@ def create_question(
     )
     db.add(qkp)
     db.flush()
+    db.commit()
 
     logger.info(
         "Question created: id=%s, topic_id=%s, type=%s, source=%s",

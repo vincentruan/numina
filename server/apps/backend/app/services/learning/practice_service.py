@@ -45,6 +45,7 @@ def create_session(
         topic_id,
         len(question_ids),
     )
+    db.commit()
     return session
 
 
@@ -114,6 +115,7 @@ def submit_answer(
     session.completed_count += 1
 
     db.flush()
+    db.commit()
     return attempt
 
 
@@ -153,6 +155,7 @@ def finish_session(
         correct,
         total,
     )
+    db.commit()
 
     return {
         "session_id": session_id,

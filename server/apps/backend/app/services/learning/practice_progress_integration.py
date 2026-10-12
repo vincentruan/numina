@@ -85,6 +85,7 @@ def update_progress_from_session(
         progress.mastery_score = score
         db.flush()
 
+    db.commit()
     return {
         "mastery_changed": mastery_changed,
         "new_mastery_level": progress.mastery_level,

@@ -202,7 +202,7 @@ def complete_onboarding(
     """Mark onboarding as completed for this child."""
     stats = stats_service.get_or_create_stats(db, child.id, child.family_id)
     stats.onboarding_completed = True
-    db.flush()
+    db.commit()
     return OnboardingCompleteResponse(onboarding_completed=True)
 
 

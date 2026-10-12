@@ -74,6 +74,7 @@ def get_or_create_progress(db: Session, child_id: int, topic_id: int) -> Learnin
     )
     db.add(progress)
     db.flush()
+    db.commit()
     return progress
 
 
@@ -88,6 +89,7 @@ def transition_to_learning(db: Session, progress: LearningProgress) -> LearningP
     progress.mastery_level = "learning"
     progress.last_practice_at = datetime.now(UTC)
     db.flush()
+    db.commit()
     return progress
 
 
@@ -195,6 +197,7 @@ def transition_to_mastered(
     progress.stability = update_stability(progress, score)
     progress.next_review_at = compute_next_review(progress)
     db.flush()
+    db.commit()
     return progress
 
 
@@ -216,6 +219,7 @@ def recheck_prerequisites(
     if _all_hard_prereqs_met(db, child_id, topic_id):
         progress.mastery_level = "available"
         db.flush()
+        db.commit()
     return progress
 
 
@@ -358,6 +362,7 @@ def approve_parent_review(
     except Exception:
         logger.warning('XP award failed on parent review for child %s', progress.child_id, exc_info=True)
 
+    db.commit()
     return progress
 
 
@@ -453,6 +458,7 @@ def resolve_streak_reminder_on_pass(
     )
     if updated:
         db.flush()
+        db.commit()
     return updated
 
 
@@ -496,6 +502,7 @@ def record_failed_assessment(
     )
     db.add(attempt)
     db.flush()
+    db.commit()
 
     return check_and_notify_streak(db, child_id, topic_id)
 
