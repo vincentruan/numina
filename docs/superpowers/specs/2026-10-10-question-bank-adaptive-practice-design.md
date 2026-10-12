@@ -110,7 +110,7 @@ class PracticeSession(Base):
     ended_at: datetime | None
     total_score: float | None        # 最终得分 (0.0-1.0)
     completed_count: int             # 已完成题目数
-    source: str                      # adaptive / parent_assigned / self_selected
+    source: str                      # adaptive / self_selected (parent_assigned → Phase 2)
     learning_progress_id: int | None # FK → learning_progress.id (关联的掌握记录更新)
 ```
 
@@ -138,6 +138,10 @@ class PracticeAttempt(Base):
 
 ### 2.2 与现有模型的关系
 
+> **与 LearningSession/LearningAssessmentAttempt 的区别**: 现有模型服务于 AI 导师对话式评估场景（LearningSession 记录一次 AI 对话，LearningAssessmentAttempt 记录 AI 发起的评估问答），生命周期由 AI 对话驱动。新增的 PracticeSession/PracticeAttempt 服务于程序化练习场景（自适应选题、逐题作答、自动评分），生命周期由儿童主动发起的练习会话驱动。两者通过 topic_id + child_id 关联，共享 LearningProgress 状态机，但数据模型独立以反映不同的交互模式和数据需求。
+
+> **注**: LearningProgress 需新增 `mastery_score: Float | None` 列（nullable），用于存储练习得分（0.0-1.0）。此字段在 `0.5 <= score < 0.8` 分支中更新但不触发状态转换，在 `score >= 0.8` 触发状态推进时同步更新。需相应 Alembic 迁移。
+
 ```
 Question ──→ LearningTopic (topic_id, 主知识点)
 Question ──→ QuestionKnowledgePoint ──→ LearningTopic (多对多)
@@ -159,6 +163,8 @@ PracticeAttempt ──→ LearningTopic (topic_id, 冗余)
 | calculation | `{"answer": 95, "steps": [...]}` | `{"answer": 95}` |
 | application | `{"answer": "见解析", "acceptable": [...]}` | `{"answer": "..."}` |
 
+> **application 题型评分**: MVP 阶段 application 类型的作答自动标记为 `is_correct=False`（因无法程序化判定开放性答案）。Phase 2 引入 LLM 评审后启用自动评分。
+
 ## 3. 题目生成引擎
 
 ### 3.1 三层生成策略
@@ -170,7 +176,7 @@ PracticeAttempt ──→ LearningTopic (topic_id, 冗余)
 - 变体：同模板不同参数 = 不同题目（自然去重）
 - 存储：parameters_json 记录参数，用于追溯
 
-**Layer 2: LLM 辅助生成（高认知层级题目）**
+**Layer 2: LLM 辅助生成（高认知层级题目）** — ⚠️ **MVP 不启用，延迟到 Phase 2**
 
 - 触发：知识点的 evidence / assessment_prompt 需要开放式或应用题
 - 输入：topic.description + evidence + age_group + difficulty + bloom_level
@@ -196,9 +202,11 @@ PracticeAttempt ──→ LearningTopic (topic_id, 冗余)
 
 LLM 生成题目额外需人工审核（审核队列在 Phase 2 实现）。
 
+> **MVP 策略**: Phase 1 仅使用 Layer 1（程序化模板）生成 `review_status="approved"` 题目。Layer 2（LLM 生成）延迟到 Phase 2 人工审核队列就绪后再启用，因为 LLM 交叉验证无法可靠保证数学答案正确性。
+
 ### 3.3 模板系统设计
 
-自建简单模板注册机制（不集成 mathgenerator，其 API 不够灵活）：
+自建简单模板注册机制（不集成 mathgenerator，原因：① mathgenerator 不支持参数化难度范围控制；② 缺乏中文本地化钩子；③ 输出格式与我们的 Question 模型不兼容，需要额外适配层）。
 
 ```python
 # server/packages/domain/question_templates/
@@ -310,10 +318,27 @@ class BayesianKnowledgeTracingEstimator(MasteryEstimator):
 **入口**: LearningMapPage 知识点卡片新增练习按钮。
 
 **PracticeSessionPage 流程**:
-1. 选择模式（快速 5 题 / 标准 10 题 / 诊断 8 题 / 挑战 5 题）
+1. 选择模式（快速 5 题 / 标准 10 题 / 挑战 5 题）<!-- 诊断 8 题 → Phase 2 -->
 2. 逐题作答（即时反馈：正确动画 / 错误 + 解析）
 3. 结果汇总（得分、用时、错题回顾、XP/星星币获得）
 4. 后续操作：再来一组 / AI 辅导错题 / 返回地图
+
+**会话中断与恢复**:
+- 每次提交作答自动持久化 PracticeAttempt，无需额外保存操作
+- 未完成的 PracticeSession（ended_at 为 null）在 24 小时内可恢复
+- 入口：LearningMapPage 检测到未完成会话时显示「继续练习」按钮，替代正常开始按钮
+- 超过 24 小时的未完成会话自动标记为 abandoned（ended_at 设为超时时间，total_score 为 null）
+
+**空题状态**:
+- 当知识点无可用题目时（question_count = 0），练习按钮灰显，tooltip 显示「这个知识点还没有练习题，试试 AI 辅导吧！」
+- 当可用题目少于模式要求数量时（如标准 10 题但只有 3 题），允许开始部分会话（做 3 题），并在开始前提示「该知识点目前只有 3 道题」
+
+**即时反馈交互规范**:
+- 正确答案：绿色 ✓ 动画（0.8s），自动进入下一题或点击「下一题」按钮
+- 错误答案：红色 ✗ + 显示正确答案 + 「查看解析」按钮（折叠展开）
+- 填空题/计算题：精确匹配，不支持部分正确；支持忽略首尾空格
+- 同一题目在同一会话内仅可作答一次（不可重做）
+- 题间过渡：点击「下一题」后 0.3s 淡入动画
 
 **题型交互**:
 - 选择题：点选按钮
@@ -321,14 +346,30 @@ class BayesianKnowledgeTracingEstimator(MasteryEstimator):
 - 填空题：输入框
 - 计算题：输入框 + 可选步骤展示
 
-### 5.2 AI 导师协作
+### 5.2 AI 导师协作（深度整合）
 
-```
-练习后 → AI 辅导错题（传入错题上下文，针对性讲解）
-AI 导师讲解后 → 推荐练习（传入知识点 + 建议难度）
-```
+**练习 → AI 导师**:
+- 练习完成后，若 score < 0.8，显示「AI 辅导错题」入口
+- 传入数据：错题列表（question stem + user answer + correct answer + solution）、topic_id、session score
+- AI 导师根据错题模式调整教学策略（如连续计算错误 → 讲解进位概念）
 
-### 5.3 家长端（Phase 2）
+**AI 导师 → 练习**:
+- AI 导师讲解知识点后，自动推荐练习（传入 topic_id + 建议 difficulty）
+- 推荐依据：AI 导师评估的薄弱环节 + 当前 mastery_level
+- 练习结果回传 AI 导师：下次 AI 会话可引用最近的练习成绩作为教学上下文
+
+**数据流**: PracticeSession/PracticeAttempt 的学习数据通过 topic_id + child_id 关联 LearningSession/LearningAssessmentAttempt，AI 导师查询时通过 learning_progress 获取练习历史摘要。
+
+### 5.3 游戏化整合
+
+练习系统与现有 XP/星星币体系整合，复用现有奖励逻辑：
+
+- **XP 奖励**: 每完成一道正确题目获得基础 XP（difficulty × 5），会话完成后额外奖励（score × 20）
+- **星星币**: 会话 score >= 0.8 时奖励 5 星星币，score = 1.0 时奖励 10 星星币
+- **连续练习**: 复用现有「连续学习天数」机制，练习 session 计入学习天数
+- **实现方式**: 调用现有 `CoinTransaction` 和 XP 累加逻辑，type 设为 `practice_session`
+
+### 5.4 家长端（Phase 2）
 
 - 练习报告（得分、用时、错题）
 - 知识点维度汇总（正确率趋势）
@@ -383,9 +424,8 @@ server/
 │   ├── practice_service.py          # 练习会话管理
 │   ├── scoring_service.py           # 自动评分
 │   ├── adaptive_service.py          # 选题引擎 + MasteryEstimator
-│   └── question_generator.py        # 模板生成 + LLM 生成入口
-├── apps/backend/app/services/learning/
-│   └── (新增 quality_gate.py)       # 质量关卡验证
+│   ├── question_generator.py        # 模板生成 + LLM 生成入口
+│   └── quality_gate.py              # 质量关卡验证
 └── apps/backend/alembic/versions/
     └── xxx_add_questions_and_practice.py
 ```
@@ -434,8 +474,9 @@ frontend/apps/child/src/
 **目标**: 儿童能完成一次有效的数学练习闭环
 
 **范围**:
-- 后端: 数据模型 + Alembic 迁移 + 10-15 个数学模板 + 模板注册机制 + 自动评分 + 练习 API + 规则选题 + 状态机打通 + 练习统计
+- 后端: 数据模型 + Alembic 迁移 + 4 个算术模板（加减乘除）+ 模板注册机制 + 自动评分 + 练习 API + 规则选题 + 状态机打通 + 练习统计
 - 前端: PracticeSessionPage + 题目渲染 + 答题输入 + 即时反馈 + 结果汇总 + 知识地图入口
+- **注意**: MVP 仅覆盖算术（数的运算）知识点。分数/小数、几何、应用题模板在 Phase 2 添加。
 
 **验收标准**:
 - 8 岁儿童能选择"两位数加法"知识点
@@ -454,7 +495,7 @@ frontend/apps/child/src/
 - 应用题模板扩展
 - 练习历史趋势
 
-**进入条件**: ≥30 数学知识点各有 ≥5 题，≥10 个模板稳定运行
+**进入条件**: ≥30 数学知识点各有 ≥5 题，≥10 个模板稳定运行，**且** Phase 1 上线 ≥4 周后有 ≥10 名儿童各完成 ≥3 次练习会话，平均会话完成率 ≥70%。
 
 ### Phase 3: 多学科扩展 + 知识追踪
 
