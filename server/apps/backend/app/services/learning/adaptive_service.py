@@ -93,6 +93,70 @@ class RuleBasedMasteryEstimator:
         return weighted_correct / total_weight if total_weight > 0 else 0.0
 
 
+class BayesianKnowledgeTracingEstimator:
+    """Bayesian Knowledge Tracing (BKT) mastery estimator.
+
+    Uses the standard BKT model with per-topic belief state tracking:
+    - P(L₀): initial probability of knowing (default 0.1)
+    - P(T): probability of learning on each attempt (default 0.3)
+    - P(G): probability of guessing correctly when not knowing (default 0.25)
+    - P(S): probability of slipping (wrong answer when knowing) (default 0.1)
+
+    Falls back to RuleBasedMasteryEstimator when fewer than MIN_ATTEMPTS
+    observations are available (< 5).
+    """
+
+    MIN_ATTEMPTS = 5
+
+    def __init__(
+        self,
+        p_l0: float = 0.1,
+        p_t: float = 0.3,
+        p_g: float = 0.25,
+        p_s: float = 0.1,
+    ):
+        self.p_l0 = p_l0
+        self.p_t = p_t
+        self.p_g = p_g
+        self.p_s = p_s
+
+    def estimate(self, db: Session, child_id: int, topic_id: int) -> float:
+        """Estimate mastery via Bayesian belief state update.
+
+        Iterates through attempts chronologically, applying Bayes' rule
+        after each observation, then projecting forward with P(T).
+        """
+        attempts = (
+            db.query(PracticeAttempt)
+            .filter_by(child_id=child_id, topic_id=topic_id)
+            .order_by(PracticeAttempt.created_at.asc())
+            .all()
+        )
+
+        if len(attempts) < self.MIN_ATTEMPTS:
+            # Insufficient data — fallback to rule-based
+            return RuleBasedMasteryEstimator().estimate(db, child_id, topic_id)
+
+        # BKT forward algorithm
+        p_l = self.p_l0
+        for attempt in attempts:
+            # Bayesian update: P(L|observation)
+            if attempt.is_correct:
+                p_l_given_obs = (
+                    p_l * (1 - self.p_s)
+                    / (p_l * (1 - self.p_s) + (1 - p_l) * self.p_g)
+                )
+            else:
+                p_l_given_obs = (
+                    p_l * self.p_s
+                    / (p_l * self.p_s + (1 - p_l) * (1 - self.p_g))
+                )
+            # Transition: P(L_{n+1}) = P(L|obs)(1-P(T)) + (1-P(L|obs))*P(T)
+            p_l = p_l_given_obs * (1 - self.p_t) + (1 - p_l_given_obs) * self.p_t
+
+        return p_l
+
+
 def select_questions(
     db: Session,
     topic_id: int,
