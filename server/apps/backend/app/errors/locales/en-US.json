@@ -145,5 +145,12 @@
   "LEARNING_TRANSLATION_UNAVAILABLE": "Translation service unavailable, please try again later",
   "LEARNING_PATH_NOT_FOUND": "Learning path not found",
   "LEARNING_PATH_ACCESS_DENIED": "Access denied to this learning path",
-  "LEARNING_PATH_INVALID_MILESTONE": "Invalid milestone configuration"
+  "LEARNING_PATH_INVALID_MILESTONE": "Invalid milestone configuration",
+  "PRACTICE_QUESTION_NOT_FOUND": "Question not found",
+  "PRACTICE_QUESTION_INVALID": "Question data invalid",
+  "PRACTICE_TOPIC_NOT_FOUND": "Topic not found",
+  "PRACTICE_SESSION_NOT_FOUND": "Practice session not found",
+  "PRACTICE_SESSION_ALREADY_ENDED": "Practice session already ended",
+  "PRACTICE_NO_QUESTIONS_AVAILABLE": "No questions available for this topic",
+  "PRACTICE_DUPLICATE_ATTEMPT": "This question has already been answered"
 }
