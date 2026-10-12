@@ -152,5 +152,7 @@
   "PRACTICE_SESSION_NOT_FOUND": "练习会话不存在",
   "PRACTICE_SESSION_ALREADY_ENDED": "练习会话已结束",
   "PRACTICE_NO_QUESTIONS_AVAILABLE": "该知识点暂无可用题目",
-  "PRACTICE_DUPLICATE_ATTEMPT": "该题目已作答，不可重复提交"
+  "PRACTICE_DUPLICATE_ATTEMPT": "该题目已作答，不可重复提交",
+  "PRACTICE_QUESTION_NOT_IN_SESSION": "该题目不在当前练习会话中",
+  "PRACTICE_TOPIC_LOCKED": "该知识点已锁定，请先完成前置条件"
 }

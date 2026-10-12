@@ -1,4 +1,5 @@
 """Practice session management service."""
+
 import json
 from datetime import UTC, datetime
 
@@ -56,7 +57,19 @@ def submit_answer(
 
     Raises:
         AppError(PRACTICE_DUPLICATE_ATTEMPT): if question already answered.
+        AppError(PRACTICE_QUESTION_NOT_IN_SESSION): if question not in session.
+        AppError(PRACTICE_QUESTION_NOT_FOUND): if question doesn't exist.
     """
+    # Load session for question list validation
+    session = db.query(PracticeSession).filter_by(id=session_id).first()
+    if not session:
+        raise AppError(ErrorCode.PRACTICE_SESSION_NOT_FOUND)
+
+    # Verify question belongs to this session
+    session_question_ids: list[int] = json.loads(session.question_ids_json)
+    if question_id not in session_question_ids:
+        raise AppError(ErrorCode.PRACTICE_QUESTION_NOT_IN_SESSION)
+
     # Check for duplicate
     existing = (
         db.query(PracticeAttempt)
@@ -94,9 +107,7 @@ def submit_answer(
     db.add(attempt)
 
     # Update session completed_count
-    session = db.query(PracticeSession).filter_by(id=session_id).first()
-    if session:
-        session.completed_count += 1
+    session.completed_count += 1
 
     db.flush()
     return attempt
@@ -115,6 +126,8 @@ def finish_session(
     """
     session = db.query(PracticeSession).filter_by(id=session_id).first()
     if not session:
+        raise AppError(ErrorCode.PRACTICE_SESSION_NOT_FOUND)
+    if session.child_id != child_id:
         raise AppError(ErrorCode.PRACTICE_SESSION_NOT_FOUND)
     if session.ended_at is not None:
         raise AppError(ErrorCode.PRACTICE_SESSION_ALREADY_ENDED)

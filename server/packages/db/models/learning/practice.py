@@ -1,4 +1,5 @@
 """Practice session and attempt models."""
+
 from datetime import datetime
 
 from sqlalchemy import (
@@ -10,6 +11,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -38,12 +40,8 @@ class PracticeSession(Base):
     )
     ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     total_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    completed_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-    source: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="adaptive"
-    )
+    completed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="adaptive")
     learning_progress_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("learning_progress.id"), nullable=True
     )
@@ -76,9 +74,7 @@ class PracticeAttempt(Base):
     user_answer_json: Mapped[str] = mapped_column(Text, nullable=False)
     is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
     time_spent_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    attempt_number: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=1
-    )
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now()
     )
@@ -92,5 +88,8 @@ class PracticeAttempt(Base):
             "child_id",
             "topic_id",
             "created_at",
+        ),
+        UniqueConstraint(
+            "session_id", "question_id", name="uq_attempt_session_question"
         ),
     )

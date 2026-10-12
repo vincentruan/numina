@@ -109,6 +109,11 @@ def upgrade() -> None:
             "practice_attempts",
             ["child_id", "topic_id", "created_at"],
         )
+        op.create_unique_constraint(
+            "uq_attempt_session_question",
+            "practice_attempts",
+            ["session_id", "question_id"],
+        )
 
 
 def downgrade() -> None:

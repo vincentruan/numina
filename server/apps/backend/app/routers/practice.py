@@ -1,5 +1,7 @@
 """Practice system API endpoints."""
+
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import get_current_user_or_child
@@ -10,7 +12,7 @@ from apps.backend.app.schemas.practice import (
     PracticeAttemptResponse,
     PracticeResultResponse,
     PracticeSessionResponse,
-    QuestionResponse,
+    QuestionPublicResponse,
     SessionCreateRequest,
     SubmitAnswerRequest,
 )
@@ -21,8 +23,13 @@ from apps.backend.app.services.learning.practice_service import (
     get_session,
     submit_answer,
 )
-from apps.backend.app.services.learning.progress_service import get_or_create_progress
-from apps.backend.app.services.learning.question_service import list_questions
+from apps.backend.app.services.learning.progress_service import (
+    get_or_create_progress,
+)
+from apps.backend.app.services.learning.question_service import (
+    get_question,
+    list_questions,
+)
 from packages.core.logging import get_logger
 from packages.db.models.learning.topic import LearningTopic
 
@@ -31,7 +38,11 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/practice", tags=["practice"])
 
 
-@router.get("/questions", response_model=list[QuestionResponse])
+class BatchQuestionsRequest(BaseModel):
+    question_ids: list[int]
+
+
+@router.get("/questions", response_model=list[QuestionPublicResponse])
 def list_practice_questions(
     topic_id: int | None = None,
     difficulty: int | None = None,
@@ -39,9 +50,26 @@ def list_practice_questions(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user_or_child),
 ):
-    """List approved questions, optionally filtered by topic/difficulty."""
-    questions = list_questions(db=db, topic_id=topic_id, difficulty=difficulty, limit=limit)
+    """List approved questions (without answers), optionally filtered by topic/difficulty."""
+    questions = list_questions(
+        db=db, topic_id=topic_id, difficulty=difficulty, limit=limit
+    )
     return questions
+
+
+@router.post("/questions/batch", response_model=list[QuestionPublicResponse])
+def batch_get_questions(
+    req: BatchQuestionsRequest,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user_or_child),
+):
+    """Fetch specific questions by ID list (without answers)."""
+    results = []
+    for qid in req.question_ids:
+        q = get_question(db, qid)
+        if q and q.review_status == "approved":
+            results.append(q)
+    return results
 
 
 @router.post("/sessions", response_model=PracticeSessionResponse)
@@ -57,6 +85,10 @@ def create_practice_session(
 
     # Get child's mastery level for adaptive selection
     progress = get_or_create_progress(db, user.id, req.topic_id)
+
+    # Block locked topics
+    if progress.mastery_level == "locked":
+        raise AppError(ErrorCode.PRACTICE_TOPIC_LOCKED)
 
     # Select questions
     questions = select_questions(
@@ -82,9 +114,7 @@ def create_practice_session(
     return session
 
 
-@router.post(
-    "/sessions/{session_id}/answer", response_model=PracticeAttemptResponse
-)
+@router.post("/sessions/{session_id}/answer", response_model=PracticeAttemptResponse)
 def submit_practice_answer(
     session_id: int,
     req: SubmitAnswerRequest,
@@ -110,9 +140,7 @@ def submit_practice_answer(
     return attempt
 
 
-@router.post(
-    "/sessions/{session_id}/finish", response_model=PracticeResultResponse
-)
+@router.post("/sessions/{session_id}/finish", response_model=PracticeResultResponse)
 def finish_practice_session(
     session_id: int,
     db: Session = Depends(get_db),

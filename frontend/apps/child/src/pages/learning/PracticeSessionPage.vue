@@ -84,9 +84,9 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  batchGetQuestions,
   createPracticeSession,
   finishPracticeSession,
-  listPracticeQuestions,
   submitPracticeAnswer,
   type PracticeAttemptResponse,
   type PracticeResultResponse,
@@ -126,7 +126,7 @@ const modes = computed(() => [
   { count: 5, label: t('practice.mode.challenge') },
 ])
 
-const displayTopicName = computed(() => topicId.value ? `#${topicId.value.slice(-6)}` : '')
+const displayTopicName = computed(() => topicId.value ? `${t('practice.title')} #${topicId.value.slice(-6)}` : t('practice.title'))
 
 const totalQuestions = computed(() => questions.value.length)
 const currentQuestion = computed(() => questions.value[currentIndex.value])
@@ -145,9 +145,9 @@ async function startSession(count: number) {
       count,
     })
     session.value = resp
-    // Fetch real question details via GET /practice/questions
-    const all = await listPracticeQuestions(resp.topic_id)
-    const byId = new Map(all.map((q) => [q.id, q]))
+    // Fetch specific questions by ID using batch endpoint
+    const fetched = await batchGetQuestions(resp.question_ids)
+    const byId = new Map(fetched.map((q) => [q.id, q]))
     questions.value = resp.question_ids
       .map((qid) => byId.get(qid))
       .filter((q): q is QuestionResponse => !!q)
@@ -170,13 +170,13 @@ async function onAnswerSubmit(answer: Record<string, unknown>) {
     const attempt = await submitPracticeAnswer(session.value.id, {
       question_id: currentQuestion.value.id,
       user_answer: answer,
-      time_spent_seconds: null,
+      time_spent_seconds: undefined,
     })
     lastAttempt.value = attempt
     feedbackShown.value = true
   } catch (e) {
     // duplicate attempt or session ended — show toast and skip
-    feedbackShown.value = true
+    // Do NOT set feedbackShown here — the answer was not actually submitted
   } finally {
     submitting.value = false
   }
@@ -214,6 +214,13 @@ function onAgain() {
 
 function goBack() {
   router.back()
+}
+
+function load() {
+  phase.value = 'mode'
+  error.value = ''
+  session.value = null
+  questions.value = []
 }
 </script>
 

@@ -1,4 +1,6 @@
 """Adaptive question selection engine."""
+
+import random
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
@@ -70,8 +72,6 @@ def select_questions(
         query = query.filter(~Question.id.in_(exclude_set))
 
     candidates = query.all()
-
-    import random
 
     random.shuffle(candidates)
     return candidates[:count]

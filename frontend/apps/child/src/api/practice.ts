@@ -86,6 +86,15 @@ export async function listPracticeQuestions(
   return resp.data.data
 }
 
+export async function batchGetQuestions(
+  questionIds: string[],
+): Promise<QuestionResponse[]> {
+  const resp = await http.post('/api/v1/practice/questions/batch', {
+    question_ids: questionIds,
+  })
+  return resp.data.data
+}
+
 export async function createPracticeSession(
   req: PracticeSessionCreate,
 ): Promise<PracticeSessionResponse> {

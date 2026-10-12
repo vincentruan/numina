@@ -1,17 +1,18 @@
 """Pydantic schemas for practice system."""
-from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_serializer
 
 from apps.backend.app.schemas.base import SnowflakeBase
-
 
 # --- Request schemas ---
 
 
 class SessionCreateRequest(BaseModel):
     topic_id: int
-    session_mode: str = "practice"
+    session_mode: Literal["practice", "review", "challenge"] = "practice"
     count: int = Field(default=5, ge=1, le=20)
 
 
@@ -24,25 +25,32 @@ class SubmitAnswerRequest(BaseModel):
 # --- Response schemas ---
 
 
-class QuestionResponse(SnowflakeBase):
+class QuestionPublicResponse(SnowflakeBase):
+    """Public question response — no answer or solution exposed."""
+
     id: int
     topic_id: int
     question_type: str
     stem: str
     stem_zh: str | None
     options: list[dict] | None
-    answer: dict
-    solution: dict | None
     difficulty: int
     bloom_level: str
     source: str
     source_version: str | None
     review_status: str
-    review_notes: str | None
     age_group: str
     parameters: dict | None
     times_used: int
     correct_count: int
+
+
+class QuestionResponse(QuestionPublicResponse):
+    """Admin response with answer and solution."""
+
+    answer: dict
+    solution: dict | None
+    review_notes: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -60,10 +68,12 @@ class PracticeSessionResponse(SnowflakeBase):
     source: str
     learning_progress_id: int | None
 
+    @field_serializer("question_ids")
+    def _serialize_question_ids(self, v: list[int]) -> list[str]:
+        return [str(x) for x in v]
+
 
 class PracticeAttemptResponse(SnowflakeBase):
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     session_id: int
     question_id: int

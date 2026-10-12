@@ -1,4 +1,5 @@
 """Question CRUD and quality gate service."""
+
 import json
 
 from sqlalchemy.orm import Session
@@ -79,9 +80,7 @@ def create_question(
         options=options,
     )
     if errors:
-        raise AppError(
-            ErrorCode.PRACTICE_QUESTION_INVALID, details="; ".join(errors)
-        )
+        raise AppError(ErrorCode.PRACTICE_QUESTION_INVALID, details="; ".join(errors))
 
     # Determine review status
     review_status = "approved" if source == "template" else "pending"
@@ -132,11 +131,11 @@ def list_questions(
 ) -> list[Question]:
     """List questions with optional filters."""
     query = db.query(Question).filter(Question.review_status == "approved")
-    if topic_id:
+    if topic_id is not None:
         query = query.filter(Question.topic_id == topic_id)
     if question_type:
         query = query.filter(Question.question_type == question_type)
-    if difficulty:
+    if difficulty is not None:
         query = query.filter(Question.difficulty == difficulty)
     return query.limit(limit).all()
 

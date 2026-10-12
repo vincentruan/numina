@@ -65,14 +65,18 @@ def test_submit_answer_endpoint(client, auth_headers, topic, questions):
         json={"topic_id": topic.id, "count": 1},
         headers=auth_headers,
     )
-    session_id = resp.json()["data"]["id"]
+    session_data = resp.json()["data"]
+    session_id = session_data["id"]
+    q_ids = session_data["question_ids"]
 
-    # Submit answer
+    # Submit answer for the question actually in the session
+    qid = q_ids[0]
+    q = next(q for q in questions if str(q.id) == qid)
     resp = client.post(
         f"/api/v1/practice/sessions/{session_id}/answer",
         json={
-            "question_id": questions[0].id,
-            "user_answer": {"answer": questions[0].answer["answer"]},
+            "question_id": int(qid),
+            "user_answer": {"answer": q.answer["answer"]},
             "time_spent_seconds": 10,
         },
         headers=auth_headers,
