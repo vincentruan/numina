@@ -126,4 +126,5 @@ def test_select_questions_returns_empty_when_none_available(db: Session, topic):
 def test_mastery_estimator_basic(db: Session, topic):
     estimator = RuleBasedMasteryEstimator()
     score = estimator.estimate(db=db, child_id=1, topic_id=topic.id)
-    assert score == 0.0
+    # No attempts → neutral fallback (0.5) for insufficient data
+    assert score == 0.5
