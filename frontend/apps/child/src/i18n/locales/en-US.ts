@@ -579,6 +579,36 @@ export default {
       aiBadge: 'AI',
     },
   },
+  practice: {
+    title: 'Practice',
+    startPractice: 'Start Practice',
+    mode: {
+      quick: 'Quick Practice',
+      standard: 'Standard Practice',
+      challenge: 'Challenge',
+    },
+    answer: {
+      true: 'True',
+      false: 'False',
+      inputPlaceholder: 'Enter answer',
+    },
+    feedback: {
+      correct: 'Great job!',
+      wrong: 'Not quite — check the solution',
+      solution: 'Solution Steps',
+      next: 'Next',
+      finish: 'See Results',
+    },
+    result: {
+      correctOf: 'Got {correct} / {total} correct',
+      again: 'Try Again',
+      backToMap: 'Back to Map',
+    },
+    errors: {
+      startFailed: 'Could not start practice, please try again',
+      finishFailed: 'Could not finish practice',
+    },
+  },
   empty: {
     noTasks: 'No tasks today, enjoy your rest 🌟',
     allDone: 'All done for today! Amazing 🎉',

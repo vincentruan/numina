@@ -144,6 +144,9 @@
         <button class="btn-primary" :disabled="starting" @click="onStartLearning">
           {{ starting ? t('common.loading') : t('learning.startLearning') }}
         </button>
+        <button class="btn-secondary" @click="goToPractice">
+          {{ t('practice.startPractice') }}
+        </button>
         <button class="btn-secondary" :disabled="submitting" @click="onSubmitAssignment">
           {{ submitting ? t('common.loading') : t('learning.submitAssignment') }}
         </button>
@@ -304,6 +307,10 @@ async function handleTranslate() {
 
 function goBack() {
   router.push('/learning')
+}
+
+function goToPractice() {
+  router.push(`/learning/practice/${topicId.value}`)
 }
 
 function getProgressLevel(topicIdStr: string): string {

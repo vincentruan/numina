@@ -580,6 +580,36 @@ export default {
       aiBadge: 'AI',
     },
   },
+  practice: {
+    title: '练习',
+    startPractice: '开始练习',
+    mode: {
+      quick: '快速练习',
+      standard: '标准练习',
+      challenge: '挑战模式',
+    },
+    answer: {
+      true: '对',
+      false: '错',
+      inputPlaceholder: '输入答案',
+    },
+    feedback: {
+      correct: '太棒了，答对啦！',
+      wrong: '答错啦，看看解析吧',
+      solution: '解析步骤',
+      next: '下一题',
+      finish: '查看结果',
+    },
+    result: {
+      correctOf: '答对了 {correct} / {total} 题',
+      again: '再来一组',
+      backToMap: '返回地图',
+    },
+    errors: {
+      startFailed: '开始练习失败了，再试一次吧',
+      finishFailed: '结束练习失败了',
+    },
+  },
   empty: {
     noTasks: '今天没有任务，好好休息吧 🌟',
     allDone: '今天的任务都完成啦！太棒了 🎉',

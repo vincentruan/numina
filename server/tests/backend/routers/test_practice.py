@@ -114,6 +114,17 @@ def test_finish_session_endpoint(client, auth_headers, topic, questions):
     assert data["total_count"] == 2
 
 
+def test_list_questions_endpoint(client, auth_headers, topic, questions):
+    resp = client.get(
+        f"/api/v1/practice/questions?topic_id={topic.id}",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert len(data) == 5
+    assert data[0]["id"]  # Snowflake string
+
+
 def test_no_questions_returns_404(client, auth_headers, db):
     """Topic with no approved questions returns error."""
     empty_topic = LearningTopic(

@@ -10,6 +10,7 @@ from apps.backend.app.schemas.practice import (
     PracticeAttemptResponse,
     PracticeResultResponse,
     PracticeSessionResponse,
+    QuestionResponse,
     SessionCreateRequest,
     SubmitAnswerRequest,
 )
@@ -21,12 +22,26 @@ from apps.backend.app.services.learning.practice_service import (
     submit_answer,
 )
 from apps.backend.app.services.learning.progress_service import get_or_create_progress
+from apps.backend.app.services.learning.question_service import list_questions
 from packages.core.logging import get_logger
 from packages.db.models.learning.topic import LearningTopic
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/practice", tags=["practice"])
+
+
+@router.get("/questions", response_model=list[QuestionResponse])
+def list_practice_questions(
+    topic_id: int | None = None,
+    difficulty: int | None = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user_or_child),
+):
+    """List approved questions, optionally filtered by topic/difficulty."""
+    questions = list_questions(db=db, topic_id=topic_id, difficulty=difficulty, limit=limit)
+    return questions
 
 
 @router.post("/sessions", response_model=PracticeSessionResponse)
