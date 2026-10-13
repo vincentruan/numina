@@ -185,7 +185,12 @@ def select_questions(
     5. Exclude recently answered questions (last N days) — except review mode
     6. Random sample up to count
     """
-    if session_mode == "challenge":
+    # Derive effective mode: explicit session_mode takes precedence;
+    # fallback to mastery_level for backward compatibility (callers that
+    # pass mastery_level="review" without session_mode still get review behavior).
+    effective_mode = session_mode if session_mode != "practice" else mastery_level
+
+    if effective_mode == "challenge":
         min_diff, max_diff = 4, 5
     elif estimator is not None:
         mastery_score = estimator.estimate(db, child_id=child_id, topic_id=topic_id)
@@ -193,23 +198,23 @@ def select_questions(
     else:
         min_diff, max_diff = get_difficulty_range(mastery_level)
 
-    # Review mode: include recently-answered questions (relax exclusion)
-    if session_mode == "review":
-        cutoff = datetime.now(UTC) - timedelta(days=1)  # only exclude today's
+    # Recent question IDs for this child
+    # Review mode: do NOT exclude recently-answered questions — the whole
+    # point of review is to re-ask questions the child already saw.
+    if effective_mode == "review":
+        recent_ids: set[int] = set()
     else:
         cutoff = datetime.now(UTC) - timedelta(days=exclude_recent_days)
-
-    # Recent question IDs for this child
-    recent_ids = {
-        row.question_id
-        for row in db.query(PracticeAttempt.question_id)
-        .filter(
-            PracticeAttempt.child_id == child_id,
-            PracticeAttempt.topic_id == topic_id,
-            PracticeAttempt.created_at >= cutoff,
-        )
-        .all()
-    }
+        recent_ids = {
+            row.question_id
+            for row in db.query(PracticeAttempt.question_id)
+            .filter(
+                PracticeAttempt.child_id == child_id,
+                PracticeAttempt.topic_id == topic_id,
+                PracticeAttempt.created_at >= cutoff,
+            )
+            .all()
+        }
 
     exclude_set = set(exclude_question_ids) | recent_ids
 
