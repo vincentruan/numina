@@ -60,6 +60,7 @@
   "STORAGE_ENCRYPTION_KEY_NOT_CONFIGURED": "存储加密密钥未配置，请联系系统管理员",
   "AI_NOT_ENABLED": "AI 功能未开启，请联系家庭管理员在设置中配置并启用 AI 助手",
   "AI_SERVICE_UNAVAILABLE": "AI 服务暂时不可用，请稍后再试",
+  "AI_ENCRYPTION_KEY_NOT_CONFIGURED": "AI 加密密钥未配置，请联系系统管理员",
   "AI_SERVICE_TIMEOUT": "AI 服务响应超时，请稍后再试",
   "AI_CONFIG_MISSING_API_KEY": "启用 AI 功能需要配置 API Key",
   "AI_CONFIG_MISSING_PROVIDER": "配置 API Key 需要选择 AI Provider",
