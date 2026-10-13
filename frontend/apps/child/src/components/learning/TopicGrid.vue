@@ -5,7 +5,7 @@
       :key="group.domain"
       class="domain-group"
     >
-      <h3 class="domain-group__title">{{ group.domain }}</h3>
+      <h3 class="domain-group__title">{{ domainLabel(group.domain) }}</h3>
       <div class="domain-group__cards">
         <button
           v-for="item in group.items"
@@ -109,6 +109,12 @@ const domainGroups = computed<DomainGroup[]>(() => {
   }
   return Array.from(map.entries()).map(([domain, items]) => ({ domain, items }))
 })
+
+function domainLabel(domain: string): string {
+  const key = `learning.domains.${domain}`
+  const translated = t(key)
+  return translated === key ? domain : translated
+}
 </script>
 
 <style scoped>

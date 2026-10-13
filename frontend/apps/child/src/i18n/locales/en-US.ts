@@ -532,6 +532,11 @@ export default {
       comfort: 'Comfort Zone',
       challenge: 'Challenge Zone',
     },
+    ageGroup: {
+      low: 'Beginner',
+      mid: 'Intermediate',
+      high: 'Challenging',
+    },
     onboarding: {
       welcomeTitle: 'Hi, {name}!',
       welcomeDesc: "I'm your big friend. From today I'll explore the world of knowledge with you.",

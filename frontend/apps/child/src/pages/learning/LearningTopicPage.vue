@@ -7,9 +7,9 @@
       <div class="breadcrumb">
         <span class="breadcrumb__item" @click="goBack">{{ t('learning.title') }}</span>
         <span class="breadcrumb__sep">/</span>
-        <span class="breadcrumb__item">{{ topic.subject }}</span>
+        <span class="breadcrumb__item">{{ subjectLabel(topic.subject) }}</span>
         <span v-if="topic.domain" class="breadcrumb__sep">/</span>
-        <span v-if="topic.domain" class="breadcrumb__item breadcrumb__item--active">{{ topic.domain }}</span>
+        <span v-if="topic.domain" class="breadcrumb__item breadcrumb__item--active">{{ domainLabel(topic.domain) }}</span>
       </div>
 
       <!-- Topic title row with curriculum badge -->
@@ -163,7 +163,7 @@
     <van-dialog
       v-model:show="showDifficultyDialog"
       :title="difficultyDialogTitle"
-      show-cancel-button
+      :show-cancel-button="!!suggestedTopicId"
       :confirm-button-text="t('learning.difficultyWarning.continueAnyway')"
       :cancel-button-text="t('learning.difficultyWarning.goSuggested')"
       @confirm="proceedToSession"
@@ -218,6 +218,18 @@ const route = useRoute()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
 
+function subjectLabel(subject: string): string {
+  const key = `learning.subject.${subject}`
+  const translated = t(key)
+  return translated === key ? subject.charAt(0).toUpperCase() + subject.slice(1) : translated
+}
+
+function domainLabel(domain: string): string {
+  const key = `learning.domains.${domain}`
+  const translated = t(key)
+  return translated === key ? domain : translated
+}
+
 const topicId = computed(() => route.params.id as string)
 
 const loading = ref(true)
@@ -268,10 +280,17 @@ const difficultyDialogTitle = computed(() => {
 const difficultyMessage = computed(() => {
   const w = difficultyWarning.value
   if (!w) return ''
-  if (w.type === 'age')
-    return t('learning.difficultyWarning.ageMessage', { level: w.level })
+  if (w.type === 'age') {
+    const levelKey = `learning.ageGroup.${w.level}`
+    const levelLabel = t(levelKey)
+    return t('learning.difficultyWarning.ageMessage', {
+      level: levelLabel === levelKey ? w.level : levelLabel,
+    })
+  }
   return t('learning.difficultyWarning.prereqMessage', { count: w.unmet_count })
 })
+
+const suggestedTopicId = computed(() => difficultyWarning.value?.suggested_topic_id ?? null)
 
 const suggestedTopicName = computed(() => {
   const w = difficultyWarning.value
