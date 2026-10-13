@@ -201,13 +201,24 @@ def get_weak_topics(
     )
 
     results = []
-    for row in rows:
-        topic = db.query(LearningTopic).filter_by(id=row.topic_id).first()
-        progress = (
+
+    # Batch-load topics and progress to avoid N+1
+    topic_ids = {row.topic_id for row in rows}
+    topics_by_id = {}
+    progress_by_topic = {}
+    if topic_ids:
+        for t in db.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all():
+            topics_by_id[t.id] = t
+        for p in (
             db.query(LearningProgress)
-            .filter_by(child_id=child_id, topic_id=row.topic_id)
-            .first()
-        )
+            .filter(LearningProgress.child_id == child_id, LearningProgress.topic_id.in_(topic_ids))
+            .all()
+        ):
+            progress_by_topic[p.topic_id] = p
+
+    for row in rows:
+        topic = topics_by_id.get(row.topic_id)
+        progress = progress_by_topic.get(row.topic_id)
         correct = row.correct or 0
         accuracy = correct / row.total if row.total > 0 else 0.0
         results.append(
@@ -257,9 +268,16 @@ def get_session_detail(db: Session, session_id: int, child_id: int) -> dict | No
         .all()
     )
 
+    # Batch-load questions to avoid N+1
+    question_ids = {a.question_id for a in attempts}
+    questions_by_id = {}
+    if question_ids:
+        for q in db.query(Question).filter(Question.id.in_(question_ids)).all():
+            questions_by_id[q.id] = q
+
     attempt_details = []
     for a in attempts:
-        q = db.query(Question).filter_by(id=a.question_id).first()
+        q = questions_by_id.get(a.question_id)
         attempt_details.append(
             {
                 "id": a.id,

@@ -611,6 +611,7 @@ export default {
     errors: {
       startFailed: 'Could not start practice, please try again',
       finishFailed: 'Could not finish practice',
+      submitFailed: 'Could not submit answer, please try again',
     },
     prereqReview: 'Recommended Prerequisite Review',
     prereqReason: '{accuracy}% accuracy — review first',

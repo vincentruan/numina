@@ -193,8 +193,8 @@ async function onAnswerSubmit(answer: Record<string, unknown>) {
     lastAttempt.value = attempt
     feedbackShown.value = true
   } catch (e) {
-    // duplicate attempt or session ended — show toast and skip
-    // Do NOT set feedbackShown here — the answer was not actually submitted
+    // duplicate attempt or session ended — show toast so user knows
+    showFailToast(t('practice.errors.submitFailed'))
   } finally {
     submitting.value = false
   }

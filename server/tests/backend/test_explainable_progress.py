@@ -167,7 +167,7 @@ class TestRecommendWithReason:
         recs = get_recommend_with_reason(db, child_id=uid)
         # Should have at least one recommendation with a reason
         if recs:
-            assert any("reason" in r for r in recs)
+            assert any("reason_key" in r for r in recs)
 
     def test_empty_returns_empty(self, db: Session, explain_setup):
         """No attempts → no recommendations."""

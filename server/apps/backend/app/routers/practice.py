@@ -47,6 +47,7 @@ from apps.backend.app.services.learning.question_service import (
     list_questions,
 )
 from packages.core.logging import get_logger
+from packages.db.models.learning.practice import PracticeSession
 from packages.db.models.learning.question import Question as QuestionModel
 from packages.db.models.learning.topic import LearningTopic
 
@@ -74,14 +75,18 @@ def list_practice_questions(
     return questions
 
 
-@router.post("/questions/batch", response_model=list[PracticeQuestionWithAnswer])
+@router.post("/questions/batch")
 def batch_get_questions(
     req: BatchQuestionsRequest,
     db: Session = Depends(get_db),
-    _user: User = Depends(get_current_user_or_child),
+    user: User = Depends(get_current_user_or_child),
 ):
-    """Fetch specific questions by ID list (with answers for active session context)."""
-    results = (
+    """Fetch specific questions by ID list.
+
+    Returns questions with answers ONLY if the user has an active (non-ended)
+    session containing those question IDs. Otherwise returns public view (no answers).
+    """
+    questions = (
         db.query(QuestionModel)
         .filter(
             QuestionModel.id.in_(req.question_ids),
@@ -89,7 +94,31 @@ def batch_get_questions(
         )
         .all()
     )
-    return results
+
+    # Check if user has an active session containing these question IDs
+    requested_ids = set(req.question_ids)
+    has_session_context = False
+
+    active_sessions = (
+        db.query(PracticeSession)
+        .filter(
+            PracticeSession.child_id == user.id,
+            PracticeSession.ended_at.is_(None),
+        )
+        .all()
+    )
+    for s in active_sessions:
+        session_qids = set(json.loads(s.question_ids_json) if s.question_ids_json else [])
+        if requested_ids & session_qids:
+            has_session_context = True
+            break
+
+    if has_session_context:
+        return [
+            PracticeQuestionWithAnswer.model_validate(q) for q in questions
+        ]
+    else:
+        return [QuestionPublicResponse.model_validate(q) for q in questions]
 
 
 @router.post("/sessions", response_model=PracticeSessionResponse)
@@ -228,9 +257,17 @@ def list_practice_sessions(
 ):
     """List practice sessions for the current child."""
     sessions = list_sessions(db, child_id=user.id, limit=limit, offset=offset)
+
+    # Batch-load topics to avoid N+1
+    topic_ids = {s.topic_id for s in sessions}
+    topics_by_id = {}
+    if topic_ids:
+        for t in db.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all():
+            topics_by_id[t.id] = t
+
     results = []
     for s in sessions:
-        topic = db.query(LearningTopic).filter_by(id=s.topic_id).first()
+        topic = topics_by_id.get(s.topic_id)
         question_ids = json.loads(s.question_ids_json) if s.question_ids_json else []
         results.append(
             SessionListItem(

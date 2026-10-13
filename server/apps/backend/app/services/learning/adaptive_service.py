@@ -355,13 +355,13 @@ def get_recommend_with_reason(
     for row in rows:
         accuracy = (row.correct or 0) / row.total if row.total > 0 else 0.0
 
-        # Generate explainable reason
+        # Generate explainable reason key for frontend i18n
         if accuracy < 0.5:
-            reason = f"该知识点正确率仅 {accuracy:.0%}，建议加强练习"
+            reason_key = "low_accuracy"
         elif accuracy < 0.7:
-            reason = f"该知识点正确率 {accuracy:.0%}，仍有提升空间"
+            reason_key = "medium_accuracy"
         else:
-            reason = f"该知识点掌握良好（{accuracy:.0%}），建议巩固"
+            reason_key = "high_accuracy"
 
         results.append({
             "topic_id": row.id,
@@ -370,7 +370,7 @@ def get_recommend_with_reason(
             "domain": row.domain,
             "total_attempts": row.total,
             "accuracy": accuracy,
-            "reason": reason,
+            "reason_key": reason_key,
         })
 
     return results

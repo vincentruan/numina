@@ -612,6 +612,7 @@ export default {
     errors: {
       startFailed: '开始练习失败了，再试一次吧',
       finishFailed: '结束练习失败了',
+      submitFailed: '提交答案失败了，请重试',
     },
     prereqReview: '建议复习先修知识点',
     prereqReason: '正确率 {accuracy}%，建议先巩固',

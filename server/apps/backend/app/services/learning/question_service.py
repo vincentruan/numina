@@ -146,11 +146,12 @@ def get_question(db: Session, question_id: int) -> Question | None:
     return db.query(Question).filter_by(id=question_id).first()
 
 
-def check_duplicate(db: Session, stem: str, answer: dict) -> bool:
+def check_duplicate(db: Session, stem: str, answer: dict, topic_id: int | None = None) -> bool:
     """Check if a question with same stem+answer already exists.
 
     Uses content hashing (SHA256 of stem + sorted answer JSON).
     Canonicalizes both sides with sort_keys=True for consistent comparison.
+    Optionally scoped to a topic_id to avoid full table scan.
     """
     import hashlib
 
@@ -160,7 +161,11 @@ def check_duplicate(db: Session, stem: str, answer: dict) -> bool:
 
     target_hash = _hash(stem, answer)
 
-    for q in db.query(Question.stem, Question.answer_json).all():
+    query = db.query(Question.stem, Question.answer_json)
+    if topic_id is not None:
+        query = query.filter(Question.topic_id == topic_id)
+
+    for q in query.all():
         existing_answer = json.loads(q.answer_json)
         if _hash(q.stem, existing_answer) == target_hash:
             return True
