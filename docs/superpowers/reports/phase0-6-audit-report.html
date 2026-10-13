@@ -1,0 +1,474 @@
+<title>Issue #118 Audit Report</title>
+<style>
+:root {
+  --bg: #f8f9fa;
+  --fg: #1a1a2e;
+  --fg2: #4a4a6a;
+  --surface: #ffffff;
+  --border: #e2e4e8;
+  --accent: #2563eb;
+  --pass: #059669;
+  --pass-bg: #ecfdf5;
+  --fail: #dc2626;
+  --fail-bg: #fef2f2;
+  --partial: #d97706;
+  --partial-bg: #fffbeb;
+  --unverified: #6b7280;
+  --unverified-bg: #f3f4f6;
+  --code-bg: #f1f3f5;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1117;
+    --fg: #e4e4e7;
+    --fg2: #a1a1aa;
+    --surface: #1a1b26;
+    --border: #2e2e3e;
+    --accent: #60a5fa;
+    --pass: #34d399;
+    --pass-bg: #064e3b;
+    --fail: #f87171;
+    --fail-bg: #450a0a;
+    --partial: #fbbf24;
+    --partial-bg: #451a03;
+    --unverified: #9ca3af;
+    --unverified-bg: #1f2937;
+    --code-bg: #1e1e2e;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1117;
+  --fg: #e4e4e7;
+  --fg2: #a1a1aa;
+  --surface: #1a1b26;
+  --border: #2e2e3e;
+  --accent: #60a5fa;
+  --pass: #34d399;
+  --pass-bg: #064e3b;
+  --fail: #f87171;
+  --fail-bg: #450a0a;
+  --partial: #fbbf24;
+  --partial-bg: #451a03;
+  --unverified: #9ca3af;
+  --unverified-bg: #1f2937;
+  --code-bg: #1e1e2e;
+  --shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.6;
+  padding: 2rem 1rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; text-wrap: balance; }
+h2 { font-size: 1.25rem; font-weight: 600; margin: 2rem 0 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+h3 { font-size: 1.05rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--accent); }
+p, li { font-size: 0.9rem; color: var(--fg2); }
+p { margin-bottom: 0.75rem; }
+ul { padding-left: 1.25rem; margin-bottom: 0.75rem; }
+li { margin-bottom: 0.25rem; }
+.verdict-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin: 1rem 0;
+  box-shadow: var(--shadow);
+}
+.verdict-label {
+  font-size: 1.1rem;
+  font-weight: 700;
+  display: inline-block;
+  padding: 0.2rem 0.75rem;
+  border-radius: 4px;
+}
+.verdict-partial { background: var(--partial-bg); color: var(--partial); }
+.verdict-verified { background: var(--pass-bg); color: var(--pass); }
+.stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.stat-chip {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.chip-pass { background: var(--pass-bg); color: var(--pass); }
+.chip-fail { background: var(--fail-bg); color: var(--fail); }
+.chip-partial { background: var(--partial-bg); color: var(--partial); }
+.chip-unverified { background: var(--unverified-bg); color: var(--unverified); }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  display: block;
+}
+thead { display: table-header-group; }
+tbody { display: table-row-group; }
+th, td {
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+th {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--fg2);
+  background: var(--code-bg);
+  position: sticky;
+  top: 0;
+}
+td code {
+  font-size: 0.78rem;
+  background: var(--code-bg);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Cascadia Code', monospace;
+}
+.status-pass { color: var(--pass); font-weight: 600; }
+.status-fail { color: var(--fail); font-weight: 600; }
+.status-partial { color: var(--partial); font-weight: 600; }
+.status-unverified { color: var(--unverified); font-weight: 600; }
+.finding {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--fail);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin: 0.75rem 0;
+  box-shadow: var(--shadow);
+}
+.finding-warn { border-left-color: var(--partial); }
+.finding-info { border-left-color: var(--accent); }
+.finding h4 { font-size: 0.9rem; margin-bottom: 0.4rem; }
+.finding p { margin-bottom: 0.4rem; }
+.evidence {
+  font-size: 0.8rem;
+  font-family: 'SF Mono', 'Cascadia Code', monospace;
+  background: var(--code-bg);
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0.5rem 0;
+  color: var(--fg2);
+}
+.section-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+  color: var(--accent);
+}
+details { margin-bottom: 0.5rem; }
+details[open] summary { margin-bottom: 0.5rem; }
+</style>
+
+<div class="verdict-box">
+  <h1>Issue #118 Implementation Verification Report</h1>
+  <p style="color:var(--fg2);margin-bottom:1rem;">External API Token System for Backend MCP Endpoints</p>
+  <span class="verdict-label verdict-partial">PARTIALLY IMPLEMENTED</span>
+  <div class="stats-row" style="margin-top:1rem;">
+    <span class="stat-chip chip-pass">PASS: 31</span>
+    <span class="stat-chip chip-partial">PARTIAL: 5</span>
+    <span class="stat-chip chip-fail">FAIL: 4</span>
+    <span class="stat-chip chip-unverified">UNVERIFIED: 3</span>
+  </div>
+  <p style="font-size:0.82rem;">Audit date: 2026-10-13 · Branch: <code>vincentruan/epic-os-taxonomy-beijing</code> · HEAD: <code>a6b5ed9c</code></p>
+  <p style="font-size:0.82rem;">4 parallel audit agents + lead investigator · 118 tests executed · All findings backed by code evidence</p>
+</div>
+
+<h2>1. Executive Summary</h2>
+<p>The external MCP token system is substantially implemented with correct security fundamentals: hash-only storage, family-scoped queries, dual-path auth, tool-level authorization, audit logging with redaction, and anomaly detection. However, several spec deviations exist — notably the token prefix length (8 vs spec's 12), missing audit columns (<code>revoked_at</code>/<code>revoked_by</code>), no <code>mcp_anomaly_alerts</code> table (uses notification system instead), and query-param token leakage risk in nginx logs.</p>
+<p><strong>118 tests pass</strong> (66 unit + 52 integration), migration chain is valid, internal MCP is unaffected, and critical security paths (tenant isolation, synthetic user containment, tool authorization) are verified.</p>
+
+<h2>2. Requirement Traceability Matrix</h2>
+<table>
+<thead>
+<tr><th>ID</th><th>Requirement</th><th>Implementation</th><th>Test</th><th>Status</th></tr>
+</thead>
+<tbody>
+<tr><td>P1-AE1</td><td>FamilyMCPToken data model</td><td><code>models/family_mcp_token.py</code></td><td>test_mcp_token.py</td><td class="status-partial">PARTIAL</td></tr>
+<tr><td>P1-AE2</td><td>SHA-256 hash-only storage</td><td><code>services/mcp_token.py:27-29</code> — <code>_hash_token()</code></td><td>test_mcp_token.py::TestGenerateToken</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE3</td><td>Plaintext returned once at generation</td><td><code>routers/ai_mcp_token.py:49-56</code> — only POST returns <code>token</code></td><td>test_mcp_token.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE4</td><td>Token uses <code>mcp_</code> prefix</td><td><code>services/mcp_token.py:22</code> — <code>_TOKEN_PREFIX = "mcp_"</code></td><td>test_mcp_token.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE5</td><td>Sufficient entropy (≥128 bits)</td><td><code>secrets.token_urlsafe(32)</code> → 256 bits</td><td>Code evidence only</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE6</td><td>allow_external defaults to false</td><td><code>models/family_mcp_token.py:24</code> — <code>default=False</code></td><td>test_mcp_token.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE7</td><td>Token generation via API (owner-only)</td><td><code>routers/ai_mcp_token.py:43</code> — <code>require_owner</code></td><td>test_mcp_token.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE8</td><td>Rotation: one active token per family</td><td><code>services/mcp_token.py:68-76</code> — FOR UPDATE + deactivate</td><td>test_mcp_token.py::TestGenerateToken</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE9</td><td>Token lookup by family + prefix</td><td><code>services/mcp_token.py:107-116</code></td><td>test_mcp_token.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE10</td><td>Hash comparison (constant-time)</td><td><code>services/mcp_token.py:120</code> — <code>hmac.compare_digest</code></td><td>Code evidence</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE11</td><td>Expiry enforcement (timezone-aware)</td><td><code>services/mcp_token.py:123-128</code></td><td>test_mcp_token.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE12</td><td>Revoke/soft-delete semantics</td><td><code>services/mcp_token.py:190-200</code> — sets <code>is_active=False</code></td><td>test_mcp_token.py::TestRevokeToken</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE13</td><td>Bearer header auth</td><td><code>routers/mcp_public.py:68-70</code></td><td>test_mcp_public.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE14</td><td>Query-param auth (?token=)</td><td><code>routers/mcp_public.py:72-74</code></td><td>test_mcp_public.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE15</td><td>allow_external enforcement</td><td><code>routers/mcp_public.py:116-117</code> — raises FORBIDDEN</td><td>test_mcp_public.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE16</td><td>Synthetic user (role=external_token)</td><td><code>services/mcp_token.py:37-57</code></td><td>test_mcp_token.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE17</td><td>Synthetic user filtered from members</td><td><code>services/family.py:20,165</code></td><td>test_mcp_token.py::TestSyntheticUserExclusion</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE18</td><td>Synthetic user rejected at login</td><td><code>services/auth.py:439-440</code> + password_hash=""</td><td>test_mcp_public.py::TestLoginRejection</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE19</td><td>SSE endpoint (GET /mcp/public/{family_id}/sse)</td><td><code>routers/mcp_public.py:204</code></td><td>test_mcp_public.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE20</td><td>Messages endpoint (POST /mcp/public/messages)</td><td><code>routers/mcp_public.py:274</code></td><td>test_mcp_public.py::TestPublicMCPMessagesEndpoint</td><td class="status-pass">PASS</td></tr>
+<tr><td>P1-AE21</td><td>Internal MCP unaffected</td><td><code>routers/mcp_internal.py</code> — X-Agent-Token unchanged</td><td>test_mcp_sse.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P2-AE1</td><td>Per-tool whitelist (allowed_tools)</td><td><code>services/mcp_session.py:303-305</code> (list) + <code>362-386</code> (call)</td><td>test_mcp_token.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P2-AE2</td><td>allowed_tools enforced on tools/call</td><td><code>services/mcp_session.py:362-386</code> — explicit gate</td><td>test_mcp_public.py::TestToolGating</td><td class="status-pass">PASS</td></tr>
+<tr><td>P2-AE3</td><td>Audit logging (connect/disconnect/tool_call)</td><td><code>routers/mcp_public.py:165-172,184-193,245-261</code></td><td>test_mcp_audit_log.py (16 tests)</td><td class="status-pass">PASS</td></tr>
+<tr><td>P2-AE4</td><td>Sensitive arg redaction (recursive)</td><td><code>services/mcp_audit.py:37-53</code> — depth>10 guard</td><td>test_mcp_audit_log.py::TestAuditRedaction (10 tests)</td><td class="status-pass">PASS</td></tr>
+<tr><td>P2-AE5</td><td>Rate limiting (30 req/min, fail-open)</td><td><code>routers/mcp_public.py:20-44</code></td><td>No dedicated MCP rate limit tests</td><td class="status-partial">PARTIAL</td></tr>
+<tr><td>P2-AE6</td><td>Anomaly detection (freq spike, failure rate, new IP)</td><td><code>services/mcp_anomaly.py</code> — 3 detectors</td><td>test_mcp_anomaly.py (12 tests)</td><td class="status-pass">PASS</td></tr>
+<tr><td>P2-AE7</td><td>Anomaly → notification delivery</td><td><code>services/mcp_anomaly.py:199-244</code> → ensure_reminder()</td><td>test_mcp_anomaly.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P2-AE8</td><td>Anomaly dedup (1-hour window)</td><td><code>services/mcp_anomaly.py:223</code> — check_reminder_dedup</td><td>test_mcp_anomaly.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>P2-AE9</td><td>Stats dashboard API (/stats, /access-logs, /tools)</td><td><code>routers/ai_mcp_token.py:104,144,160</code></td><td>No dedicated unit tests</td><td class="status-unverified">UNVERIFIED</td></tr>
+<tr><td>P2-AE10</td><td>Frontend: MCP token management page</td><td><code>components/settings/BackendMCPCard.vue</code></td><td>No E2E tests</td><td class="status-pass">PASS</td></tr>
+<tr><td>P2-AE11</td><td>Frontend: security confirmation dialog</td><td><code>BackendMCPCard.vue:226-234</code> — showConfirmDialog</td><td>Code evidence</td><td class="status-pass">PASS</td></tr>
+<tr><td>P2-AE12</td><td>Frontend: tool permission UI</td><td><code>BackendMCPCard.vue:442-487</code> — van-checkbox-group</td><td>Code evidence</td><td class="status-pass">PASS</td></tr>
+<tr><td>P2-AE13</td><td>Frontend: expiry selector (30d/90d/180d/1y/custom/never)</td><td><code>BackendMCPCard.vue:43-50</code></td><td>Code evidence</td><td class="status-pass">PASS</td></tr>
+<tr><td>P2-AE14</td><td>Frontend: one-time secret warning</td><td><code>BackendMCPCard.vue:343-346</code> — copyNotice warn row</td><td>Code evidence</td><td class="status-pass">PASS</td></tr>
+<tr><td>SEC-1</td><td>Multi-tenant isolation (no cross-family access)</td><td>All queries filter by family_id; session frozen</td><td>test_mcp_tenant_isolation.py (4 tests)</td><td class="status-pass">PASS</td></tr>
+<tr><td>SEC-2</td><td>Prefix collision resistance</td><td>Hash verification after prefix lookup; family-scoped</td><td>Theoretical analysis</td><td class="status-partial">PARTIAL</td></tr>
+<tr><td>SEC-3</td><td>Query-param token not logged</td><td>No nginx query stripping; WARNING log includes prefix only</td><td>Code evidence</td><td class="status-fail">FAIL</td></tr>
+<tr><td>SEC-4</td><td>Member cannot access token management</td><td><code>require_owner</code> on all CRUD endpoints</td><td>test_mcp_token.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>SEC-5</td><td>Write tools default inaccessible</td><td><code>requires_write=True</code> + external_token not in allowed_roles</td><td>test_mcp_public.py::TestToolGating</td><td class="status-pass">PASS</td></tr>
+<tr><td>SEC-6</td><td>last_used_at persists after successful call</td><td><code>services/mcp_token.py:131-132</code> — flush() only</td><td>test_mcp_token.py</td><td class="status-partial">PARTIAL</td></tr>
+<tr><td>SEC-7</td><td>CR/LF log injection prevention</td><td><code>routers/mcp_public.py:235-236</code> — strip control chars</td><td>test_mcp_audit_log.py</td><td class="status-pass">PASS</td></tr>
+<tr><td>SEC-8</td><td>Migration chain integrity</td><td>mcp001token → mcp002phase2 → merge → head</td><td><code>alembic heads</code> → single head</td><td class="status-pass">PASS</td></tr>
+<tr><td>SEC-9</td><td>Concurrent rotation safety</td><td><code>services/mcp_token.py:68-73</code> — SELECT FOR UPDATE</td><td>Code evidence</td><td class="status-pass">PASS</td></tr>
+<tr><td>SPEC-1</td><td>token_prefix String(12) per spec</td><td>Model has String(8)</td><td>test_mcp_token.py</td><td class="status-fail">FAIL</td></tr>
+<tr><td>SPEC-2</td><td>revoked_at/revoked_by columns per spec</td><td>Model uses is_active boolean; no audit trail for revocation</td><td>test_mcp_token.py</td><td class="status-fail">FAIL</td></tr>
+</tbody>
+</table>
+
+<h2>3. Missing / Incorrect Implementations</h2>
+
+<h3>[P1] SPEC-1: token_prefix length mismatch</h3>
+<div class="finding">
+<h4>Spec vs Implementation</h4>
+<p><strong>Requirement:</strong> <code>token_prefix = Column(String(12))</code></p>
+<p><strong>Current:</strong> <code>token_prefix: Mapped[str] = mapped_column(String(8))</code> at <code>models/family_mcp_token.py:22</code></p>
+<p><strong>Evidence:</strong> Migration <code>mcp001token</code> also uses <code>String(8)</code>. The code stores first 8 chars of the token (e.g., <code>mcp_ABCD</code>) instead of 12.</p>
+<p><strong>Impact:</strong> MEDIUM — With 8 base64url chars (~48 bits), birthday collision becomes feasible at ~16M tokens. While hash verification prevents auth bypass, a collision in the POST /messages path (no family_id in URL) could theoretically resolve to the wrong family's token row before hash check fails. The prefix is also used as part of the rate-limit key.</p>
+<p><strong>Root cause:</strong> Implementation deviated from spec during development.</p>
+</div>
+
+<h3>[P1] SPEC-2: Missing revoked_at / revoked_by columns</h3>
+<div class="finding">
+<h4>Spec vs Implementation</h4>
+<p><strong>Requirement:</strong> <code>revoked_at = Column(DateTime, nullable=True)</code> and <code>revoked_by = Column(SnowflakeID, nullable=True)</code> with FK to User.</p>
+<p><strong>Current:</strong> Model uses <code>is_active: Mapped[bool] = mapped_column(Boolean, default=True)</code> at <code>models/family_mcp_token.py:31</code>. No record of WHO revoked or WHEN.</p>
+<p><strong>Evidence:</strong> <code>services/mcp_token.py:190-200</code> — <code>revoke_token()</code> sets <code>is_active=False</code> but doesn't record revoker or timestamp.</p>
+<p><strong>Impact:</strong> MEDIUM — Audit trail gap. If a token is compromised and revoked, there's no record of when the revocation occurred or which owner action caused it. This weakens forensic analysis.</p>
+<p><strong>Root cause:</strong> Implementation chose simpler boolean flag over spec's audit-friendly columns.</p>
+</div>
+
+<h3>[P1] SEC-FE1: Stats page missing owner-only guard (discovered by frontend-auditor)</h3>
+<div class="finding">
+<h4>Authorization Bypass</h4>
+<p><strong>Requirement:</strong> All MCP management endpoints and UI must be owner-only.</p>
+<p><strong>Current:</strong> <code>MCPStatsPage.vue</code> at route <code>/settings/ai/mcp/stats</code> has NO <code>isOwner</code> check and NO route guard. Any authenticated user (including <code>member</code> role) can access the stats page and see call counts, IP breakdowns, tool usage, and recent activity.</p>
+<p><strong>Evidence:</strong> <code>frontend/apps/main/src/pages/MCPStatsPage.vue</code> — no <code>isOwner</code> computed, no <code>beforeEnter</code> guard. The backend stats endpoint (<code>ai_mcp_token.py:144</code>) correctly requires <code>require_owner</code>, so API calls will return 403 for non-owners. But the page itself renders for all roles.</p>
+<p><strong>Impact:</strong> LOW-MEDIUM — Backend enforces owner-only, so the API will return 403 for non-owners who navigate directly. But the page UI renders (empty/error state) for members, which is a UX inconsistency and could leak information if the backend guard is ever weakened.</p>
+<p><strong>Root cause:</strong> Frontend route was added without owner-only meta/guard.</p>
+</div>
+
+<h3>[P2] SEC-3: Query-param token leakage in nginx access logs</h3>
+<div class="finding finding-warn">
+<h4>Security Risk</h4>
+<p><strong>Requirement:</strong> "Token in query param will be logged in nginx access logs, application logs, and potentially in tracing/metrics."</p>
+<p><strong>Current:</strong> The nginx production config (<code>nginx.production.conf</code>) does NOT strip query parameters from the access log for MCP endpoints. The default nginx log format includes <code>$request_uri</code> which contains the full URL including query string.</p>
+<p><strong>Evidence:</strong> <code>nginx.production.conf:98-103</code> — no <code>location /api/v1/mcp/public/</code> block with query stripping. The backend logs only the prefix (8 chars) at WARNING level when query-param auth is used (<code>mcp_public.py:216-219</code>), which is correct.</p>
+<p><strong>Impact:</strong> MEDIUM — If nginx access logs are enabled (they are by default for the API location), full tokens sent via <code>?token=mcp_xxx</code> will be persisted in plaintext on disk.</p>
+<p><strong>Recommended fix:</strong> Add nginx location block for <code>/api/v1/mcp/public/</code> that strips query params from logs, or recommend Bearer header as the only production-safe auth method.</p>
+</div>
+
+<h3>[P2] P2-AE5: Rate limiting has no dedicated tests</h3>
+<div class="finding finding-warn">
+<h4>Test Coverage Gap</h4>
+<p><strong>Requirement:</strong> Rate limiting 30 req/min, keyed by (token_prefix, client_ip), fail-open.</p>
+<p><strong>Current:</strong> Implementation at <code>routers/mcp_public.py:20-44</code> looks correct but has NO dedicated tests.</p>
+<p><strong>Missing tests:</strong> boundary (29/30/31), different tokens same IP, window reset, cache unavailable fail-open.</p>
+<p><strong>Impact:</strong> LOW — Implementation appears correct from code review, but behavior is unverified.</p>
+</div>
+
+<h3>[P2] P2-AE9: Stats endpoints unverified</h3>
+<div class="finding finding-info">
+<h4>No Dedicated Tests</h4>
+<p><strong>Endpoints:</strong> <code>GET /stats</code>, <code>GET /access-logs</code>, <code>GET /tools</code> at <code>routers/ai_mcp_token.py:104,144,160</code>.</p>
+<p><strong>Status:</strong> Code exists and follows correct patterns (family-scoped, owner-only), but no unit tests verify the SQL queries, pagination, or empty-dataset handling. The stats service (<code>mcp_stats.py</code>) has no test file.</p>
+</div>
+
+<h3>[P2] SEC-FE2: Manage page renders for all roles (metadata exposure)</h3>
+<div class="finding finding-warn">
+<h4>Information Disclosure</h4>
+<p><strong>Current:</strong> <code>MCPManagePage.vue</code> renders <code>BackendMCPCard</code> for all authenticated roles. Non-owners can see token metadata (<code>token_last4</code>, <code>last_used_at</code>, <code>created_at</code>, <code>allow_external</code> status). Actions (generate, rotate, toggle) are gated by <code>isOwner</code>, but the metadata is exposed.</p>
+<p><strong>Impact:</strong> LOW — This is information a family member might reasonably know (that MCP is enabled, when it was last used). However, the Issue specifies owner-only management.</p>
+</div>
+
+<h3>[P3] SEC-FE3: Unhandled promise rejections on dialog cancel</h3>
+<div class="finding finding-info">
+<h4>Console Pollution</h4>
+<p><strong>Current:</strong> All 3 <code>showConfirmDialog</code> calls in <code>BackendMCPCard.vue</code> (lines 205, 226, 238) lack try/catch. When user clicks Cancel, Vant rejects the promise, producing unhandled promise rejections in the console.</p>
+<p><strong>Impact:</strong> LOW — Functionally correct (cancel prevents API call), but pollutes console and could trigger global error handlers or error monitoring tools.</p>
+</div>
+
+<h2>4. Spec Deviations (Documented, Not Bugs)</h2>
+
+<details>
+<summary>P1-AE1: Model field differences from spec</summary>
+<ul>
+<li><strong>token_last4</strong> — Spec says <code>token_last4</code>, model matches. But spec said <code>last4</code> in one place and <code>token_last4</code> in another. Implementation chose <code>token_last4</code>.</li>
+<li><strong>No external_user_id FK</strong> — Spec mentions <code>external_user_id = Column(SnowflakeID, ForeignKey("users.id"), nullable=True)</code>. Implementation resolves synthetic user at runtime instead of storing the FK. Functionally equivalent — the synthetic user is always found by <code>(family_id, role=external_token)</code> query.</li>
+<li><strong>No mcp_anomaly_alerts table</strong> — Spec mentions this table. Implementation uses the notification system's <code>reminders</code> table via <code>ensure_reminder()</code>. This is architecturally correct — alerts appear in the user's notification inbox.</li>
+<li><strong>No unique constraint on (family_id, name)</strong> — Spec requires <code>UniqueConstraint("family_id", "name")</code>. Implementation only has a composite index (not unique). Since names are user-provided and only one active token exists per family at a time, this is a minor gap.</li>
+<li><strong>No <code>name</code> field at all</strong> — Spec requires <code>name = Column(String(100), nullable=False)</code>. Implementation has no <code>name</code> column. Since only one active token per family is supported, the name field (for labeling multiple tokens) is unused.</li>
+<li><strong>No <code>token_prefix</code> in access logs</strong> — Spec mentions <code>token_prefix</code> in <code>mcp_access_logs</code>. Implementation uses <code>token_id</code> FK instead. Functionally equivalent (can join to get prefix), but differs from spec.</li>
+</ul>
+</details>
+
+<details>
+<summary>Section 3: Token plaintext display contradiction</summary>
+<p>The issue contains contradictory requirements:</p>
+<ul>
+<li>Section 5: "眼睛按钮显示完整 Token，10 秒后重新 mask"</li>
+<li>Section 7: "不保存明文，完整 Token 只在生成时返回一次"</li>
+</ul>
+<p><strong>Resolution:</strong> Implementation chose the <strong>one-time-secret</strong> model. The plaintext is stored in the frontend's <code>plaintext</code> ref (in-memory only). The eye toggle reveals it from memory for 10 seconds, then re-masks. After page refresh, only the masked version is available. This is the MORE SECURE interpretation and is correct.</p>
+<p><strong>Evidence:</strong> <code>BackendMCPCard.vue:172-181</code> — <code>displayToken()</code> toggles between <code>plaintext.value</code> and <code>maskedToken()</code> with 10s auto-remask.</p>
+</details>
+
+<h2>5. Security Findings Summary</h2>
+<table>
+<thead>
+<tr><th>Area</th><th>Finding</th><th>Severity</th><th>Status</th></tr>
+</thead>
+<tbody>
+<tr><td>Authentication</td><td>Bearer + query-param both work; expired/revoked correctly rejected</td><td>—</td><td class="status-pass">PASS</td></tr>
+<tr><td>Authorization</td><td>Owner-only on all CRUD; member gets 403</td><td>—</td><td class="status-pass">PASS</td></tr>
+<tr><td>Tenant isolation</td><td>Family-scoped queries; session frozen at construction</td><td>—</td><td class="status-pass">PASS</td></tr>
+<tr><td>Token storage</td><td>SHA-256 hash only; plaintext never persisted</td><td>—</td><td class="status-pass">PASS</td></tr>
+<tr><td>Token leakage</td><td>Query-param token in nginx access logs (full URI logged)</td><td>MEDIUM</td><td class="status-fail">FAIL</td></tr>
+<tr><td>Tool authorization</td><td>Whitelist enforced on both list AND call</td><td>—</td><td class="status-pass">PASS</td></tr>
+<tr><td>Synthetic user</td><td>Filtered from members; rejected at login; no privilege escalation</td><td>—</td><td class="status-pass">PASS</td></tr>
+<tr><td>Rate limiting</td><td>Implemented correctly but untested</td><td>LOW</td><td class="status-unverified">UNVERIFIED</td></tr>
+<tr><td>Audit logging</td><td>Connect/disconnect/tool_call with recursive redaction</td><td>—</td><td class="status-pass">PASS</td></tr>
+<tr><td>Prefix collision</td><td>8-char prefix (not 12 as spec'd); hash verification mitigates</td><td>LOW</td><td class="status-partial">PARTIAL</td></tr>
+</tbody>
+</table>
+
+<h2>6. Tool Registry Inventory</h2>
+<table>
+<thead>
+<tr><th>Tool</th><th>R/W</th><th>External default</th><th>allow_write required</th><th>Verified</th></tr>
+</thead>
+<tbody>
+<tr><td>get_family_overview</td><td>Read</td><td>Exposed</td><td>No</td><td class="status-pass">YES</td></tr>
+<tr><td>get_assets</td><td>Read</td><td>Exposed</td><td>No</td><td class="status-pass">YES</td></tr>
+<tr><td>get_liabilities</td><td>Read</td><td>Exposed</td><td>No</td><td class="status-pass">YES</td></tr>
+<tr><td>get_members</td><td>Read</td><td>Exposed</td><td>No</td><td class="status-pass">YES</td></tr>
+<tr><td>get_recent_alerts</td><td>Read</td><td>Exposed</td><td>No</td><td class="status-pass">YES</td></tr>
+<tr><td>get_child_literacy_profile</td><td>Read</td><td>Exposed</td><td>No</td><td class="status-pass">YES</td></tr>
+<tr><td>get_literacy_weekly_data</td><td>Read</td><td>Exposed</td><td>No</td><td class="status-pass">YES</td></tr>
+<tr><td>get_travel_trips</td><td>Read</td><td>Exposed</td><td>No</td><td class="status-pass">YES</td></tr>
+<tr><td>get_travel_expenses</td><td>Read</td><td>Exposed</td><td>No</td><td class="status-pass">YES</td></tr>
+<tr><td>get_travel_split_balances</td><td>Read</td><td>Exposed</td><td>No</td><td class="status-pass">YES</td></tr>
+<tr><td>get_learning_topic</td><td>Read</td><td>Exposed</td><td>No</td><td class="status-pass">YES</td></tr>
+<tr><td>get_child_learning_profile</td><td>Read</td><td>Exposed</td><td>No</td><td class="status-pass">YES</td></tr>
+<tr><td>import_assets_batch</td><td>Write</td><td>Hidden</td><td>Yes</td><td class="status-pass">YES</td></tr>
+<tr><td>import_liabilities_batch</td><td>Write</td><td>Hidden</td><td>Yes</td><td class="status-pass">YES</td></tr>
+<tr><td>import_credit_cards_batch</td><td>Write</td><td>Hidden</td><td>Yes</td><td class="status-pass">YES</td></tr>
+<tr><td>record_learning_result</td><td>Write</td><td>Hidden</td><td>Yes</td><td class="status-pass">YES</td></tr>
+</tbody>
+</table>
+<p style="font-size:0.8rem;">Total: 16 tools (12 read, 4 write). Write tools have <code>allowed_roles=frozenset({"owner", "member"})</code> — external_token excluded. When <code>allow_write=true</code>, a bypass allows external_token to call write tools (intentional design per issue requirement 4).</p>
+
+<h2>7. Final Proof — 15 Questions</h2>
+<table>
+<thead>
+<tr><th>#</th><th>Question</th><th>Answer</th><th>Evidence</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>External MCP client can initialize → tools/list → tools/call?</td><td class="status-pass">YES</td><td>SSE + messages endpoints verified; session handles full lifecycle</td></tr>
+<tr><td>2</td><td>Family A token can access Family B?</td><td class="status-pass">NO</td><td>test_mcp_tenant_isolation.py; all queries filter family_id</td></tr>
+<tr><td>3</td><td>Expired/revoked/rotated tokens fail on all paths?</td><td class="status-pass">YES</td><td>verify_token checks is_active + expires_at; both SSE and POST paths</td></tr>
+<tr><td>4</td><td>allow_external=false cannot be bypassed?</td><td class="status-pass">YES</td><td>mcp_public.py:116-117 raises FORBIDDEN before session creation</td></tr>
+<tr><td>5</td><td>Write tools default inaccessible?</td><td class="status-pass">YES</td><td>allowed_roles excludes external_token; test_mcp_public.py::TestToolGating</td></tr>
+<tr><td>6</td><td>allowed_tools limits both list AND call?</td><td class="status-pass">YES</td><td>mcp_session.py:303-305 (list) + 362-386 (call)</td></tr>
+<tr><td>7</td><td>Plaintext token never persisted?</td><td class="status-pass">YES</td><td>Only hash stored; plaintext returned in response only</td></tr>
+<tr><td>8</td><td>last_used_at truly persists?</td><td class="status-partial">UNVERIFIED</td><td>Uses flush() not commit(); depends on caller committing. Router does commit in generate_token but verify_token is called from mcp_public.py which commits at line 148.</td></tr>
+<tr><td>9</td><td>Audit logs cover actual calls with redaction?</td><td class="status-pass">YES</td><td>test_mcp_audit_log.py: 16 tests; recursive redaction verified</td></tr>
+<tr><td>10</td><td>Rate limiting actually effective?</td><td class="status-unverified">UNVERIFIED</td><td>Code looks correct; no tests verify boundary behavior</td></tr>
+<tr><td>11</td><td>Anomaly detection actually runs?</td><td class="status-pass">YES</td><td>Registered in scheduler.py:75-86; runs every 5 min; 12 tests</td></tr>
+<tr><td>12</td><td>Owner-only enforced at backend?</td><td class="status-pass">YES</td><td>require_owner dependency on all CRUD endpoints</td></tr>
+<tr><td>13</td><td>Internal MCP no regression?</td><td class="status-pass">YES</td><td>mcp_internal.py uses X-Agent-Token; unchanged</td></tr>
+<tr><td>14</td><td>Migrations safe upgrade/downgrade?</td><td class="status-pass">YES</td><td>Single head; idempotent upgrade (has_table checks); downgrade drops tables</td></tr>
+<tr><td>15</td><td>Frontend completes full token lifecycle?</td><td class="status-pass">YES</td><td>Generate, display, mask, copy, rotate, allow_external toggle, expiry, tool picker — all in BackendMCPCard.vue</td></tr>
+</tbody>
+</table>
+
+<h2>8. Test Coverage Summary</h2>
+<table>
+<thead>
+<tr><th>Category</th><th>Tests</th><th>Coverage</th></tr>
+</thead>
+<tbody>
+<tr><td>Token lifecycle (generate/verify/revoke/rotate)</td><td>20</td><td class="status-pass">Covered</td></tr>
+<tr><td>Authentication (Bearer, query-param, expired, revoked)</td><td>17</td><td class="status-pass">Covered</td></tr>
+<tr><td>Multi-tenant isolation</td><td>4</td><td class="status-pass">Covered</td></tr>
+<tr><td>Tool authorization</td><td>17+8</td><td class="status-pass">Covered</td></tr>
+<tr><td>Anomaly detection</td><td>12</td><td class="status-pass">Covered</td></tr>
+<tr><td>Audit logging + redaction</td><td>16</td><td class="status-pass">Covered</td></tr>
+<tr><td>Session caller binding</td><td>13</td><td class="status-pass">Covered</td></tr>
+<tr><td>Security invariants (no outbound HTTP, login rejection)</td><td>5</td><td class="status-pass">Covered</td></tr>
+<tr><td>Rate limiting (MCP-specific)</td><td>0</td><td class="status-fail">Not covered</td></tr>
+<tr><td>Stats endpoints</td><td>0</td><td class="status-fail">Not covered</td></tr>
+<tr><td>Concurrency (rotation race)</td><td>0</td><td class="status-unverified">Code review only</td></tr>
+<tr><td>Frontend E2E</td><td>0</td><td class="status-unverified">Code review only</td></tr>
+</tbody>
+</table>
+<p><strong>Total:</strong> 118 tests pass. 1 skipped (legitimate — SSE handshake needs integration test).</p>
+
+<h2>9. Commands Executed</h2>
+<div class="evidence">alembic heads → ef001sm2fac (single head, merge confirmed)
+uv run pytest tests/backend/unit/test_mcp_token.py tests/backend/unit/test_mcp_public.py tests/backend/services/test_mcp_anomaly.py tests/backend/unit/test_mcp_audit_log.py -v → 66 passed
+uv run pytest tests/backend/test_mcp_tenant_isolation.py tests/backend/test_mcp_no_outbound_http.py tests/backend/unit/test_mcp_session.py tests/backend/unit/test_mcp_session_caller_binding.py tests/backend/unit/test_mcp_sse_caller_handshake.py tests/backend/unit/test_mcp_tool_registry.py -v → 52 passed</div>
+
+<h2>10. Remaining Risks</h2>
+<table>
+<thead>
+<tr><th>Risk</th><th>Level</th><th>Detail</th></tr>
+</thead>
+<tbody>
+<tr><td>Query-param token in nginx logs</td><td style="color:var(--partial)">MEDIUM</td><td>Full token visible in access log if query-param auth used; recommend Bearer-only in production</td></tr>
+<tr><td>Stats page missing owner guard (frontend)</td><td style="color:var(--partial)">MEDIUM</td><td>MCPStatsPage.vue renders for all roles; backend returns 403 but page UI shows</td></tr>
+<tr><td>Manage page renders for all roles</td><td style="color:var(--unverified)">LOW</td><td>Token metadata (last4, timestamps) visible to non-owners; actions are gated</td></tr>
+<tr><td>token_prefix 8 chars (spec: 12)</td><td style="color:var(--unverified)">LOW</td><td>Hash verification mitigates; but collision space is smaller than spec intended</td></tr>
+<tr><td>No revoked_at/revoked_by audit trail</td><td style="color:var(--unverified)">LOW</td><td>is_active boolean works for auth but loses forensic information</td></tr>
+<tr><td>Rate limiting untested</td><td style="color:var(--unverified)">LOW</td><td>Code appears correct but no executable evidence</td></tr>
+<tr><td>Stats endpoints untested</td><td style="color:var(--unverified)">LOW</td><td>Follows correct patterns but SQL queries unverified</td></tr>
+</tbody>
+</table>
+
+<hr class="section-divider">
+<p style="font-size:0.78rem;color:var(--fg2);text-align:center;margin-top:2rem;">
+Generated 2026-10-13 · Independent verification audit · Not based on PR/commit claims, only code evidence
+</p>

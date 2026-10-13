@@ -46,7 +46,9 @@ def generate_token(
     db: Session = Depends(get_db),
 ) -> MCPTokenGenerateResponse:
     """Generate a new token (or rotate existing). Returns plaintext **once**."""
-    plaintext, row = token_svc.generate_token(current_user.family_id, db)
+    plaintext, row = token_svc.generate_token(
+        current_user.family_id, db, revoked_by=current_user.id
+    )
     db.commit()
 
     base = MCPTokenResponse.model_validate(row)
@@ -70,7 +72,9 @@ def update_token(
     ``allowed_tools``: null resets to all-available, list sets exact whitelist.
     """
     # Build kwargs — only pass allowed_tools if it was explicitly set in the body
-    kwargs = {}
+    from typing import Any
+
+    kwargs: dict[str, Any] = {}
     if body.allow_external is not None:
         kwargs["allow_external"] = body.allow_external
     if body.allow_write is not None:
@@ -96,7 +100,7 @@ def delete_token(
     db: Session = Depends(get_db),
 ) -> Response:
     """Revoke (soft-deactivate) the active token."""
-    token_svc.revoke_token(current_user.family_id, db)
+    token_svc.revoke_token(current_user.family_id, db, revoked_by=current_user.id)
     db.commit()
     return Response(status_code=204)
 

@@ -83,7 +83,6 @@ class TestPublicMCPEndpointAuth:
     def test_query_param_auth_succeeds(self, client, db):
         """AE3: query param token is accepted and a WARNING audit log is emitted."""
         import asyncio
-        import logging
 
         from starlette.requests import Request
 
@@ -282,3 +281,156 @@ class TestToolRegistryValidation:
         from apps.backend.app.services.mcp_tool_registry import _VALID_ROLES
 
         assert "external_token" in _VALID_ROLES
+
+
+class TestMCPRateLimit:
+    """Per-token rate limit: 30 req/min, keyed by (token_prefix, client_ip), fail-open."""
+
+    def test_rate_limit_allows_under_threshold(self, db):
+        """Requests under the limit should pass."""
+        import asyncio
+
+        from apps.backend.app.routers.mcp_public import _check_mcp_rate_limit
+
+        async def run():
+            await _check_mcp_rate_limit("test_prefix_under", "1.2.3.4")
+
+        asyncio.run(run())
+
+    def test_rate_limit_blocks_over_threshold(self, db):
+        """Requests over the limit should raise 429."""
+        import asyncio
+
+        from apps.backend.app.errors import AppError
+        from apps.backend.app.routers.mcp_public import _check_mcp_rate_limit
+        from packages.core.cache import get_cache, keys
+
+
+        # Pre-fill the cache to exactly the limit
+        cache = get_cache()
+        key = f"{keys.RATE_LIMIT}:mcp_public:rl_test_block:5.6.7.8"
+
+        async def fill_and_test():
+            # Set counter to exactly 30 (the limit)
+            await cache.set(key, 30, ttl=60)
+            # Next increment returns 31 → blocked
+            await _check_mcp_rate_limit("rl_test_block", "5.6.7.8")
+
+        with pytest.raises(AppError) as exc_info:
+            asyncio.run(fill_and_test())
+        from apps.backend.app.errors.codes import ErrorCode
+
+        assert exc_info.value.code == ErrorCode.RATE_LIMITED
+
+    def test_rate_limit_different_ips_independent(self, db):
+        """Different IPs with same token prefix should have independent limits."""
+        import asyncio
+
+        from apps.backend.app.routers.mcp_public import _check_mcp_rate_limit
+        from packages.core.cache import get_cache, keys
+
+        cache = get_cache()
+
+        async def run():
+            # Fill IP A to limit
+            key_a = f"{keys.RATE_LIMIT}:mcp_public:ip_test:10.0.0.1"
+            await cache.set(key_a, 30, ttl=60)
+            # IP B with same prefix should still work
+            await _check_mcp_rate_limit("ip_test", "10.0.0.2")
+
+        # Should not raise
+        asyncio.run(run())
+
+    def test_rate_limit_fails_open_on_cache_error(self, db):
+        """When cache backend is unavailable, requests should be allowed (fail-open)."""
+        import asyncio
+
+        from apps.backend.app.routers.mcp_public import _check_mcp_rate_limit
+
+
+        async def run():
+            with patch(
+                "packages.core.cache.get_cache",
+                side_effect=RuntimeError("cache down"),
+            ):
+                # Should NOT raise — fail-open
+                await _check_mcp_rate_limit("fail_test", "1.2.3.4")
+
+        asyncio.run(run())
+
+
+class TestMCPStatsService:
+    """Verify stats aggregation handles empty datasets, family isolation, and data."""
+
+    def test_empty_dataset_returns_zero(self, db):
+        """Stats for a family with no logs returns zero counts."""
+        from apps.backend.app.services.mcp_stats import get_mcp_stats
+
+        stats = get_mcp_stats(family_id=999999, db=db)
+        assert stats.total_calls == 0
+        assert stats.success_count == 0
+        assert stats.failure_count == 0
+        assert stats.error_count == 0
+        assert stats.permission_denied_count == 0
+        assert stats.success_rate == 0.0
+        assert stats.tool_breakdown == []
+        assert stats.ip_breakdown == []
+        assert stats.hourly_buckets == []
+
+    def test_family_isolation(self, db):
+        """Stats only include logs for the requested family."""
+        from apps.backend.app.models.mcp_access_log import MCPAccessLog
+        from apps.backend.app.services.mcp_stats import get_mcp_stats
+        from apps.backend.app.utils.snowflake import next_id
+
+        # Family A has logs
+        db.add(MCPAccessLog(
+            id=next_id(), family_id=111, event_type="tool_call",
+            tool_name="get_assets", status="success", client_ip="1.1.1.1",
+        ))
+        # Family B has logs
+        db.add(MCPAccessLog(
+            id=next_id(), family_id=222, event_type="tool_call",
+            tool_name="get_liabilities", status="success", client_ip="2.2.2.2",
+        ))
+        db.flush()
+
+        stats_a = get_mcp_stats(family_id=111, db=db)
+        stats_b = get_mcp_stats(family_id=222, db=db)
+
+        assert stats_a.total_calls == 1
+        assert stats_b.total_calls == 1
+        assert stats_a.tool_breakdown[0].tool_name == "get_assets"
+        assert stats_b.tool_breakdown[0].tool_name == "get_liabilities"
+
+    def test_counts_and_breakdowns(self, db):
+        """Verify counts, rates, and breakdowns with mixed statuses."""
+        from apps.backend.app.models.mcp_access_log import MCPAccessLog
+        from apps.backend.app.services.mcp_stats import get_mcp_stats
+        from apps.backend.app.utils.snowflake import next_id
+
+        family_id = 333
+        for status, tool in [
+            ("success", "get_assets"),
+            ("success", "get_assets"),
+            ("failure", "get_liabilities"),
+            ("error", "get_assets"),
+            ("permission_denied", "get_members"),
+        ]:
+            db.add(MCPAccessLog(
+                id=next_id(), family_id=family_id, event_type="tool_call",
+                tool_name=tool, status=status, client_ip="5.5.5.5",
+            ))
+        db.flush()
+
+        stats = get_mcp_stats(family_id=family_id, db=db)
+        assert stats.total_calls == 5
+        assert stats.success_count == 2
+        assert stats.failure_count == 1
+        assert stats.error_count == 1
+        assert stats.permission_denied_count == 1
+        assert abs(stats.success_rate - 0.4) < 0.01  # 2/5
+        assert len(stats.tool_breakdown) >= 2  # at least get_assets and get_liabilities
+        assert len(stats.ip_breakdown) == 1
+        assert stats.ip_breakdown[0].client_ip == "5.5.5.5"
+        assert stats.ip_breakdown[0].count == 5

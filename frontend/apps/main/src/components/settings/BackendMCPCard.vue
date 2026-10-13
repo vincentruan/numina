@@ -202,12 +202,16 @@ async function onCopy() {
 
 async function onGenerate() {
   const rotating = token.value !== null
-  await showConfirmDialog({
-    title: rotating ? t('mcp.token.rotateTitle') : t('mcp.token.generateTitle'),
-    message: rotating ? t('mcp.token.rotateWarning') : t('mcp.token.generateWarning'),
-    confirmButtonText: t('common.confirm'),
-    cancelButtonText: t('common.cancel'),
-  })
+  try {
+    await showConfirmDialog({
+      title: rotating ? t('mcp.token.rotateTitle') : t('mcp.token.generateTitle'),
+      message: rotating ? t('mcp.token.rotateWarning') : t('mcp.token.generateWarning'),
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+    })
+  } catch {
+    return // user cancelled
+  }
   busy.value = true
   try {
     const res = await generateMCPToken()
@@ -223,24 +227,32 @@ async function onGenerate() {
 }
 
 async function onToggleExternal(on: boolean) {
-  await showConfirmDialog({
-    title: t('mcp.token.allowExternal'),
-    message: t('mcp.token.allowExternalWarning'),
-    confirmButtonText: t('common.confirm'),
-    cancelButtonText: t('common.cancel'),
-  })
+  try {
+    await showConfirmDialog({
+      title: t('mcp.token.allowExternal'),
+      message: t('mcp.token.allowExternalWarning'),
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+    })
+  } catch {
+    return // user cancelled
+  }
   const res = await updateMCPToken({ allow_external: on })
   token.value = res.data
   showSuccessToast(on ? t('toast.enabled') : t('toast.disabled'))
 }
 
 async function onToggleWrite(on: boolean) {
-  await showConfirmDialog({
-    title: t('mcp.token.allowWrite'),
-    message: t('mcp.token.allowWriteWarning'),
-    confirmButtonText: t('common.confirm'),
-    cancelButtonText: t('common.cancel'),
-  })
+  try {
+    await showConfirmDialog({
+      title: t('mcp.token.allowWrite'),
+      message: t('mcp.token.allowWriteWarning'),
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+    })
+  } catch {
+    return // user cancelled
+  }
   const res = await updateMCPToken({ allow_write: on })
   token.value = res.data
   showSuccessToast(on ? t('toast.enabled') : t('toast.disabled'))

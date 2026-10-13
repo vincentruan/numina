@@ -90,8 +90,9 @@ def _validate_and_resolve(family_id: str, raw_token: str):
         if row is None:
             # Distinguish expired vs invalid — try to find the row
             from apps.backend.app.models.family_mcp_token import FamilyMCPToken
+            from apps.backend.app.services.mcp_token import _PREFIX_LEN
 
-            prefix = raw_token[:8]
+            prefix = raw_token[:_PREFIX_LEN]
             existing = (
                 db.query(FamilyMCPToken)
                 .filter(
@@ -227,7 +228,9 @@ async def mcp_public_sse(
 
     # Per-token rate limit (after validation so invalid tokens don't consume slots)
     client_ip = request.client.host if request.client else "unknown"
-    await _check_mcp_rate_limit(raw_token[:8], client_ip)
+    from apps.backend.app.services.mcp_token import _PREFIX_LEN
+
+    await _check_mcp_rate_limit(raw_token[:_PREFIX_LEN], client_ip)
 
     # Build audit context for connect/disconnect events
     user_agent = request.headers.get("user-agent", "")[:512]
@@ -293,12 +296,13 @@ async def mcp_public_messages(
         from apps.backend.app.database import SessionLocal
         from apps.backend.app.models.family_mcp_token import FamilyMCPToken
         from apps.backend.app.services import mcp_token as token_svc
+        from apps.backend.app.services.mcp_token import _PREFIX_LEN
 
         with SessionLocal() as db:
             row = token_svc.verify_token_by_prefix(raw_token, db)
             if row is None:
                 # Distinguish expired vs invalid for better error messages
-                prefix = raw_token[:8]
+                prefix = raw_token[:_PREFIX_LEN]
                 existing = (
                     db.query(FamilyMCPToken)
                     .filter(FamilyMCPToken.token_prefix == prefix)
@@ -321,6 +325,8 @@ async def mcp_public_messages(
 
     # Per-token rate limit (after validation)
     _client_ip = request.client.host if request.client else "unknown"
-    await _check_mcp_rate_limit(raw_token[:8], _client_ip)
+    from apps.backend.app.services.mcp_token import _PREFIX_LEN as _PLEN
+
+    await _check_mcp_rate_limit(raw_token[:_PLEN], _client_ip)
 
     return PublicMCPMessageResponse()

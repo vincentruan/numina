@@ -61,8 +61,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MCPUsageTrendChart from '@/components/charts/MCPUsageTrendChart.vue'
 import MCPToolDistributionChart from '@/components/charts/MCPToolDistributionChart.vue'
@@ -75,6 +77,14 @@ import {
 import { formatDateTime } from '@/utils/format'
 
 const { t, locale } = useI18n()
+const router = useRouter()
+const authStore = useAuthStore()
+const isOwner = computed(() => authStore.user?.role === 'owner')
+
+// Owner-only: redirect non-owners to settings
+if (!isOwner.value) {
+  router.replace('/settings')
+}
 
 const activeRange = ref('7d')
 const stats = ref<MCPStatsData | null>(null)

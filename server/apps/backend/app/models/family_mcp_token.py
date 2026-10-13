@@ -19,7 +19,7 @@ class FamilyMCPToken(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     family_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # SHA-256 hex
-    token_prefix: Mapped[str] = mapped_column(String(8), nullable=False)  # first 8 chars
+    token_prefix: Mapped[str] = mapped_column(String(12), nullable=False)  # first 12 chars
     token_last4: Mapped[str] = mapped_column(String(4), nullable=False)  # last 4 chars
     allow_external: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     allow_write: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -29,6 +29,9 @@ class FamilyMCPToken(Base):
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Revocation audit trail — set when is_active transitions True → False
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    revoked_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), onupdate=func.now()
