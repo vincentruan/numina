@@ -146,6 +146,34 @@ def get_question(db: Session, question_id: int) -> Question | None:
     return db.query(Question).filter_by(id=question_id).first()
 
 
+def review_question(db: Session, question_id: int, decision: str) -> Question:
+    """Approve or reject a pending question (human review for non-template sources).
+
+    Only 'pending' questions can be reviewed — approved questions cannot be
+    silently reverted, and rejected questions stay rejected.
+
+    Raises:
+        AppError(PRACTICE_QUESTION_NOT_FOUND): if question doesn't exist.
+        AppError(PRACTICE_QUESTION_INVALID): if question is not pending.
+    """
+    question = db.query(Question).filter_by(id=question_id).first()
+    if not question:
+        raise AppError(ErrorCode.PRACTICE_QUESTION_NOT_FOUND)
+    if question.review_status != "pending":
+        raise AppError(
+            ErrorCode.PRACTICE_QUESTION_INVALID,
+            details=f"Question review_status is '{question.review_status}', only 'pending' can be reviewed",
+        )
+
+    question.review_status = decision
+    db.flush()
+    db.commit()
+    logger.info(
+        "Question reviewed: id=%s, decision=%s", question_id, decision
+    )
+    return question
+
+
 def check_duplicate(db: Session, stem: str, answer: dict, topic_id: int | None = None) -> bool:
     """Check if a question with same stem+answer already exists.
 

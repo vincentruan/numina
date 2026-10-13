@@ -74,13 +74,15 @@ class RuleBasedMasteryEstimator:
         attempts = (
             db.query(PracticeAttempt)
             .filter_by(child_id=child_id, topic_id=topic_id)
-            .order_by(PracticeAttempt.created_at.asc())
+            .order_by(PracticeAttempt.created_at.desc())
             .limit(self.MAX_ATTEMPTS)
             .all()
         )
         if len(attempts) < self.MIN_SAMPLE_SIZE:
             return 0.5  # Neutral fallback for insufficient data
 
+        # Reverse to chronological order for decay weighting
+        attempts = list(reversed(attempts))
         n = len(attempts)
         total_weight = 0.0
         weighted_correct = 0.0
@@ -168,24 +170,34 @@ def select_questions(
     exclude_recent_days: int,
     child_id: int,
     estimator: MasteryEstimator | None = None,
+    session_mode: str = "practice",
 ) -> list[Question]:
     """Select questions for a practice session.
 
     Strategy:
     1. If estimator provided, use it to get dynamic mastery score → difficulty range
     2. Otherwise, fall back to static mastery_level → difficulty mapping
-    3. Filter by topic, difficulty range, review_status=approved
-    4. Exclude recently answered questions (last N days)
-    5. Exclude explicitly excluded IDs
+    3. session_mode adjusts difficulty and selection:
+       - "practice": normal adaptive selection
+       - "review": prioritize previously-wrong questions (relax exclusion window)
+       - "challenge": force harder questions (difficulty 4-5)
+    4. Filter by topic, difficulty range, review_status=approved
+    5. Exclude recently answered questions (last N days) — except review mode
     6. Random sample up to count
     """
-    if estimator is not None:
+    if session_mode == "challenge":
+        min_diff, max_diff = 4, 5
+    elif estimator is not None:
         mastery_score = estimator.estimate(db, child_id=child_id, topic_id=topic_id)
         min_diff, max_diff = _mastery_score_to_difficulty(mastery_score)
     else:
         min_diff, max_diff = get_difficulty_range(mastery_level)
 
-    cutoff = datetime.now(UTC) - timedelta(days=exclude_recent_days)
+    # Review mode: include recently-answered questions (relax exclusion)
+    if session_mode == "review":
+        cutoff = datetime.now(UTC) - timedelta(days=1)  # only exclude today's
+    else:
+        cutoff = datetime.now(UTC) - timedelta(days=exclude_recent_days)
 
     # Recent question IDs for this child
     recent_ids = {

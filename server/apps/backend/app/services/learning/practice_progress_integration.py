@@ -6,6 +6,7 @@ from apps.backend.app.errors import AppError
 from apps.backend.app.services.learning.progress_service import (
     transition_to_mastered,
     unlock_dependent_topics,
+    update_sm2_after_session,
     validate_transition,
 )
 from packages.core.logging import get_logger
@@ -26,6 +27,9 @@ def update_progress_from_session(
     - score >= 0.8: advance state (learning->assessing, assessing->mastered)
     - score < 0.5: no state change, update mastery_score
     - 0.5 <= score < 0.8: no state change, update mastery_score
+
+    Always updates SM-2 spaced repetition (stability + next_review_at)
+    regardless of state transitions.
 
     Returns dict with mastery_changed, new_mastery_level.
     """
@@ -83,6 +87,17 @@ def update_progress_from_session(
     else:
         # Update score without state change
         progress.mastery_score = score
+        db.flush()
+
+    # Always update SM-2 spaced repetition after every session
+    # (transition_to_mastered already handles this internally)
+    if progress.mastery_level != "mastered" or not mastery_changed:
+        update_sm2_after_session(progress, score)
+        from apps.backend.app.services.learning.progress_service import (
+            compute_next_review,
+        )
+
+        progress.next_review_at = compute_next_review(progress)
         db.flush()
 
     db.commit()

@@ -22,6 +22,10 @@ class SubmitAnswerRequest(BaseModel):
     time_spent_seconds: int | None = Field(default=None, ge=0, le=7200)
 
 
+class ReviewQuestionRequest(BaseModel):
+    decision: Literal["approved", "rejected"]
+
+
 # --- Response schemas ---
 
 

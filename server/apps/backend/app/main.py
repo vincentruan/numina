@@ -364,6 +364,25 @@ async def lifespan(app: FastAPI):
                     adapter.fetch_and_store_rates(db)
             except Exception:
                 logger.warning("初始汇率获取失败", exc_info=True)
+        # Auto-seed practice questions if the question bank is empty
+        try:
+            from packages.db.models.learning.question import Question as QuestionModel
+
+            has_questions = db.query(QuestionModel).first() is not None
+            if not has_questions:
+                logger.info("题库为空，自动导入模板题目...")
+                from apps.backend.app.services.learning.question_seeder import (
+                    seed_questions_from_templates,
+                )
+
+                seed_result = seed_questions_from_templates(db, count_per_template=10)
+                logger.info(
+                    "题库自动导入完成: 生成 %d 题，失败 %d 题",
+                    seed_result.generated,
+                    seed_result.failed,
+                )
+        except Exception:
+            logger.warning("题库自动导入失败", exc_info=True)
     finally:
         db.close()
 

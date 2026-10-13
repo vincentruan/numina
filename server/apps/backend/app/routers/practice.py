@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.deps import get_current_user_or_child
+from apps.backend.app.auth.deps import get_current_user_or_child, require_owner
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
@@ -18,6 +18,7 @@ from apps.backend.app.schemas.practice import (
     PracticeSessionResponse,
     QuestionPublicResponse,
     RecommendResponse,
+    ReviewQuestionRequest,
     SessionCreateRequest,
     SessionDetailResponse,
     SessionListItem,
@@ -25,7 +26,7 @@ from apps.backend.app.schemas.practice import (
     WeakTopicResponse,
 )
 from apps.backend.app.services.learning.adaptive_service import (
-    RuleBasedMasteryEstimator,
+    BayesianKnowledgeTracingEstimator,
     get_ability_dimensions,
     get_progress_trend,
     select_questions,
@@ -45,6 +46,7 @@ from apps.backend.app.services.learning.progress_service import (
 from apps.backend.app.services.learning.question_service import (
     get_coverage_stats,
     list_questions,
+    review_question,
 )
 from packages.core.logging import get_logger
 from packages.db.models.learning.practice import PracticeSession
@@ -73,6 +75,23 @@ def list_practice_questions(
         db=db, topic_id=topic_id, difficulty=difficulty, limit=limit
     )
     return questions
+
+
+@router.put("/questions/{question_id}/review", response_model=QuestionPublicResponse)
+def review_question_endpoint(
+    question_id: int,
+    req: ReviewQuestionRequest,
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_owner),
+):
+    """Review a pending question (owner only) — approve or reject.
+
+    Template-generated questions are auto-approved; LLM/external-source
+    questions start as 'pending' and require human review before entering
+    the child-facing question bank.
+    """
+    question = review_question(db, question_id=question_id, decision=req.decision)
+    return QuestionPublicResponse.model_validate(question)
 
 
 @router.post("/questions/batch")
@@ -139,7 +158,8 @@ def create_practice_session(
     if progress.mastery_level == "locked":
         raise AppError(ErrorCode.PRACTICE_TOPIC_LOCKED)
 
-    # Select questions — use dynamic mastery estimator for adaptive difficulty
+    # Select questions — use BKT estimator for adaptive difficulty
+    # (BKT auto-falls back to RuleBased when < 5 attempts)
     questions = select_questions(
         db=db,
         topic_id=req.topic_id,
@@ -148,7 +168,8 @@ def create_practice_session(
         exclude_question_ids=[],
         exclude_recent_days=7,
         child_id=user.id,
-        estimator=RuleBasedMasteryEstimator(),
+        estimator=BayesianKnowledgeTracingEstimator(),
+        session_mode=req.session_mode,
     )
 
     if not questions:
@@ -223,13 +244,46 @@ def finish_practice_session(
             "Progress integration failed for session %s", session_id, exc_info=True
         )
 
+    # Award XP and coins if mastery changed
+    xp_earned = 0
+    coins_earned = 0
+    if mastery_changed:
+        # Award XP (10 XP for mastery advancement)
+        try:
+            from apps.backend.app.services.learning.stats_service import award_xp
+
+            xp_result = award_xp(db, child_id=user.id, family_id=user.family_id, xp_amount=10)
+            xp_earned = xp_result["xp_awarded"]
+        except Exception:
+            logger.warning("XP award failed for session %s", session_id, exc_info=True)
+
+        # Award coins (10 stars for mastery advancement)
+        try:
+            from packages.db.models.child_economy.coin_transaction import CoinTransaction
+
+            topic = db.query(LearningTopic).filter_by(id=session.topic_id).first()
+            topic_label = (topic.name_zh or topic.name or "learning") if topic else "learning"
+            txn = CoinTransaction(
+                family_id=user.family_id,
+                child_user_id=user.id,
+                amount=10,
+                transaction_type="learning_earn",
+                narrative=f"完成练习掌握知识点：{topic_label}",
+                narrative_emoji="🌟",
+            )
+            db.add(txn)
+            db.flush()
+            coins_earned = 10
+        except Exception:
+            logger.warning("Coin award failed for session %s", session_id, exc_info=True)
+
     return PracticeResultResponse(
         session_id=session_id,
         total_score=result["total_score"],
         correct_count=result["correct_count"],
         total_count=result["total_count"],
-        xp_earned=10 if mastery_changed else 0,
-        coins_earned=10 if mastery_changed else 0,
+        xp_earned=xp_earned,
+        coins_earned=coins_earned,
         mastery_changed=mastery_changed,
         new_mastery_level=new_mastery_level,
     )
