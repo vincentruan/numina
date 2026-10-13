@@ -28,7 +28,7 @@ from packages.db.models.learning.topic import LearningDependency, LearningTopic
 
 @pytest.fixture
 def math_topic_mid(db: Session):
-    """A mid-level mathematics topic."""
+    """A mid-level mathematics topic (beijing source — children default to zh-CN)."""
     t = LearningTopic(
         topic_key="mt_math_mid",
         topic_type="CONCEPTUAL",
@@ -40,6 +40,7 @@ def math_topic_mid(db: Session):
         age_group="mid",
         evidence_json="[]",
         standards_json="[]",
+        source_taxonomy="beijing",
     )
     db.add(t)
     db.flush()
@@ -60,6 +61,7 @@ def math_topic_high(db: Session):
         age_group="high",
         evidence_json="[]",
         standards_json="[]",
+        source_taxonomy="beijing",
     )
     db.add(t)
     db.flush()
