@@ -1,0 +1,12 @@
+# .worktreeinclude — copy gitignored files into new worktrees
+# Syntax: .gitignore-style glob patterns (one per line)
+# Only files that match a pattern AND are gitignored will be copied.
+# Used for sim-test worktrees so .env config is available out of the box.
+
+# Root env files
+.env
+.env.local
+.env.production
+
+# Server env
+server/.env
