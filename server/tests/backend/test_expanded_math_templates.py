@@ -172,8 +172,7 @@ def test_geometry_angle_supplementary_correct():
 def test_geometry_circle_circumference_correct():
     def verify(gq):
         params = gq.parameters
-        import math
-        expected = round(2 * math.pi * params["radius"], 2)
+        expected = round(2 * 3.14 * params["radius"], 2)
         return abs(gq.answer["answer"] - expected) < 0.01
 
     _verify_template_correctness("math.geometry.circle_circumference", verify)

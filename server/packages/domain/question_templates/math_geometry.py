@@ -1,5 +1,4 @@
 """Math geometry question templates — elementary school level."""
-import math
 import random
 
 from packages.domain.question_templates.base import GeneratedQuestion
@@ -94,7 +93,8 @@ def _gen_supplementary_angle(params: dict) -> GeneratedQuestion:
 def _gen_circle_circumference(params: dict) -> GeneratedQuestion:
     """Calculate the circumference of a circle (using π ≈ 3.14)."""
     radius = random.randint(1, 14)
-    circumference = round(2 * math.pi * radius, 2)
+    pi_approx = 3.14
+    circumference = round(2 * pi_approx * radius, 2)
     return GeneratedQuestion(
         template_id="math.geometry.circle_circumference",
         stem=f"一个圆的半径是 {radius} 厘米，求它的周长（π 取 3.14）",
