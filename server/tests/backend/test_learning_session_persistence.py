@@ -43,6 +43,7 @@ def learning_setup(db: Session):
         name="Persist Test",
         description="test",
         age_group="mid",
+        source_taxonomy="beijing",
     )
     db.add(topic)
     db.flush()
