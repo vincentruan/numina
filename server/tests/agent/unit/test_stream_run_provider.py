@@ -37,13 +37,15 @@ def test_skips_open_provider():
     assert result["config_id"] == "cfg-2"
 
 
-def test_returns_none_when_all_open():
-    """No usable provider → return None so caller surfaces the failure."""
+def test_returns_last_resort_when_all_open():
+    """All providers open → return first as last-resort recovery probe."""
     providers = [
         _make_provider("cfg-1", "open"),
         _make_provider("cfg-2", "open"),
     ]
-    assert _select_stream_run_provider(providers) is None
+    result = _select_stream_run_provider(providers)
+    assert result is not None
+    assert result["config_id"] == "cfg-1"
 
 
 def test_returns_none_for_empty_list():
