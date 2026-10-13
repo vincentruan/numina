@@ -475,6 +475,16 @@ const router = createRouter({
           component: () => import('@/pages/LearningReviewsPage.vue')
         },
         {
+          path: 'baby/learning/paths',
+          name: 'LearningPaths',
+          component: () => import('@/pages/LearningPathsPage.vue')
+        },
+        {
+          path: 'baby/learning/paths/:pathId',
+          name: 'LearningPathDetail',
+          component: () => import('@/pages/LearningPathDetailPage.vue')
+        },
+        {
           path: 'baby/learning/:childId/map',
           name: 'ChildLearningMap',
           component: () => import('@/pages/ChildLearningMapPage.vue')
