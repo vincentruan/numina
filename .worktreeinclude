@@ -10,3 +10,6 @@
 
 # Server env
 server/.env
+
+# Data directory (SQLite DB, uploads, secrets, sessions)
+.numina/data/
