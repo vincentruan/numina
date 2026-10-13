@@ -37,10 +37,8 @@ def _mastery_score_to_difficulty(score: float) -> tuple[int, int]:
     """
     if score < 0.3:
         return (1, 2)
-    elif score < 0.5:
-        return (1, 3)
     elif score < 0.7:
-        return (2, 3)
+        return (1, 3)
     elif score < 0.85:
         return (2, 4)
     else:

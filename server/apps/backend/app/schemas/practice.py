@@ -19,7 +19,7 @@ class SessionCreateRequest(BaseModel):
 class SubmitAnswerRequest(BaseModel):
     question_id: int
     user_answer: dict
-    time_spent_seconds: int | None = None
+    time_spent_seconds: int | None = Field(default=None, ge=0, le=7200)
 
 
 # --- Response schemas ---
@@ -53,6 +53,28 @@ class QuestionResponse(QuestionPublicResponse):
     review_notes: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class PracticeQuestionWithAnswer(SnowflakeBase):
+    """Question with answer/solution — only returned for active session context."""
+
+    id: int
+    topic_id: int
+    question_type: str
+    stem: str
+    stem_zh: str | None
+    options: list[dict] | None
+    difficulty: int
+    bloom_level: str
+    source: str
+    source_version: str | None
+    review_status: str
+    age_group: str
+    parameters: dict | None
+    times_used: int
+    correct_count: int
+    answer: dict
+    solution: dict | None
 
 
 class PracticeSessionResponse(SnowflakeBase):

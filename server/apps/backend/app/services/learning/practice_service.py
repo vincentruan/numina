@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import case
 from sqlalchemy import func as sa_func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
@@ -114,8 +115,12 @@ def submit_answer(
     # Update session completed_count
     session.completed_count += 1
 
-    db.flush()
-    db.commit()
+    try:
+        db.flush()
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise AppError(ErrorCode.PRACTICE_DUPLICATE_ATTEMPT) from None
     return attempt
 
 
@@ -184,7 +189,9 @@ def get_weak_topics(
         db.query(
             PracticeAttempt.topic_id,
             sa_func.count(PracticeAttempt.id).label("total"),
-            sa_func.sum(case((PracticeAttempt.is_correct, 1), else_=0)).label("correct"),
+            sa_func.sum(case((PracticeAttempt.is_correct, 1), else_=0)).label(
+                "correct"
+            ),
             sa_func.max(PracticeAttempt.created_at).label("last_at"),
         )
         .filter(PracticeAttempt.child_id == child_id)
@@ -203,16 +210,18 @@ def get_weak_topics(
         )
         correct = row.correct or 0
         accuracy = correct / row.total if row.total > 0 else 0.0
-        results.append({
-            "topic_id": row.topic_id,
-            "topic_name": topic.name if topic else "",
-            "topic_name_zh": topic.name_zh if topic else None,
-            "total_attempts": row.total,
-            "correct_attempts": correct,
-            "accuracy": accuracy,
-            "last_practice_at": row.last_at,
-            "mastery_level": progress.mastery_level if progress else "available",
-        })
+        results.append(
+            {
+                "topic_id": row.topic_id,
+                "topic_name": topic.name if topic else "",
+                "topic_name_zh": topic.name_zh if topic else None,
+                "total_attempts": row.total,
+                "correct_attempts": correct,
+                "accuracy": accuracy,
+                "last_practice_at": row.last_at,
+                "mastery_level": progress.mastery_level if progress else "available",
+            }
+        )
 
     results.sort(key=lambda r: r["accuracy"])
     return results[:limit]
@@ -232,14 +241,10 @@ def list_sessions(
     )
 
 
-def get_session_detail(
-    db: Session, session_id: int, child_id: int
-) -> dict | None:
+def get_session_detail(db: Session, session_id: int, child_id: int) -> dict | None:
     """Get full session detail with attempts and question context."""
     session = (
-        db.query(PracticeSession)
-        .filter_by(id=session_id, child_id=child_id)
-        .first()
+        db.query(PracticeSession).filter_by(id=session_id, child_id=child_id).first()
     )
     if not session:
         return None
@@ -255,19 +260,23 @@ def get_session_detail(
     attempt_details = []
     for a in attempts:
         q = db.query(Question).filter_by(id=a.question_id).first()
-        attempt_details.append({
-            "id": a.id,
-            "question_id": a.question_id,
-            "question_stem": q.stem if q else "",
-            "question_type": q.question_type if q else "",
-            "user_answer": a.user_answer,
-            "is_correct": a.is_correct,
-            "time_spent_seconds": a.time_spent_seconds,
-            "attempt_number": a.attempt_number,
-            "created_at": a.created_at,
-        })
+        attempt_details.append(
+            {
+                "id": a.id,
+                "question_id": a.question_id,
+                "question_stem": q.stem if q else "",
+                "question_type": q.question_type if q else "",
+                "user_answer": a.user_answer,
+                "is_correct": a.is_correct,
+                "time_spent_seconds": a.time_spent_seconds,
+                "attempt_number": a.attempt_number,
+                "created_at": a.created_at,
+            }
+        )
 
-    question_ids = json.loads(session.question_ids_json) if session.question_ids_json else []
+    question_ids = (
+        json.loads(session.question_ids_json) if session.question_ids_json else []
+    )
 
     return {
         "id": session.id,

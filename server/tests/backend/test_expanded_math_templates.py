@@ -6,18 +6,16 @@ Each template is validated by:
 3. Template registration verification
 """
 
-import pytest
 
 # Import template modules to trigger registration
+import packages.domain.question_templates.math_arithmetic  # noqa: F401
 import packages.domain.question_templates.math_fractions  # noqa: F401
 import packages.domain.question_templates.math_geometry  # noqa: F401
 import packages.domain.question_templates.math_word_problems  # noqa: F401
-import packages.domain.question_templates.math_arithmetic  # noqa: F401
 from packages.domain.question_templates.registry import (
     TEMPLATE_REGISTRY,
     generate_question,
 )
-
 
 # --- Registration tests ---
 
@@ -130,7 +128,7 @@ def test_fractions_simple_reduction_correct():
         from math import gcd
         g = gcd(params["numerator"], params["denominator"])
         expected = f"{params['numerator'] // g}/{params['denominator'] // g}"
-        return gq.answer["answer"] == expected
+        return gq.answer["value"] == expected
 
     _verify_template_correctness("math.fractions.simple_reduction", verify)
 
@@ -264,7 +262,7 @@ def test_arithmetic_division_remainder_correct():
         expected_q = params["dividend"] // params["divisor"]
         expected_r = params["dividend"] % params["divisor"]
         expected_str = f"{expected_q}……{expected_r}"
-        return gq.answer["answer"] == expected_str
+        return gq.answer["value"] == expected_str
 
     _verify_template_correctness("math.arithmetic.division_with_remainder", verify)
 

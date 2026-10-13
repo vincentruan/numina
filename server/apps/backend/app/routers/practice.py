@@ -2,8 +2,8 @@
 
 import json
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import get_current_user_or_child
@@ -13,6 +13,7 @@ from apps.backend.app.models.user import User
 from apps.backend.app.schemas.practice import (
     CoverageResponse,
     PracticeAttemptResponse,
+    PracticeQuestionWithAnswer,
     PracticeResultResponse,
     PracticeSessionResponse,
     QuestionPublicResponse,
@@ -27,7 +28,6 @@ from apps.backend.app.services.learning.adaptive_service import (
     RuleBasedMasteryEstimator,
     get_ability_dimensions,
     get_progress_trend,
-    get_recommend_with_reason,
     select_questions,
 )
 from apps.backend.app.services.learning.practice_service import (
@@ -44,10 +44,10 @@ from apps.backend.app.services.learning.progress_service import (
 )
 from apps.backend.app.services.learning.question_service import (
     get_coverage_stats,
-    get_question,
     list_questions,
 )
 from packages.core.logging import get_logger
+from packages.db.models.learning.question import Question as QuestionModel
 from packages.db.models.learning.topic import LearningTopic
 
 logger = get_logger(__name__)
@@ -56,14 +56,14 @@ router = APIRouter(prefix="/practice", tags=["practice"])
 
 
 class BatchQuestionsRequest(BaseModel):
-    question_ids: list[int]
+    question_ids: list[int] = Field(..., max_length=100)
 
 
 @router.get("/questions", response_model=list[QuestionPublicResponse])
 def list_practice_questions(
     topic_id: int | None = None,
     difficulty: int | None = None,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user_or_child),
 ):
@@ -74,18 +74,21 @@ def list_practice_questions(
     return questions
 
 
-@router.post("/questions/batch", response_model=list[QuestionPublicResponse])
+@router.post("/questions/batch", response_model=list[PracticeQuestionWithAnswer])
 def batch_get_questions(
     req: BatchQuestionsRequest,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user_or_child),
 ):
-    """Fetch specific questions by ID list (without answers)."""
-    results = []
-    for qid in req.question_ids:
-        q = get_question(db, qid)
-        if q and q.review_status == "approved":
-            results.append(q)
+    """Fetch specific questions by ID list (with answers for active session context)."""
+    results = (
+        db.query(QuestionModel)
+        .filter(
+            QuestionModel.id.in_(req.question_ids),
+            QuestionModel.review_status == "approved",
+        )
+        .all()
+    )
     return results
 
 
@@ -208,7 +211,7 @@ def finish_practice_session(
 @router.get("/weak-topics", response_model=list[WeakTopicResponse])
 def get_weak_topics_endpoint(
     limit: int = 10,
-    min_attempts: int = 3,
+    min_attempts: int = Query(default=3, ge=1),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
 ):
@@ -218,7 +221,7 @@ def get_weak_topics_endpoint(
 
 @router.get("/sessions", response_model=list[SessionListItem])
 def list_practice_sessions(
-    limit: int = 20,
+    limit: int = Query(default=20, ge=1, le=100),
     offset: int = 0,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
@@ -229,18 +232,20 @@ def list_practice_sessions(
     for s in sessions:
         topic = db.query(LearningTopic).filter_by(id=s.topic_id).first()
         question_ids = json.loads(s.question_ids_json) if s.question_ids_json else []
-        results.append(SessionListItem(
-            id=s.id,
-            topic_id=s.topic_id,
-            topic_name=topic.name if topic else "",
-            topic_name_zh=topic.name_zh if topic else None,
-            session_mode=s.session_mode,
-            total_score=s.total_score,
-            completed_count=s.completed_count,
-            total_count=len(question_ids),
-            started_at=s.started_at,
-            ended_at=s.ended_at,
-        ))
+        results.append(
+            SessionListItem(
+                id=s.id,
+                topic_id=s.topic_id,
+                topic_name=topic.name if topic else "",
+                topic_name_zh=topic.name_zh if topic else None,
+                session_mode=s.session_mode,
+                total_score=s.total_score,
+                completed_count=s.completed_count,
+                total_count=len(question_ids),
+                started_at=s.started_at,
+                ended_at=s.ended_at,
+            )
+        )
     return results
 
 
@@ -273,9 +278,7 @@ def get_practice_recommendations(
             find_weak_prerequisites,
         )
 
-        weak_prereqs = find_weak_prerequisites(
-            db, topic_id=topic_id, child_id=user.id
-        )
+        weak_prereqs = find_weak_prerequisites(db, topic_id=topic_id, child_id=user.id)
         return [
             RecommendResponse(
                 topic_id=r["topic_id"],

@@ -163,7 +163,7 @@ def _gen_division_with_remainder(params: dict) -> GeneratedQuestion:
         template_id="math.arithmetic.division_with_remainder",
         stem=f"计算：{dividend} ÷ {divisor} = ?……?",
         stem_zh=f"计算：{dividend} ÷ {divisor} = ?……?（写出商和余数）",
-        answer={"answer": f"{quotient}……{remainder}"},
+        answer={"value": f"{quotient}……{remainder}"},
         solution={"steps": [f"{dividend} ÷ {divisor}", f"= {quotient}……{remainder}", f"验证：{divisor} × {quotient} + {remainder} = {dividend}"]},
         question_type="fill_blank",
         difficulty=3,
