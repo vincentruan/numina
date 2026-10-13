@@ -248,7 +248,7 @@ class ChildLearningOverview(SnowflakeBase):
     available_count: int
     locked_count: int
     review_count: int
-    total_study_minutes: int
+    total_study_minutes: int = 0
     cumulative_xp: int = 0
     level: int = 1
     level_name_zh: str = ""

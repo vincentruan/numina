@@ -12,7 +12,7 @@
         <template v-else>
           <!-- Subject tabs -->
           <van-tabs v-model:active="activeSubjectIdx" scrollable class="subject-tabs">
-            <van-tab v-for="tab in subjectTabs" :key="tab.subject" :title="`${tab.subject} (${tab.count})`" />
+            <van-tab v-for="tab in subjectTabs" :key="tab.subject" :title="`${subjectLabel(tab.subject)} (${tab.count})`" />
           </van-tabs>
 
           <!-- Domain groups -->
@@ -23,7 +23,7 @@
               class="domain-group"
             >
               <div class="domain-group-header">
-                <span class="domain-name">{{ group.domain || t('learning.ungrouped') }}</span>
+                <span class="domain-name">{{ domainLabel(group.domain) || t('learning.ungrouped') }}</span>
                 <span class="domain-count">{{ group.items.length }}</span>
               </div>
               <div class="topic-list">
@@ -75,6 +75,7 @@ import { usePageLoading } from '@/composables/usePageLoading'
 import {
   getChildMap,
   getTopicsBatch,
+  getLearningChildren,
   translateTopic,
   type ProgressResponse,
   type TopicResponse,
@@ -172,6 +173,19 @@ function shouldShowTranslate(topic: TopicResponse): boolean {
   return true
 }
 
+function subjectLabel(subject: string): string {
+  const key = `learning.subject${subject.charAt(0).toUpperCase()}${subject.slice(1)}`
+  const translated = t(key)
+  return translated === key ? subject.charAt(0).toUpperCase() + subject.slice(1) : translated
+}
+
+function domainLabel(domain: string): string {
+  if (!domain) return ''
+  const translated = t(`learning.domains['${domain}']`)
+  const key = `learning.domains['${domain}']`
+  return translated === key ? domain : translated
+}
+
 async function handleTranslate(topicId: string) {
   translatingIds.value.add(topicId)
   try {
@@ -194,8 +208,17 @@ async function handleTranslate(topicId: string) {
 async function load() {
   loading.value = true
   try {
-    const progress = await getChildMap(childId)
+    const [progress, children] = await Promise.all([
+      getChildMap(childId),
+      getLearningChildren(),
+    ])
     progressList.value = progress
+
+    // Resolve child display name from API (don't rely on query param)
+    if (!childName.value) {
+      const child = children.find((c) => c.child_id === childId)
+      childName.value = child?.child_name || childId
+    }
 
     // Fetch topic details in batch (single request instead of N+1)
     const uniqueTopicIds = [...new Set(progress.map((p) => p.topic_id))]
@@ -221,8 +244,8 @@ async function onRefresh() {
 
 onMounted(async () => {
   increment()
-  // Get child name from route query or use ID as fallback
-  childName.value = (route.query.name as string) || childId
+  // Use query param as immediate hint; load() will resolve from API
+  childName.value = (route.query.name as string) || ''
   await load()
   decrement()
 })
