@@ -259,7 +259,9 @@ def finish_practice_session(
 
         # Award coins (10 stars for mastery advancement)
         try:
-            from packages.db.models.child_economy.coin_transaction import CoinTransaction
+            from packages.db.models.child_economy.coin_transaction import (
+                CoinTransaction,
+            )
 
             topic = db.query(LearningTopic).filter_by(id=session.topic_id).first()
             topic_label = (topic.name_zh or topic.name or "learning") if topic else "learning"
