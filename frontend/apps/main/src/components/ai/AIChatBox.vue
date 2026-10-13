@@ -598,6 +598,14 @@ function handleTitleUpdated(threadId: string, newTitle: string) {
 }
 
 async function handleStartChat(payload: SubmitPayload, source?: string) {
+  // Clear stale task state from a previous (possibly failed) run so the
+  // 'running' guard below does not permanently block new chats after an
+  // SSE error leaves chatTaskStatus stuck at 'running'.
+  stopChatTaskPolling()
+  chatTaskStatus.value = 'idle'
+  chatTaskError.value = null
+  chat.isLoading.value = false
+  errorBarMessage.value = null
   // C1 fix: block sending while AITask preflight reports a background task running.
   // Without this guard the user can fire a new SSE run concurrently with the
   // in-flight task, risking competing runs on the same session.
@@ -669,6 +677,17 @@ async function handleStartChat(payload: SubmitPayload, source?: string) {
 
 async function handleSendMessage(payload: SubmitPayload) {
   if (!store.activeThreadId) return
+  // Reset stale chat-task state from a previous failed run so the new
+  // message can send freely.  Without this, checkChatTask's 2-second polling
+  // may still report the old task as 'running' (the backend run hasn't
+  // terminated yet or the SSE dropped prematurely) and keep isLoading=true —
+  // the InputBox then routes clicks to emit('stop') instead of emit('submit'),
+  // making new input appear to be ignored.
+  stopChatTaskPolling()
+  chatTaskStatus.value = 'idle'
+  chatTaskError.value = null
+  chat.isLoading.value = false
+  errorBarMessage.value = null
   // U5 (D1 /goal): intercept the /goal slash command. U1's slash palette fills
   // `/goal ` for palette selection (apply returns handled=false), so a typed
   // `/goal <condition>` arrives here verbatim on submit — parse it and route to
@@ -730,6 +749,13 @@ function handleStop() {
 }
 
 async function handleRetry() {
+  // Clear stale task state so the 'running' guard does not permanently block
+  // retries after an SSE error leaves chatTaskStatus stuck at 'running'.
+  stopChatTaskPolling()
+  chatTaskStatus.value = 'idle'
+  chatTaskError.value = null
+  chat.isLoading.value = false
+  errorBarMessage.value = null
   // Guard: do not retry while a background AITask is running — the agent is
   // still producing output and a retry would create a competing SSE run on
   // the same thread, causing duplicate messages and title-generation failures
