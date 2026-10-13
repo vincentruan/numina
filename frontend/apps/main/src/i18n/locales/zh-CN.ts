@@ -934,6 +934,7 @@ export default {
     // Artifact preview keys
     defaultKind: '文件',
     install: '安装',
+    preview: '预览',
     download: '下载',
     viewModeCode: '代码',
     viewModePreview: '预览',
