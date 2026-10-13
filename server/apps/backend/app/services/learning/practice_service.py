@@ -58,16 +58,21 @@ def submit_answer(
     topic_id: int,
     user_answer: dict,
     time_spent_seconds: int | None,
+    _session: PracticeSession | None = None,
 ) -> PracticeAttempt:
     """Submit an answer for a question in a practice session.
+
+    Args:
+        _session: Pre-loaded session object (avoids redundant query when caller
+                  already has it). If None, the session is loaded from DB.
 
     Raises:
         AppError(PRACTICE_DUPLICATE_ATTEMPT): if question already answered.
         AppError(PRACTICE_QUESTION_NOT_IN_SESSION): if question not in session.
         AppError(PRACTICE_QUESTION_NOT_FOUND): if question doesn't exist.
     """
-    # Load session for question list validation
-    session = db.query(PracticeSession).filter_by(id=session_id).first()
+    # Use pre-loaded session or load from DB
+    session = _session or db.query(PracticeSession).filter_by(id=session_id).first()
     if not session:
         raise AppError(ErrorCode.PRACTICE_SESSION_NOT_FOUND)
 

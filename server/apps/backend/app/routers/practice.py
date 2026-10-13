@@ -186,6 +186,7 @@ def submit_practice_answer(
         topic_id=session.topic_id,
         user_answer=req.user_answer,
         time_spent_seconds=req.time_spent_seconds,
+        _session=session,
     )
     return attempt
 
