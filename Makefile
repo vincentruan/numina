@@ -669,6 +669,9 @@ setup-beijing-data:
 	@echo ""
 	@echo "✓ os-taxonomy-beijing 数据已就绪"
 	@echo "  使用: cd server && uv run python scripts/seed_learning_topics.py --source beijing"
+	@echo ""
+	@echo "生成 dedup_mapping.json (mt_/mtc_ 重叠去重映射)..."
+	@cd $(SERVER_DIR) && uv run python scripts/generate_dedup_mapping.py
 
 setup-os-taxonomy-data:
 	@echo "初始化 os-taxonomy 上游知识图谱子模块..."
