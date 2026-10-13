@@ -328,6 +328,10 @@ const minDate = new Date()
 const SUBJECTS = [
   'mathematics', 'science', 'english', 'history',
   'personal_social', 'life_skills', 'computing', 'learning_to_learn',
+  // Beijing taxonomy subjects
+  'chinese', 'ethics_law', 'physics', 'chemistry', 'biology',
+  'geography', 'art', 'information_technology', 'general_technology',
+  'pe_health', 'labor', 'politics', 'comprehensive_practical',
 ] as const
 
 const subjectList = computed(() => [

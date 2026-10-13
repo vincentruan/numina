@@ -212,7 +212,7 @@ Beijing data; en-US learners see the translated os-taxonomy data.
 ### Data Location
 
 ```
-server/data/os-taxonomy-beijing/   ← git submodule
+server/data/os-taxonomy-beijing/   ← managed clone (make setup-beijing-data)
   data/
     topics.zh.json          (1,590 mt_ translated topics)
     cn-topics.json           (2,008 mtc_ China-specific topics)
@@ -226,8 +226,8 @@ server/data/os-taxonomy-beijing/   ← git submodule
 ### Syncing Beijing Data
 
 ```bash
-# Update the submodule
-git submodule update --remote server/data/os-taxonomy-beijing
+# Update the Beijing data clone
+make setup-beijing-data
 
 # Re-seed the database (applies dedup mapping if present)
 cd server
@@ -245,7 +245,7 @@ uv run python scripts/seed_learning_topics.py --source beijing
 | Curriculum alignment | NGSS / Common Core / UK NC | China MOE 2022 standards |
 | China-specific subjects | None | 语文, 道德与法治, 历史 |
 | Topic prefixes | `mt_` | `mt_` + `mtc_` (China-specific) |
-| Dedup | Not needed | LLM-based dedup merges `mtc_`↔`mt_` overlap |
+| Dedup | Not needed | Rule-based fallback dedup merges `mtc_`↔`mt_` overlap (LLM mode deferred) |
 | Seed command | `--source os-taxonomy` (default) | `--source beijing` |
 
 ## Debugging

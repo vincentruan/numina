@@ -36,6 +36,10 @@
                   <div class="topic-info">
                     <span class="topic-name">{{ topicDisplayName(item.topic) }}</span>
                     <span class="topic-desc">{{ topicDescription(item.topic) }}</span>
+                    <span
+                      v-if="firstStandardCode(item.topic)"
+                      class="topic-standard"
+                    >{{ firstStandardCode(item.topic) }}</span>
                   </div>
                   <van-button
                     v-if="shouldShowTranslate(item.topic)"
@@ -81,6 +85,7 @@ import {
   type TopicResponse,
   type ProgressWithTopic,
 } from '@/api/learning'
+import http from '@/api'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { hasChineseChars } from '@numina/shared'
@@ -124,6 +129,12 @@ const subjectTabs = computed(() => {
 })
 
 const selectedSubject = computed(() => subjectTabs.value[activeSubjectIdx.value]?.subject || '')
+
+/** First resolved curriculum standard code for the topic, or null. */
+function firstStandardCode(topic: TopicResponse): string | null {
+  const first = topic.curriculum_standards?.find((s) => s.code != null)
+  return first ? first.code : null
+}
 
 const filteredItems = computed(() =>
   mapItems.value.filter((item) => item.topic.subject === selectedSubject.value),
@@ -216,8 +227,19 @@ async function load() {
 
     // Resolve child display name from API (don't rely on query param)
     if (!childName.value) {
-      const child = children.find((c) => c.child_id === childId)
-      childName.value = child?.child_name || childId
+      const child = children.find((c) => String(c.child_id) === String(childId))
+      childName.value = child?.child_name || ''
+    }
+    // Fallback: if children list didn't include the child, fetch directly
+    if (!childName.value) {
+      try {
+        const allChildren = await http.get('/family/children')
+        const list = allChildren.data as Array<{ id: string; display_name: string }>
+        const found = list.find((c) => String(c.id) === String(childId))
+        childName.value = found?.display_name || childId
+      } catch {
+        childName.value = childId
+      }
     }
 
     // Fetch topic details in batch (single request instead of N+1)
@@ -335,6 +357,16 @@ onMounted(async () => {
   color: var(--text-secondary);
   display: block;
   margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topic-standard {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: block;
+  margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

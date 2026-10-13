@@ -699,7 +699,7 @@ seed-questions:
 	@echo "从模板生成题目到题库..."
 	cd server && uv run python -m apps.backend.scripts.seed_questions
 
-setup: setup-data setup-env setup-db
+setup: setup-data setup-env setup-db setup-learning-data
 	@echo ""
 	@echo "========================================"
 	@echo "       Numina 初始化完成"

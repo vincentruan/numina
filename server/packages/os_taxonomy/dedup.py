@@ -123,7 +123,9 @@ def run_dedup(
     Args:
         topics: Normalized topics from a single taxonomy source.
         mode: "fallback" for rule-based similarity, "llm" for LLM-based
-            classification (currently a stub that behaves like fallback).
+            classification.  **Deferred**: "llm" currently falls through to
+            the fallback behaviour — real LLM integration requires
+            OPENAI_API_KEY and structured-output support; track in Issue #117.
         threshold: Similarity ratio threshold for the "equivalent" class.
 
     Returns:
