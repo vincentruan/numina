@@ -466,6 +466,8 @@ async def stream_assessment(
         )
 
     agent_body = {
+        "family_id": str(family_id),
+        "user_id": str(child.id),
         "input": {
             "messages": [{"role": "user", "content": agent_content}],
         },
@@ -517,7 +519,6 @@ async def stream_assessment(
         family_id=family_id,
         run_id=result["run_id"],
         bridge=shared_bridge,
-        thread_id=thread_id,
     )
 
     last_event_id = http_request.headers.get("Last-Event-ID")

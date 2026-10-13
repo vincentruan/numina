@@ -143,8 +143,10 @@ def create_session(
     )
     db.add(session)
     db.flush()
-    db.refresh(session)
+    # Derive thread_id from session ID (same pattern as AIChatSession)
+    session.thread_id = str(session.id)
     db.commit()
+    db.refresh(session)
 
     return {
         "id": session.id,

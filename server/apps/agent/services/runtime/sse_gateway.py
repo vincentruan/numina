@@ -329,6 +329,12 @@ async def start_run(
             app=app,
             reason="启蒙周报须经由后端触发端点，请勿直连 /runs/stream",
         )
+    if not internal and app == "learning-tutor":
+        raise _app_rejected_error(
+            status_code=409,
+            app=app,
+            reason="AI导师须经由后端触发端点，请勿直连 /runs/stream",
+        )
     if (
         app != "numina"
         and app != "asset-report"
@@ -337,6 +343,7 @@ async def start_run(
         and app != "wish-advice"
         and app != "dashboard-narrative"
         and app != "literacy-weekly-report"
+        and app != "learning-tutor"
     ):
         raise _app_rejected_error(status_code=400, app=app, reason="未知的 app 值")
 
