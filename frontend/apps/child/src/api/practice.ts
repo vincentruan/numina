@@ -82,39 +82,39 @@ export interface PracticeAnswerSubmit {
 export async function listPracticeQuestions(
   topicId: string,
 ): Promise<QuestionResponse[]> {
-  const resp = await http.get('/api/v1/practice/questions', { params: { topic_id: topicId } })
-  return resp.data.data
+  const resp = await http.get('/practice/questions', { params: { topic_id: topicId } })
+  return resp.data
 }
 
 export async function batchGetQuestions(
   questionIds: string[],
 ): Promise<QuestionResponse[]> {
-  const resp = await http.post('/api/v1/practice/questions/batch', {
+  const resp = await http.post('/practice/questions/batch', {
     question_ids: questionIds,
   })
-  return resp.data.data
+  return resp.data
 }
 
 export async function createPracticeSession(
   req: PracticeSessionCreate,
 ): Promise<PracticeSessionResponse> {
-  const resp = await http.post('/api/v1/practice/sessions', req)
-  return resp.data.data
+  const resp = await http.post('/practice/sessions', req)
+  return resp.data
 }
 
 export async function submitPracticeAnswer(
   sessionId: string,
   req: PracticeAnswerSubmit,
 ): Promise<PracticeAttemptResponse> {
-  const resp = await http.post(`/api/v1/practice/sessions/${sessionId}/answer`, req)
-  return resp.data.data
+  const resp = await http.post(`/practice/sessions/${sessionId}/answer`, req)
+  return resp.data
 }
 
 export async function finishPracticeSession(
   sessionId: string,
 ): Promise<PracticeResultResponse> {
-  const resp = await http.post(`/api/v1/practice/sessions/${sessionId}/finish`)
-  return resp.data.data
+  const resp = await http.post(`/practice/sessions/${sessionId}/finish`)
+  return resp.data
 }
 
 // --- Phase 5: Weak points + history + recommend ---
@@ -181,33 +181,33 @@ export async function getWeakTopics(
   limit = 10,
   minAttempts = 3,
 ): Promise<WeakTopicResponse[]> {
-  const resp = await http.get('/api/v1/practice/weak-topics', {
+  const resp = await http.get('/practice/weak-topics', {
     params: { limit, min_attempts: minAttempts },
   })
-  return resp.data.data
+  return resp.data
 }
 
 export async function listPracticeSessions(
   limit = 20,
   offset = 0,
 ): Promise<SessionListItem[]> {
-  const resp = await http.get('/api/v1/practice/sessions', {
+  const resp = await http.get('/practice/sessions', {
     params: { limit, offset },
   })
-  return resp.data.data
+  return resp.data
 }
 
 export async function getPracticeSessionDetail(
   sessionId: string,
 ): Promise<SessionDetailResponse> {
-  const resp = await http.get(`/api/v1/practice/sessions/${sessionId}`)
-  return resp.data.data
+  const resp = await http.get(`/practice/sessions/${sessionId}`)
+  return resp.data
 }
 
 export async function getPracticeRecommendations(
   topicId?: string,
 ): Promise<RecommendResponse[]> {
   const params = topicId ? { topic_id: topicId } : {}
-  const resp = await http.get('/api/v1/practice/recommend', { params })
-  return resp.data.data
+  const resp = await http.get('/practice/recommend', { params })
+  return resp.data
 }
