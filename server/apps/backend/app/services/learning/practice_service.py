@@ -97,6 +97,27 @@ def submit_answer(
 
     is_correct = check_answer(question.question_type, question.answer, user_answer)
 
+    # P0-1 fix: For ai_graded, preserve confidence metadata for mastery gating.
+    # check_answer returns only bool — we call check_ai_graded directly to get
+    # the full result including low_confidence flag.
+    ai_confidence = None
+    ai_low_confidence = False
+    if question.question_type == "ai_graded":
+        from apps.backend.app.services.learning.scoring_service import check_ai_graded
+
+        ai_result = check_ai_graded(question.answer, user_answer)
+        is_correct = ai_result["is_correct"]
+        ai_confidence = ai_result.get("confidence")
+        ai_low_confidence = ai_result.get("low_confidence", False)
+
+        # P2-2 fix: Persist grading explanation on the question
+        if ai_result.get("explanation"):
+            question.grading_explanation_json = json.dumps({
+                "confidence": ai_result["confidence"],
+                "result_level": ai_result["result_level"],
+                "explanation": ai_result["explanation"],
+            })
+
     # Count attempt number for this child+question
     attempt_num = (
         db.query(PracticeAttempt)
@@ -114,6 +135,8 @@ def submit_answer(
         is_correct=is_correct,
         time_spent_seconds=time_spent_seconds,
         attempt_number=attempt_num,
+        ai_confidence=ai_confidence,
+        ai_low_confidence=ai_low_confidence,
     )
     db.add(attempt)
 
@@ -150,8 +173,11 @@ def finish_session(
 
     # Calculate score
     attempts = db.query(PracticeAttempt).filter_by(session_id=session_id).all()
-    correct = sum(1 for a in attempts if a.is_correct)
-    total = len(attempts)
+    # P0-1 fix: Exclude low-confidence ai_graded attempts from score calculation.
+    # Spec: "置信度低于阈值的题目不进入掌握度计算，只给反馈不计分"
+    scoring_attempts = [a for a in attempts if not a.ai_low_confidence]
+    correct = sum(1 for a in scoring_attempts if a.is_correct)
+    total = len(scoring_attempts)
     score = calculate_session_score(correct, total)
 
     session.ended_at = datetime.now(UTC)

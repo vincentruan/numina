@@ -22,11 +22,13 @@ logger = get_logger(__name__)
 def backfill(db: Session, batch_size: int = 100) -> dict:
     """Fill content_hash for questions that don't have one.
 
-    Returns dict with backfilled/skipped counts.
+    Returns dict with backfilled/skipped/errors counts.
     Fixed-offset loop: the content_hash IS NULL filter shrinks as rows
     are flushed, so we re-query from offset 0 until a batch returns empty.
+    P2-7 fix: per-row error handling for malformed answer_json.
     """
     backfilled = 0
+    errors = 0
     skipped = db.query(Question).filter(Question.content_hash.isnot(None)).count()
 
     while True:
@@ -41,14 +43,21 @@ def backfill(db: Session, batch_size: int = 100) -> dict:
             break
 
         for q in questions:
-            answer = json.loads(q.answer_json)
-            q.content_hash = _compute_content_hash(q.stem, answer)
-            backfilled += 1
+            try:
+                answer = json.loads(q.answer_json)
+                q.content_hash = _compute_content_hash(q.stem, answer)
+                backfilled += 1
+            except (json.JSONDecodeError, TypeError, KeyError) as e:
+                logger.warning(
+                    "content_hash backfill: skipping question %s — %s",
+                    q.id, e,
+                )
+                errors += 1
 
         db.flush()
 
-    logger.info("content_hash backfill: backfilled=%d, skipped=%d", backfilled, skipped)
-    return {"backfilled": backfilled, "skipped": skipped}
+    logger.info("content_hash backfill: backfilled=%d, skipped=%d, errors=%d", backfilled, skipped, errors)
+    return {"backfilled": backfilled, "skipped": skipped, "errors": errors}
 
 
 def main() -> None:

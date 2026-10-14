@@ -85,6 +85,9 @@ def create_question(
     # Determine review status
     review_status = "approved" if source == "template" else "pending"
 
+    # P2-1 fix: compute content_hash for dedup on all new questions
+    from apps.backend.app.services.learning.question_seeder import _compute_content_hash
+
     question = Question(
         topic_id=topic_id,
         question_type=question_type,
@@ -99,6 +102,7 @@ def create_question(
         review_status=review_status,
         age_group=age_group,
         parameters_json=json.dumps(parameters) if parameters else None,
+        content_hash=_compute_content_hash(stem, answer),
     )
     db.add(question)
     db.flush()

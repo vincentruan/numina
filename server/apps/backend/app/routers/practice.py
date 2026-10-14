@@ -61,7 +61,7 @@ router = APIRouter(prefix="/practice", tags=["practice"])
 
 
 class BatchQuestionsRequest(BaseModel):
-    question_ids: list[int] = Field(..., max_length=100)
+    question_ids: list[str] = Field(..., max_length=100)  # P2-5: Snowflake IDs as strings
 
 
 @router.get("/questions", response_model=list[QuestionPublicResponse])
@@ -110,14 +110,14 @@ def batch_get_questions(
     questions = (
         db.query(QuestionModel)
         .filter(
-            QuestionModel.id.in_(req.question_ids),
+            QuestionModel.id.in_([int(qid) for qid in req.question_ids]),  # P2-5: convert str→int
             QuestionModel.review_status == "approved",
         )
         .all()
     )
 
     # Check if user has an active session containing these question IDs
-    requested_ids = set(req.question_ids)
+    requested_ids = {int(qid) for qid in req.question_ids}
     has_session_context = False
 
     active_sessions = (
@@ -466,16 +466,18 @@ def get_coverage_detailed(
     )
     from packages.db.models.learning.topic import LearningTopic
 
-    query = db.query(LearningTopic).filter(LearningTopic.deprecated == False)  # noqa: E712
+    query = db.query(LearningTopic).filter(LearningTopic.deprecated.is_(False))
     if subject:
         query = query.filter(LearningTopic.subject == subject)
 
+    # P2-3 fix: get total count BEFORE offset/limit for proper pagination
+    total = query.count()
     topics = query.offset(offset).limit(limit).all()
     details = []
     for t in topics:
         cov = compute_topic_coverage(db, t.id, family_id=user.family_id)
         details.append({
-            "topic_id": t.id,
+            "topic_id": str(t.id),  # P1-2: Snowflake ID as string
             "topic_key": t.topic_key,
             "name": t.name,
             "subject": t.subject,
@@ -486,7 +488,7 @@ def get_coverage_detailed(
             "approved_question_count": cov["approved_question_count"],
         })
 
-    return {"topics": details, "total": len(details)}
+    return {"topics": details, "total": total}
 
 
 @router.get("/coverage/gap-report")
@@ -501,6 +503,9 @@ def get_coverage_gap_report(
     from apps.backend.app.services.learning.coverage_service import get_gap_report
 
     gaps = get_gap_report(db, subject=subject, threshold=threshold, limit=limit, family_id=user.family_id)
+    # P1-2 fix: convert Snowflake IDs to strings
+    for g in gaps:
+        g["topic_id"] = str(g["topic_id"])
     return {
         "gaps": gaps,
         "threshold": threshold,
@@ -565,7 +570,7 @@ def get_review_queue(
     for q in questions:
         topic = db.get(LearningTopic, q.topic_id) if q.topic_id else None
         items.append({
-            "question_id": q.id,
+            "question_id": str(q.id),  # P1-2: Snowflake ID as string
             "topic_key": topic.topic_key if topic else None,
             "question_type": q.question_type,
             "stem": q.stem,
@@ -590,9 +595,12 @@ def batch_review_questions(
     """Batch approve, reject, or suspend questions. Family-scoped."""
     new_status = {"approve": "approved", "reject": "rejected", "suspend": "suspended"}[body.decision]
 
+    # P2-5 fix: convert string IDs to int for DB query
+    question_ids_int = [int(qid) for qid in body.question_ids]
+
     # Single bulk UPDATE — avoids N+1 SELECT loop.
     filter_ = [
-        QuestionModel.id.in_(body.question_ids),
+        QuestionModel.id.in_(question_ids_int),
         QuestionModel.review_status == "pending",
         or_(QuestionModel.family_id == user.family_id, QuestionModel.family_id.is_(None)),
     ]
@@ -636,7 +644,7 @@ def get_grading_explanation(
     explanation = q.grading_explanation
     # Apply content safety filter to reasoning text (LLM-generated content)
     if explanation and "reasoning" in explanation:
-        from apps.backend.app.services.learning.content_safety_filter import filter_tutor_output
+        from apps.backend.app.services.learning.content_safety_filter import filter_tutor_output  # noqa: I001
         filtered = filter_tutor_output(explanation["reasoning"], child_id=user.id)
         if not filtered.safe:
             explanation = {**explanation, "reasoning": "[内容已被过滤]"}

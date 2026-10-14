@@ -77,6 +77,9 @@ class PracticeAttempt(Base):
     time_spent_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     is_retry: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # P7b: AI grading metadata — preserves confidence for mastery gating (P0-1 fix)
+    ai_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ai_low_confidence: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now()
     )

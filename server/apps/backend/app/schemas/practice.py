@@ -277,7 +277,7 @@ class GapReportResponse(BaseModel):
 
 
 class BatchReviewRequest(BaseModel):
-    question_ids: list[int] = Field(max_length=500)
+    question_ids: list[str] = Field(max_length=500)  # P2-5: Snowflake IDs as strings
     decision: Literal["approve", "reject", "suspend"]
     notes: str | None = None
 

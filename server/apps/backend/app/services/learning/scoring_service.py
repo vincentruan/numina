@@ -6,6 +6,7 @@ from packages.core.logging import get_logger
 logger = get_logger(__name__)
 
 _FLOAT_TOLERANCE = 1e-6
+_grade_unavailable_warned = False
 
 
 def _float_eq(a: float, b: float, *, rel_tol: float = 1e-4, abs_tol: float = _FLOAT_TOLERANCE) -> bool:
@@ -132,11 +133,14 @@ def check_ai_graded(
         except Exception:
             # Agent /grade endpoint is not yet deployed — ai_graded questions
             # will always score as incorrect until the endpoint exists.
-            # Log at ERROR so ops can detect this gap in monitoring.
-            logger.error(
-                "ai_graded: agent /grade endpoint unavailable; "
-                "ai_graded questions will fail closed until deployed"
-            )
+            # Log at WARNING once to avoid flooding error logs (P2-6 fix).
+            global _grade_unavailable_warned
+            if not _grade_unavailable_warned:
+                logger.warning(
+                    "ai_graded: agent /grade endpoint unavailable; "
+                    "ai_graded questions will fail closed until deployed"
+                )
+                _grade_unavailable_warned = True
             confidence = 0.0
             result_level = "incorrect"
             is_correct = False

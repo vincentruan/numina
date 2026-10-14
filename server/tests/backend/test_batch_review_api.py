@@ -35,7 +35,7 @@ class TestBatchReview:
         q2 = _make_question(db_session, stem="2+2=?", answer_json='{"answer": 4}')
 
         resp = client.post("/api/v1/practice/questions/batch-review", json={
-            "question_ids": [q1.id, q2.id],
+            "question_ids": [str(q1.id), str(q2.id)],
             "decision": "approve",
         }, headers=auth_headers)
         assert resp.status_code == 200
@@ -46,7 +46,7 @@ class TestBatchReview:
         q = _make_question(db_session, stem="bad?", answer_json='{"answer": 0}')
 
         resp = client.post("/api/v1/practice/questions/batch-review", json={
-            "question_ids": [q.id],
+            "question_ids": [str(q.id)],
             "decision": "reject",
             "notes": "Incorrect answer",
         }, headers=auth_headers)

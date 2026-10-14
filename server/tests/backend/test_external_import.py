@@ -20,7 +20,7 @@ class TestMath23KAdapter:
     def test_parse_produces_imported_question(self):
         adapter = Math23KAdapter()
         sample = [{"question": "1+1等于多少？", "answer": "2"}]
-        results = list(adapter.parse(sample))
+        results = list(adapter.parse(sample, source_license="MIT"))
         assert len(results) == 1
         assert isinstance(results[0], ImportedQuestion)
         assert results[0].stem == "1+1等于多少？"

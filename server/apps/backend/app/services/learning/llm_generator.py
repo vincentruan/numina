@@ -136,9 +136,18 @@ def validate_layer2_correctness(gq: GeneratedQuestion) -> dict:
         answer = gq.answer
         if "answer" not in answer:
             return {"passed": False, "detail": "calculation missing 'answer' key"}
+        # P2-4 fix: verify answer is actually numeric
+        ans_val = answer["answer"]
+        if isinstance(ans_val, str):
+            try:
+                float(ans_val)
+            except ValueError:
+                return {"passed": False, "detail": f"calculation answer not numeric: {ans_val}"}
+        elif not isinstance(ans_val, (int, float)):
+            return {"passed": False, "detail": f"calculation answer not numeric: {ans_val}"}
         return {
             "passed": True,
-            "detail": "calculation answer present (manual verify recommended)",
+            "detail": "calculation answer present and numeric (manual verify recommended)",
         }
 
     if gq.question_type == "multiple_choice":

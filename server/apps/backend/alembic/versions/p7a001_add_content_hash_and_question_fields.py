@@ -19,7 +19,7 @@ def upgrade() -> None:
     op.create_index(op.f("ix_questions_content_hash"), "questions", ["content_hash"])
     op.add_column("questions", sa.Column("source_name", sa.String(50), nullable=True))
     op.add_column("questions", sa.Column("source_license", sa.String(50), nullable=True))
-    op.add_column("questions", sa.Column("imported_at", sa.DateTime(), nullable=True))
+    op.add_column("questions", sa.Column("imported_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column("questions", sa.Column("grading_explanation_json", sa.Text(), nullable=True))
     op.add_column("questions", sa.Column("suspicious", sa.Boolean(), server_default="0"))
     op.add_column("questions", sa.Column("needs_review", sa.Boolean(), server_default="0"))
@@ -33,6 +33,8 @@ def upgrade() -> None:
 
     # Practice tables
     op.add_column("practice_attempts", sa.Column("is_retry", sa.Boolean(), server_default="0"))
+    op.add_column("practice_attempts", sa.Column("ai_confidence", sa.Float(), nullable=True))
+    op.add_column("practice_attempts", sa.Column("ai_low_confidence", sa.Boolean(), server_default="0"))
     op.add_column("practice_sessions", sa.Column("validity_flag", sa.String(20), nullable=True))
 
 
@@ -44,6 +46,8 @@ def downgrade() -> None:
     op.drop_column("questions", "family_id")
     # Practice tables
     op.drop_column("practice_sessions", "validity_flag")
+    op.drop_column("practice_attempts", "ai_low_confidence")
+    op.drop_column("practice_attempts", "ai_confidence")
     op.drop_column("practice_attempts", "is_retry")
     # Questions: original P7a columns
     op.drop_column("questions", "empirical_difficulty")

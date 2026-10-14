@@ -7,6 +7,7 @@ P7a-full will upgrade to 5-dim weighted model.
 
 from __future__ import annotations
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from packages.core.logging import get_logger
@@ -21,6 +22,8 @@ def get_prerequisite_value(db: Session, topic_id: int) -> float:
 
     Value = (number of topics that depend on this topic) / (max dependents in subject).
     Returns 0.0 if the topic has no dependents or is the only topic.
+
+    P1-5 fix: uses a single GROUP BY query instead of N individual COUNTs.
     """
     dependent_count = (
         db.query(LearningDependency)
@@ -36,12 +39,12 @@ def get_prerequisite_value(db: Session, topic_id: int) -> float:
     if topic is None or topic.subject is None:
         return 0.0
 
-    # Find max dependents in same subject for normalization
+    # Find all topic IDs in the same subject
     subject_topic_ids = (
         db.query(LearningTopic.id)
         .filter(
             LearningTopic.subject == topic.subject,
-            LearningTopic.deprecated == False,  # noqa: E712
+            LearningTopic.deprecated.is_(False),
         )
         .all()
     )
@@ -49,16 +52,18 @@ def get_prerequisite_value(db: Session, topic_id: int) -> float:
     if not tid_list:
         return 0.0
 
-    max_dependents = 0
-    for tid in tid_list:
-        count = (
-            db.query(LearningDependency)
-            .filter(LearningDependency.prerequisite_id == tid)
-            .count()
+    # P1-5 fix: single GROUP BY query replaces per-topic COUNT loop
+    dep_counts = dict(
+        db.query(
+            LearningDependency.prerequisite_id,
+            func.count(LearningDependency.id),
         )
-        if count > max_dependents:
-            max_dependents = count
+        .filter(LearningDependency.prerequisite_id.in_(tid_list))
+        .group_by(LearningDependency.prerequisite_id)
+        .all()
+    )
 
+    max_dependents = max(dep_counts.values()) if dep_counts else 0
     if max_dependents == 0:
         return 0.0
 
@@ -113,7 +118,7 @@ def compute_subject_coverage(
         db.query(LearningTopic)
         .filter(
             LearningTopic.subject == subject,
-            LearningTopic.deprecated == False,  # noqa: E712
+            LearningTopic.deprecated.is_(False),
         )
         .all()
     )
@@ -163,7 +168,7 @@ def get_gap_report(
     When family_id is provided, scopes Question queries to that family only.
     """
     query = db.query(LearningTopic).filter(
-        LearningTopic.deprecated == False,  # noqa: E712
+        LearningTopic.deprecated.is_(False),
     )
     if subject:
         query = query.filter(LearningTopic.subject == subject)

@@ -30,7 +30,13 @@ class ImportedQuestion:
 
 
 class Math23KAdapter:
-    """Adapter for Math23K dataset (JSON array of {question, answer})."""
+    """Adapter for Math23K dataset (JSON array of {question, answer}).
+
+    P2-4 fix: LICENSE_REQUIRED enforces license verification before import.
+    See docs/solutions/integration-issues/math23k-license-compatibility.md
+    """
+
+    LICENSE_REQUIRED = True
 
     def detect_format(self, raw_data: list) -> bool:
         if not raw_data or not isinstance(raw_data, list):
@@ -38,7 +44,14 @@ class Math23KAdapter:
         sample = raw_data[0]
         return "question" in sample and "answer" in sample
 
-    def parse(self, raw_data: list) -> Iterator[ImportedQuestion]:
+    def parse(self, raw_data: list, source_license: str | None = None) -> Iterator[ImportedQuestion]:
+        # P2-4 fix: block import when license is not verified
+        if self.LICENSE_REQUIRED and not source_license:
+            raise ValueError(
+                "Math23K license not verified. "
+                "See docs/solutions/integration-issues/math23k-license-compatibility.md. "
+                "Pass source_license to parse() after confirming license compatibility."
+            )
         for item in raw_data:
             yield ImportedQuestion(
                 stem=item.get("question", ""),
@@ -46,6 +59,7 @@ class Math23KAdapter:
                 answer_json={"answer": item.get("answer", "")},
                 question_type="application",
                 source_name="math23k",
+                source_license=source_license,
             )
 
     def validate(self, question: ImportedQuestion) -> list[str]:
