@@ -793,6 +793,7 @@ python -m server.scripts.production_run --plan plan.json
 GET /practice/coverage/summary
 GET /practice/coverage/detailed
 GET /practice/coverage/gap-report
+GET /practice/coverage/trend
 GET /practice/quality/distribution
 GET /practice/quality/flagged
 GET /practice/quality/calibration
@@ -801,6 +802,8 @@ GET /practice/learning-effect/weaknesses
 GET /practice/learning-effect/recommendations
 GET /practice/questions/review-queue
 POST /practice/questions/batch-review
+GET /practice/questions/usage-stats
+GET /practice/questions/{id}/grading-explanation
 ```
 
 ### 8.3 家长可见
@@ -819,6 +822,8 @@ POST /practice/questions/batch-review
 |------|------|------|
 | `LearningEffectCard.vue` | Vue 3 + Vant 4 | 学习效果概览卡片 |
 | `LearningTrendChart.vue` | ECharts 折线图 | 4-12 周正确率趋势 |
+| `GradingExplanationPanel.vue` | Vue 3 + Vant 4 | AI 判分可解释性面板（置信度 + 维度拆解 + 推理摘要） |
+| `CoverageTrendChart.vue` | ECharts 折线图 | 覆盖率随时间变化趋势 |
 
 **儿童端唯一改动：** `PracticeAnswerInput.vue` 扩展支持 `multi_fill_blank`（多个输入框）和 `ai_graded`（文本输入 + AI 评分中过渡状态）。
 
@@ -846,7 +851,7 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 
 ### 9.2 P7a：评价基础设施
 
-**目标：** 覆盖率评价 + 质量评价最小可用集。
+**目标：** 覆盖率评价 + 质量评价最小可用集 + 使用频率追踪 + 覆盖率趋势快照。
 
 **交付物：**
 
@@ -856,23 +861,27 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 | P7a-2 | `quality_service.py`：七维质量得分 + 分题型验证 |
 | P7a-3 | `coverage_cache` 表（alembic 迁移） |
 | P7a-4 | `question_quality` 表（alembic 迁移） |
-| P7a-5 | 覆盖率 + 质量 API 端点（7 个） |
+| P7a-5 | 覆盖率 + 质量 API 端点（7 个：含 coverage/trend） |
 | P7a-6 | `coverage_report` CLI 脚本 |
 | P7a-7 | `SUBJECT_EXPECTATIONS` 配置 |
 | P7a-8 | P2-2 前置修复：北京 topic subject/ageRange 字段补齐脚本 |
+| P7a-9 | 题目使用频率分析：扩展 `coverage_report` 脚本 `--usage` flag + `GET /practice/questions/usage-stats` API（按 topic 聚合 times_used、correct_count、avg_time_spent） |
+| P7a-10 | 覆盖率趋势快照：`coverage_cache` 增加 `snapshot_date` 字段，每次全量计算自动追加快照；`coverage_report --diff` 对比两个日期的快照 |
 
-**测试：** coverage_service 15+ 测试，quality_service 20+ 测试，集成测试验证现有 240 题全量计算不报错。
+**测试：** coverage_service 15+ 测试，quality_service 20+ 测试，usage_stats 5+ 测试，集成测试验证现有 240 题全量计算不报错。
 
 **验收标准：**
 - [ ] 覆盖率脚本输出各学科得分和 gap 清单
 - [ ] 质量评价为每道题产出 quality_score
 - [ ] 数学覆盖率报告能区分强弱领域
 - [ ] 质量分布报告能区分四个等级
+- [ ] 使用频率报告能区分高频/低频/零使用题目
+- [ ] 覆盖率快照在两次全量计算间可对比，`--diff` 输出改善/恶化 topic 列表
 - [ ] 全部测试通过
 
 ### 9.3 P7b：数学纵深 + 出题流水线
 
-**目标：** 扩展数学覆盖，验证混合出题流水线。
+**目标：** 扩展数学覆盖，验证混合出题流水线，建立 AI 判分可解释性基础。
 
 **交付物：**
 
@@ -886,6 +895,7 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 | P7b-6 | 批量审核 API |
 | P7b-7 | `production_run` CLI 脚本 |
 | P7b-8 | Question 模型扩展字段 |
+| P7b-9 | AI 判分可解释性（后端）：`grading_explanation` JSON 字段（含 confidence、dimension_breakdown、reasoning_summary）；`ai_graded` 评分时自动生成解释数据；`GET /practice/questions/{id}/grading-explanation` API |
 
 **验收标准：**
 - [ ] 数学 topic 覆盖率 ≥ 3%
@@ -894,6 +904,7 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 - [ ] LLM 生成 ≥ 20 道推理题
 - [ ] 批量审核 API 可用
 - [ ] 生产脚本可一键执行
+- [ ] AI 判分结果附带可解释性数据（confidence + 维度拆解 + 推理摘要）
 - [ ] 全部测试通过（新增 25+）
 
 ### 9.4 P7c：学习效果评价 + 家长可见
@@ -913,6 +924,8 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 | P7c-7 | PracticeAttempt `is_retry` 字段 |
 | P7c-8 | PracticeSession `validity_flag` 字段 |
 | P7c-9 | PracticeAnswerInput 新题型支持 |
+| P7c-10 | AI 判分可解释性（家长展示）：`GradingExplanationPanel.vue` 组件——展示置信度条形图 + 评分维度拆解（如「知识点匹配 ✓ / 步骤完整性 ✗」）+ AI 推理摘要（1-2 句自然语言） |
+| P7c-11 | 覆盖率趋势可视化：`CoverageTrendChart.vue`（ECharts 折线图，展示指定 topic/domain/subject 的覆盖率随时间变化） |
 
 **验收标准：**
 - [ ] 掌握度异常检测正确识别虚高/虚低
@@ -922,6 +935,8 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 - [ ] 趋势图正确展示
 - [ ] 审核队列支持批量操作
 - [ ] 儿童端新题型可输入
+- [ ] AI 判分结果在家长端可查看，解释信息可理解
+- [ ] 覆盖率趋势图在家长端可查看
 - [ ] 全部测试通过（新增 20+）
 
 ### 9.5 P7d：学科扩展试点
@@ -949,7 +964,7 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 
 ### 9.6 P7e：持续优化闭环
 
-**目标：** 自动化优化机制落地。
+**目标：** 自动化优化机制落地 + BKT 单儿童参数校准。
 
 **交付物：**
 
@@ -962,12 +977,15 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 | P7e-5 | 质量分定期重算 |
 | P7e-6 | 路径优化建议 API |
 | P7e-7 | 映射质量扫描 |
+| P7e-8 | BKT 单儿童参数校准：`calibrate_bkt_params(child_id)` 函数——利用该儿童自身作答数据（≥20 次）做 per-topic 最大似然估计，更新 P(L) 和 P(T)；事件驱动（每 N 次作答触发）；校准结果写入 `bkt_calibration` 缓存表 |
 
 **验收标准：**
 - [ ] 一键全流程：发现缺口 → 生成计划 → 执行生产 → 覆盖率更新
 - [ ] 难度校准正确检测人为偏差
 - [ ] 异常监控正确标记异常题目
 - [ ] 路径优化建议正确识别已掌握 topic
+- [ ] BKT 校准后掌握度-正确率偏差（P7c 指标）显著缩小
+- [ ] 覆盖率趋势快照在优化前后正确记录变化
 - [ ] 全部测试通过（新增 10+）
 
 ### 9.7 依赖关系与风险
@@ -1015,9 +1033,9 @@ P7a ──→ P7b ──→ P7c ──→ P7d ──→ P7e
 |------|---------|---------|
 | 可视化仪表盘前端 | Phase 7a 只输出 API + 脚本 | 中——未来可能需要给非技术利益相关者展示 |
 | 覆盖率目标自动追踪 | 过度工程化 | 低 |
-| 历史覆盖率趋势 | 第一次上线就是第一次快照 | 中——数据积累后有价值 |
-| 题目使用频率分析 | times_used/correct_count 已在模型上但覆盖率评价不依赖使用数据 | 中——可辅助判断题目实际价值 |
 | 复杂语义相似度检测 | 第一阶段靠 Bloom/难度/题型维度间接约束 | 中——能更精确识别同质化题目 |
+
+> **已纳入 Phase 7：** 题目使用频率分析（→ P7a-9）、历史覆盖率趋势快照（→ P7a-10）。原排除理由「覆盖率评价不依赖使用数据」和「第一次上线就是第一次快照」在闭环度量视角下不成立——使用频率是生产投资回报率的衡量，覆盖率趋势是 P7e 优化闭环的效果度量前提。
 
 ### 10.3 题目质量评价
 
@@ -1029,11 +1047,13 @@ P7a ──→ P7b ──→ P7c ──→ P7d ──→ P7e
 | 实时质量监控 dashboard | 不做实时刷新 | 低 |
 | 协变量分析（DIF - 题目功能差异分析） | 检测题目是否对不同性别/地区儿童有偏见——当前数据量不支持 | 高——教育公平性的重要工具 |
 
+> **已纳入 Phase 7（最小版）：** AI 判分可解释性框架（→ P7b-9 后端 + P7c-10 家长展示）。原排除理由「用置信度阈值做简单防御」不足以支撑 `ai_graded` 题型的用户信任——Phase 7 的最小版提供 confidence + 维度拆解 + 推理摘要，完整系统性框架仍待后续迭代。
+
 ### 10.4 学习效果评价
 
 | 项目 | 排除原因 | 未来价值 |
 |------|---------|---------|
-| BKT 参数在线自适应（EM 算法） | 需要大规模数据 | 高——能显著提升掌握度估计准确性 |
+| BKT 参数在线自适应（完整 EM 算法） | 需要大规模群体数据 | 高——能显著提升掌握度估计准确性 |
 | 前测-后测实验设计 | 需要严格控制 | 中——学术验证价值高 |
 | 跨儿童比较（排名、百分位） | 产品设计决策：不做排名 | 低——与隐私优先理念冲突 |
 | AI 生成学习报告（叙述性总结） | 可后续用 AI tutor 在 session 内反馈替代 | 中——家长沟通价值 |
@@ -1043,6 +1063,8 @@ P7a ──→ P7b ──→ P7c ──→ P7d ──→ P7e
 | 间隔复习效果长期验证 | 需要数月数据积累 | 高——验证 SM-2 是否真的有效 |
 | 元认知能力评估（学习方法与自我监控） | 不适合题目测评，需要情境任务 | 中——需要专门设计 |
 | 社会情感能力评估 | 不适合传统测评 | 低——不在核心学科范围 |
+
+> **已纳入 Phase 7（简化版）：** BKT 单儿童参数校准（→ P7e-8）。与完整 EM 算法的区别：仅利用单个儿童自身作答数据（≥20 次）做 per-topic 最大似然估计，不需要群体数据。这是「数据积累后才能做」的最小可行版本——20 次作答的门槛在 Phase 7 数学纵深后即可达到。完整群体级 EM 仍待后续阶段。
 
 ### 10.5 学科扩展
 
@@ -1084,6 +1106,8 @@ P7a ──→ P7b ──→ P7c ──→ P7d ──→ P7e
 | AI 判分的系统性可解释性框架 | 当前用置信度阈值作为简单防御 | 高——教育公平性要求 |
 | 题目数据版权系统性审查 | 逐案处理 | 中——规模增长后需要系统化 |
 | 内容安全的多语言/多方言适配 | 当前仅中文 | 中——如果扩展到少数民族地区 |
+
+> **已纳入 Phase 7（最小版）：** AI 判分可解释性框架的最小版本（→ P7b-9 + P7c-10）已在 Phase 7 中实现，提供 per-question 的 confidence + 维度拆解 + 推理摘要。完整系统性框架（跨题目/跨儿童的评分偏差分析、公平性审计）仍待后续阶段。
 
 ---
 
