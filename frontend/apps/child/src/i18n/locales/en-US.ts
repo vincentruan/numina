@@ -531,6 +531,7 @@ export default {
       growth: 'Growth Zone',
       comfort: 'Comfort Zone',
       challenge: 'Challenge Zone',
+      review: 'Review',
     },
     ageGroup: {
       low: 'Beginner',

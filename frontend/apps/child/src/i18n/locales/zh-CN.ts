@@ -750,6 +750,7 @@ export default {
       growth: '成长区',
       comfort: '舒适区',
       challenge: '挑战区',
+      review: '复习',
     },
     ageGroup: {
       low: '入门',
