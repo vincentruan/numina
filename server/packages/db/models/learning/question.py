@@ -1,8 +1,10 @@
 """Question bank models."""
+import json
 from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Float,
     ForeignKey,
     Integer,
@@ -56,11 +58,38 @@ class Question(Base):
         UTCDateTime(), server_default=func.now(), onupdate=func.now()
     )
 
+    # P7a: content deduplication
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
+    # P7b: source metadata for external/LLM imports
+    source_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_license: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    imported_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+    # P7b: AI grading explainability
+    grading_explanation_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # P7e: quality monitoring (added now to avoid future migration)
+    suspicious: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    needs_review: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    empirical_difficulty: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # P7b: risk classification (set by classify_risk() in Task 6)
+    risk: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    # P7b: family scoping for review-queue isolation
+    family_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+
     # JSON accessors
     options: list | None = json_text("options_json")
     answer: dict = json_text("answer_json")
     solution: dict | None = json_text("solution_json")
     parameters: dict | None = json_text("parameters_json")
+
+    @property
+    def grading_explanation(self) -> dict | None:
+        if self.grading_explanation_json:
+            return json.loads(self.grading_explanation_json)
+        return None
 
 
 class QuestionKnowledgePoint(Base):

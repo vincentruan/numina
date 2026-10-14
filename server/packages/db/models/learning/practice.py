@@ -45,6 +45,7 @@ class PracticeSession(Base):
     learning_progress_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("learning_progress.id"), nullable=True
     )
+    validity_flag: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # JSON accessor
     question_ids: list[int] = json_text("question_ids_json")
@@ -75,6 +76,7 @@ class PracticeAttempt(Base):
     is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
     time_spent_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    is_retry: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now()
     )
