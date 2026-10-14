@@ -411,6 +411,97 @@ def get_practice_coverage(
     return CoverageResponse(**stats)
 
 
+@router.get("/coverage/summary")
+def get_coverage_summary(
+    user: User = Depends(get_current_user_or_child),
+    db: Session = Depends(get_db),
+):
+    """Subject-level coverage aggregation (P7a-min)."""
+    from apps.backend.app.services.learning.coverage_service import compute_subject_coverage
+    from packages.db.models.learning.topic import LearningTopic
+
+    subjects = (
+        db.query(LearningTopic.subject)
+        .filter(
+            LearningTopic.subject.isnot(None),
+            LearningTopic.deprecated == False,  # noqa: E712
+        )
+        .distinct()
+        .all()
+    )
+    subject_list = [s[0] for s in subjects if s[0]]
+
+    results = []
+    total_topics = 0
+    covered_topics = 0
+    for subj in subject_list:
+        s = compute_subject_coverage(db, subj, family_id=user.family_id)
+        results.append(s)
+        total_topics += s["total_topics"]
+        covered_topics += s["covered_topics"]
+
+    return {
+        "subjects": results,
+        "total_topics": total_topics,
+        "covered_topics": covered_topics,
+        "overall_rate": covered_topics / total_topics if total_topics > 0 else 0.0,
+    }
+
+
+@router.get("/coverage/detailed")
+def get_coverage_detailed(
+    subject: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    user: User = Depends(get_current_user_or_child),
+    db: Session = Depends(get_db),
+):
+    """Per-topic coverage scores (P7a-min)."""
+    from apps.backend.app.services.learning.coverage_service import compute_topic_coverage
+    from packages.db.models.learning.topic import LearningTopic
+
+    query = db.query(LearningTopic).filter(LearningTopic.deprecated == False)  # noqa: E712
+    if subject:
+        query = query.filter(LearningTopic.subject == subject)
+
+    topics = query.offset(offset).limit(limit).all()
+    details = []
+    for t in topics:
+        cov = compute_topic_coverage(db, t.id, family_id=user.family_id)
+        details.append({
+            "topic_id": t.id,
+            "topic_key": t.topic_key,
+            "name": t.name,
+            "subject": t.subject,
+            "domain": t.domain,
+            "existence": cov["existence"],
+            "prerequisite_value": cov["prerequisite_value"],
+            "coverage_score": cov["coverage_score"],
+            "approved_question_count": cov["approved_question_count"],
+        })
+
+    return {"topics": details, "total": len(details)}
+
+
+@router.get("/coverage/gap-report")
+def get_coverage_gap_report(
+    subject: str | None = None,
+    threshold: float = 0.5,
+    limit: int = 100,
+    user: User = Depends(get_current_user_or_child),
+    db: Session = Depends(get_db),
+):
+    """Topics below coverage threshold, sorted by prerequisite value (P7a-min)."""
+    from apps.backend.app.services.learning.coverage_service import get_gap_report
+
+    gaps = get_gap_report(db, subject=subject, threshold=threshold, limit=limit, family_id=user.family_id)
+    return {
+        "gaps": gaps,
+        "threshold": threshold,
+        "total_gaps": len(gaps),
+    }
+
+
 @router.get("/ability-dimensions")
 def get_child_ability_dimensions(
     user: User = Depends(get_current_user_or_child),

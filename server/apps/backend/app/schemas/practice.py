@@ -220,3 +220,54 @@ class CoverageResponse(BaseModel):
     coverage_rate: float
     by_subject: list[SubjectCoverageItem]
     by_difficulty: dict[str, int]
+
+
+# --- P7a-min: coverage detail/summary/gap-report schemas ---
+
+
+class CoverageTopicDetail(BaseModel):
+    topic_id: int
+    topic_key: str
+    name: str
+    subject: str | None = None
+    domain: str | None = None
+    existence: float
+    prerequisite_value: float
+    coverage_score: float
+    approved_question_count: int
+
+
+class CoverageSubjectSummary(BaseModel):
+    subject: str
+    total_topics: int
+    covered_topics: int
+    coverage_rate: float
+    avg_prerequisite_value: float
+
+
+class CoverageSummaryResponse(BaseModel):
+    subjects: list[CoverageSubjectSummary]
+    total_topics: int
+    covered_topics: int
+    overall_rate: float
+
+
+class CoverageDetailedResponse(BaseModel):
+    topics: list[CoverageTopicDetail]
+    total: int
+
+
+class GapItem(BaseModel):
+    topic_id: int
+    topic_key: str
+    name: str
+    subject: str | None = None
+    domain: str | None = None
+    coverage_score: float
+    prerequisite_value: float
+
+
+class GapReportResponse(BaseModel):
+    gaps: list[GapItem]
+    threshold: float
+    total_gaps: int
