@@ -12,6 +12,7 @@ description: >
   "test the app visually", "儿童测试", "child frontend test",
   "test AI chat/report/PDF import", "ui quality", "设计审查", "UI 质量检查",
   "dark mode test", "深色模式测试", "mobile test", "移动端测试",
+  "dev server test", "5173/5174 测试", "热加载测试", "HMR test",
   "accessibility test", "无障碍测试", "security test", "安全测试",
   "learning test", "学习测试", "curriculum test", "课标测试",
   or any request to verify the deployed app's features.
@@ -160,10 +161,46 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
 ## Deployment Mode (declare before running)
 
-This pipeline supports **two deployment targets**. At the start of the run,
-ask the user which mode (default: `docker` if services answer on :80, else
-`dev`). All subsequent phases use the mode-specific `BASE` / `CHILD_BASE` /
-`API_BASE` values instead of a hard-coded URL.
+This pipeline supports **two deployment targets**. All subsequent phases use
+the mode-specific `BASE` / `CHILD_BASE` / `API_BASE` values instead of a
+hard-coded URL.
+
+### Mode selection — probe order (run FIRST, before Phase 0)
+
+用户明确说 "用 docker 测试" / "用 dev 测试" / 指定了 BASE → 直接采用, 跳过探测。
+用户未指定 → 按以下顺序探测, 取第一个命中的规则:
+
+1. **dev server 同源探测 (优先)** — :5173 有进程监听 **且** 该进程的 cwd
+   在**当前仓库路径**下 (`git rev-parse --show-toplevel` 的子路径) → 选
+   `dev`。理由: vite HMR 让大部分前端修复无需 rebuild 即刻生效, 修复-复测
+   循环最快。
+2. **docker 探测** — `curl -sf http://localhost/` 返回 200 → 选 `docker`。
+3. **两者都不可用** → 停止, 按 Phase 1 的提示语让用户先启动服务。
+4. **两者同时可用** → 仍选 `dev` (规则 1 优先), 在报告 "测试环境" 段注明
+   `探测: 5173 同源 dev server (docker 亦可用)`; 用户可随时说 "用 docker 重跑"。
+
+```bash
+# Mode probe (在仓库根执行)
+ROOT="$(git rev-parse --show-toplevel)"
+PID=$(lsof -tiTCP:5173 -sTCP:LISTEN 2>/dev/null | head -1)
+DEV_MATCH=0
+if [ -n "$PID" ]; then
+  CWD=$(lsof -p "$PID" 2>/dev/null | awk '/cwd/ {print $NF}')
+  case "$CWD" in "$ROOT"/*) DEV_MATCH=1 ;; esac
+fi
+if [ "$DEV_MATCH" = "1" ]; then
+  echo "MODE=dev (5173 同源 dev server, cwd=$CWD)"
+elif curl -sf -o /dev/null --max-time 3 http://localhost/; then
+  echo "MODE=docker"
+else
+  echo "未探测到可用部署 — 先启动 dev servers (make dev-all) 或 docker (make up)"; exit 1
+fi
+```
+
+> **不要只看 `docker ps` 判定 docker 模式。** 容器可能全部 `Up` 但 nginx
+> 处于重启循环 (:80 死)。已验证 (2026-10-14): `docker ps | grep numina`
+> 全部 OK, `curl localhost/` 却失败 (numina-nginx Restarting)。docker 判定
+> 必须以 curl 探测 BASE 为准。
 
 ### Mode `docker` (nginx proxy, single entry)
 
@@ -209,7 +246,7 @@ so the SPA still calls `/api/...` relatively.
 
 ### Setting the vars for the run
 
-After the user picks a mode, export the three vars once and reference
+After the mode is determined (user-specified or auto-probed above), export the three vars once and reference
 `$BASE` / `$CHILD_BASE` / `$API_BASE` in every Phase below:
 
 ```bash
@@ -882,6 +919,51 @@ Also test at **320×568** (iPhone SE 1st gen — smallest supported) and
 
 ---
 
+## Phase 5.7 — UI 体验审查 agent (functional + experiential)
+
+功能断言 (snapshot 文本命中 = pass) 无法发现"页面错位、图标丢失、交互不连贯"
+类问题。对每个有 UI 交互的 Area 完成后, 派生一个**体验审查子 agent** (Agent
+tool, 一般 1 agent / Area 组), 从用户视角综合判断。
+
+### Agent 派生模板
+
+```
+你是 Numina 仿真测试的 UI 体验审查员。基于本 Area 的截图
+(dogfood-output/<case>.png, 用 Read 工具查看) 与 snapshot 记录, 逐 case 评估:
+
+1. 功能输入输出: 断言是否真实满足 (不只看 pass 标记)
+2. 交互连贯性: 点击→反馈→页面转换是否有断点 (按钮无反馈、加载态缺失、
+   转场突兀、弹层遮挡输入焦点)
+3. 视觉友好度: 元素错位/重叠、图标丢失或代字形 (□/□/私用区字符)、
+   空间挤压 (文本截断/溢出)、对比度不足、移动端 375px 适配
+4. 状态完整性: 骨架屏/空态/错误态是否合理呈现
+
+输出格式 (每 case 一行 + 问题项展开):
+- {case-id}: PASS|ISSUE — {一句体验结论}
+ISSUE 项展开: {现象描述} / {影响面 (阻断/降级体验/轻微)} / {建议 (查什么)}
+
+不要重新执行测试流程, 只做审查。不要修改任何文件。
+```
+
+### 编排规则
+
+- **时机**: 每个 Area 组 (G1/G2/G3) 的功能 case 跑完后立即派生, 与下一组
+  并行不冲突 (审查 agent 只读截图, 不操作浏览器)。
+- **输入**: 该 Area 的截图 + 每case 的 snapshot 摘要 (失败/关键交互处)。
+- **UI 观察复用**: Area 15 专项审计照旧独立运行; Phase 5.7 是对**全部功能
+  Area** 的补充层, 两者发现合并进报告 "UI 质量观察" 段, 标注来源
+  (`UI-EXP` = 体验审查 agent 发现)。
+- **冒烟模式** (smoke) 可跳过本 phase; full/ai/travel/ui-quality 模式必须跑。
+- **失败 taxonomy 新增**: `UI-EXP` | 体验审查发现 | 输入输出正确但存在
+  错位/图标丢失/不连贯等体验缺陷
+
+> **为什么是派生 agent 而不是主 agent 顺手看**: 主 agent 上下文里装满了
+> 断言与驱动命令, 容易"输入输出满足即 pass"的认知 tunnel; 独立 agent 只带
+> 截图与预期, 以纯用户视角复查, 与 OMC "authoring 与 review 分离" 原则
+> 一致。
+
+---
+
 ## Phase 6 — Generate Test Report
 
 After all Area cases (Phase 3/4/5) are run, produce a single test report.
@@ -945,7 +1027,7 @@ the skill log.
 # Numina 仿真测试报告 — {YYYY-MM-DD}
 
 ## 测试环境 (合并自 Phase 0 / 1 / 1.5)
-- 部署模式: docker | dev
+- 部署模式: docker | dev  (含探测结论, 如 `dev (5173 同源 dev server; docker 亦可用)`)
 - Base URL: {BASE}  /  Child URL: {CHILD_BASE}  /  API: {API_BASE}
 - Browser driver (Phase 0): {driver_name} ✓ clean
 - 服务健康 (Phase 1): adult UP / child UP / api UP  (docker 模式附 docker ps 摘要)
@@ -1025,6 +1107,7 @@ the skill log.
 | `UI-VANT` | Vant4 规范违反 | `:value` 替代 `:model-value`, popup 缺少 teleport |
 | `UI-CONSIST` | 跨应用不一致 | 两个 app 的空态/骨架屏/Toast 风格不同 |
 | `UI-PROGRESS` | NProgress 回归 | 闪烁 / 卡住 / 滚动后不可见 |
+| `UI-EXP` | 体验审查发现 (Phase 5.7) | 输入输出正确但存在错位/图标丢失/交互不连贯等体验缺陷 |
 
 ### After writing
 
@@ -1070,9 +1153,44 @@ Also write to file if possible: `tests/reports/ui-audit-{date}.md`
 读取 `tests/reports/ui-audit-{date}.md` 的 "失败详情" 段, 提取每个
 失败用例的:
 - Case ID (C2.3 / R4 / F.3.6 / ...)
-- 分类代码 (RENDER / NAV / AUTH / DATA / I18N / AI / INTERACT / PERF / REGRESS)
+- 分类代码 (RENDER / NAV / AUTH / DATA / I18N / AI / INTERACT / PERF / REGRESS / UI-EXP)
 - 路由
 - 初步判断
+
+### Step 1.5 — .dev-logs 协同排查 (dev 模式必做; docker 模式跳到 Step 1.6)
+
+dev 模式 (`LOG=1` 或 `MODE=bg`) 下 Python 服务写日志到
+`server/.dev-logs/`, 修复前先读日志缩小根因范围:
+
+```bash
+LOGDIR="server/.dev-logs"
+# 失败 case 的复测时间窗 (从报告/复测时间戳取 ±5 分钟)
+SINCE="2026-10-14 15:00" UNTIL="2026-10-14 15:10"
+awk -v s="$SINCE" -v e="$UNTIL" '$0 >= s && $0 <= e' \
+  "$LOGDIR/backend-app.log" "$LOGDIR/agent-app.log" \
+  "$LOGDIR/scheduler_worker-app.log" 2>/dev/null | \
+  grep -Ei "error|exception|traceback|500 |4[0-9]{2} |failed|timeout" | head -40
+```
+
+- 日志格式: `YYYY-MM-DD HH:MM:SS,mmm - logger - LEVEL - message` (backend,
+  含 security 流); agent/worker 为 `YYYY-MM-DD HH:MM:SS,mmm [LEVEL] logger: msg`。
+- 按 case 失败时刻取时间窗, 只看 ERROR/WARNING + HTTP 状态码行; 命中后把
+  日志行 (去掉 user_id 等敏感值) 摘录进该失败项的 "初步判断", 将猜测升级
+  为证据。
+- 若 `server/.dev-logs/` 不存在或为空 → 服务以 `LOG=0` 启动, 无法文件化
+  协同排查。记入该失败项 "(dev-logs 未启用, 无法协同排查; 建议
+  `make dev-all MODE=bg LOG=1`)", **不要**当作测试失败。docker 模式无
+  server/.dev-logs, 用 Step 1.6 的 `docker logs` 等价排查。
+- 分类增益: 日志排查对 DATA / AI / AUTH / PERF 类失败有增益 (服务端可
+  观测); UI-EXP / RENDER / NAV / I18N 主要是前端侧问题, 服务端日志通常无
+  信号 — 直接进入 Step 2, 不空耗日志检索。
+
+### Step 1.6 — docker 模式日志等价物
+
+```bash
+docker logs numina-backend --since 10m 2>&1 | grep -Ei "error|exception|500" | head -30
+docker logs numina-agent --since 10m 2>&1 | tail -40
+```
 
 ### Step 2 — 生成 Checklist Todo
 
@@ -1269,6 +1387,9 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | Area 15 viewport test at desktop width → misses all mobile issues | Set viewport to 375×812 BEFORE running UIQ cases. If driver doesn't support resize, note in report and skip viewport-dependent checks |
 | Area 15 cross-app consistency: comparing main vs child screenshots at different widths | Both apps must be at the same viewport (375×812) for valid comparison. Child app has different design tokens (Clay vs Together AI) — compare pattern consistency, not pixel identity |
 | Phase 0 chrome-devtools detection sets driver without verifying MCP availability | The agent must self-check its tool list for `mcp__chrome-devtools__*` tools and set `MCP_CHROME_DEVTOOLS=1` BEFORE running the detection script. The bash fallback `command -v echo` always succeeds and would set the driver unconditionally |
+| Choosing docker mode just because `docker ps` shows containers Up | nginx may be in a restart loop with :80 dead (verified 2026-10-14). Docker-mode eligibility = `curl -sf http://localhost/` 200, nothing else |
+| Dev-mode probe matches a 5173 from a DIFFERENT repo/worktree | cwd check must be under `git rev-parse --show-toplevel` of the current repo — a vite from another checkout answers on 5173 but tests the wrong code |
+| Phase 7 fix loop in dev mode skips `.dev-logs` | Before localizing a fix, grep `server/.dev-logs/*-app.log` in the failure time window (±5 min); empty/missing dir = LOG=0 was on, note it, don't treat as test failure |
 
 ### bsk-specific Mistakes (only when bsk is the active driver)
 
