@@ -3,6 +3,7 @@
 import json
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import case, or_
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.practice import (
+    BatchReviewRequest,
     CoverageResponse,
     PracticeAttemptResponse,
     PracticeQuestionWithAnswer,
@@ -519,3 +521,106 @@ def get_child_progress_trend(
 ):
     """Get chronological attempt history for a child+topic."""
     return get_progress_trend(db, child_id=user.id, topic_id=topic_id)
+
+
+# --- P7b: batch review + grading explanation endpoints ---
+
+
+@router.get("/questions/review-queue")
+def get_review_queue(
+    risk: str | None = None,
+    limit: int = 50,
+    user: User = Depends(require_owner),  # parent-only moderation
+    db: Session = Depends(get_db),
+):
+    """List questions pending review, filtered and ordered by risk level.
+
+    Family-scoped: only questions from the caller's family (or unscoped
+    template-seeded questions) are visible.
+    """
+    from packages.db.models.learning.topic import LearningTopic
+
+    query = (
+        db.query(QuestionModel)
+        .filter(QuestionModel.review_status == "pending")
+        .filter(
+            or_(QuestionModel.family_id == user.family_id, QuestionModel.family_id.is_(None))
+        )
+    )
+    if risk:
+        query = query.filter(QuestionModel.risk == risk)
+    questions = query.order_by(
+        case(
+            (QuestionModel.risk == "high", 0),
+            (QuestionModel.risk == "medium", 1),
+            (QuestionModel.risk == "low", 2),
+            else_=3,
+        ).asc()
+    ).limit(limit).all()
+    items = []
+    for q in questions:
+        topic = db.get(LearningTopic, q.topic_id) if q.topic_id else None
+        items.append({
+            "question_id": q.id,
+            "topic_key": topic.topic_key if topic else None,
+            "question_type": q.question_type,
+            "stem": q.stem,
+            "answer_json": json.loads(q.answer_json),
+            "source": q.source,
+            "review_status": q.review_status,
+            "risk": q.risk,
+            "grading_explanation": q.grading_explanation,
+        })
+    return {
+        "questions": items,
+        "total": len(items),
+    }
+
+
+@router.post("/questions/batch-review")
+def batch_review_questions(
+    body: BatchReviewRequest,
+    user: User = Depends(require_owner),  # parent-only moderation
+    db: Session = Depends(get_db),
+):
+    """Batch approve, reject, or suspend questions. Family-scoped."""
+    new_status = {"approve": "approved", "reject": "rejected", "suspend": "suspended"}[body.decision]
+    processed = 0
+    for qid in body.question_ids:
+        q = db.get(QuestionModel, qid)
+        if (
+            q
+            and q.review_status == "pending"
+            and (q.family_id is None or q.family_id == user.family_id)
+        ):
+            q.review_status = new_status
+            if body.notes:
+                q.review_notes = body.notes
+            processed += 1
+    db.commit()
+    approved = processed if body.decision == "approve" else 0
+    rejected = processed if body.decision == "reject" else 0
+    suspended = processed if body.decision == "suspend" else 0
+    return {
+        "processed": processed, "approved": approved,
+        "rejected": rejected, "suspended": suspended,
+    }
+
+
+@router.get("/questions/{question_id}/grading-explanation")
+def get_grading_explanation(
+    question_id: int,
+    user: User = Depends(get_current_user_or_child),
+    db: Session = Depends(get_db),
+):
+    """Return AI grading explanation for a question."""
+    from apps.backend.app.errors import AppError, ErrorCode
+
+    q = db.get(QuestionModel, question_id)
+    if q is None:
+        raise AppError(ErrorCode.NOT_FOUND, details="Question not found")
+    if q.family_id is not None and q.family_id != user.family_id:
+        raise AppError(ErrorCode.NOT_FOUND, details="Question not found")  # family-scoped NOT_FOUND
+    if not q.grading_explanation_json:
+        raise AppError(ErrorCode.NOT_FOUND, details="No grading explanation available")
+    return q.grading_explanation

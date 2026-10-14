@@ -12,7 +12,14 @@ export interface QuestionOption {
 export interface QuestionResponse {
   id: string
   topic_id: string
-  question_type: 'multiple_choice' | 'true_false' | 'fill_blank' | 'calculation' | 'application'
+  question_type:
+    | 'multiple_choice'
+    | 'true_false'
+    | 'fill_blank'
+    | 'calculation'
+    | 'application'
+    | 'multi_fill_blank'
+    | 'ai_graded'
   stem: string
   stem_zh: string | null
   options: QuestionOption[] | null
@@ -26,6 +33,10 @@ export interface QuestionResponse {
   parameters: Record<string, unknown> | null
   times_used: number
   correct_count: number
+  // multi_fill_blank-specific (undefined for other types)
+  blank_count?: number
+  // ai_graded-specific — rubric intentionally NOT exposed to child
+  rubric_visible?: boolean
 }
 
 export interface PracticeSessionResponse {

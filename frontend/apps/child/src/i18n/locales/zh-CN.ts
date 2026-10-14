@@ -820,6 +820,7 @@ export default {
       true: '对',
       false: '错',
       inputPlaceholder: '输入答案',
+      aiGrading: 'AI 正在评分...',
     },
     feedback: {
       correct: '太棒了，答对啦！',

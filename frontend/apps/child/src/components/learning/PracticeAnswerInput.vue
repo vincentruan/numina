@@ -47,6 +47,45 @@
       </button>
     </div>
 
+    <!-- Multi fill blank -->
+    <div v-else-if="question.question_type === 'multi_fill_blank'" class="multi-blank-list">
+      <div v-for="i in blankCount" :key="i" class="multi-blank-row">
+        <span class="multi-blank-label">{{ i }}</span>
+        <input
+          v-model="multiBlanks[i - 1]"
+          class="answer-input"
+          type="text"
+          :disabled="disabled || showFeedback"
+          @keyup.enter="submitMultiBlank"
+        />
+      </div>
+      <button
+        class="multi-blank-submit"
+        :disabled="disabled || showFeedback"
+        @click="submitMultiBlank"
+      >
+        {{ t('common.confirm') }}
+      </button>
+    </div>
+
+    <!-- AI graded -->
+    <div v-else-if="question.question_type === 'ai_graded'" class="ai-graded">
+      <textarea
+        v-model="aiAnswer"
+        class="ai-graded-textarea"
+        rows="4"
+        :placeholder="t('practice.answer.inputPlaceholder')"
+        :disabled="disabled || showFeedback || aiGrading"
+      />
+      <button
+        class="multi-blank-submit"
+        :disabled="disabled || showFeedback || aiGrading"
+        @click="submitAiAnswer"
+      >
+        {{ aiGrading ? t('practice.answer.aiGrading') : t('common.confirm') }}
+      </button>
+    </div>
+
     <!-- Fill blank / calculation -->
     <div v-else class="input-row">
       <input
@@ -82,6 +121,15 @@ const { t } = useI18n()
 
 const selectedKey = ref<string | null>(null)
 const textAnswer = ref('')
+const multiBlanks = ref<string[]>([])
+const aiAnswer = ref('')
+const aiGrading = ref(false)
+
+const blankCount = computed(() => {
+  const ans = props.question.answer as Record<string, unknown>
+  const blanks = ans?.blanks
+  return Array.isArray(blanks) ? Math.min(blanks.length, 5) : (props.question.blank_count ?? 1)
+})
 
 const correctKey = computed(() => {
   const ans = props.question.answer as Record<string, unknown>
@@ -116,7 +164,20 @@ function submitText() {
   }
 }
 
-defineExpose({ submitText })
+function submitMultiBlank() {
+  const blanks = multiBlanks.value.map((v) => v.trim())
+  if (blanks.some((v) => !v)) return
+  emit('submit', { blanks })
+}
+
+function submitAiAnswer() {
+  const raw = aiAnswer.value.trim()
+  if (!raw) return
+  aiGrading.value = true
+  emit('submit', { text: raw })
+}
+
+defineExpose({ submitText, submitMultiBlank })
 </script>
 
 <style scoped>
@@ -185,6 +246,60 @@ defineExpose({ submitText })
 }
 
 .answer-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.multi-blank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.multi-blank-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.multi-blank-label {
+  width: 24px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--color-body);
+}
+
+.multi-blank-submit {
+  min-height: 48px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 14px;
+  background: var(--color-primary);
+  color: var(--color-canvas);
+  font-size: 16px;
+}
+
+.ai-graded {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-graded-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid var(--color-border, #e5e0d5);
+  border-radius: 14px;
+  background: var(--color-surface-card);
+  font-size: 16px;
+  color: var(--color-ink);
+  resize: vertical;
+}
+
+.ai-graded-textarea:focus {
   outline: none;
   border-color: var(--color-primary);
 }

@@ -601,6 +601,7 @@ export default {
       true: 'True',
       false: 'False',
       inputPlaceholder: 'Enter answer',
+      aiGrading: 'AI is grading...',
     },
     feedback: {
       correct: 'Great job!',

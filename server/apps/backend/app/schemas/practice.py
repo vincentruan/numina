@@ -271,3 +271,42 @@ class GapReportResponse(BaseModel):
     gaps: list[GapItem]
     threshold: float
     total_gaps: int
+
+
+# --- P7b: batch review + grading explanation schemas ---
+
+
+class BatchReviewRequest(BaseModel):
+    question_ids: list[int]
+    decision: str  # "approve" | "reject" | "suspend"
+    notes: str | None = None
+
+
+class BatchReviewResponse(BaseModel):
+    processed: int
+    approved: int
+    rejected: int
+    suspended: int
+
+
+class ReviewQueueItem(SnowflakeBase):
+    question_id: int
+    topic_key: str | None = None
+    question_type: str
+    stem: str
+    answer_json: dict
+    source: str
+    review_status: str
+    risk: str | None = None
+    grading_explanation: dict | None = None
+
+
+class ReviewQueueResponse(BaseModel):
+    questions: list[ReviewQueueItem]
+    total: int
+
+
+class GradingExplanationResponse(BaseModel):
+    confidence: float
+    dimensions: dict
+    reasoning: str
