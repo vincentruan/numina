@@ -48,8 +48,100 @@ def check_answer(
         acceptable = correct_answer.get("acceptable", [])
         return user_val in acceptable
 
+    if question_type == "multi_fill_blank":
+        result = check_multi_fill_blank_partial(correct_answer, user_answer)
+        return result["correct_count"] == result["total"]
+
+    if question_type == "ai_graded":
+        result = check_ai_graded(correct_answer, user_answer)
+        return result["is_correct"]
+
     logger.warning("Unknown question_type for scoring: %s", question_type)
     return False
+
+
+def check_multi_fill_blank_partial(
+    correct_answer: dict,
+    user_answer: dict,
+) -> dict:
+    """Score multi_fill_blank with per-blank detail.
+
+    Returns {correct_count, total, per_blank: [bool, ...]}.
+    """
+    correct_blanks = correct_answer.get("blanks", [])
+    user_blanks = user_answer.get("blanks", [])
+    total = len(correct_blanks)
+    per_blank = []
+
+    for i in range(total):
+        if i < len(user_blanks):
+            c = str(correct_blanks[i]).strip()
+            u = str(user_blanks[i]).strip()
+            per_blank.append(c == u)
+        else:
+            per_blank.append(False)
+
+    return {
+        "correct_count": sum(per_blank),
+        "total": total,
+        "per_blank": per_blank,
+    }
+
+
+def check_ai_graded(
+    correct_answer: dict,
+    user_answer: dict,
+    family_id: int | None = None,
+    user_id: int | None = None,
+    *,
+    mock_confidence: float | None = None,
+) -> dict:
+    """AI-assisted grading with confidence.
+
+    Returns {is_correct, result_level, confidence, explanation, low_confidence}.
+    result_level: 'correct' | 'partial' | 'incorrect'.
+    """
+    confidence_threshold = 0.7
+
+    if mock_confidence is not None:
+        confidence = mock_confidence
+        is_correct = confidence >= confidence_threshold
+        result_level = "correct" if confidence >= 0.85 else ("partial" if confidence >= 0.5 else "incorrect")
+        explanation = "Mock AI grading for testing"
+    else:
+        # Production path: synchronous HTTP call to agent's /grade endpoint.
+        import httpx
+        from packages.core.settings import settings
+        try:
+            response = httpx.post(
+                f"{settings.AGENT_BASE_URL}/grade",
+                json={
+                    "rubric": correct_answer.get("rubric", ""),
+                    "user_text": user_answer.get("text", ""),
+                    "keywords": correct_answer.get("keywords", []),
+                },
+                headers={"X-Family-Id": str(family_id), "X-User-Id": str(user_id)},
+                timeout=30.0,
+            )
+            data = response.json()
+            confidence = data.get("confidence", 0.0)
+            result_level = data.get("result_level", "correct" if confidence >= 0.85 else "partial" if confidence >= 0.5 else "incorrect")
+            is_correct = confidence >= confidence_threshold
+            explanation = data.get("explanation", "")
+        except Exception:
+            logger.warning("ai_graded: agent LLM endpoint unavailable, returning False")
+            confidence = 0.0
+            result_level = "incorrect"
+            is_correct = False
+            explanation = "AI grading service unavailable"
+
+    return {
+        "is_correct": is_correct,
+        "result_level": result_level,
+        "confidence": confidence,
+        "explanation": explanation,
+        "low_confidence": confidence < confidence_threshold,
+    }
 
 
 def calculate_session_score(correct: int, total: int) -> float:
