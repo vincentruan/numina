@@ -2,8 +2,13 @@
 # Bootstrap: import template modules to trigger @register_template decorators
 from packages.domain.question_templates import (
     math_arithmetic,
+    math_decimal,
+    math_estimation,
     math_fractions,
     math_geometry,
+    math_measurement,
+    math_patterns,
+    math_statistics,
     math_word_problems,
 )  # noqa: F401
 from packages.domain.question_templates.base import GeneratedQuestion
