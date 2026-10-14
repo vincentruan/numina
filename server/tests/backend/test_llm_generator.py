@@ -1,16 +1,15 @@
 """Tests for LLM question generator with 3-layer validation."""
-import pytest
-from unittest.mock import MagicMock
 
+import pytest
+
+from apps.backend.app.services.learning.llm_generator import (
+    _build_generation_prompt,
+    classify_risk,
+    validate_layer1_format,
+    validate_layer3_ai_cross,
+)
 from packages.db.models.learning.topic import LearningTopic
 from packages.domain.question_templates.base import GeneratedQuestion
-from apps.backend.app.services.learning.llm_generator import (
-    validate_layer1_format,
-    validate_layer2_correctness,
-    validate_layer3_ai_cross,
-    classify_risk,
-    _build_generation_prompt,
-)
 
 
 @pytest.fixture
@@ -74,7 +73,9 @@ class TestLayer3AiCrossValidation:
         assert result["passed"] is False
 
     def test_content_safety_filter_applied(self, math_topic):
-        from apps.backend.app.services.learning.content_safety_filter import filter_tutor_output
+        from apps.backend.app.services.learning.content_safety_filter import (
+            filter_tutor_output,
+        )
         unsafe = "Some violent content"
         result = filter_tutor_output(unsafe, child_id=0)
         assert hasattr(result, "safe")

@@ -8,17 +8,16 @@ Pipeline:
   5. Layer 3: AI cross-validation (separate prompt/model judges the question)
   6. Risk classification → route to review strategy
 """
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
 
-from sqlalchemy.orm import Session
-
+from apps.backend.app.services.learning.content_safety_filter import filter_tutor_output
 from packages.core.logging import get_logger
 from packages.db.models.learning.topic import LearningTopic
 from packages.domain.question_templates.base import GeneratedQuestion
-from apps.backend.app.services.learning.content_safety_filter import filter_tutor_output
 
 logger = get_logger(__name__)
 
@@ -94,15 +93,30 @@ def validate_layer1_format(gq: GeneratedQuestion, topic: LearningTopic) -> list[
 
     # CRITICAL: topic_key must match (anti-hallucination defense)
     if gq.topic_key != topic.topic_key:
-        errors.append(f"topic_key mismatch: expected '{topic.topic_key}', got '{gq.topic_key}'")
+        errors.append(
+            f"topic_key mismatch: expected '{topic.topic_key}', got '{gq.topic_key}'"
+        )
 
-    if gq.question_type not in {"calculation", "fill_blank", "multiple_choice", "true_false", "application"}:
+    if gq.question_type not in {
+        "calculation",
+        "fill_blank",
+        "multiple_choice",
+        "true_false",
+        "application",
+    }:
         errors.append(f"unknown question_type: {gq.question_type}")
 
     if gq.difficulty < 1 or gq.difficulty > 5:
         errors.append(f"difficulty out of range: {gq.difficulty}")
 
-    if gq.bloom_level not in {"remember", "understand", "apply", "analyze", "evaluate", "create"}:
+    if gq.bloom_level not in {
+        "remember",
+        "understand",
+        "apply",
+        "analyze",
+        "evaluate",
+        "create",
+    }:
         errors.append(f"unknown bloom_level: {gq.bloom_level}")
 
     # Content safety
@@ -122,7 +136,10 @@ def validate_layer2_correctness(gq: GeneratedQuestion) -> dict:
         answer = gq.answer
         if "answer" not in answer:
             return {"passed": False, "detail": "calculation missing 'answer' key"}
-        return {"passed": True, "detail": "calculation answer present (manual verify recommended)"}
+        return {
+            "passed": True,
+            "detail": "calculation answer present (manual verify recommended)",
+        }
 
     if gq.question_type == "multiple_choice":
         options = gq.options or []
@@ -131,7 +148,10 @@ def validate_layer2_correctness(gq: GeneratedQuestion) -> dict:
         answer_key = gq.answer.get("key")
         option_keys = {o.get("key") for o in options}
         if answer_key not in option_keys:
-            return {"passed": False, "detail": f"answer key '{answer_key}' not in options"}
+            return {
+                "passed": False,
+                "detail": f"answer key '{answer_key}' not in options",
+            }
         texts = [o.get("text", "") for o in options]
         if len(set(texts)) != len(texts):
             return {"passed": False, "detail": "duplicate option texts"}
@@ -161,11 +181,17 @@ def validate_layer3_ai_cross(
     """
     if mock_verdict is not None:
         passed = mock_verdict == "match"
-        return {"passed": passed, "score": 1.0 if passed else 0.0, "detail": f"mock: {mock_verdict}"}
+        return {
+            "passed": passed,
+            "score": 1.0 if passed else 0.0,
+            "detail": f"mock: {mock_verdict}",
+        }
 
     # Production path: synchronous HTTP call to agent's cross-validation endpoint.
     import httpx
+
     from packages.core.settings import settings
+
     try:
         response = httpx.post(
             f"{settings.AGENT_BASE_URL}/cross-validate-question",
@@ -183,10 +209,18 @@ def validate_layer3_ai_cross(
         )
         verdict = response.json().get("verdict", "match")
         score = {"match": 1.0, "partial": 0.5, "mismatch": 0.0}.get(verdict, 0.5)
-        return {"passed": verdict != "mismatch", "score": score, "detail": f"agent: {verdict}"}
+        return {
+            "passed": verdict != "mismatch",
+            "score": score,
+            "detail": f"agent: {verdict}",
+        }
     except Exception:
         logger.warning("Layer 3: agent cross-validation unavailable, failing closed")
-        return {"passed": False, "score": 0.0, "detail": "agent unavailable — routed to human review"}
+        return {
+            "passed": False,
+            "score": 0.0,
+            "detail": "agent unavailable — routed to human review",
+        }
 
 
 def classify_risk(gq: GeneratedQuestion, validation: dict) -> str:

@@ -1,4 +1,5 @@
 """Chinese literacy pilot templates."""
+
 import random
 
 from packages.domain.question_templates.base import GeneratedQuestion
@@ -13,7 +14,9 @@ def _gen_radicals(params: dict) -> GeneratedQuestion:
         ("花", "艹", ["艹", "亻", "扌", "口"]),
     ]
     char, correct, opts = random.choice(items)
-    options = [{"key": chr(65+i), "text": o, "text_zh": o} for i, o in enumerate(opts)]
+    options = [
+        {"key": chr(65 + i), "text": o, "text_zh": o} for i, o in enumerate(opts)
+    ]
     answer_key = chr(65 + opts.index(correct))
     return GeneratedQuestion(
         template_id="chinese.literacy.radicals",

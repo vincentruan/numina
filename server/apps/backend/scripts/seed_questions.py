@@ -13,9 +13,11 @@ import sys
 
 # Ensure template modules are imported so @register_template fires
 import packages.domain.question_templates.math_arithmetic  # noqa: F401
-from packages.db.session import SessionLocal
+from apps.backend.app.services.learning.question_seeder import (
+    seed_questions_from_templates,
+)
 from packages.core.logging import get_logger
-from apps.backend.app.services.learning.question_seeder import seed_questions_from_templates
+from packages.db.session import SessionLocal
 
 logger = get_logger(__name__)
 
@@ -54,7 +56,7 @@ def main() -> int:
         else:
             db.commit()
 
-        print(f"Seed complete:")
+        print("Seed complete:")
         print(f"  Generated:        {result.generated}")
         print(f"  Skipped (dup):    {result.skipped_duplicate}")
         print(f"  Skipped (topic):  {result.skipped_no_topic}")

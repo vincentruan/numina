@@ -1,9 +1,8 @@
 """Tests for content_hash backfill and Beijing topic fix."""
-import pytest
 
+from apps.backend.app.services.learning.question_seeder import _compute_content_hash
 from packages.db.models.learning.question import Question
 from packages.db.models.learning.topic import LearningTopic
-from apps.backend.app.services.learning.question_seeder import _compute_content_hash
 
 
 class TestContentHashBackfill:

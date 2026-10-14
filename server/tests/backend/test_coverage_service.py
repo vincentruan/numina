@@ -1,14 +1,14 @@
 """Tests for minimal coverage service (P7a-min)."""
 import pytest
 
-from packages.db.models.learning.question import Question
-from packages.db.models.learning.topic import LearningTopic, LearningDependency
 from apps.backend.app.services.learning.coverage_service import (
-    compute_topic_coverage,
     compute_subject_coverage,
+    compute_topic_coverage,
     get_gap_report,
     get_prerequisite_value,
 )
+from packages.db.models.learning.question import Question
+from packages.db.models.learning.topic import LearningDependency, LearningTopic
 
 
 @pytest.fixture

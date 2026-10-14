@@ -1,5 +1,4 @@
 """Tests for coverage API endpoints."""
-import pytest
 from fastapi.testclient import TestClient
 
 from packages.db.models.learning.question import Question

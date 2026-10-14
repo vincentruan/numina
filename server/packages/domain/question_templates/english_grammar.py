@@ -1,4 +1,5 @@
 """English grammar pilot templates."""
+
 import random
 
 from packages.domain.question_templates.base import GeneratedQuestion

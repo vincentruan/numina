@@ -80,9 +80,11 @@ def create_session(
     Returns a dict including ``difficulty_warning`` when the topic's
     age group exceeds the child's or prerequisites are unmet.
     """
+    from apps.backend.app.services.learning.topic_service import (
+        locale_to_source_taxonomy,
+    )
     from packages.db.models.learning.topic import LearningTopic
     from packages.db.models.user import User
-    from apps.backend.app.services.learning.topic_service import locale_to_source_taxonomy
 
     topic = db.query(LearningTopic).filter(LearningTopic.id == req.topic_id).first()
     if not topic:

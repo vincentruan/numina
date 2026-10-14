@@ -38,7 +38,9 @@ class TestSuspendedExcludedFromSelection:
         assert not any(x.id == q.id for x in selected)
 
     def test_coverage_service_excludes_suspended(self, db_session, suspended_question):
-        from apps.backend.app.services.learning.coverage_service import compute_topic_coverage
+        from apps.backend.app.services.learning.coverage_service import (
+            compute_topic_coverage,
+        )
 
         t, _ = suspended_question
         result = compute_topic_coverage(db_session, t.id)

@@ -5,16 +5,17 @@ Usage:
     uv run python -m apps.backend.scripts.coverage_report --subject mathematics --format table
     uv run python -m apps.backend.scripts.coverage_report --gap-only --output gaps.json
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 
-from packages.db.session import SessionLocal
 from apps.backend.app.services.learning.coverage_service import (
     compute_subject_coverage,
     get_gap_report,
 )
+from packages.db.session import SessionLocal
 
 
 def _print_table(rows: list[dict], columns: list[str]) -> None:
@@ -22,7 +23,9 @@ def _print_table(rows: list[dict], columns: list[str]) -> None:
     if not rows:
         print("(no data)")
         return
-    widths = {c: max(len(c), max(len(str(r.get(c, ""))) for r in rows)) for c in columns}
+    widths = {
+        c: max(len(c), max(len(str(r.get(c, ""))) for r in rows)) for c in columns
+    }
     header = "  ".join(c.ljust(widths[c]) for c in columns)
     print(header)
     print("-" * len(header))
@@ -52,14 +55,27 @@ def main() -> None:
                 else:
                     print(data)
             else:
-                _print_table(gaps, ["topic_key", "name", "subject", "domain",
-                                    "coverage_score", "prerequisite_value"])
+                _print_table(
+                    gaps,
+                    [
+                        "topic_key",
+                        "name",
+                        "subject",
+                        "domain",
+                        "coverage_score",
+                        "prerequisite_value",
+                    ],
+                )
         else:
             from packages.db.models.learning.topic import LearningTopic
+
             subjects = (
                 db.query(LearningTopic.subject)
-                .filter(LearningTopic.subject.isnot(None), LearningTopic.deprecated == False)
-                .distinct().all()
+                .filter(
+                    LearningTopic.subject.isnot(None), ~LearningTopic.deprecated
+                )
+                .distinct()
+                .all()
             )
             results = []
             for (subj,) in subjects:
@@ -71,8 +87,16 @@ def main() -> None:
             if args.format == "json":
                 print(json.dumps(results, indent=2))
             else:
-                _print_table(results, ["subject", "total_topics", "covered_topics",
-                                       "coverage_rate", "avg_prerequisite_value"])
+                _print_table(
+                    results,
+                    [
+                        "subject",
+                        "total_topics",
+                        "covered_topics",
+                        "coverage_rate",
+                        "avg_prerequisite_value",
+                    ],
+                )
     finally:
         db.close()
 

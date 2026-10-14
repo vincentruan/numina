@@ -4,16 +4,17 @@ Usage:
     cd server
     uv run python -m apps.backend.scripts.backfill_content_hash
 """
+
 from __future__ import annotations
 
 import json
 
 from sqlalchemy.orm import Session
 
+from apps.backend.app.services.learning.question_seeder import _compute_content_hash
 from packages.core.logging import get_logger
 from packages.db.models.learning.question import Question
 from packages.db.session import SessionLocal
-from apps.backend.app.services.learning.question_seeder import _compute_content_hash
 
 logger = get_logger(__name__)
 
@@ -26,11 +27,7 @@ def backfill(db: Session, batch_size: int = 100) -> dict:
     are flushed, so we re-query from offset 0 until a batch returns empty.
     """
     backfilled = 0
-    skipped = (
-        db.query(Question)
-        .filter(Question.content_hash.isnot(None))
-        .count()
-    )
+    skipped = db.query(Question).filter(Question.content_hash.isnot(None)).count()
 
     while True:
         questions = (

@@ -4,13 +4,14 @@ Minimal version: coverage_score = existence (binary 0/1).
 Prerequisite value used for prioritization in gap reports.
 P7a-full will upgrade to 5-dim weighted model.
 """
+
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
 from packages.core.logging import get_logger
 from packages.db.models.learning.question import Question
-from packages.db.models.learning.topic import LearningTopic, LearningDependency
+from packages.db.models.learning.topic import LearningDependency, LearningTopic
 
 logger = get_logger(__name__)
 
@@ -64,7 +65,9 @@ def get_prerequisite_value(db: Session, topic_id: int) -> float:
     return dependent_count / max_dependents
 
 
-def compute_topic_coverage(db: Session, topic_id: int, family_id: int | None = None) -> dict:
+def compute_topic_coverage(
+    db: Session, topic_id: int, family_id: int | None = None
+) -> dict:
     """Compute coverage score for a single topic (P7a-min version).
 
     Returns dict with:
@@ -79,11 +82,7 @@ def compute_topic_coverage(db: Session, topic_id: int, family_id: int | None = N
     ]
     if family_id is not None:
         q_filter.append(Question.family_id == family_id)
-    approved_count = (
-        db.query(Question)
-        .filter(*q_filter)
-        .count()
-    )
+    approved_count = db.query(Question).filter(*q_filter).count()
     existence = 1.0 if approved_count > 0 else 0.0
 
     prereq_value = get_prerequisite_value(db, topic_id)
@@ -100,7 +99,9 @@ def compute_topic_coverage(db: Session, topic_id: int, family_id: int | None = N
     }
 
 
-def compute_subject_coverage(db: Session, subject: str, family_id: int | None = None) -> dict:
+def compute_subject_coverage(
+    db: Session, subject: str, family_id: int | None = None
+) -> dict:
     """Compute subject-level coverage aggregation.
 
     Returns dict with:
@@ -119,8 +120,11 @@ def compute_subject_coverage(db: Session, subject: str, family_id: int | None = 
     total = len(topics)
     if total == 0:
         return {
-            "subject": subject, "total_topics": 0, "covered_topics": 0,
-            "coverage_rate": 0.0, "avg_prerequisite_value": 0.0,
+            "subject": subject,
+            "total_topics": 0,
+            "covered_topics": 0,
+            "coverage_rate": 0.0,
+            "avg_prerequisite_value": 0.0,
         }
 
     covered = 0
@@ -132,11 +136,7 @@ def compute_subject_coverage(db: Session, subject: str, family_id: int | None = 
         ]
         if family_id is not None:
             q_filter.append(Question.family_id == family_id)
-        approved = (
-            db.query(Question)
-            .filter(*q_filter)
-            .count()
-        )
+        approved = db.query(Question).filter(*q_filter).count()
         if approved > 0:
             covered += 1
         total_prereq += get_prerequisite_value(db, t.id)
@@ -174,15 +174,17 @@ def get_gap_report(
     for topic in topics:
         cov = compute_topic_coverage(db, topic.id, family_id=family_id)
         if cov["coverage_score"] < threshold:
-            gaps.append({
-                "topic_id": topic.id,
-                "topic_key": topic.topic_key,
-                "name": topic.name,
-                "subject": topic.subject,
-                "domain": topic.domain,
-                "coverage_score": cov["coverage_score"],
-                "prerequisite_value": cov["prerequisite_value"],
-            })
+            gaps.append(
+                {
+                    "topic_id": topic.id,
+                    "topic_key": topic.topic_key,
+                    "name": topic.name,
+                    "subject": topic.subject,
+                    "domain": topic.domain,
+                    "coverage_score": cov["coverage_score"],
+                    "prerequisite_value": cov["prerequisite_value"],
+                }
+            )
 
     gaps.sort(key=lambda x: -x["prerequisite_value"])
     return gaps[:limit]

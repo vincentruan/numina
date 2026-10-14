@@ -1,4 +1,5 @@
 """English vocabulary pilot templates."""
+
 import random
 
 from packages.domain.question_templates.base import GeneratedQuestion
@@ -13,7 +14,7 @@ def _gen_animals(params: dict) -> GeneratedQuestion:
         ("bird", "鸟", ["bird", "fish", "cat", "dog"]),
     ]
     word, meaning, opts = random.choice(items)
-    options = [{"key": chr(65+i), "text": o} for i, o in enumerate(opts)]
+    options = [{"key": chr(65 + i), "text": o} for i, o in enumerate(opts)]
     answer_key = chr(65 + opts.index(word))
     return GeneratedQuestion(
         template_id="english.vocabulary.animals",
@@ -37,7 +38,7 @@ def _gen_colors(params: dict) -> GeneratedQuestion:
         ("green", "绿色", ["green", "red", "blue", "orange"]),
     ]
     word, meaning, opts = random.choice(items)
-    options = [{"key": chr(65+i), "text": o} for i, o in enumerate(opts)]
+    options = [{"key": chr(65 + i), "text": o} for i, o in enumerate(opts)]
     answer_key = chr(65 + opts.index(word))
     return GeneratedQuestion(
         template_id="english.vocabulary.colors",

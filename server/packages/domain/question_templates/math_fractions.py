@@ -1,4 +1,5 @@
 """Math fraction question templates — elementary school level."""
+
 import random
 
 from packages.domain.question_templates.base import GeneratedQuestion
@@ -26,7 +27,12 @@ def _gen_fraction_comparison(params: dict) -> GeneratedQuestion:
         stem=f"比较大小：{a_num}/{a_den} ○ {b_num}/{b_den}，○里填 >、< 或 = ?",
         stem_zh=f"比较大小：{a_num}/{a_den} ○ {b_num}/{b_den}，○里填 >、< 或 = ?",
         answer={"value": symbol},
-        solution={"steps": [f"交叉相乘：{a_num}×{b_den}={lhs}，{b_num}×{a_den}={rhs}", f"{lhs} {'>' if lhs > rhs else '<' if lhs < rhs else '='} {rhs}"]},
+        solution={
+            "steps": [
+                f"交叉相乘：{a_num}×{b_den}={lhs}，{b_num}×{a_den}={rhs}",
+                f"{lhs} {'>' if lhs > rhs else '<' if lhs < rhs else '='} {rhs}",
+            ]
+        },
         question_type="fill_blank",
         difficulty=2,
         bloom_level="understand",
@@ -48,7 +54,12 @@ def _gen_fraction_addition(params: dict) -> GeneratedQuestion:
         stem=f"计算：{a_num}/{den} + {b_num}/{den} = ?/{den}",
         stem_zh=f"计算：{a_num}/{den} + {b_num}/{den} = ?/{den}",
         answer={"answer": result_num},
-        solution={"steps": ["同分母分数相加，分母不变，分子相加", f"{a_num} + {b_num} = {result_num}，结果为 {result_num}/{den}"]},
+        solution={
+            "steps": [
+                "同分母分数相加，分母不变，分子相加",
+                f"{a_num} + {b_num} = {result_num}，结果为 {result_num}/{den}",
+            ]
+        },
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
@@ -70,7 +81,12 @@ def _gen_fraction_subtraction(params: dict) -> GeneratedQuestion:
         stem=f"计算：{a_num}/{den} - {b_num}/{den} = ?/{den}",
         stem_zh=f"计算：{a_num}/{den} - {b_num}/{den} = ?/{den}",
         answer={"answer": result_num},
-        solution={"steps": ["同分母分数相减，分母不变，分子相减", f"{a_num} - {b_num} = {result_num}，结果为 {result_num}/{den}"]},
+        solution={
+            "steps": [
+                "同分母分数相减，分母不变，分子相减",
+                f"{a_num} - {b_num} = {result_num}，结果为 {result_num}/{den}",
+            ]
+        },
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
@@ -124,7 +140,12 @@ def _gen_fraction_reduction(params: dict) -> GeneratedQuestion:
         stem=f"将分数 {num}/{den} 化简为最简分数",
         stem_zh=f"将分数 {num}/{den} 化简为最简分数",
         answer={"value": f"{reduced_num}/{reduced_den}"},
-        solution={"steps": [f"求最大公因数：gcd({num}, {den}) = {factor}", f"{num}÷{factor} = {reduced_num}，{den}÷{factor} = {reduced_den}"]},
+        solution={
+            "steps": [
+                f"求最大公因数：gcd({num}, {den}) = {factor}",
+                f"{num}÷{factor} = {reduced_num}，{den}÷{factor} = {reduced_den}",
+            ]
+        },
         question_type="fill_blank",
         difficulty=3,
         bloom_level="apply",

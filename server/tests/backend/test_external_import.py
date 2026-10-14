@@ -1,9 +1,8 @@
 """Tests for external question bank import."""
-import pytest
 
 from apps.backend.app.services.learning.external_import import (
-    Math23KAdapter,
     ImportedQuestion,
+    Math23KAdapter,
     SelfJSONAdapter,
 )
 

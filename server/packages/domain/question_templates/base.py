@@ -1,4 +1,5 @@
 """Base types for question template engine."""
+
 from dataclasses import dataclass, field
 
 

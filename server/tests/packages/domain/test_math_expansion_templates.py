@@ -1,10 +1,8 @@
 """Tests for P7b math template expansion."""
-import pytest
 
 from packages.domain.question_templates.registry import (
     TEMPLATE_REGISTRY,
     generate_question,
-    list_templates,
 )
 
 

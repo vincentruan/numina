@@ -1,4 +1,5 @@
 """Math statistics templates."""
+
 import random
 
 from packages.domain.question_templates.base import GeneratedQuestion
@@ -17,9 +18,12 @@ def _gen_mean(params: dict) -> GeneratedQuestion:
         template_id="math.statistics.mean",
         stem=f"求以下数据的平均数：{num_str}",
         stem_zh=f"求平均数：{num_str}",
-        answer={"answer": mean}, question_type="calculation",
-        difficulty=2, bloom_level="apply",
-        topic_key="math.statistics.mean", age_group="low",
+        answer={"answer": mean},
+        question_type="calculation",
+        difficulty=2,
+        bloom_level="apply",
+        topic_key="math.statistics.mean",
+        age_group="low",
     )
 
 
@@ -35,8 +39,12 @@ def _gen_probability(params: dict) -> GeneratedQuestion:
         answer_text = "3/5"
     return GeneratedQuestion(
         template_id="math.statistics.probability_basic",
-        stem=question, stem_zh=question,
-        answer={"value": answer_text}, question_type="fill_blank",
-        difficulty=3, bloom_level="understand",
-        topic_key="math.statistics.probability_basic", age_group="low",
+        stem=question,
+        stem_zh=question,
+        answer={"value": answer_text},
+        question_type="fill_blank",
+        difficulty=3,
+        bloom_level="understand",
+        topic_key="math.statistics.probability_basic",
+        age_group="low",
     )

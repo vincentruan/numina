@@ -1,4 +1,5 @@
 """Template registration and question generation."""
+
 from collections.abc import Callable
 
 from packages.domain.question_templates.base import GeneratedQuestion
@@ -15,7 +16,9 @@ def register_template(template_id: str) -> Callable:
             ...
     """
 
-    def decorator(func: Callable[..., GeneratedQuestion]) -> Callable[..., GeneratedQuestion]:
+    def decorator(
+        func: Callable[..., GeneratedQuestion],
+    ) -> Callable[..., GeneratedQuestion]:
         TEMPLATE_REGISTRY[template_id] = func
         return func
 

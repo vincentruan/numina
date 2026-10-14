@@ -44,11 +44,13 @@ Phase 0-6 建立了完整的知识图谱集成、标准化题库基础、自适�
 
 | 决策点 | 选择 | 理由 |
 |--------|------|------|
-| 核心策略 | 评价体系先行 | 用数据驱动学科扩展优先级，避免盲目建设 |
+| 核心策略 | 最小可用评价先行 → 内容生产 → 完整评价 | 先用存在性计数 + 先修价值排序驱动出题（1-2 天可交付），再在内容增长后逐步引入多维评价模型 |
 | 缺口填补方式 | 混合模式（按题型自动路由） | 不同题型适合不同生成方式，单一方式无法覆盖全学科 |
 | 评价体系消费者 | 内部工具 + 家长可见 | 内部驱动内容建设，家长可见增强信任 |
 | 审核资源 | 仅开发者本人 | 必须风险分级 + 自动化验证为主，否则审核积压成为瓶颈 |
-| 学科扩展顺序 | 数学先行验证流水线 | 风险最低，在熟悉领域验证完整流程后再复制 |
+| 学科扩展顺序 | 数学先行 → 其他学科最小试点 → 家长可见 | 先在熟悉领域验证流水线，再让四个学科都有最小可用内容后才开放家长端分析 |
+
+> **Spec review (2026-10-14) 修订说明：** 原决策「评价体系先行」经 6 位 reviewer 审查后调整为「最小可用评价先行」。核心变化：P7a 先交付存在性计数 + 先修价值排序（~4 交付物），P7b 同步开始数学内容生产，完整五维评价模型在 P7e 数据积累后落地。原 P7a-9（使用频率）和 P7a-10（覆盖率趋势）推迟到 P7e。学科扩展试点（P7d-lite）提前到 P7c 之前，确保家长端上线时四学科均有最小可用内容。
 
 ---
 
@@ -67,7 +69,7 @@ Phase 7 在现有系统之上增量扩展三个新层次，不推翻任何已有
 
 Phase 7 新增层
 ├── ① 评价层（P7a 先建）
-│   ├── coverage_service — 真实覆盖率评价（升级现有 get_coverage_stats）
+│   ├── coverage_service — 真实覆盖率评价（新建，保留现有 get_coverage_stats 不变）
 │   ├── quality_service — 题目质量评价（程序化验证 + AI 交叉验证 + 风险分级）
 │   └── learning_effect_service — 学习效果指标（规则化指标先行）
 ├── ② 生产层（P7a 后期 ~ P7b）
@@ -107,7 +109,7 @@ Phase 7 新增层
 现有 `scoring_service` 支持 5 种结构化题型。Phase 7 新增：
 
 - **`multi_fill_blank`**：多空填空，多个空逐一匹配（统计题、单位换算需要）
-- **`ai_graded`**：AI 辅助评分，评分时附带置信度。**置信度低于阈值的题目不进入掌握度计算**，只给反馈不计分——防止 AI 判分过度自信直接影响掌握度
+- **`ai_graded`**：AI 辅助评分，评分时附带置信度。**置信度低于阈值的题目不进入掌握度计算**，只给反馈不计分——防止 AI 判分过度自信直接影响掌握度。**评分调用路径：** backend 通过 HTTP 调用 agent 的轻量 LLM 端点（与 `ai_suggest` 路由模式一致），不在 backend 进程内直接调用 LLM
 
 ---
 
@@ -130,7 +132,7 @@ Phase 7 新增层
 
 **路由输出：** 生成任务列表（哪个 topic 用哪种方式生成多少题），以及预期质量分数
 
-**实现：** 在 `question_templates/registry.py` 现有注册机制上扩展。新增 `routing_rules` 配置表，每个 topic/domain 绑定默认生成策略。第一阶段用显式配置表，不做智能路由。
+**实现：** 新建 `question_router.py`（`services/learning/` 目录下），独立于 `question_templates/registry.py`。路由器导入 registry 的模板列表，但路由决策（选择生成方式）是独立的关注点。新增 `routing_rules` 配置表，每个 topic/domain 绑定默认生成策略。第一阶段用显式配置表，不做智能路由。
 
 ### 3.2 外部题库导入适配器（`external_import`）
 
@@ -144,18 +146,18 @@ class ImportAdapter(Protocol):
 ```
 
 Phase 7 第一轮建 2 个适配器：
-- **Math23K 适配器**（MIT 许可，~23K 小学-初中数学应用题，JSON 格式）
+- **Math23K 适配器**（⚠️ 许可证待验证——审计报告中 Math23K 标记为「未评估」，P7a 前置任务须确认实际许可证后再设定 `source_license`。~23K 小学-初中数学应用题，JSON 格式）
 - **自建 JSON 格式**（未来人工添加或 LLM 批量导出的标准格式）
 
 **导入流水线：**
 
 ```
 原始文件 → 适配器检测格式 → parse → validate（格式 + topic_key 映射）
-  → 去重（复用现有 content_hash）→ 质量评分（质量评价最小集）
+  → 去重（需新增 `content_hash` 列——当前 Question 模型无此列，P7a 迁移添加 `content_hash VARCHAR(64) INDEX`，回填现有题目 hash(stem + answer_json)）→ 质量评分（质量评价最小集）
   → 抽样人工审核（5% 置信区间 ±5%）→ 批量入库
 ```
 
-**关键字段：** `source="external"` + `source_name="math23k"` + `source_license="MIT"` + `imported_at`。所有外部题目初始 `review_status="pending"`，抽样通过后批量改为 `"approved"`。
+**关键字段：** `source="external"` + `source_name="math23k"` + `source_license="<待 P7a-min 验证后填入>"` + `imported_at`。所有外部题目初始 `review_status="pending"`，抽样通过后批量改为 `"approved"`。
 
 ### 3.3 LLM 出题管道（`llm_generator`）
 
@@ -174,14 +176,14 @@ LLM 生成 prompt → 草稿输出（JSON）
 **Prompt 设计关键约束：**
 - Prompt 中必须包含目标 `topic_key` 的名称和描述（从 LearningTopic 查询），不允许 LLM 自行选择知识点
 - 输出必须包含 `topic_key`，服务端校验该 key 与输入一致（防止 LLM 杜撰知识点，复用 finance-coach-target-id-hallucination 的白名单防御经验）
-- 输出格式严格 JSON Schema，使用 structured output
+- 输出格式：`json_object` response_format + Pydantic 后验证 + `llm_json_repair` 回退（与现有 agent 完整模式一致）；不做 schema-enforced structured output（当前基础设施不支持）
 - 单次调用生成 1 题（不批量生成——质量会雪崩式下降）
 
 **风险分级规则：**
 
 | 条件 | 风险等级 | 处理 |
 |------|---------|------|
-| 通过三层验证 + 属于客观题类型（choice/fill_blank/calculation） | 低 | 自动 approved |
+| 通过三层验证 + 属于客观题类型（choice/fill_blank/calculation） | 低 | 自动 approved（**注：** 首批 LLM 题目进入 probationary 期——前 50 道客观题即使通过三层验证也需人工审核后批准；probationary 期间收集验证通过率数据，通过率 > 90% 后取消人工审核要求） |
 | 通过三层验证 + 属于推理/理解题（Bloom: analyze/evaluate） | 中 | 进入审核队列，标记 `review_priority=medium` |
 | 未通过第二层或第三层 | 高 | 进入审核队列，标记 `review_priority=high`，附上具体验证失败原因 |
 | 任何 AI 评分置信度 < 0.7 | 高 | 同上 |
@@ -241,6 +243,8 @@ coverage_score = 0.30 × existence + 0.20 × difficulty + 0.15 × diversity + 0.
 ```
 
 得分范围 0.0 ~ 1.0。
+
+> **权重说明：** 上述权重为设计目标状态。在当前覆盖率（0.56%）下，存在性维度（0/1 二值）是约束瓶颈——99.4% 的 topic 在此维度得分为 0。**P7a 先实现最小版本**：仅计算 existence（权重 100%）+ prerequisite_value 排序，作为出题优先级的驱动信号。五维权重在 P7e 覆盖率提升到有意义水平（建议 ≥ 5%）后引入，届时用实际数据做敏感性分析验证权重合理性。
 
 ### 4.3 聚合层级
 
@@ -310,6 +314,12 @@ GET /practice/coverage/gap-report
   → 覆盖缺口清单：score < 阈值的 topic
   → 按先修价值排序
   → 附带推荐生成方式
+
+GET /practice/coverage/trend
+  → 两个快照日期之间的覆盖率变化
+  → 查询参数：?subject=&domain=&from=&to=
+  → 响应：每个 topic 的 delta（改善/恶化/不变）
+  → 注：由 P7a-10 的 snapshot_date 基础设施支撑（推迟至 P7e 实现）
 ```
 
 **脚本工具：**
@@ -324,7 +334,8 @@ python -m server.scripts.coverage_report --diff <previous_report.json>
 
 | 现有模块 | 集成方式 |
 |---------|---------|
-| `question_service.get_coverage_stats()` | 升级：扩展为返回 coverage_score 多维数据，API 兼容 |
+| `question_service.get_coverage_stats()` | 保留不变：现有端点 `GET /practice/coverage` 继续使用此函数 |
+| `coverage_service.py`（新建） | 新服务：提供多维 coverage_score 计算，供新的 `/practice/coverage/detailed`、`/summary`、`/gap-report` 端点调用 |
 | `LearningTopic` 模型 | 不修改：所有维度从已有字段和 Question 表聚合计算 |
 | `LearningDependency` | 用于先修价值维度计算 |
 | `LearningCluster` | 用于领域级聚合 |
@@ -394,6 +405,7 @@ Prompt: "以下题目是否测量了知识点「{topic.name}」？
 - 输出 1 → 1.0，输出 2 → 0.5，输出 3 → 0.0
 - 模板生成题目跳过此验证（直接 1.0）
 - 仅对 LLM 生成和外部导入题目执行
+- **成本控制：** topic_match LLM 调用按批量执行（每周一次处理该周新增的非模板题目），不实时逐题调用。预估每周 ~50 次调用（按 200 题/周、其中 ~50 非模板计算）。若 API 成本成为约束，可替换为 embedding 相似度方法
 
 #### 5.3.3 题干清晰度（15%，半自动）
 
@@ -430,6 +442,8 @@ Prompt: "以下题目是否测量了知识点「{topic.name}」？
 
 #### 5.3.6 去重性（10%，全自动）
 
+> **前置条件：** 需在 P7a alembic 迁移中新增 `content_hash VARCHAR(64) INDEX` 列到 questions 表，回填现有 240 道模板题的 hash(stem + answer_json)。当前 Question 模型无此列。
+
 - content_hash 在整个题库中唯一 → 1.0
 - 同 topic 下有相同 content_hash → 0.0
 - 同 topic + 同源模板 + 同 difficulty 的不同变体 → 0.5
@@ -458,14 +472,32 @@ Prompt: "以下题目是否测量了知识点「{topic.name}」？
 | 0.4 ~ 0.6 | 待改进 | 降低选题权重 |
 | < 0.4 | 不合格 | 自动隔离：review_status 改为 "suspended" |
 
-### 5.6 与现有系统的集成
+### 5.6 质量评价 API 端点
+
+```
+GET /practice/quality/distribution
+  → 质量分直方图：按 quality_score 分桶（0-0.4/0.4-0.6/0.6-0.8/0.8-1.0）
+  → 可选按学科、题型过滤
+  → 响应：{ bins: [{ range: "0.8-1.0", count: 120, percentage: 0.5 }, ...] }
+
+GET /practice/quality/flagged
+  → 质量异常题目列表：quality_score < 0.6 或 review_status = "suspended"
+  → 支持排序：按 quality_score 升序
+  → 响应：[{ question_id, quality_score, failing_dimensions, review_status }, ...]
+
+GET /practice/quality/calibration
+  → 难度校准建议：declared_difficulty 与 empirical_difficulty 偏差 > 0.2 的题目
+  → 响应：[{ question_id, declared, actual, deviation, action: "auto_adjust"|"flag_for_review" }, ...]
+```
+
+### 5.7 与现有系统的集成
 
 | 现有模块 | 集成方式 |
 |---------|---------|
 | `validate_question()` | 复用：作为前置格式校验 |
 | `scoring_service.py` | 复用：计算题正确性验证 |
 | `content_safety_filter.py` | 复用：LLM 题目前置安全检查 |
-| 现有 `review_status` | 扩展：新增 `"suspended"` 状态 |
+| 现有 `review_status` | 扩展：新增 `"suspended"` 状态（**注：** 引入前须审计所有 review_status 消费者——question_service, adaptive_service, practice_service, practice router 均需确认正确处理 suspended） |
 | `question_router` | 集成：质量评价结果反馈给路由器 |
 | `coverage_service` | 集成：低质量题目（< 0.4）不计入有效覆盖 |
 
@@ -810,22 +842,36 @@ GET /practice/questions/{id}/grading-explanation
 
 **扩展现有页面（不新建）：**
 
-| 现有页面 | 扩展内容 |
-|---------|---------|
-| `BabyLearningPage.vue` | 新增 LearningEffectCard：学科掌握进度条 + 本周亮点 + 薄弱环节 |
-| `ChildLearningMapPage.vue` | 薄弱知识点橙红色高亮 |
-| `LearningReviewsPage.vue` | 新增题目审核 tab + 批量操作 |
+| 现有页面 | 扩展内容 | 布局位置 |
+|---------|---------|---------|
+| `BabyLearningPage.vue` | 新增 LearningEffectCard：学科掌握进度条 + 本周亮点 + 薄弱环节 | 页面顶部，紧接儿童选择器下方，van-cell-group 包裹 |
+| `ChildLearningMapPage.vue` | 薄弱知识点橙红色高亮 | 现有知识图谱节点颜色扩展，无需新布局 |
+| `LearningReviewsPage.vue` | 新增题目审核 tab + 批量操作 | 现有 tab 结构新增第三 tab：[掌握度审核] [任务审核] [题目审核] |
 
 **新增前端组件：**
 
-| 组件 | 技术 | 说明 |
-|------|------|------|
-| `LearningEffectCard.vue` | Vue 3 + Vant 4 | 学习效果概览卡片 |
-| `LearningTrendChart.vue` | ECharts 折线图 | 4-12 周正确率趋势 |
-| `GradingExplanationPanel.vue` | Vue 3 + Vant 4 | AI 判分可解释性面板（置信度 + 维度拆解 + 推理摘要） |
-| `CoverageTrendChart.vue` | ECharts 折线图 | 覆盖率随时间变化趋势 |
+| 组件 | 技术 | 说明 | 信息架构 |
+|------|------|------|---------|
+| `LearningEffectCard.vue` | Vue 3 + Vant 4 | 学习效果概览卡片 | 第一层：学科进度条（已掌握/学习中/未开始）；第二层：本周亮点（新掌握 N 个知识点、连续学习 N 天）；第三层：薄弱环节（展开显示 top 3 薄弱 topic + 建议操作） |
+| `LearningTrendChart.vue` | ECharts 折线图 | 4-12 周正确率趋势 | 默认显示最近 4 周，可切换到 8/12 周；空数据时显示「数据积累中，再练习几次就能看到趋势」 |
+| `GradingExplanationPanel.vue` | Vue 3 + Vant 4 | AI 判分可解释性面板 | 第一层：置信度条形图（高/中/低，颜色编码）；第二层：评分维度拆解（知识点匹配 ✓/✗、步骤完整性 ✓/✗）；第三层：AI 推理摘要（1-2 句自然语言，可折叠） |
+| `CoverageTrendChart.vue` | ECharts 折线图 | 覆盖率随时间变化趋势 | 按 subject 切换；空数据（仅一次快照）时显示单点 + 提示「需要更多数据点才能显示趋势」 |
 
-**儿童端唯一改动：** `PracticeAnswerInput.vue` 扩展支持 `multi_fill_blank`（多个输入框）和 `ai_graded`（文本输入 + AI 评分中过渡状态）。
+**儿童端改动：** `PracticeAnswerInput.vue` 扩展支持 `multi_fill_blank` 和 `ai_graded`。
+
+**`multi_fill_blank` 交互规格：**
+- 最多 5 个空，垂直排列（移动端友好），每空带编号标签（①②③）
+- 输入框获得焦点时弹出数字键盘（type="number" 或 inputmode="numeric"）
+- Tab/下一个按钮在输入框间导航
+- 提交后：每空独立判分，正确显示绿色 ✓，错误显示红色 ✗ + 正确答案
+- 部分得分：顶部显示「N/M 正确」汇总
+
+**`ai_graded` 交互规格：**
+- 输入状态：文本输入区域（van-field type="textarea"）+ 提交按钮
+- 评分中状态：「AI 正在评分...」+ 旋转动画，禁用重复提交，30 秒超时
+- 超时/错误状态：「评分失败，请重试」+ 重试按钮
+- 评分完成状态：显示结果（正确/部分正确/不正确）+ 置信度指示器（高=绿色盾牌、中=黄色、低=灰色+「AI 评分可能不准确」提示）
+- 低置信度（< 0.7）不计入掌握度，仅显示反馈
 
 ### 8.4 审核队列界面
 
@@ -843,41 +889,66 @@ GET /practice/questions/{id}/grading-explanation
 
 ### 9.1 总览
 
+> **Spec review (2026-10-14) 修订：** 原顺序 P7a→P7b→P7c→P7d→P7e 调整为 P7a(最小)→P7b+P7d-lite→P7a(完整)→P7c→P7e。核心变化：P7a 拆分为最小版和完整版，非数学学科最小试点（P7d-lite）提前到家长端分析之前，确保四学科都有内容后才开放家长可见的学习效果。
+
 ```
-P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 学习效果+家长可见
-                                                        │
-                       P7e 持续优化闭环 ←── P7d 学科扩展试点
+P7a-min 最小评价（存在性+先修排序）
+    │
+    ├──→ P7b 数学纵深+出题流水线
+    │         │
+    │         ├──→ P7d-lite 其他学科最小试点（语文/英语/科学各一个试点簇）
+    │         │         │
+    │         │         ├──→ P7a-full 完整评价（五维覆盖+七维质量）
+    │         │         │
+    │         │         └──→ P7c 学习效果+家长可见（此时四学科均有内容）
+    │         │                   │
+    └─────────┴───────────────────┴──→ P7e 持续优化闭环
 ```
+
+**P7a-min 与 P7b 可部分重叠：** P7a-min（~4 交付物，预计 3-5 天）完成后即可开始 P7b 模板和导入工作，无需等待 P7a-full 的多维评价模型。
 
 ### 9.2 P7a：评价基础设施
 
-**目标：** 覆盖率评价 + 质量评价最小可用集 + 使用频率追踪 + 覆盖率趋势快照。
+**目标：** 分两阶段交付。P7a-min 先提供存在性计数 + 先修排序，驱动 P7b 出题优先级；P7a-full 在内容积累后引入多维评价模型。
 
-**交付物：**
+#### 9.2.1 P7a-min：最小可用评价（P7b 前置，~3-5 天）
 
 | 编号 | 交付物 |
 |------|--------|
-| P7a-1 | `coverage_service.py`：五维覆盖得分 + 三级聚合 |
-| P7a-2 | `quality_service.py`：七维质量得分 + 分题型验证 |
-| P7a-3 | `coverage_cache` 表（alembic 迁移） |
-| P7a-4 | `question_quality` 表（alembic 迁移） |
-| P7a-5 | 覆盖率 + 质量 API 端点（7 个：含 coverage/trend） |
-| P7a-6 | `coverage_report` CLI 脚本 |
-| P7a-7 | `SUBJECT_EXPECTATIONS` 配置 |
-| P7a-8 | P2-2 前置修复：北京 topic subject/ageRange 字段补齐脚本 |
-| P7a-9 | 题目使用频率分析：扩展 `coverage_report` 脚本 `--usage` flag + `GET /practice/questions/usage-stats` API（按 topic 聚合 times_used、correct_count、avg_time_spent） |
-| P7a-10 | 覆盖率趋势快照：`coverage_cache` 增加 `snapshot_date` 字段，每次全量计算自动追加快照；`coverage_report --diff` 对比两个日期的快照 |
-
-**测试：** coverage_service 15+ 测试，quality_service 20+ 测试，usage_stats 5+ 测试，集成测试验证现有 240 题全量计算不报错。
+| P7a-1m | `coverage_service.py`（最小版）：存在性维度（0/1）+ 先修价值排序（基于 LearningDependency dependent 数量）；两级聚合（topic + subject） |
+| P7a-2m | `content_hash` alembic 迁移：questions 表新增 `content_hash VARCHAR(64) INDEX`，回填现有题目 hash(stem + answer_json) |
+| P7a-3m | P2-2 前置修复：北京 topic subject/ageRange 字段补齐脚本（先查 NULL 数量，再从上游 os-taxonomy-beijing 数据自动回填） |
+| P7a-4m | 覆盖率 API 端点（3 个）：`GET /practice/coverage/summary`、`/detailed`、`/gap-report` |
+| P7a-5m | `coverage_report` CLI 脚本（基础版）：`--subject`、`--gap-only`、`--format table` |
 
 **验收标准：**
-- [ ] 覆盖率脚本输出各学科得分和 gap 清单
+- [ ] 覆盖率脚本输出各学科有/无题目的 topic 数量和 gap 清单
+- [ ] gap 清单按先修价值排序，能指导出题优先级
+- [ ] 北京 topic subject/ageRange 字段补齐，覆盖服务能正确按学科聚合
+- [ ] 全部测试通过（新增 10+）
+
+#### 9.2.2 P7a-full：完整评价模型（P7d-lite 之后）
+
+> 在 P7b 数学内容生产 + P7d-lite 其他学科试点完成后，此时覆盖率已显著提升，五维模型能产生有意义的差异化评分。
+
+| 编号 | 交付物 |
+|------|--------|
+| P7a-1 | `coverage_service.py` 升级为五维覆盖得分 + 三级聚合 |
+| P7a-2 | `quality_service.py`：七维质量得分 + 分题型验证 |
+| P7a-3 | `coverage_cache` 表（alembic 迁移）：`topic_id PK, coverage_score FLOAT, existence FLOAT, difficulty FLOAT, diversity FLOAT, bloom FLOAT, prerequisite_value FLOAT, computed_at TIMESTAMP` |
+| P7a-4 | `question_quality` 表（alembic 迁移）：`question_id PK, quality_score FLOAT, correctness FLOAT, topic_match FLOAT, clarity FLOAT, distractor FLOAT, age_fit FLOAT, uniqueness FLOAT, educational_value FLOAT, computed_at TIMESTAMP` |
+| P7a-5 | 覆盖率 + 质量 API 端点扩展（新增 4 个：quality/distribution、quality/flagged、quality/calibration、questions/review-queue） |
+| P7a-6 | `SUBJECT_EXPECTATIONS` 配置 |
+| P7a-7 | 覆盖率权重敏感性分析：用实际数据验证五维权重是否产生合理的优先级排序 |
+
+**验收标准：**
+- [ ] 五维覆盖率报告能区分强弱领域
 - [ ] 质量评价为每道题产出 quality_score
-- [ ] 数学覆盖率报告能区分强弱领域
 - [ ] 质量分布报告能区分四个等级
-- [ ] 使用频率报告能区分高频/低频/零使用题目
-- [ ] 覆盖率快照在两次全量计算间可对比，`--diff` 输出改善/恶化 topic 列表
-- [ ] 全部测试通过
+- [ ] 权重敏感性分析完成并记录
+- [ ] 全部测试通过（新增 25+）
+
+> **推迟到 P7e 的交付物：** 原 P7a-9（题目使用频率分析）和 P7a-10（覆盖率趋势快照）推迟到 P7e，在优化闭环阶段实现。届时使用频率和覆盖率趋势数据已有足够积累，趋势对比和 ROI 衡量才有意义。
 
 ### 9.3 P7b：数学纵深 + 出题流水线
 
@@ -900,16 +971,39 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 **验收标准：**
 - [ ] 数学 topic 覆盖率 ≥ 3%
 - [ ] 新增 8-10 个数学模板
-- [ ] Math23K 导入 ≥ 50 道
-- [ ] LLM 生成 ≥ 20 道推理题
+- [ ] Math23K 导入 ≥ 50 道（**前置条件：Math23K 许可证已在 P7a-min 阶段验证并记录**）
+- [ ] LLM 生成 ≥ 20 道推理题（前 50 道客观题需人工审核，probationary 通过后可自动批准）
 - [ ] 批量审核 API 可用
 - [ ] 生产脚本可一键执行
 - [ ] AI 判分结果附带可解释性数据（confidence + 维度拆解 + 推理摘要）
 - [ ] 全部测试通过（新增 25+）
 
-### 9.4 P7c：学习效果评价 + 家长可见
+### 9.4 P7d-lite：其他学科最小试点（P7c 前置）
 
-**目标：** L1 规则化学习效果指标 + 家长端展示 + 审核队列扩展。
+**目标：** 语文、英语、科学各一个试点簇的最小程序化模板，确保四学科都有可用内容后才开放家长端学习效果分析。
+
+> **与原 P7d 的区别：** P7d-lite 仅包含程序化模板（不涉及 LLM 出题和三学科路由配置），是最小可用内容。原 P7d 的完整内容（LLM prompt 扩展、路由配置、质量验证）作为 P7d-full 在 P7c 之后执行。
+
+**交付物：**
+
+| 编号 | 交付物 |
+|------|--------|
+| P7d-lite-1 | 语文试点簇模板 3-5 个（汉语拼音 + 识字） |
+| P7d-lite-2 | 英语试点簇模板 3-5 个（基础词汇 + 简单语法） |
+| P7d-lite-3 | 科学试点簇模板 3-5 个（生命科学事实 + 物质科学事实） |
+| P7d-lite-4 | 三学科路由配置（显式配置表，每学科试点簇绑定程序化模板策略） |
+| P7d-lite-5 | 儿童端学科切换验证（能切换学科并看到掌握度） |
+
+**验收标准：**
+- [ ] 语文试点簇覆盖率 ≥ 10%
+- [ ] 英语试点簇覆盖率 ≥ 10%
+- [ ] 科学试点簇覆盖率 ≥ 10%
+- [ ] 儿童端能切换学科并看到掌握度
+- [ ] 全部测试通过（新增 10+）
+
+### 9.5 P7c：学习效果评价 + 家长可见
+
+**目标：** L1 规则化学习效果指标 + 家长端展示 + 审核队列扩展。**此时四学科均有最小可用内容（P7d-lite 已完成），家长看到的是完整的多学科学习画面。**
 
 **交付物：**
 
@@ -925,7 +1019,7 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 | P7c-8 | PracticeSession `validity_flag` 字段 |
 | P7c-9 | PracticeAnswerInput 新题型支持 |
 | P7c-10 | AI 判分可解释性（家长展示）：`GradingExplanationPanel.vue` 组件——展示置信度条形图 + 评分维度拆解（如「知识点匹配 ✓ / 步骤完整性 ✗」）+ AI 推理摘要（1-2 句自然语言） |
-| P7c-11 | 覆盖率趋势可视化：`CoverageTrendChart.vue`（ECharts 折线图，展示指定 topic/domain/subject 的覆盖率随时间变化） |
+| P7c-11 | 覆盖率趋势可视化：`CoverageTrendChart.vue`（ECharts 折线图）。**注：** 趋势数据由 P7e 的覆盖率快照基础设施提供；P7c 阶段如仅有单次快照，组件显示单点 + 「需要更多数据」提示 |
 
 **验收标准：**
 - [ ] 掌握度异常检测正确识别虚高/虚低
@@ -939,9 +1033,9 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 - [ ] 覆盖率趋势图在家长端可查看
 - [ ] 全部测试通过（新增 20+）
 
-### 9.5 P7d：学科扩展试点
+### 9.6 P7d-full：学科扩展完整流水线
 
-**目标：** 语文、英语、科学各一个试点簇。
+**目标：** 在 P7d-lite 最小试点验证后，完成语文、英语、科学的完整出题流水线（含 LLM 出题）。
 
 **交付物：**
 
@@ -962,9 +1056,9 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 - [ ] 儿童端能切换学科并看到掌握度
 - [ ] 全部测试通过（新增 15+）
 
-### 9.6 P7e：持续优化闭环
+### 9.7 P7e：持续优化闭环
 
-**目标：** 自动化优化机制落地 + BKT 单儿童参数校准。
+**目标：** 自动化优化机制落地 + BKT 单儿童参数校准 + 使用频率/趋势分析（从 P7a 推迟）。
 
 **交付物：**
 
@@ -977,7 +1071,9 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 | P7e-5 | 质量分定期重算 |
 | P7e-6 | 路径优化建议 API |
 | P7e-7 | 映射质量扫描 |
-| P7e-8 | BKT 单儿童参数校准：`calibrate_bkt_params(child_id)` 函数——利用该儿童自身作答数据（≥20 次）做 per-topic 最大似然估计，更新 P(L) 和 P(T)；事件驱动（每 N 次作答触发）；校准结果写入 `bkt_calibration` 缓存表 |
+| P7e-8 | BKT 单儿童参数校准：`calibrate_bkt_params(child_id)` 函数——利用该儿童自身作答数据做 per-**domain** 贝叶斯估计（以全局默认值为先验），更新 P(L) 和 P(T)；事件驱动（每 N 次作答触发）；校准结果写入 `bkt_calibration` 缓存表。**注：** 改为 per-domain 而非 per-topic，因为 per-topic MLE 从 ≥20 次作答统计功效不足；贝叶斯估计在数据稀疏时自动收缩到全局默认值 |
+| P7e-9 | 题目使用频率分析（从 P7a-9 推迟）：`coverage_report --usage` + `GET /practice/questions/usage-stats` API |
+| P7e-10 | 覆盖率趋势快照（从 P7a-10 推迟）：`coverage_cache` 增加 `snapshot_date`，`coverage_report --diff` 对比两个日期快照 |
 
 **验收标准：**
 - [ ] 一键全流程：发现缺口 → 生成计划 → 执行生产 → 覆盖率更新
@@ -988,22 +1084,27 @@ P7a 评价基础设施 ──→ P7b 数学纵深+出题流水线 ──→ P7c 
 - [ ] 覆盖率趋势快照在优化前后正确记录变化
 - [ ] 全部测试通过（新增 10+）
 
-### 9.7 依赖关系与风险
+### 9.8 依赖关系与风险
 
 ```
-P7a ──→ P7b ──→ P7c ──→ P7d ──→ P7e
+P7a-min ──→ P7b ──→ P7d-lite ──→ P7a-full ──→ P7c ──→ P7d-full ──→ P7e
+                 │                              │
+                 └── P7b 模板工作可与 P7a-min ──┘
+                     后续并行启动
 ```
 
 **主要风险：**
 
 | 风险 | 缓解措施 |
 |------|---------|
-| Math23K 数据格式不符 | P7a 期间提前探查 |
+| **Math23K 许可证不符** | **P7a-min 前置验证**：在开始 P7b 之前确认 Math23K 实际许可证并记录；若非 MIT 则评估兼容性或寻找替代数据源 |
+| Math23K 数据格式不符 | P7a-min 期间提前探查格式 |
 | LLM 出题质量过低 | 调整 prompt + 降低 LLM 占比 |
 | 真实数据不足导致效果指标空转 | L1 指标设计为数据不足时返回 null |
-| 北京 topic 缺字段（P2-2 遗留） | P7a 第一步修复 |
+| 北京 topic 缺字段（P2-2 遗留） | P7a-min 第一步修复（P7a-3m） |
+| 单人审核瓶颈 | LLM 题目 probationary 期（前 50 道人工审核），通过后自动批准降低负载 |
 
-### 9.8 整体验收标准（对照 Issue #129）
+### 9.9 整体验收标准（对照 Issue #129）
 
 | Issue #129 验收标准 | Phase 7 对应交付 |
 |--------------------|-----------------|
@@ -1035,7 +1136,7 @@ P7a ──→ P7b ──→ P7c ──→ P7d ──→ P7e
 | 覆盖率目标自动追踪 | 过度工程化 | 低 |
 | 复杂语义相似度检测 | 第一阶段靠 Bloom/难度/题型维度间接约束 | 中——能更精确识别同质化题目 |
 
-> **已纳入 Phase 7：** 题目使用频率分析（→ P7a-9）、历史覆盖率趋势快照（→ P7a-10）。原排除理由「覆盖率评价不依赖使用数据」和「第一次上线就是第一次快照」在闭环度量视角下不成立——使用频率是生产投资回报率的衡量，覆盖率趋势是 P7e 优化闭环的效果度量前提。
+> **推迟到 P7e：** 题目使用频率分析（→ P7e-9）、历史覆盖率趋势快照（→ P7e-10）。原纳入 P7a，经 spec review 后认为在覆盖率极低时（0.56%）使用频率和趋势对比无实际区分度，推迟到 P7e 优化闭环阶段，届时数据积累充分。
 
 ### 10.3 题目质量评价
 

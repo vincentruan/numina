@@ -1,4 +1,5 @@
 """Math arithmetic question templates — elementary school level."""
+
 import random
 
 from packages.domain.question_templates.base import GeneratedQuestion
@@ -142,7 +143,12 @@ def _gen_multiplication_estimate(params: dict) -> GeneratedQuestion:
         stem=f"估算：{a} × {b} ≈ ?（将两个数四舍五入到最近的整十数再相乘）",
         stem_zh=f"估算：{a} × {b} ≈ ?（将两个数四舍五入到最近的整十数再相乘）",
         answer={"answer": a_round * b_round},
-        solution={"steps": [f"{a} ≈ {a_round}，{b} ≈ {b_round}", f"{a_round} × {b_round} = {a_round * b_round}"]},
+        solution={
+            "steps": [
+                f"{a} ≈ {a_round}，{b} ≈ {b_round}",
+                f"{a_round} × {b_round} = {a_round * b_round}",
+            ]
+        },
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
@@ -164,7 +170,13 @@ def _gen_division_with_remainder(params: dict) -> GeneratedQuestion:
         stem=f"计算：{dividend} ÷ {divisor} = ?……?",
         stem_zh=f"计算：{dividend} ÷ {divisor} = ?……?（写出商和余数）",
         answer={"value": f"{quotient}……{remainder}"},
-        solution={"steps": [f"{dividend} ÷ {divisor}", f"= {quotient}……{remainder}", f"验证：{divisor} × {quotient} + {remainder} = {dividend}"]},
+        solution={
+            "steps": [
+                f"{dividend} ÷ {divisor}",
+                f"= {quotient}……{remainder}",
+                f"验证：{divisor} × {quotient} + {remainder} = {dividend}",
+            ]
+        },
         question_type="fill_blank",
         difficulty=3,
         bloom_level="apply",
@@ -177,7 +189,9 @@ def _gen_division_with_remainder(params: dict) -> GeneratedQuestion:
 @register_template("math.arithmetic.mixed_operations")
 def _gen_mixed_operations(params: dict) -> GeneratedQuestion:
     """Mixed operations with order-of-operations rules."""
-    op = random.choice(["add_then_multiply", "multiply_then_add", "subtract_then_divide"])
+    op = random.choice(
+        ["add_then_multiply", "multiply_then_add", "subtract_then_divide"]
+    )
     if op == "add_then_multiply":
         a = random.randint(5, 30)
         b = random.randint(5, 30)
@@ -202,7 +216,9 @@ def _gen_mixed_operations(params: dict) -> GeneratedQuestion:
         stem=stem,
         stem_zh=stem,
         answer={"answer": result},
-        solution={"steps": [stem.replace("计算：", "").replace(" = ?", ""), f"= {result}"]},
+        solution={
+            "steps": [stem.replace("计算：", "").replace(" = ?", ""), f"= {result}"]
+        },
         question_type="calculation",
         difficulty=3,
         bloom_level="apply",

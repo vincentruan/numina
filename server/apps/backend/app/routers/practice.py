@@ -3,8 +3,8 @@
 import json
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import case, or_
 from pydantic import BaseModel, Field
+from sqlalchemy import case, or_
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import get_current_user_or_child, require_owner
@@ -419,7 +419,9 @@ def get_coverage_summary(
     db: Session = Depends(get_db),
 ):
     """Subject-level coverage aggregation (P7a-min)."""
-    from apps.backend.app.services.learning.coverage_service import compute_subject_coverage
+    from apps.backend.app.services.learning.coverage_service import (
+        compute_subject_coverage,
+    )
     from packages.db.models.learning.topic import LearningTopic
 
     subjects = (
@@ -459,7 +461,9 @@ def get_coverage_detailed(
     db: Session = Depends(get_db),
 ):
     """Per-topic coverage scores (P7a-min)."""
-    from apps.backend.app.services.learning.coverage_service import compute_topic_coverage
+    from apps.backend.app.services.learning.coverage_service import (
+        compute_topic_coverage,
+    )
     from packages.db.models.learning.topic import LearningTopic
 
     query = db.query(LearningTopic).filter(LearningTopic.deprecated == False)  # noqa: E712
@@ -585,18 +589,24 @@ def batch_review_questions(
 ):
     """Batch approve, reject, or suspend questions. Family-scoped."""
     new_status = {"approve": "approved", "reject": "rejected", "suspend": "suspended"}[body.decision]
-    processed = 0
-    for qid in body.question_ids:
-        q = db.get(QuestionModel, qid)
-        if (
-            q
-            and q.review_status == "pending"
-            and (q.family_id is None or q.family_id == user.family_id)
-        ):
-            q.review_status = new_status
-            if body.notes:
-                q.review_notes = body.notes
-            processed += 1
+
+    # Single bulk UPDATE — avoids N+1 SELECT loop.
+    filter_ = [
+        QuestionModel.id.in_(body.question_ids),
+        QuestionModel.review_status == "pending",
+        or_(QuestionModel.family_id == user.family_id, QuestionModel.family_id.is_(None)),
+    ]
+    processed = (
+        db.query(QuestionModel)
+        .filter(*filter_)
+        .update(
+            {
+                QuestionModel.review_status: new_status,
+                **({QuestionModel.review_notes: body.notes} if body.notes else {}),
+            },
+            synchronize_session=False,
+        )
+    )
     db.commit()
     approved = processed if body.decision == "approve" else 0
     rejected = processed if body.decision == "reject" else 0
@@ -623,4 +633,11 @@ def get_grading_explanation(
         raise AppError(ErrorCode.NOT_FOUND, details="Question not found")  # family-scoped NOT_FOUND
     if not q.grading_explanation_json:
         raise AppError(ErrorCode.NOT_FOUND, details="No grading explanation available")
-    return q.grading_explanation
+    explanation = q.grading_explanation
+    # Apply content safety filter to reasoning text (LLM-generated content)
+    if explanation and "reasoning" in explanation:
+        from apps.backend.app.services.learning.content_safety_filter import filter_tutor_output
+        filtered = filter_tutor_output(explanation["reasoning"], child_id=user.id)
+        if not filtered.safe:
+            explanation = {**explanation, "reasoning": "[内容已被过滤]"}
+    return explanation

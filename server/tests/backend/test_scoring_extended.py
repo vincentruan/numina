@@ -1,9 +1,8 @@
 """Tests for extended scoring types: multi_fill_blank and ai_graded."""
-import pytest
 
 from apps.backend.app.services.learning.scoring_service import (
-    check_answer,
     check_ai_graded,
+    check_answer,
     check_multi_fill_blank_partial,
 )
 

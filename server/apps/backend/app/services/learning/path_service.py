@@ -6,7 +6,8 @@ import os
 from collections import deque
 from datetime import UTC, date, datetime
 
-from sqlalchemy import func, select as sa_select
+from sqlalchemy import func
+from sqlalchemy import select as sa_select
 from sqlalchemy.orm import Session
 
 from packages.core.logging import get_logger

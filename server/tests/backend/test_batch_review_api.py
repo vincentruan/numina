@@ -1,5 +1,4 @@
 """Tests for batch review API and grading explanation endpoint."""
-import pytest
 
 from packages.db.models.learning.question import Question
 from packages.db.models.learning.topic import LearningTopic

@@ -111,6 +111,7 @@ def check_ai_graded(
     else:
         # Production path: synchronous HTTP call to agent's /grade endpoint.
         import httpx
+
         from packages.core.settings import settings
         try:
             response = httpx.post(
@@ -129,7 +130,13 @@ def check_ai_graded(
             is_correct = confidence >= confidence_threshold
             explanation = data.get("explanation", "")
         except Exception:
-            logger.warning("ai_graded: agent LLM endpoint unavailable, returning False")
+            # Agent /grade endpoint is not yet deployed — ai_graded questions
+            # will always score as incorrect until the endpoint exists.
+            # Log at ERROR so ops can detect this gap in monitoring.
+            logger.error(
+                "ai_graded: agent /grade endpoint unavailable; "
+                "ai_graded questions will fail closed until deployed"
+            )
             confidence = 0.0
             result_level = "incorrect"
             is_correct = False

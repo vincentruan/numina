@@ -277,8 +277,8 @@ class GapReportResponse(BaseModel):
 
 
 class BatchReviewRequest(BaseModel):
-    question_ids: list[int]
-    decision: str  # "approve" | "reject" | "suspend"
+    question_ids: list[int] = Field(max_length=500)
+    decision: Literal["approve", "reject", "suspend"]
     notes: str | None = None
 
 

@@ -1,4 +1,5 @@
 """Life science pilot templates."""
+
 import random
 
 from packages.domain.question_templates.base import GeneratedQuestion
@@ -13,7 +14,9 @@ def _gen_plant_parts(params: dict) -> GeneratedQuestion:
         ("运输水分和养料的是？", "茎", ["茎", "根", "叶", "花"]),
     ]
     question, correct, opts = random.choice(items)
-    options = [{"key": chr(65+i), "text": o, "text_zh": o} for i, o in enumerate(opts)]
+    options = [
+        {"key": chr(65 + i), "text": o, "text_zh": o} for i, o in enumerate(opts)
+    ]
     answer_key = chr(65 + opts.index(correct))
     return GeneratedQuestion(
         template_id="science.life.plant_parts",
@@ -37,7 +40,9 @@ def _gen_animal_types(params: dict) -> GeneratedQuestion:
         ("金鱼属于哪类动物？", "鱼类", ["鱼类", "哺乳动物", "两栖动物", "昆虫"]),
     ]
     question, correct, opts = random.choice(items)
-    options = [{"key": chr(65+i), "text": o, "text_zh": o} for i, o in enumerate(opts)]
+    options = [
+        {"key": chr(65 + i), "text": o, "text_zh": o} for i, o in enumerate(opts)
+    ]
     answer_key = chr(65 + opts.index(correct))
     return GeneratedQuestion(
         template_id="science.life.animal_types",

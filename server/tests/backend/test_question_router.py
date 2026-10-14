@@ -1,12 +1,11 @@
 """Tests for question router and production pipeline."""
 import pytest
 
-from packages.db.models.learning.topic import LearningTopic
 from apps.backend.app.services.learning.question_router import (
-    route,
     generate_production_plan,
-    RoutingResult,
+    route,
 )
+from packages.db.models.learning.topic import LearningTopic
 
 
 @pytest.fixture

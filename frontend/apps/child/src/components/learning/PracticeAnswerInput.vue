@@ -102,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { QuestionOption, QuestionResponse } from '@/api/practice'
 
@@ -118,6 +118,18 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Reset transient UI state when the question changes (IMPORTANT-7 fix)
+watch(
+  () => props.question.id,
+  () => {
+    selectedKey.value = null
+    textAnswer.value = ''
+    multiBlanks.value = []
+    aiAnswer.value = ''
+    aiGrading.value = false
+  },
+)
 
 const selectedKey = ref<string | null>(null)
 const textAnswer = ref('')

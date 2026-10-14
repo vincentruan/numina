@@ -3,6 +3,7 @@
 Routes topics → generation method based on explicit configuration.
 Phase 7 first version: config table mapping domain → method.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -119,13 +120,15 @@ def generate_production_plan(
         routing = route(db, gap["topic_id"])
         count = min(routing.recommended_count, remaining)
 
-        plan.append(ProductionTask(
-            topic_id=gap["topic_id"],
-            method=routing.method,
-            count=count,
-            target_difficulty=routing.target_difficulty,
-            target_bloom=routing.target_bloom,
-        ))
+        plan.append(
+            ProductionTask(
+                topic_id=gap["topic_id"],
+                method=routing.method,
+                count=count,
+                target_difficulty=routing.target_difficulty,
+                target_bloom=routing.target_bloom,
+            )
+        )
         remaining -= count
 
     return plan
@@ -133,6 +136,7 @@ def generate_production_plan(
 
 def _count_approved_questions(db: Session, topic_id: int) -> int:
     from packages.db.models.learning.question import Question
+
     return (
         db.query(Question)
         .filter(Question.topic_id == topic_id, Question.review_status == "approved")
@@ -142,6 +146,7 @@ def _count_approved_questions(db: Session, topic_id: int) -> int:
 
 def _target_difficulty_for_topic(db: Session, topic_id: int) -> list[int]:
     from packages.db.models.learning.question import Question
+
     existing = (
         db.query(Question.difficulty)
         .filter(Question.topic_id == topic_id, Question.review_status == "approved")

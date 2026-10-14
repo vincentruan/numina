@@ -1,4 +1,5 @@
 """Chinese pinyin pilot templates."""
+
 import random
 
 from packages.domain.question_templates.base import GeneratedQuestion
@@ -39,11 +40,17 @@ def _gen_pinyin_initials(params: dict) -> GeneratedQuestion:
 @register_template("chinese.pinyin.finals")
 def _gen_pinyin_finals(params: dict) -> GeneratedQuestion:
     questions = [
-        ("ā", "第一声"), ("á", "第二声"), ("ǎ", "第三声"), ("à", "第四声"),
+        ("ā", "第一声"),
+        ("á", "第二声"),
+        ("ǎ", "第三声"),
+        ("à", "第四声"),
     ]
     tone_char, tone_name = random.choice(questions)
     tone_options = ["第一声", "第二声", "第三声", "第四声"]
-    options = [{"key": chr(65+i), "text": t, "text_zh": t} for i, t in enumerate(tone_options)]
+    options = [
+        {"key": chr(65 + i), "text": t, "text_zh": t}
+        for i, t in enumerate(tone_options)
+    ]
     correct_idx = tone_options.index(tone_name)
     answer_key = chr(65 + correct_idx)
     return GeneratedQuestion(

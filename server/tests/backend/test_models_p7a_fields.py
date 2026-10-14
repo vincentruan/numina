@@ -1,9 +1,8 @@
 """Tests for P7a model field additions."""
-import pytest
 from sqlalchemy import inspect
 
-from packages.db.models.learning.question import Question
 from packages.db.models.learning.practice import PracticeAttempt, PracticeSession
+from packages.db.models.learning.question import Question
 
 
 class TestQuestionModelP7aFields:

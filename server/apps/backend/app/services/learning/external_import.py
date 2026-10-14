@@ -1,4 +1,5 @@
 """External question bank import adapters."""
+
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -12,6 +13,7 @@ logger = get_logger(__name__)
 @dataclass
 class ImportedQuestion:
     """A question parsed from an external source, not yet in the DB."""
+
     stem: str
     answer_json: dict
     question_type: str

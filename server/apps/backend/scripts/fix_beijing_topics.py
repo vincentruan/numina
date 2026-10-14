@@ -7,6 +7,7 @@ Usage:
     cd server
     uv run python -m apps.backend.scripts.fix_beijing_topics [--dry-run]
 """
+
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
@@ -66,7 +67,8 @@ def fix_beijing_topics(db: Session, dry_run: bool = False) -> dict:
         if upstream is None:
             logger.warning(
                 "No upstream match for Beijing topic domain=%s key=%s",
-                topic.domain, topic.topic_key,
+                topic.domain,
+                topic.topic_key,
             )
             no_match += 1
             continue
@@ -82,13 +84,22 @@ def fix_beijing_topics(db: Session, dry_run: bool = False) -> dict:
 
     logger.info(
         "Beijing topic fix: fixed=%d, skipped=%d, no_match=%d (dry_run=%s)",
-        fixed, skipped, no_match, dry_run,
+        fixed,
+        skipped,
+        no_match,
+        dry_run,
     )
-    return {"fixed": fixed, "skipped": skipped, "no_match": no_match, "total": len(beijing_topics)}
+    return {
+        "fixed": fixed,
+        "skipped": skipped,
+        "no_match": no_match,
+        "total": len(beijing_topics),
+    }
 
 
 def main() -> None:
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
