@@ -27,6 +27,6 @@ def _gen_number_sequence(params: dict) -> GeneratedQuestion:
         stem_zh=f"找规律：{seq_str}、?",
         answer={"answer": answer}, question_type="calculation",
         difficulty=3, bloom_level="analyze",
-        topic_key="math.patterns.number_sequence", age_group="lower",
+        topic_key="math.patterns.number_sequence", age_group="low",
         solution={"steps": [f"规律：{rule}", f"下一个数 = {answer}"]},
     )

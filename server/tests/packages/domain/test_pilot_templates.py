@@ -24,7 +24,7 @@ class TestChineseTemplates:
         assert len(chinese) >= 3
         gq = generate_question(chinese[0], {})
         assert gq.stem_zh
-        assert gq.age_group in ("early", "lower")
+        assert gq.age_group in ("low", "mid", "high")
 
 
 class TestEnglishTemplates:

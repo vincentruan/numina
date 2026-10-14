@@ -24,7 +24,7 @@ def _gen_radicals(params: dict) -> GeneratedQuestion:
         difficulty=1,
         bloom_level="remember",
         topic_key="chinese.literacy.radicals",
-        age_group="early",
+        age_group="low",
         options=options,
     )
 
@@ -42,5 +42,5 @@ def _gen_stroke_count(params: dict) -> GeneratedQuestion:
         difficulty=1,
         bloom_level="remember",
         topic_key="chinese.literacy.stroke_count",
-        age_group="early",
+        age_group="low",
     )

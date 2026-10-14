@@ -24,7 +24,7 @@ def _gen_plant_parts(params: dict) -> GeneratedQuestion:
         difficulty=1,
         bloom_level="remember",
         topic_key="science.life.plant_parts",
-        age_group="lower",
+        age_group="low",
         options=options,
     )
 
@@ -48,6 +48,6 @@ def _gen_animal_types(params: dict) -> GeneratedQuestion:
         difficulty=1,
         bloom_level="remember",
         topic_key="science.life.animal_types",
-        age_group="lower",
+        age_group="low",
         options=options,
     )

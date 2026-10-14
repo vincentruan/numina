@@ -24,5 +24,5 @@ def _gen_be_verbs(params: dict) -> GeneratedQuestion:
         difficulty=1,
         bloom_level="apply",
         topic_key="english.grammar.be_verbs",
-        age_group="lower",
+        age_group="low",
     )

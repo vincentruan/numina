@@ -19,7 +19,7 @@ def _gen_mean(params: dict) -> GeneratedQuestion:
         stem_zh=f"求平均数：{num_str}",
         answer={"answer": mean}, question_type="calculation",
         difficulty=2, bloom_level="apply",
-        topic_key="math.statistics.mean", age_group="lower",
+        topic_key="math.statistics.mean", age_group="low",
     )
 
 
@@ -38,5 +38,5 @@ def _gen_probability(params: dict) -> GeneratedQuestion:
         stem=question, stem_zh=question,
         answer={"value": answer_text}, question_type="fill_blank",
         difficulty=3, bloom_level="understand",
-        topic_key="math.statistics.probability_basic", age_group="lower",
+        topic_key="math.statistics.probability_basic", age_group="low",
     )

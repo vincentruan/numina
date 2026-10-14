@@ -21,7 +21,7 @@ def _gen_unit_conversion(params: dict) -> GeneratedQuestion:
         stem_zh=f"{val}{from_u} = ?{to_u}",
         answer={"answer": answer}, question_type="calculation",
         difficulty=2, bloom_level="apply",
-        topic_key="math.measurement.unit_conversion", age_group="lower",
+        topic_key="math.measurement.unit_conversion", age_group="low",
     )
 
 
@@ -36,7 +36,7 @@ def _gen_perimeter(params: dict) -> GeneratedQuestion:
         stem_zh=f"长方形长{l}cm，宽{w}cm，求周长。",
         answer={"answer": answer}, question_type="calculation",
         difficulty=2, bloom_level="apply",
-        topic_key="math.measurement.perimeter_rectangle", age_group="lower",
+        topic_key="math.measurement.perimeter_rectangle", age_group="low",
         solution={"steps": [f"周长 = 2×(长+宽) = 2×({l}+{w}) = {answer}"]},
     )
 
@@ -52,5 +52,5 @@ def _gen_area(params: dict) -> GeneratedQuestion:
         stem_zh=f"长方形长{l}cm，宽{w}cm，求面积。",
         answer={"answer": answer}, question_type="calculation",
         difficulty=2, bloom_level="apply",
-        topic_key="math.measurement.area_rectangle", age_group="lower",
+        topic_key="math.measurement.area_rectangle", age_group="low",
     )

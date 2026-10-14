@@ -25,6 +25,6 @@ def _gen_states_of_matter(params: dict) -> GeneratedQuestion:
         difficulty=1,
         bloom_level="remember",
         topic_key="science.matter.states_of_matter",
-        age_group="lower",
+        age_group="low",
         options=options,
     )
