@@ -230,7 +230,24 @@ def select_questions(
 
     candidates = query.all()
 
-    random.shuffle(candidates)
+    # Review mode: prioritize questions the child previously answered wrong.
+    if effective_mode == "review" and candidates:
+        wrong_ids = {
+            row.question_id
+            for row in db.query(PracticeAttempt.question_id)
+            .filter(
+                PracticeAttempt.child_id == child_id,
+                PracticeAttempt.topic_id == topic_id,
+                PracticeAttempt.is_correct == False,  # noqa: E712
+            )
+            .all()
+        }
+        wrong_candidates = [q for q in candidates if q.id in wrong_ids]
+        other_candidates = [q for q in candidates if q.id not in wrong_ids]
+        random.shuffle(wrong_candidates)
+        random.shuffle(other_candidates)
+        candidates = wrong_candidates + other_candidates
+
     return candidates[:count]
 
 
