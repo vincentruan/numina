@@ -80,11 +80,20 @@ def create_session(
     Returns a dict including ``difficulty_warning`` when the topic's
     age group exceeds the child's or prerequisites are unmet.
     """
+    from apps.backend.app.services.learning.topic_service import (
+        locale_to_source_taxonomy,
+    )
     from packages.db.models.learning.topic import LearningTopic
     from packages.db.models.user import User
 
     topic = db.query(LearningTopic).filter(LearningTopic.id == req.topic_id).first()
     if not topic:
+        raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
+
+    # Cross-source guard: ensure the topic belongs to the child's locale taxonomy
+    child = db.query(User).filter(User.id == child_id).first()
+    expected_source = locale_to_source_taxonomy(child.language if child else None)
+    if topic.source_taxonomy != expected_source:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
 
     progress = progress_service.get_or_create_progress(db, child_id, req.topic_id)
@@ -143,6 +152,9 @@ def create_session(
     )
     db.add(session)
     db.flush()
+    # Derive thread_id from session ID (same pattern as AIChatSession)
+    session.thread_id = str(session.id)
+    db.commit()
     db.refresh(session)
 
     return {
@@ -186,6 +198,7 @@ def end_session(
         session.duration_seconds = int(delta.total_seconds())
 
     db.flush()
+    db.commit()
     return session
 
 
@@ -217,10 +230,13 @@ def start_assessment(
     if not progress:
         raise AppError(ErrorCode.LEARNING_PROGRESS_NOT_FOUND)
 
-    # Transition learning -> assessing
-    progress_service.validate_transition(progress.mastery_level, "assessing")
-    progress.mastery_level = "assessing"
+    # Transition learning -> assessing (idempotent: re-entry on retry when
+    # already 'assessing' must not 409 — e.g. stream error + Retry button)
+    if progress.mastery_level != "assessing":
+        progress_service.validate_transition(progress.mastery_level, "assessing")
+        progress.mastery_level = "assessing"
     db.flush()
+    db.commit()
     return progress
 
 

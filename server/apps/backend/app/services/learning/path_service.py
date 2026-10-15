@@ -7,6 +7,7 @@ from collections import deque
 from datetime import UTC, date, datetime
 
 from sqlalchemy import func
+from sqlalchemy import select as sa_select
 from sqlalchemy.orm import Session
 
 from packages.core.logging import get_logger
@@ -142,12 +143,14 @@ def create_path(
     due_date: date | None = None,
 ) -> LearningPath:
     """Create a learning path with auto-sorted items and associated assignments."""
-    # Validate all topic_ids exist before creating any items
-    existing_ids = set(
-        db.query(LearningTopic.id)
-        .filter(LearningTopic.id.in_(topic_ids))
-        .scalars()
+    # Validate all topic_ids exist and share the same source_taxonomy
+    existing = (
+        db.execute(
+            sa_select(LearningTopic.id, LearningTopic.source_taxonomy)
+            .where(LearningTopic.id.in_(topic_ids))
+        ).all()
     )
+    existing_ids = {row[0] for row in existing}
     missing = set(topic_ids) - existing_ids
     if missing:
         from apps.backend.app.errors.codes import ErrorCode
@@ -156,6 +159,15 @@ def create_path(
         raise AppError(
             ErrorCode.LEARNING_TOPIC_NOT_FOUND,
             details={"missing_ids": [str(tid) for tid in missing]},
+        )
+    sources = {row[1] for row in existing}
+    if len(sources) > 1:
+        from apps.backend.app.errors.codes import ErrorCode
+        from apps.backend.app.errors.exceptions import AppError
+
+        raise AppError(
+            ErrorCode.LEARNING_TOPIC_NOT_FOUND,
+            details={"reason": "all topics must belong to the same source_taxonomy"},
         )
 
     # 1. Create the path record

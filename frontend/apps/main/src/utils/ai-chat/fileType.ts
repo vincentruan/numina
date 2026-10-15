@@ -57,67 +57,67 @@ export const EXTENSION_MAP: Record<string, string> = {
   txt: 'text',
 }
 
-// 扩展名 → 图标名称
+// 扩展名 → 图标名称（lucide iconify 格式）
 export const FILE_ICON_MAP: Record<string, string> = {
   // Code
-  js: 'file-code',
-  jsx: 'file-code',
-  ts: 'file-code',
-  tsx: 'file-code',
-  vue: 'file-code',
-  py: 'file-code',
-  go: 'file-code',
-  rs: 'file-code',
-  java: 'file-code',
-  rb: 'file-code',
-  php: 'file-code',
-  c: 'file-code',
-  cpp: 'file-code',
-  h: 'file-code',
-  cs: 'file-code',
-  sh: 'terminal',
-  bash: 'terminal',
-  zsh: 'terminal',
+  js: 'lucide:file-code',
+  jsx: 'lucide:file-code',
+  ts: 'lucide:file-code',
+  tsx: 'lucide:file-code',
+  vue: 'lucide:file-code',
+  py: 'lucide:file-code',
+  go: 'lucide:file-code',
+  rs: 'lucide:file-code',
+  java: 'lucide:file-code',
+  rb: 'lucide:file-code',
+  php: 'lucide:file-code',
+  c: 'lucide:file-code',
+  cpp: 'lucide:file-code',
+  h: 'lucide:file-code',
+  cs: 'lucide:file-code',
+  sh: 'lucide:file-terminal',
+  bash: 'lucide:file-terminal',
+  zsh: 'lucide:file-terminal',
 
   // Web
-  html: 'file-code',
-  css: 'file-code',
-  scss: 'file-code',
-  less: 'file-code',
-  json: 'file-json',
-  yaml: 'file-yaml',
-  yml: 'file-yaml',
-  xml: 'file-code',
+  html: 'lucide:file-code',
+  css: 'lucide:file-code',
+  scss: 'lucide:file-code',
+  less: 'lucide:file-code',
+  json: 'lucide:file-json',
+  yaml: 'lucide:file-code',
+  yml: 'lucide:file-code',
+  xml: 'lucide:file-code',
 
   // Documents
-  md: 'file-markdown',
-  markdown: 'file-markdown',
-  txt: 'file-text',
-  pdf: 'file-pdf',
-  doc: 'file-document',
-  docx: 'file-document',
+  md: 'lucide:file-text',
+  markdown: 'lucide:file-text',
+  txt: 'lucide:file-text',
+  pdf: 'lucide:file-text',
+  doc: 'lucide:file-text',
+  docx: 'lucide:file-text',
 
   // Images
-  png: 'file-image',
-  jpg: 'file-image',
-  jpeg: 'file-image',
-  gif: 'file-image',
-  webp: 'file-image',
-  svg: 'file-image',
-  ico: 'file-image',
+  png: 'lucide:file-image',
+  jpg: 'lucide:file-image',
+  jpeg: 'lucide:file-image',
+  gif: 'lucide:file-image',
+  webp: 'lucide:file-image',
+  svg: 'lucide:file-image',
+  ico: 'lucide:file-image',
 
   // Config
-  toml: 'file-config',
-  ini: 'file-config',
-  env: 'file-config',
-  dockerfile: 'docker',
-  makefile: 'file-config',
+  toml: 'lucide:file-cog',
+  ini: 'lucide:file-cog',
+  env: 'lucide:file-cog',
+  dockerfile: 'lucide:file-cog',
+  makefile: 'lucide:file-cog',
 
   // Skill
-  skill: 'file-skill',
+  skill: 'lucide:file-code',
 
-  // Default
-  default: 'file',
+  // Default (unknown file type)
+  default: 'lucide:file',
 }
 
 /**

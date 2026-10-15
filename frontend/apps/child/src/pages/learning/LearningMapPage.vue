@@ -127,7 +127,7 @@ const recommended = computed(() => {
 })
 
 function onTopicClick(topicId: string) {
-  router.push(`/learning/${topicId}`)
+  router.push(`/learning/topic/${topicId}`)
 }
 
 async function load() {

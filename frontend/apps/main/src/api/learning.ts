@@ -204,9 +204,18 @@ export interface PathCreateRequest {
 
 export interface PathResponse {
   id: string
+  child_id: string
   name: string
   name_zh: string | null
+  description: string | null
+  description_zh: string | null
   status: string
+  per_task_score: number
+  bonus_score: number
+  milestone_scores: { threshold: number; bonus: number }[]
+  due_date: string | null
+  completed_at: string | null
+  next_milestone: { threshold: number; bonus: number; progress: string } | null
   completed_count: number
   total_count: number
   items: {
@@ -216,6 +225,7 @@ export interface PathResponse {
     topic_name_zh: string | null
     status: string
     sort_order: number
+    completed_at: string | null
   }[]
   created_at: string
 }

@@ -202,7 +202,7 @@ def complete_onboarding(
     """Mark onboarding as completed for this child."""
     stats = stats_service.get_or_create_stats(db, child.id, child.family_id)
     stats.onboarding_completed = True
-    db.flush()
+    db.commit()
     return OnboardingCompleteResponse(onboarding_completed=True)
 
 
@@ -466,6 +466,8 @@ async def stream_assessment(
         )
 
     agent_body = {
+        "family_id": str(family_id),
+        "user_id": str(child.id),
         "input": {
             "messages": [{"role": "user", "content": agent_content}],
         },
@@ -517,7 +519,6 @@ async def stream_assessment(
         family_id=family_id,
         run_id=result["run_id"],
         bridge=shared_bridge,
-        thread_id=thread_id,
     )
 
     last_event_id = http_request.headers.get("Last-Event-ID")

@@ -20,6 +20,8 @@ class MCPTokenResponse(SnowflakeBase):
     expires_at: datetime | None
     last_used_at: datetime | None
     is_active: bool
+    revoked_at: datetime | None = None
+    revoked_by: int | None = None  # user id of revoking owner (serialized as str by SnowflakeBase)
     created_at: datetime
 
     @field_validator("allowed_tools", mode="before")

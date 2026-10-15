@@ -245,7 +245,7 @@ def create_ai_config(
     if payload.ai_api_key:
         encrypted = encrypt_api_key(payload.ai_api_key)
         if encrypted is None:
-            raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
+            raise AppError(ErrorCode.AI_ENCRYPTION_KEY_NOT_CONFIGURED)
 
     # Auto-assign display_order if not provided
     if payload.display_order is None:
@@ -362,7 +362,7 @@ def update_ai_config(
         else:
             encrypted = encrypt_api_key(payload.ai_api_key)
             if encrypted is None:
-                raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
+                raise AppError(ErrorCode.AI_ENCRYPTION_KEY_NOT_CONFIGURED)
             cfg.api_key_encrypted = encrypted
         # 清空测试结果（API Key 变更后需重新测试）
         db.query(AIProviderTestResult).filter_by(config_id=cfg.id).delete()
@@ -423,7 +423,7 @@ def reveal_ai_config_key(
     if not cfg:
         raise AppError(ErrorCode.FAMILY_NOT_FOUND)
     if not cfg.api_key_encrypted:
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
+        raise AppError(ErrorCode.AI_ENCRYPTION_KEY_NOT_CONFIGURED)
     decrypted = decrypt_api_key(cfg.api_key_encrypted)
     if not decrypted:
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)

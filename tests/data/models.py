@@ -601,3 +601,215 @@ class ManifestoSignature(Base):
     __table_args__ = (
         UniqueConstraint("version_id", "user_id", name="uq_manifesto_signature_version_user"),
     )
+
+
+# ── Learning models (mirror backend packages/db/models/learning/) ────────────
+
+class LearningTopic(Base):
+    """Learning topic — seeded by server/scripts/seed_learning_topics.py."""
+    __tablename__ = "learning_topics"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    topic_key: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    topic_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    subject: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    domain: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    name_zh: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    description_zh: Mapped[str | None] = mapped_column(Text, nullable=True)
+    age_range_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    age_range_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    centrality: Mapped[float | None] = mapped_column(Float, nullable=True)
+    evidence_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    evidence_zh_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assessment_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assessment_prompt_zh: Mapped[str | None] = mapped_column(Text, nullable=True)
+    standards_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    ability_dimensions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    age_group: Mapped[str] = mapped_column(String(10), nullable=False, default="mid")
+    deprecated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    source_taxonomy: Mapped[str] = mapped_column(String(20), nullable=False, default="os-taxonomy", index=True)
+    curriculum_standards_json: Mapped[str | None] = mapped_column(Text, nullable=True, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("topic_key", "source_taxonomy", name="uq_topic_key_source"),
+    )
+
+
+class LearningProgress(Base):
+    """Per-child per-topic mastery progress."""
+    __tablename__ = "learning_progress"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    child_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
+    topic_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("learning_topics.id"), nullable=False, index=True)
+    mastery_level: Mapped[str] = mapped_column(String(20), nullable=False, default="locked", index=True)
+    mastery_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    completed_via: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    xp_earned: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_practice_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    first_mastered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    stability: Mapped[float | None] = mapped_column(Float, nullable=True, default=1.0)
+    ease_factor: Mapped[float | None] = mapped_column(Float, nullable=True, default=2.5)
+    next_review_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ability_dimensions_score_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("child_id", "topic_id", name="uq_learning_progress_child_topic"),
+    )
+
+
+class LearningSession(Base):
+    """A learning session — child studies a topic."""
+    __tablename__ = "learning_sessions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    assignment_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    child_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
+    topic_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("learning_topics.id"), nullable=False, index=True)
+    thread_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    session_type: Mapped[str] = mapped_column(String(20), nullable=False, default="tutorial")
+    ai_evaluation_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PracticeSession(Base):
+    """Practice session — child answers questions on a topic."""
+    __tablename__ = "practice_sessions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    child_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
+    topic_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("learning_topics.id"), nullable=False, index=True)
+    session_mode: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    question_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    total_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    completed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="adaptive")
+    learning_progress_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+
+class PracticeAttempt(Base):
+    """Single question attempt within a practice session."""
+    __tablename__ = "practice_attempts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    session_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("practice_sessions.id"), nullable=False, index=True)
+    question_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("questions.id"), nullable=False, index=True)
+    child_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
+    topic_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("learning_topics.id"), nullable=False, index=True)
+    user_answer_json: Mapped[str] = mapped_column(Text, nullable=False)
+    is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    time_spent_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("session_id", "question_id", name="uq_attempt_session_question"),
+    )
+
+
+class Question(Base):
+    """Question in the question bank."""
+    __tablename__ = "questions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    topic_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("learning_topics.id"), nullable=False, index=True)
+    question_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    stem: Mapped[str] = mapped_column(Text, nullable=False)
+    stem_zh: Mapped[str | None] = mapped_column(Text, nullable=True)
+    options_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    answer_json: Mapped[str] = mapped_column(Text, nullable=False)
+    solution_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    difficulty: Mapped[int] = mapped_column(Integer, nullable=False, default=1, index=True)
+    bloom_level: Mapped[str] = mapped_column(String(20), nullable=False, default="apply")
+    source: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    source_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    review_status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    age_group: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    parameters_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    times_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    correct_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class ChildLearningStats(Base):
+    """Cumulative learning stats per child."""
+    __tablename__ = "child_learning_stats"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    child_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False, index=True)
+    cumulative_xp: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    learning_streak_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_learning_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    current_zone: Mapped[str] = mapped_column(String(10), nullable=False, default="growth")
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    xp_today: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_xp_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class LearningPath(Base):
+    """A curated learning path for a child."""
+    __tablename__ = "learning_paths"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False, index=True)
+    child_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
+    created_by: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    name_zh: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    description_zh: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    per_task_score: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    bonus_score: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    milestone_scores_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class LearningPathItem(Base):
+    """A topic within a learning path, ordered."""
+    __tablename__ = "learning_path_items"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    path_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("learning_paths.id", ondelete="CASCADE"), nullable=False, index=True)
+    topic_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("learning_topics.id"), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class LearningAssignment(Base):
+    """A learning task assigned to a child."""
+    __tablename__ = "learning_assignments"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False, index=True)
+    child_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
+    topic_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("learning_topics.id"), nullable=False, index=True)
+    path_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_by: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    assignment_type: Mapped[str] = mapped_column(String(20), nullable=False, default="parent_assigned")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -99,6 +99,12 @@ class BeijingLoader:
     def _read_json(self, filename: str) -> dict:
         """Read and parse a JSON file from the data directory."""
         filepath = self._data_dir / filename
+        if not filepath.is_file():
+            raise FileNotFoundError(
+                f"Beijing taxonomy data file not found: {filepath}. "
+                "Run `make setup-beijing-data` to fetch the data, or set "
+                "BEIJING_TAXONOMY_DIR to an existing data directory."
+            )
         with open(filepath, encoding="utf-8") as f:
             return json.load(f)
 

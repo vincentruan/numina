@@ -57,13 +57,19 @@ def _project_root() -> Path:
             env_root,
         )
 
-    # Walk up looking for project markers
-    markers = ("docker-compose.yml", "pyproject.toml")
+    # Walk up looking for project markers.
+    # Two-pass: prefer docker-compose.yml (only at true project root) over
+    # pyproject.toml (exists at both root and server/ sub-workspace).
     cur = Path(__file__).resolve()
+    best_pyproject: Path | None = None
     for _ in range(8):
-        if any((cur / m).exists() for m in markers):
+        if (cur / "docker-compose.yml").exists():
             return cur
+        if best_pyproject is None and (cur / "pyproject.toml").exists():
+            best_pyproject = cur
         cur = cur.parent
+    if best_pyproject is not None:
+        return best_pyproject
 
     # Last-resort: Docker container layout (WORKDIR /app with packages/ inside)
     docker_app = Path("/app")
@@ -76,8 +82,10 @@ def _project_root() -> Path:
         return docker_app
 
     raise RuntimeError(
-        f"Cannot locate project root from {Path(__file__).resolve()} "
-        f"(no {', '.join(markers)} within 8 levels, and /app is not a container root)"
+        "Cannot locate project root from "
+        f"{Path(__file__).resolve()} "
+        "(no docker-compose.yml or pyproject.toml within 8 levels, "
+        "and /app is not a container root)"
     )
 
 

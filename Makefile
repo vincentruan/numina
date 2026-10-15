@@ -76,6 +76,7 @@ DIST_DIR ?= dist
 .PHONY: help help-all help-setup help-dev help-build help-quality help-test help-migrate help-docker help-deploy \
         check install \
         setup setup-keys setup-env setup-env-db setup-data setup-db setup-db-mysql setup-db-postgres setup-invitation-codes \
+        setup-learning-data setup-beijing-data setup-os-taxonomy-data \
         dev-backend dev-agent dev-worker dev-frontend dev-child dev-all stop-dev-all \
         build build-main build-child \
         typecheck lint format \
@@ -210,6 +211,11 @@ _help-setup:
 	@echo "    make setup-invitation-codes   随机生成邀请码 (默认 20 个)"
 	@echo "                                  指定数量: INVITATION_CODE_COUNT=5 make setup-invitation-codes"
 	@echo "                                  指定内容: INVITATION_CODES=A,B,C make setup-invitation-codes"
+	@echo ""
+	@echo "  学习知识图谱数据:"
+	@echo "    make setup-learning-data      下载全部学习知识图谱数据 (os-taxonomy + beijing)"
+	@echo "    make setup-beijing-data       下载 os-taxonomy-beijing 中文知识图谱"
+	@echo "    make setup-os-taxonomy-data   初始化 os-taxonomy 上游知识图谱子模块"
 
 _help-dev:
 	@echo "┌───────────────────────────────────────────────────┐"
@@ -631,7 +637,69 @@ setup-invitation-codes:
 	@echo ""
 	@echo "✓ 邀请码已生成 (新用户注册时需要)"
 
-setup: setup-data setup-env setup-db
+# ── 学习知识图谱数据 ──────────────────────────────────────────
+OS_TAXONOMY_BEIJING_REPO ?= https://github.com/luw2007/os-taxonomy-beijing.git
+OS_TAXONOMY_BEIJING_DIR  := $(SERVER_DIR)/data/os-taxonomy-beijing
+OS_TAXONOMY_SUBMODULE    := .claude/skills/learning-content-translate/references/os-taxonomy
+
+setup-learning-data: setup-beijing-data setup-os-taxonomy-data
+
+setup-beijing-data:
+	@echo "下载 os-taxonomy-beijing 中文知识图谱数据..."
+	@if [ -d "$(OS_TAXONOMY_BEIJING_DIR)/.git" ]; then \
+		echo "  已存在，拉取最新..."; \
+		cd $(OS_TAXONOMY_BEIJING_DIR) && git pull --ff-only; \
+	elif [ -d "$(OS_TAXONOMY_BEIJING_DIR)" ]; then \
+		echo "  目录已存在但不是 git 仓库，删除后重新克隆..."; \
+		rm -rf $(OS_TAXONOMY_BEIJING_DIR); \
+		git clone --depth 1 $(OS_TAXONOMY_BEIJING_REPO) $(OS_TAXONOMY_BEIJING_DIR); \
+	else \
+		mkdir -p $(SERVER_DIR)/data; \
+		git clone --depth 1 $(OS_TAXONOMY_BEIJING_REPO) $(OS_TAXONOMY_BEIJING_DIR); \
+	fi
+	@echo ""
+	@echo "验证数据文件..."
+	@for f in topics.zh.json cn-topics.json dependencies.zh.json cn-dependencies.json cn-bridge-dependencies.json clusters.zh.json cn-curriculum-standards.json; do \
+		if [ -f "$(OS_TAXONOMY_BEIJING_DIR)/data/$$f" ]; then \
+			echo "  ✓ $$f"; \
+		else \
+			echo "  ✗ $$f (缺失)"; \
+		fi; \
+	done
+	@echo ""
+	@echo "✓ os-taxonomy-beijing 数据已就绪"
+	@echo "  使用: cd server && uv run python scripts/seed_learning_topics.py --source beijing"
+	@echo ""
+	@echo "生成 dedup_mapping.json (mt_/mtc_ 重叠去重映射)..."
+	@cd $(SERVER_DIR) && uv run python scripts/generate_dedup_mapping.py
+
+setup-os-taxonomy-data:
+	@echo "初始化 os-taxonomy 上游知识图谱子模块..."
+	@if [ -f "$(OS_TAXONOMY_SUBMODULE)/topics.json" ]; then \
+		echo "  子模块数据已存在"; \
+	else \
+		git submodule update --init -- $(OS_TAXONOMY_SUBMODULE); \
+	fi
+	@echo ""
+	@echo "验证数据文件..."
+	@for f in topics.json dependencies.json clusters.json; do \
+		if [ -f "$(OS_TAXONOMY_SUBMODULE)/data/$$f" ]; then \
+			echo "  ✓ $$f"; \
+		elif [ -f "server/packages/os_taxonomy/$$f" ]; then \
+			echo "  ✓ $$f (已内置于 packages/os_taxonomy/)"; \
+		else \
+			echo "  ✗ $$f (缺失)"; \
+		fi; \
+	done
+	@echo ""
+	@echo "✓ os-taxonomy 数据已就绪"
+	@echo "  使用: cd server && uv run python scripts/seed_learning_topics.py"
+
+seed-questions:
+	@echo "从模板生成题目到题库..."
+	cd server && uv run python -m apps.backend.scripts.seed_questions
+
+setup: setup-data setup-env setup-db setup-learning-data
 	@echo ""
 	@echo "========================================"
 	@echo "       Numina 初始化完成"

@@ -98,9 +98,53 @@
             </div>
           </div>
 
-          <!-- Coming soon placeholder for richer stats -->
-          <div class="coming-soon">
-            <p class="coming-soon__text">{{ t('learning.progress.comingSoon') }}</p>
+          <!-- Weak topics card -->
+          <div v-if="weakTopics.length > 0" class="weak-topics-section">
+            <h2 class="section-title">{{ t('learning.progress.weakTopics') }}</h2>
+            <div class="weak-topics-list">
+              <div
+                v-for="topic in weakTopics"
+                :key="topic.topic_id"
+                class="weak-topic-card"
+                @click="navigateToPractice(topic.topic_id)"
+              >
+                <div class="weak-topic-card__header">
+                  <span class="weak-topic-card__name">{{ getWeakTopicDisplayName(topic) }}</span>
+                  <span class="weak-topic-card__accuracy">{{ Math.round(topic.accuracy * 100) }}%</span>
+                </div>
+                <div class="weak-topic-card__footer">
+                  <span class="weak-topic-card__attempts">
+                    {{ topic.total_attempts }} {{ t('learning.progress.attempts') }}
+                  </span>
+                  <span :class="['weak-topic-card__mastery', `mastery--${topic.mastery_level}`]">
+                    {{ t(`learning.status.${topic.mastery_level}`) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent practice sessions -->
+          <div v-if="recentSessions.length > 0" class="sessions-section">
+            <h2 class="section-title">{{ t('learning.progress.recentSessions') }}</h2>
+            <div class="sessions-list">
+              <div
+                v-for="session in recentSessions"
+                :key="session.id"
+                class="session-card"
+              >
+                <div class="session-card__header">
+                  <span class="session-card__topic">{{ getSessionTopicName(session) }}</span>
+                  <span v-if="session.total_score != null" class="session-card__score">
+                    {{ Math.round(session.total_score * 100) }}%
+                  </span>
+                </div>
+                <div class="session-card__meta">
+                  <span>{{ session.completed_count }}/{{ session.total_count }}</span>
+                  <span>{{ formatDate(session.started_at) }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </template>
       </van-pull-refresh>
@@ -112,10 +156,12 @@
 defineOptions({ name: 'LearningProgress' })
 
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { getMyLearningMap, getMyProgress, getMyLearningStats, getTopicDetail, type ProgressResponse, type TopicResponse, type ChildProgressOverview, type LearningStatsResponse } from '@/api/learning'
+import { getWeakTopics, listPracticeSessions, type WeakTopicResponse, type SessionListItem } from '@/api/practice'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 import XPProgressBar from '@/components/learning/XPProgressBar.vue'
 import LevelBadge from '@/components/learning/LevelBadge.vue'
@@ -132,6 +178,9 @@ const progressList = ref<ProgressResponse[]>([])
 const topicMap = ref<Map<string, TopicResponse>>(new Map())
 const progressOverview = ref<ChildProgressOverview | null>(null)
 const learningStats = ref<LearningStatsResponse | null>(null)
+const weakTopics = ref<WeakTopicResponse[]>([])
+const recentSessions = ref<SessionListItem[]>([])
+const router = useRouter()
 
 // Computed stats
 const masteredCount = computed(() =>
@@ -188,18 +237,34 @@ function formatDate(dateStr: string): string {
   })
 }
 
+function getWeakTopicDisplayName(item: { topic_name: string; topic_name_zh: string | null }): string {
+  return locale.value === 'en-US' ? item.topic_name : (item.topic_name_zh || item.topic_name)
+}
+
+function getSessionTopicName(session: { topic_name: string; topic_name_zh: string | null }): string {
+  return locale.value === 'en-US' ? session.topic_name : (session.topic_name_zh || session.topic_name)
+}
+
+function navigateToPractice(topicId: string) {
+  router.push(`/learning/practice/${topicId}`)
+}
+
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [progress, overview, stats] = await Promise.all([
+    const [progress, overview, stats, weak, sessions] = await Promise.all([
       getMyLearningMap(),
       getMyProgress(),
       getMyLearningStats(),
+      getWeakTopics(10, 3),
+      listPracticeSessions(10),
     ])
     progressList.value = progress
     progressOverview.value = overview
     learningStats.value = stats
+    weakTopics.value = weak
+    recentSessions.value = sessions
 
     // Fetch topic details for display names
     const uniqueTopicIds = [...new Set(progress.map((p) => p.topic_id))]
@@ -448,20 +513,135 @@ onMounted(async () => {
   font-weight: 400;
 }
 
-/* Coming soon */
-.coming-soon {
-  text-align: center;
-  padding: 20px;
-  margin-top: 16px;
-  background: var(--color-surface-soft);
-  border-radius: var(--radius-md);
-  border: 1px dashed var(--color-hairline);
+/* Weak topics section */
+.weak-topics-section {
+  margin-bottom: 24px;
 }
 
-.coming-soon__text {
+.weak-topics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.weak-topic-card {
+  padding: 12px 14px;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.weak-topic-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.weak-topic-card__name {
   font-family: Inter, sans-serif;
   font-size: 14px;
+  font-weight: 500;
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.weak-topic-card__accuracy {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-brand-coral);
+  margin-left: 8px;
+}
+
+.weak-topic-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.weak-topic-card__attempts {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
   color: var(--color-body);
-  margin: 0;
+}
+
+.weak-topic-card__mastery {
+  font-family: Inter, sans-serif;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--color-surface-soft);
+  color: var(--color-body);
+}
+
+.mastery--learning {
+  color: var(--color-primary);
+}
+
+.mastery--assessing {
+  color: var(--color-brand-ochre);
+}
+
+.mastery--mastered {
+  color: var(--color-brand-ochre);
+}
+
+.mastery--review {
+  color: var(--color-brand-coral);
+}
+
+/* Sessions section */
+.sessions-section {
+  margin-bottom: 24px;
+}
+
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-card {
+  padding: 12px 14px;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-md);
+}
+
+.session-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.session-card__topic {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.session-card__score {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-brand-ochre);
+  margin-left: 8px;
+}
+
+.session-card__meta {
+  display: flex;
+  justify-content: space-between;
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  color: var(--color-body);
 }
 </style>

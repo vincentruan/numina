@@ -106,6 +106,7 @@ def get_or_create_stats(db: Session, child_id: int, family_id: int) -> ChildLear
     stats = ChildLearningStats(child_id=child_id, family_id=family_id)
     db.add(stats)
     db.flush()
+    db.commit()
     return stats
 
 
@@ -173,6 +174,7 @@ def award_xp(
     _update_streak_internal(stats)
 
     db.flush()
+    db.commit()
 
     leveled_up = stats.level > old_level
     return {
@@ -218,4 +220,5 @@ def update_streak(db: Session, child_id: int, family_id: int) -> int:
     stats = result.scalar_one()
     _update_streak_internal(stats)
     db.flush()
+    db.commit()
     return stats.learning_streak_days

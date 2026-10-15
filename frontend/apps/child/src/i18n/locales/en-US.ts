@@ -466,6 +466,7 @@ export default {
     status: {
       available: 'Available',
       learning: 'Learning',
+      assessing: 'Assessing',
       mastered: 'Mastered',
       locked: 'Locked',
       review: 'Review',
@@ -507,6 +508,9 @@ export default {
       comingSoon: 'More learning stats coming soon...',
       totalMinutes: 'min (total)',
       todayMinutes: 'min (today)',
+      weakTopics: 'Weak Topics',
+      attempts: 'attempts',
+      recentSessions: 'Recent Sessions',
     },
     todayCard: {
       assignment: 'Submit Assignment',
@@ -527,6 +531,12 @@ export default {
       growth: 'Growth Zone',
       comfort: 'Comfort Zone',
       challenge: 'Challenge Zone',
+      review: 'Review',
+    },
+    ageGroup: {
+      low: 'Beginner',
+      mid: 'Intermediate',
+      high: 'Challenging',
     },
     onboarding: {
       welcomeTitle: 'Hi, {name}!',
@@ -578,6 +588,41 @@ export default {
       ariaLabel: '{name} (AI suggested)',
       aiBadge: 'AI',
     },
+  },
+  practice: {
+    title: 'Practice',
+    startPractice: 'Start Practice',
+    sessionTitle: 'Practice #{id}',
+    mode: {
+      quick: 'Quick Practice',
+      standard: 'Standard Practice',
+      challenge: 'Challenge',
+    },
+    answer: {
+      true: 'True',
+      false: 'False',
+      inputPlaceholder: 'Enter answer',
+      aiGrading: 'AI is grading...',
+    },
+    feedback: {
+      correct: 'Great job!',
+      wrong: 'Not quite — check the solution',
+      solution: 'Solution Steps',
+      next: 'Next',
+      finish: 'See Results',
+    },
+    result: {
+      correctOf: 'Got {correct} / {total} correct',
+      again: 'Try Again',
+      backToMap: 'Back to Map',
+    },
+    errors: {
+      startFailed: 'Could not start practice, please try again',
+      finishFailed: 'Could not finish practice',
+      submitFailed: 'Could not submit answer, please try again',
+    },
+    prereqReview: 'Recommended Prerequisite Review',
+    prereqReason: '{accuracy}% accuracy — review first',
   },
   empty: {
     noTasks: 'No tasks today, enjoy your rest 🌟',

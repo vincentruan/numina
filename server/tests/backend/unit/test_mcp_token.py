@@ -3,15 +3,12 @@
 import hashlib
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.family_mcp_token import FamilyMCPToken
 from apps.backend.app.models.user import User
 from apps.backend.app.services import mcp_token as token_svc
 from apps.backend.app.utils.snowflake import next_id
 from packages.core.roles import UserRole
-
 
 # ── Service-level tests ───────────────────────────────────────────────────────
 
@@ -28,7 +25,7 @@ class TestGenerateToken:
         assert plaintext.startswith("mcp_")
         assert len(plaintext) == 47  # mcp_ (4) + token_urlsafe(32) (43)
         assert row.token_hash == hashlib.sha256(plaintext.encode()).hexdigest()
-        assert row.token_prefix == plaintext[:8]
+        assert row.token_prefix == plaintext[:12]
         assert row.token_last4 == plaintext[-4:]
         assert row.is_active is True
         assert row.allow_external is False
@@ -237,6 +234,52 @@ class TestRevokeToken:
         # Verify also fails
         result = token_svc.verify_token(family.id, plaintext, db)
         assert result is None
+
+    def test_revoke_records_audit_trail(self, db):
+        """revoked_at/revoked_by are set on explicit revocation."""
+        family = Family(id=next_id(), name="T", created_by=next_id())
+        db.add(family)
+        owner_id = next_id()
+        owner = User(
+            id=owner_id,
+            family_id=family.id,
+            username="owner1",
+            display_name="Owner",
+            password_hash="x",
+            role=UserRole.OWNER,
+        )
+        db.add(owner)
+        db.flush()
+
+        plaintext, row = token_svc.generate_token(family.id, db)
+        db.commit()
+        assert row.revoked_at is None
+
+        token_svc.revoke_token(family.id, db, revoked_by=owner_id)
+        db.commit()
+
+        updated = db.get(FamilyMCPToken, row.id)
+        assert updated.is_active is False
+        assert updated.revoked_at is not None
+        assert updated.revoked_by == owner_id
+
+    def test_rotation_records_audit_trail(self, db):
+        """Rotation deactivates the old token with revoked_at/revoked_by set."""
+        family = Family(id=next_id(), name="T", created_by=next_id())
+        db.add(family)
+        owner_id = next_id()
+        db.flush()
+
+        _plain1, row1 = token_svc.generate_token(family.id, db)
+        db.commit()
+
+        _plain2, _row2 = token_svc.generate_token(family.id, db, revoked_by=owner_id)
+        db.commit()
+
+        old = db.get(FamilyMCPToken, row1.id)
+        assert old.is_active is False
+        assert old.revoked_at is not None
+        assert old.revoked_by == owner_id
 
 
 # ── API endpoint tests ────────────────────────────────────────────────────────

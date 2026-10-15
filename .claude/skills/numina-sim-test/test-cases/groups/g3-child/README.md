@@ -12,6 +12,7 @@ from G0).
 | [`area1-child.md`](./area1-child.md) | 1 — Child app (儿童页面优化) | C1.1–C1.17 |
 | [`area5-child-navigation.md`](./area5-child-navigation.md) | 5 — Child nav coverage | C5.1–C5.10 |
 | [`area16-learning-os-taxonomy.md`](./area16-learning-os-taxonomy.md) | 16 — Learning OS taxonomy Beijing + curriculum/edge-status | C16.1–C16.14 |
+| [`area17-learning-os-core.md`](./area17-learning-os-core.md) | 17 — Learning OS core flows (child) | C17.1–C17.21 |
 
 ## State domain
 
@@ -42,11 +43,12 @@ cookie clearing required" for the exact steps.
 
 ## Agent assignment
 
-One agent drives G3 (area1 → area5 → area16), sharing `$SID_CHILD`. area1 and area5 both
+One agent drives G3 (area1 → area5 → area16 → area17), sharing `$SID_CHILD`. area1 and area5 both
 operate the child origin and interleave child chore/wish state — a second child
 agent would race on the same child's coin balance / wish list. area16 runs
-last as it focuses on the learning sub-system (knowledge map, topic detail)
-which is read-heavy and does not mutate chore/wish state.
+after area5 as it focuses on the learning sub-system (knowledge map, topic detail)
+which is read-heavy and does not mutate chore/wish state. area17 continues the
+learning OS coverage with core flows (AI tutor, progress, self-selected learning).
 
 ## Run command sketch
 

@@ -159,27 +159,28 @@ def test_can_start_learning(db, child_user, topic):
 
 
 def test_compute_next_review_first_time():
-    """First review should be ~3 days out (stability=1.0 → 3*1.0=3)."""
+    """First review: stability=1.0 → interval=1 day (enhanced SM-2 branch)."""
     p = LearningProgress(stability=1.0)
     before = datetime.now(UTC)
     dt = compute_next_review(p)
-    # dt is between 3 and 4 days from before (function uses now() >= before)
-    assert timedelta(days=3) <= (dt - before) < timedelta(days=4)
+    # stability <= 1.0 → interval_days = 1
+    assert timedelta(days=1) <= (dt - before) < timedelta(days=2)
 
 
 def test_compute_next_review_high_stability():
-    """Higher stability → longer interval."""
+    """Higher stability → longer interval via ease_factor exponent."""
     p = LearningProgress(stability=3.0)
     before = datetime.now(UTC)
     dt = compute_next_review(p)
-    # dt is between 9 and 10 days from before
-    assert timedelta(days=9) <= (dt - before) < timedelta(days=10)
+    # stability=3.0 → 6 * (2.5 ** (3.0 - 2)) = 6 * 2.5 = 15 days
+    assert timedelta(days=15) <= (dt - before) < timedelta(days=16)
 
 
 def test_update_stability_increases_on_high_score():
+    """score=0.9 → quality=4 → stability 1.0 → 2.0 (enhanced SM-2 step)."""
     p = LearningProgress(stability=1.0)
     new_s = update_stability(p, 0.9)
-    assert new_s == 1.3
+    assert new_s == 2.0  # quality>=3, stability<=1.0 → 2.0
 
 
 def test_update_stability_decreases_on_low_score():
@@ -189,9 +190,10 @@ def test_update_stability_decreases_on_low_score():
 
 
 def test_update_stability_ceiling():
+    """score=0.9 → quality=4 → stability 9.0 → min(9.0*2.5, 30.0) = 22.5."""
     p = LearningProgress(stability=9.0)
     new_s = update_stability(p, 0.9)
-    assert new_s == 10.0  # capped at 10.0
+    assert new_s == 22.5  # 9.0 * ease(2.5), capped at 30.0
 
 
 def test_update_stability_floor():

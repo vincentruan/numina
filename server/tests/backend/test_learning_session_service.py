@@ -28,6 +28,7 @@ def topic(db: Session):
         age_group="mid",
         evidence_json="[]",
         standards_json="[]",
+        source_taxonomy="beijing",
     )
     db.add(t)
     db.flush()

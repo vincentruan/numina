@@ -21,6 +21,7 @@ logger = get_logger(__name__)
 
 _TOKEN_PREFIX = "mcp_"
 _TOKEN_RANDOM_BYTES = 32  # secrets.token_urlsafe(32) → 43 chars
+_PREFIX_LEN = 12  # first 12 chars of token used for DB lookup (matches token_prefix column width)
 _SENTINEL = object()  # distinguishes "not passed" from None in update_access
 
 
@@ -57,7 +58,9 @@ def _get_or_create_synthetic_user(family_id: int, db: Session) -> User:
     return user
 
 
-def generate_token(family_id: int, db: Session) -> tuple[str, FamilyMCPToken]:
+def generate_token(
+    family_id: int, db: Session, *, revoked_by: int | None = None
+) -> tuple[str, FamilyMCPToken]:
     """Generate a new token for *family_id*, rotating any existing active token.
 
     Returns ``(plaintext, token_row)``. Plaintext is available **only** from this call.
@@ -73,7 +76,9 @@ def generate_token(family_id: int, db: Session) -> tuple[str, FamilyMCPToken]:
     )
     if existing is not None:
         existing.is_active = False
-        logger.info("MCP token rotated: family_id=%s", family_id)
+        existing.revoked_at = datetime.now(UTC)
+        existing.revoked_by = revoked_by
+        logger.info("MCP token rotated: family_id=%s revoked_by=%s", family_id, revoked_by)
 
     # Ensure synthetic user exists
     _get_or_create_synthetic_user(family_id, db)
@@ -85,7 +90,7 @@ def generate_token(family_id: int, db: Session) -> tuple[str, FamilyMCPToken]:
         id=next_id(),
         family_id=family_id,
         token_hash=token_hash,
-        token_prefix=plaintext[:8],
+        token_prefix=plaintext[:_PREFIX_LEN],
         token_last4=plaintext[-4:],
         allow_external=False,
         allow_write=False,
@@ -104,7 +109,7 @@ def verify_token(family_id: int, raw_token: str, db: Session) -> FamilyMCPToken 
     Returns the ``FamilyMCPToken`` row on success, ``None`` on any failure.
     Updates ``last_used_at`` on success.
     """
-    prefix = raw_token[:8]
+    prefix = raw_token[:_PREFIX_LEN]
     row = (
         db.query(FamilyMCPToken)
         .filter(
@@ -187,8 +192,8 @@ def update_access(
     return row
 
 
-def revoke_token(family_id: int, db: Session) -> None:
-    """Soft-deactivate the active token. No-op if none exists."""
+def revoke_token(family_id: int, db: Session, *, revoked_by: int | None = None) -> None:
+    """Soft-deactivate the active token with audit trail. No-op if none exists."""
     row = (
         db.query(FamilyMCPToken)
         .filter(FamilyMCPToken.family_id == family_id, FamilyMCPToken.is_active.is_(True))
@@ -196,8 +201,10 @@ def revoke_token(family_id: int, db: Session) -> None:
     )
     if row is not None:
         row.is_active = False
+        row.revoked_at = datetime.now(UTC)
+        row.revoked_by = revoked_by
         db.flush()
-        logger.info("MCP token revoked: family_id=%s", family_id)
+        logger.info("MCP token revoked: family_id=%s revoked_by=%s", family_id, revoked_by)
 
 
 def get_active_token(family_id: int, db: Session) -> FamilyMCPToken | None:
@@ -213,12 +220,12 @@ def verify_token_by_prefix(raw_token: str, db: Session) -> FamilyMCPToken | None
     """Validate *raw_token* without family_id (for POST /messages path).
 
     Returns the ``FamilyMCPToken`` row on success, ``None`` on any failure.
-    Does NOT update ``last_used_at`` (caller should do it if needed).
+    Updates ``last_used_at`` on success (persisted when caller commits).
 
     This function is used by the POST /messages endpoint where family_id is not
     in the URL. The SSE path uses ``verify_token()`` which takes family_id.
     """
-    prefix = raw_token[:8]
+    prefix = raw_token[:_PREFIX_LEN]
     row = (
         db.query(FamilyMCPToken)
         .filter(
@@ -242,5 +249,9 @@ def verify_token_by_prefix(raw_token: str, db: Session) -> FamilyMCPToken | None
 
     if not row.allow_external:
         return None
+
+    # Touch last_used_at so POST /messages usage counts toward visibility
+    row.last_used_at = datetime.now(UTC)
+    db.flush()
 
     return row

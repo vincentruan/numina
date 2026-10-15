@@ -17,6 +17,7 @@ All three files reuse one adult session (`$SID` from G0).
 | [`area12-ai-task-resilience.md`](./area12-ai-task-resilience.md) | 12 — AI task resilience (前端不稳定处理) | C12.1–C12.9 |
 | [`area14-travel.md`](./area14-travel.md) | 14 — Travel module (家庭旅行管理 + 行程规划) | C14.1–C14.33 |
 | [`area15-ui-quality.md`](./area15-ui-quality.md) | 15 — UI quality & design system (H5/PWA/深色模式/无障碍) | UIQ.1–UIQ.10 |
+| [`area18-learning-os-parent.md`](./area18-learning-os-parent.md) | 18 — Learning OS parent management (学习概览/派发/路径/审核) | C18.1–C18.16 |
 
 ## State domain
 
@@ -48,11 +49,12 @@ area2/3/6/7/8 share the adult session and interleave writes to the same AI confi
 chat threads — a second adult agent would race on those.
 
 > **Recommended run order within G1:** area2 (finance) → area14 (travel) →
-> area8 (expanded features) → area3 (AI) → area6 (AI chat parity) →
+> area18 (learning parent) → area8 (expanded features) → area3 (AI) → area6 (AI chat parity) →
 > area12 (task resilience) → area15 (UI quality) → area7 (regression sweep).
 > Area 7 runs last because R6 (auth expiry) destroys the session — run it at the very end.
 > Area 15 (UI quality) runs before regression since it needs a stable session for
-> dark-mode toggling and viewport tests.
+> dark-mode toggling and viewport tests. Area 18 (learning parent) runs after
+> travel since both create per-entity data and are independent of AI config.
 
 ## Run command sketch
 

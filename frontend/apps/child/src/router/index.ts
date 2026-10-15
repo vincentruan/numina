@@ -111,6 +111,12 @@ const router = createRouter({
           meta: { hasSkeleton: true },
         },
         {
+          path: 'learning/practice/:topicId',
+          name: 'PracticeSession',
+          component: () => import('@/pages/learning/PracticeSessionPage.vue'),
+          meta: { hasSkeleton: true },
+        },
+        {
           path: 'learning/path/:id',
           name: 'LearningPath',
           component: () => import('@/pages/learning/LearningPathPage.vue'),

@@ -117,8 +117,44 @@
             </div>
           </van-cell-group>
 
+          <!-- Learning paths section -->
+          <van-cell-group inset class="paths-section">
+            <template #title>
+              <span>{{ t('learning.paths.title') }}</span>
+            </template>
+            <EmptyState v-if="paths.length === 0" :description="t('learning.paths.empty')" />
+            <template v-else>
+              <div
+                v-for="path in paths"
+                :key="path.id"
+                class="path-row"
+                @click="router.push(`/baby/learning/paths/${path.id}`)"
+              >
+                <div class="path-row-main">
+                  <span class="path-row-name">{{ pathDisplayName(path) }}</span>
+                  <span class="path-row-child">{{ pathChildName(path.child_id) }}</span>
+                </div>
+                <div class="path-row-meta">
+                  <van-tag
+                    :type="path.status === 'completed' ? 'success' : path.status === 'archived' ? 'default' : 'primary'"
+                  >
+                    {{ pathStatusLabel(path.status) }}
+                  </van-tag>
+                  <span class="path-row-progress">
+                    {{ t('learning.paths.progress', { completed: path.completed_count, total: path.total_count }) }}
+                  </span>
+                </div>
+              </div>
+            </template>
+          </van-cell-group>
+
           <!-- Navigation to full pages -->
           <van-cell-group inset class="nav-section">
+            <van-cell
+              :title="t('learning.pathsTitle')"
+              is-link
+              @click="router.push('/baby/learning/paths')"
+            />
             <van-cell
               :title="t('learning.allReviews')"
               is-link
@@ -144,13 +180,15 @@ import {
   getReviews,
   approveReview,
   rejectReview,
+  getPaths,
   type ChildLearningOverview,
   type ReviewItem,
+  type PathResponse,
 } from '@/api/learning'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
 
@@ -158,19 +196,39 @@ const loading = ref(true)
 const refreshing = ref(false)
 const children = ref<ChildLearningOverview[]>([])
 const reviews = ref<ReviewItem[]>([])
+const paths = ref<PathResponse[]>([])
 const actioningId = ref<string | null>(null)
+
+function pathDisplayName(path: PathResponse): string {
+  return locale.value.startsWith('zh') && path.name_zh ? path.name_zh : path.name
+}
+
+function pathChildName(childId: string): string {
+  return children.value.find((c) => c.child_id === childId)?.child_name ?? ''
+}
+
+function pathStatusLabel(status: string): string {
+  switch (status) {
+    case 'active': return t('learning.paths.statusActive')
+    case 'completed': return t('learning.paths.statusCompleted')
+    case 'archived': return t('learning.paths.statusArchived')
+    default: return status
+  }
+}
 
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first mount
 let hasActivated = false
 
 async function loadData() {
   try {
-    const [childrenData, reviewsData] = await Promise.all([
+    const [childrenData, reviewsData, pathsData] = await Promise.all([
       getLearningChildren(),
       getReviews(),
+      getPaths(),
     ])
     children.value = childrenData
     reviews.value = reviewsData.slice(0, 5) // Show only first 5 on overview
+    paths.value = pathsData
   } catch {
     showFailToast(t('toast.operationFailed'))
   }
@@ -396,5 +454,53 @@ onActivated(async () => {
 
 .nav-section {
   margin-top: 12px;
+}
+
+.paths-section {
+  margin-top: 12px;
+}
+
+.path-row {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--van-cell-border-color);
+  cursor: pointer;
+}
+
+.path-row:last-child {
+  border-bottom: none;
+}
+
+.path-row:active {
+  background: var(--van-active-color);
+}
+
+.path-row-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.path-row-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.path-row-child {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.path-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.path-row-progress {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 </style>

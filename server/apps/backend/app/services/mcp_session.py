@@ -1030,6 +1030,9 @@ class MCPSession:
                                         exc_info=True,
                                     )
 
+                                # Commit all progress/coin/XP/milestone changes atomically
+                                db.commit()
+
                                 data = {
                                     "ok": True,
                                     "session_id": str(session_id),

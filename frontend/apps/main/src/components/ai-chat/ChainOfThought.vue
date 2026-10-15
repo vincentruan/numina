@@ -111,7 +111,7 @@ function toggleThinking() {
 // 转换消息为 CoT steps
 const steps = computed(() => {
   const allSteps: Array<{
-    type: 'reasoning' | 'toolCall' | 'leadingContent'
+    type: 'reasoning' | 'toolCall' | 'leadingContent' | 'trailingContent'
     id: string
     messageId?: string
     content?: string
@@ -197,6 +197,25 @@ const steps = computed(() => {
           usageMetadata: message.usageMetadata,
         })
       }
+
+      // Trailing answer content: AI message with body content but no tool calls.
+      // During streaming, content-only messages stay in the processing group
+      // (isUnresolvedAssistantText in messageGroups.ts) to prevent visual jumps
+      // if tool calls arrive later. Without this step, the answer text accumulates
+      // invisibly in the message content while the StreamingIndicator ("...") shows.
+      // Capturing it as a trailingContent step renders it progressively.
+      if (toolCalls.length === 0) {
+        const bodyContent = extractContentFromMessage(message)
+        if (bodyContent) {
+          allSteps.push({
+            type: 'trailingContent',
+            id: `trailing-${message.id}`,
+            messageId: message.id,
+            content: bodyContent,
+            status: 'done',
+          })
+        }
+      }
     }
 
     // Tool message (结果)
@@ -224,6 +243,15 @@ const lastToolCallStep = computed(() => {
 // 必须显示在 ChainOfThought 块顶部，不应被"还有 N 步"折叠隐藏。
 const leadingContentSteps = computed(() =>
   steps.value.filter(s => s.type === 'leadingContent')
+)
+
+// trailingContent 步骤：流式期间内容-only AI 消息的正文。
+// During streaming, content-only AI messages stay in the processing group
+// (isUnresolvedAssistantText). Without this computed, the answer text accumulates
+// invisibly while the StreamingIndicator shows "...". Rendering it progressively
+// eliminates the "thinking ends → ... → answer dumps" dead zone.
+const trailingContentSteps = computed(() =>
+  steps.value.filter(s => s.type === 'trailingContent')
 )
 
 // DeerFlow pattern: steps above the last tool call (hidden by default)
@@ -832,8 +860,19 @@ function getFetchDomain(url: string): string {
       </Transition>
     </template>
 
+    <!-- 流式正文内容（trailingContent）：thinking/tool 完成后模型生成的回答文本。
+         在 ChainOfThought 内渐进渲染，消除"思考结束→...→正文一次性出现"的死区。 -->
+    <div
+      v-for="step in trailingContentSteps"
+      :key="step.id"
+      class="trailing-content"
+    >
+      <MarkdownContent :content="step.content || ''" @sandbox-file-click="(fp: string) => emit('artifactSelect', fp)" />
+    </div>
+
     <!-- 步骤已完成但模型仍在生成（消除 tool→text 间的加载指示器空白期） -->
-    <StreamingIndicator :visible="allStepsDone" />
+    <!-- 有 trailingContent 时隐藏：正文已可见，不需要 "..." 动画 -->
+    <StreamingIndicator :visible="allStepsDone && trailingContentSteps.length === 0" />
   </div>
 </template>
 
@@ -858,6 +897,15 @@ function getFetchDomain(url: string): string {
   font-size: 14px;
   line-height: 1.6;
   color: var(--text-secondary);
+  padding: 4px 0;
+}
+
+/* 流式正文（trailingContent）：thinking/tool 后模型渐进生成的回答。
+   正常文本颜色（非次要色），与最终 assistant bubble 视觉一致 */
+.trailing-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
   padding: 4px 0;
 }
 

@@ -488,6 +488,7 @@ def reject_review(
     with contextlib.suppress(Exception):
         notify_learning_rejected(db, user.family_id, child_name, topic_name)
 
+    db.commit()
     return progress
 
 
