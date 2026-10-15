@@ -257,7 +257,7 @@ async function load() {
       getMyLearningMap(),
       getMyProgress(),
       getMyLearningStats(),
-      getWeakTopics(10, 1),
+      getWeakTopics(10, 3),
       listPracticeSessions(10),
     ])
     progressList.value = progress

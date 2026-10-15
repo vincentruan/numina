@@ -138,7 +138,7 @@ def _find_zone_topic(
     """
     filters = [
         LearningTopic.age_group == age_group,
-        LearningTopic.deprecated == False,  # noqa: E712
+        LearningTopic.deprecated.is_(False),
         LearningProgress.mastery_level.in_(["available", "learning", "locked"]),
     ]
     if source_taxonomy:

@@ -117,7 +117,7 @@ const emit = defineEmits<{
   submit: [answer: Record<string, unknown>]
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 // Reset transient UI state when the question changes (IMPORTANT-7 fix)
 watch(
@@ -152,7 +152,9 @@ const isTrueCorrect = computed(() => correctKey.value === 'T')
 const isFalseCorrect = computed(() => correctKey.value !== 'T')
 
 function displayOptionText(opt: QuestionOption): string {
-  return (props.question.stem_zh ? opt.text_zh || opt.text : opt.text)
+  return locale.value.startsWith('zh')
+    ? (opt.text_zh || opt.text)
+    : opt.text
 }
 
 function onSelect(key: string) {

@@ -45,7 +45,7 @@ def _build_topic_key_index(db: Session) -> dict[str, int]:
     """Build topic_key → id mapping for all active LearningTopics."""
     topics = (
         db.query(LearningTopic.id, LearningTopic.topic_key)
-        .filter(LearningTopic.deprecated == False)  # noqa: E712
+        .filter(LearningTopic.deprecated.is_(False))
         .all()
     )
     return {tk: tid for tid, tk in topics}

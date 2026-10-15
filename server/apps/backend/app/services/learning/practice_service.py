@@ -46,7 +46,6 @@ def create_session(
         topic_id,
         len(question_ids),
     )
-    db.commit()
     return session
 
 
@@ -145,7 +144,6 @@ def submit_answer(
 
     try:
         db.flush()
-        db.commit()
     except IntegrityError:
         db.rollback()
         raise AppError(ErrorCode.PRACTICE_DUPLICATE_ATTEMPT) from None
@@ -191,7 +189,6 @@ def finish_session(
         correct,
         total,
     )
-    db.commit()
 
     return {
         "session_id": session_id,

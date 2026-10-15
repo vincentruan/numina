@@ -74,7 +74,6 @@ def get_or_create_progress(db: Session, child_id: int, topic_id: int) -> Learnin
     )
     db.add(progress)
     db.flush()
-    db.commit()
     return progress
 
 
@@ -89,7 +88,6 @@ def transition_to_learning(db: Session, progress: LearningProgress) -> LearningP
     progress.mastery_level = "learning"
     progress.last_practice_at = datetime.now(UTC)
     db.flush()
-    db.commit()
     return progress
 
 
@@ -197,7 +195,6 @@ def transition_to_mastered(
     progress.stability = update_stability(progress, score)
     progress.next_review_at = compute_next_review(progress)
     db.flush()
-    db.commit()
     return progress
 
 
@@ -219,7 +216,6 @@ def recheck_prerequisites(
     if _all_hard_prereqs_met(db, child_id, topic_id):
         progress.mastery_level = "available"
         db.flush()
-        db.commit()
     return progress
 
 
@@ -458,7 +454,6 @@ def resolve_streak_reminder_on_pass(
     )
     if updated:
         db.flush()
-        db.commit()
     return updated
 
 
@@ -502,7 +497,6 @@ def record_failed_assessment(
     )
     db.add(attempt)
     db.flush()
-    db.commit()
 
     return check_and_notify_streak(db, child_id, topic_id)
 
@@ -582,7 +576,7 @@ def find_age_appropriate_topic(
         .filter(
             LearningTopic.subject == subject,
             LearningTopic.age_group == child_age_group,
-            LearningTopic.deprecated == False,  # noqa: E712
+            LearningTopic.deprecated.is_(False),
             LearningProgress.mastery_level.in_(["available", "learning"]),
         )
     )
@@ -597,7 +591,7 @@ def find_age_appropriate_topic(
         fallback_q = db.query(LearningTopic).filter(
             LearningTopic.subject == subject,
             LearningTopic.age_group == child_age_group,
-            LearningTopic.deprecated == False,  # noqa: E712
+            LearningTopic.deprecated.is_(False),
         )
         if source_taxonomy:
             fallback_q = fallback_q.filter(

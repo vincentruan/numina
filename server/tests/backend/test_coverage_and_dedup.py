@@ -43,16 +43,20 @@ def topics_for_coverage(db: Session):
 def _make_question(db: Session, topic_id: int, stem: str, difficulty: int = 1) -> Question:
     """Helper to create a question directly."""
     import json
+    from apps.backend.app.services.learning.question_seeder import _compute_content_hash
+
+    answer = {"answer": 42}
     q = Question(
         topic_id=topic_id,
         question_type="calculation",
         stem=stem,
-        answer_json=json.dumps({"answer": 42}),
+        answer_json=json.dumps(answer),
         difficulty=difficulty,
         bloom_level="apply",
         source="template",
         review_status="approved",
         age_group="mid",
+        content_hash=_compute_content_hash(stem, answer),
     )
     db.add(q)
     db.flush()

@@ -70,6 +70,73 @@ def get_prerequisite_value(db: Session, topic_id: int) -> float:
     return dependent_count / max_dependents
 
 
+def _batch_compute_existence(
+    db: Session, topic_ids: list[int], family_id: int | None = None
+) -> dict[int, int]:
+    """Batch-load approved question counts per topic in a single GROUP BY query.
+
+    Returns {topic_id: approved_count}.
+    """
+    q_filter = [
+        Question.review_status == "approved",
+        Question.topic_id.in_(topic_ids),
+    ]
+    if family_id is not None:
+        q_filter.append(
+            (Question.family_id == family_id) | Question.family_id.is_(None)
+        )
+
+    rows = (
+        db.query(Question.topic_id, func.count(Question.id))
+        .filter(*q_filter)
+        .group_by(Question.topic_id)
+        .all()
+    )
+    return {topic_id: count for topic_id, count in rows}
+
+
+def _batch_prerequisite_values(
+    db: Session, topic_ids: list[int]
+) -> dict[int, float]:
+    """Batch-compute prerequisite values for a set of topics in the same subject.
+
+    Returns {topic_id: prerequisite_value} using at most 3 queries total
+    instead of O(N) per-topic queries.
+    """
+    if not topic_ids:
+        return {}
+
+    # Get subjects for all topics
+    topics = (
+        db.query(LearningTopic.id, LearningTopic.subject)
+        .filter(LearningTopic.id.in_(topic_ids))
+        .all()
+    )
+    subjects = {t.subject for t in topics if t.subject}
+
+    # Per subject: single GROUP BY for dependent counts
+    result: dict[int, float] = {}
+    for subject in subjects:
+        subject_topic_ids = [t.id for t in topics if t.subject == subject]
+
+        dep_counts = dict(
+            db.query(
+                LearningDependency.prerequisite_id,
+                func.count(LearningDependency.id),
+            )
+            .filter(LearningDependency.prerequisite_id.in_(subject_topic_ids))
+            .group_by(LearningDependency.prerequisite_id)
+            .all()
+        )
+
+        max_dependents = max(dep_counts.values()) if dep_counts else 0
+        for tid in subject_topic_ids:
+            count = dep_counts.get(tid, 0)
+            result[tid] = count / max_dependents if max_dependents > 0 else 0.0
+
+    return result
+
+
 def compute_topic_coverage(
     db: Session, topic_id: int, family_id: int | None = None
 ) -> dict:
@@ -80,7 +147,6 @@ def compute_topic_coverage(
 
     When family_id is provided, scopes Question queries to that family only.
     """
-    # Existence: does this topic have ≥1 approved question?
     q_filter = [
         Question.topic_id == topic_id,
         Question.review_status == "approved",
@@ -92,7 +158,6 @@ def compute_topic_coverage(
 
     prereq_value = get_prerequisite_value(db, topic_id)
 
-    # P7a-min: score = existence (the only meaningful dimension at 0.56% coverage)
     coverage_score = existence
 
     return {
@@ -113,6 +178,7 @@ def compute_subject_coverage(
     - subject, total_topics, covered_topics, coverage_rate, avg_prerequisite_value
 
     When family_id is provided, scopes Question queries to that family only.
+    Uses batch queries to avoid N+1 pattern.
     """
     topics = (
         db.query(LearningTopic)
@@ -132,19 +198,16 @@ def compute_subject_coverage(
             "avg_prerequisite_value": 0.0,
         }
 
-    covered = 0
-    total_prereq = 0.0
-    for t in topics:
-        q_filter = [
-            Question.topic_id == t.id,
-            Question.review_status == "approved",
-        ]
-        if family_id is not None:
-            q_filter.append(Question.family_id == family_id)
-        approved = db.query(Question).filter(*q_filter).count()
-        if approved > 0:
-            covered += 1
-        total_prereq += get_prerequisite_value(db, t.id)
+    topic_ids = [t.id for t in topics]
+
+    # Batch: single GROUP BY for approved question counts
+    existence_map = _batch_compute_existence(db, topic_ids, family_id)
+
+    # Batch: prerequisite values in at most 3 queries
+    prereq_map = _batch_prerequisite_values(db, topic_ids)
+
+    covered = sum(1 for tid in topic_ids if existence_map.get(tid, 0) > 0)
+    total_prereq = sum(prereq_map.get(tid, 0.0) for tid in topic_ids)
 
     return {
         "subject": subject,
@@ -164,8 +227,7 @@ def get_gap_report(
 ) -> list[dict]:
     """Get topics below coverage threshold, sorted by prerequisite value (descending).
 
-    Returns list of dicts with topic info and coverage details.
-    When family_id is provided, scopes Question queries to that family only.
+    Uses batch queries to avoid N+1 pattern.
     """
     query = db.query(LearningTopic).filter(
         LearningTopic.deprecated.is_(False),
@@ -174,11 +236,20 @@ def get_gap_report(
         query = query.filter(LearningTopic.subject == subject)
 
     topics = query.all()
-    gaps = []
+    if not topics:
+        return []
 
+    topic_ids = [t.id for t in topics]
+
+    # Batch: existence + prerequisite values
+    existence_map = _batch_compute_existence(db, topic_ids, family_id)
+    prereq_map = _batch_prerequisite_values(db, topic_ids)
+
+    gaps = []
     for topic in topics:
-        cov = compute_topic_coverage(db, topic.id, family_id=family_id)
-        if cov["coverage_score"] < threshold:
+        approved_count = existence_map.get(topic.id, 0)
+        existence = 1.0 if approved_count > 0 else 0.0
+        if existence < threshold:
             gaps.append(
                 {
                     "topic_id": topic.id,
@@ -186,8 +257,8 @@ def get_gap_report(
                     "name": topic.name,
                     "subject": topic.subject,
                     "domain": topic.domain,
-                    "coverage_score": cov["coverage_score"],
-                    "prerequisite_value": cov["prerequisite_value"],
+                    "coverage_score": existence,
+                    "prerequisite_value": prereq_map.get(topic.id, 0.0),
                 }
             )
 

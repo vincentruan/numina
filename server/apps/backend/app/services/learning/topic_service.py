@@ -162,7 +162,7 @@ def list_subjects(
             LearningTopic.subject,
             sa_func.count(LearningTopic.id).label("topic_count"),
         )
-        .filter(LearningTopic.deprecated == False)  # noqa: E712
+        .filter(LearningTopic.deprecated.is_(False))
     )
     if source_taxonomy:
         q = q.filter(LearningTopic.source_taxonomy == source_taxonomy)

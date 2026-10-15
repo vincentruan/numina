@@ -181,27 +181,18 @@ def review_question(db: Session, question_id: int, decision: str) -> Question:
 def check_duplicate(db: Session, stem: str, answer: dict, topic_id: int | None = None) -> bool:
     """Check if a question with same stem+answer already exists.
 
-    Uses content hashing (SHA256 of stem + sorted answer JSON).
-    Canonicalizes both sides with sort_keys=True for consistent comparison.
-    Optionally scoped to a topic_id to avoid full table scan.
+    Uses the indexed content_hash column for O(1) lookup instead of
+    loading all questions to compute hashes in Python.
     """
-    import hashlib
+    from apps.backend.app.services.learning.question_seeder import _compute_content_hash
 
-    def _hash(s: str, a: dict) -> str:
-        raw = f"{s}||{json.dumps(a, sort_keys=True, ensure_ascii=False)}"
-        return hashlib.sha256(raw.encode()).hexdigest()[:32]
+    target_hash = _compute_content_hash(stem, answer)
 
-    target_hash = _hash(stem, answer)
-
-    query = db.query(Question.stem, Question.answer_json)
+    query = db.query(Question).filter(Question.content_hash == target_hash)
     if topic_id is not None:
         query = query.filter(Question.topic_id == topic_id)
 
-    for q in query.all():
-        existing_answer = json.loads(q.answer_json)
-        if _hash(q.stem, existing_answer) == target_hash:
-            return True
-    return False
+    return query.first() is not None
 
 
 def get_coverage_stats(db: Session) -> dict:
@@ -234,7 +225,7 @@ def get_coverage_stats(db: Session) -> dict:
             LearningTopic.subject,
             sa_func.count(LearningTopic.id).label("total"),
         )
-        .filter(LearningTopic.deprecated == False)  # noqa: E712
+        .filter(LearningTopic.deprecated.is_(False))
         .group_by(LearningTopic.subject)
         .all()
     )
@@ -244,7 +235,7 @@ def get_coverage_stats(db: Session) -> dict:
         db.query(LearningTopic.subject, sa_func.count(sa_func.distinct(Question.topic_id)).label("covered"))
         .join(Question, Question.topic_id == LearningTopic.id)
         .filter(
-            LearningTopic.deprecated == False,  # noqa: E712
+            LearningTopic.deprecated.is_(False),
             Question.review_status == "approved",
         )
         .group_by(LearningTopic.subject)

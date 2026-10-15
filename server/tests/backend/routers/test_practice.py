@@ -52,7 +52,7 @@ def test_create_session_endpoint(client, auth_headers, topic, questions):
         json={"topic_id": topic.id, "session_mode": "practice", "count": 3},
         headers=auth_headers,
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 201
     data = resp.json()["data"]
     assert data["session_mode"] == "practice"
     assert len(data["question_ids"]) == 3

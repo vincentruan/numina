@@ -107,17 +107,22 @@ def batch_get_questions(
     Returns questions with answers ONLY if the user has an active (non-ended)
     session containing those question IDs. Otherwise returns public view (no answers).
     """
+    try:
+        question_ids_int = [int(qid) for qid in req.question_ids]
+    except (ValueError, TypeError):
+        raise AppError(ErrorCode.VALIDATION_ERROR, details="Invalid question ID format")
+
     questions = (
         db.query(QuestionModel)
         .filter(
-            QuestionModel.id.in_([int(qid) for qid in req.question_ids]),  # P2-5: convert str→int
+            QuestionModel.id.in_(question_ids_int),
             QuestionModel.review_status == "approved",
         )
         .all()
     )
 
     # Check if user has an active session containing these question IDs
-    requested_ids = {int(qid) for qid in req.question_ids}
+    requested_ids = set(question_ids_int)
     has_session_context = False
 
     active_sessions = (
@@ -142,7 +147,7 @@ def batch_get_questions(
         return [QuestionPublicResponse.model_validate(q) for q in questions]
 
 
-@router.post("/sessions", response_model=PracticeSessionResponse)
+@router.post("/sessions", response_model=PracticeSessionResponse, status_code=201)
 def create_practice_session(
     req: SessionCreateRequest,
     db: Session = Depends(get_db),
@@ -184,6 +189,7 @@ def create_practice_session(
         session_mode=req.session_mode,
         question_ids=[q.id for q in questions],
     )
+    db.commit()
     return session
 
 
@@ -211,6 +217,7 @@ def submit_practice_answer(
         time_spent_seconds=req.time_spent_seconds,
         _session=session,
     )
+    db.commit()
     return attempt
 
 
@@ -220,15 +227,21 @@ def finish_practice_session(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
 ):
-    """Finish a practice session and calculate final score."""
+    """Finish a practice session and calculate final score.
+
+    All side effects (session end, progress update, XP/coin award) are
+    committed atomically. If any step fails, the entire operation rolls back
+    so the session remains retryable.
+    """
     # Verify ownership first
     session = get_session(db, session_id)
     if not session or session.child_id != user.id:
         raise AppError(ErrorCode.PRACTICE_SESSION_NOT_FOUND)
 
+    # Calculate score (flush only — no commit yet)
     result = finish_session(db=db, session_id=session_id, child_id=user.id)
 
-    # Try to update progress state machine
+    # Update progress state machine
     mastery_changed = False
     new_mastery_level = None
     try:
@@ -243,8 +256,15 @@ def finish_practice_session(
         new_mastery_level = progress_result["new_mastery_level"]
     except Exception:
         logger.warning(
-            "Progress integration failed for session %s", session_id, exc_info=True
+            "Progress integration failed for session %s — rolling back",
+            session_id,
+            exc_info=True,
         )
+        db.rollback()
+        raise AppError(
+            ErrorCode.PRACTICE_SESSION_NOT_FOUND,
+            details="Failed to finalize session",
+        ) from None
 
     # Award XP and coins if mastery changed
     xp_earned = 0
@@ -276,10 +296,12 @@ def finish_practice_session(
                 narrative_emoji="🌟",
             )
             db.add(txn)
-            db.flush()
             coins_earned = 10
         except Exception:
             logger.warning("Coin award failed for session %s", session_id, exc_info=True)
+
+    # Single commit: all-or-nothing for session end + progress + rewards
+    db.commit()
 
     return PracticeResultResponse(
         session_id=session_id,
@@ -428,7 +450,7 @@ def get_coverage_summary(
         db.query(LearningTopic.subject)
         .filter(
             LearningTopic.subject.isnot(None),
-            LearningTopic.deprecated == False,  # noqa: E712
+            LearningTopic.deprecated.is_(False),
         )
         .distinct()
         .all()
@@ -595,8 +617,11 @@ def batch_review_questions(
     """Batch approve, reject, or suspend questions. Family-scoped."""
     new_status = {"approve": "approved", "reject": "rejected", "suspend": "suspended"}[body.decision]
 
-    # P2-5 fix: convert string IDs to int for DB query
-    question_ids_int = [int(qid) for qid in body.question_ids]
+    # Validate and convert string IDs to int for DB query
+    try:
+        question_ids_int = [int(qid) for qid in body.question_ids]
+    except (ValueError, TypeError):
+        raise AppError(ErrorCode.VALIDATION_ERROR, details="Invalid question ID format")
 
     # Single bulk UPDATE — avoids N+1 SELECT loop.
     filter_ = [
