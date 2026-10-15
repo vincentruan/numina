@@ -169,6 +169,34 @@ class TestBayesianKnowledgeTracingEstimator:
         # Should fallback to RuleBased
         assert abs(bkt_score - rb_score) < 0.001
 
+    def test_exactly_4_attempts_fallback(self, db: Session, bkt_setup):
+        """Exactly 4 attempts → still fallback to RuleBased (boundary, TF-004)."""
+        est = BayesianKnowledgeTracingEstimator()
+
+        for i in range(4):
+            _add_attempt(db, bkt_setup, is_correct=(i % 2 == 0))
+
+        bkt_score = est.estimate(db, child_id=bkt_setup["user"].id, topic_id=bkt_setup["topic"].id)
+        rb_score = RuleBasedMasteryEstimator().estimate(
+            db, child_id=bkt_setup["user"].id, topic_id=bkt_setup["topic"].id
+        )
+        assert abs(bkt_score - rb_score) < 0.001
+
+    def test_exactly_5_attempts_uses_bkt(self, db: Session, bkt_setup):
+        """Exactly 5 attempts → BKT forward algorithm (boundary, TF-004)."""
+        est = BayesianKnowledgeTracingEstimator()
+
+        for i in range(5):
+            _add_attempt(db, bkt_setup, is_correct=(i % 2 == 0))
+
+        bkt_score = est.estimate(db, child_id=bkt_setup["user"].id, topic_id=bkt_setup["topic"].id)
+        rb_score = RuleBasedMasteryEstimator().estimate(
+            db, child_id=bkt_setup["user"].id, topic_id=bkt_setup["topic"].id
+        )
+        # With alternating answers BKT (optimistic, knowledge only grows)
+        # diverges from RuleBased — a distinct score proves BKT is active.
+        assert abs(bkt_score - rb_score) > 0.001
+
     def test_default_params(self):
         """BKT default parameters match standard values."""
         est = BayesianKnowledgeTracingEstimator()

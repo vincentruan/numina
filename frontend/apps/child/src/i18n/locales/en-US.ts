@@ -592,6 +592,7 @@ export default {
   practice: {
     title: 'Practice',
     startPractice: 'Start Practice',
+    sessionTitle: 'Practice #{id}',
     mode: {
       quick: 'Quick Practice',
       standard: 'Standard Practice',

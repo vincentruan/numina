@@ -26,6 +26,9 @@ def check_answer(
     if question_type == "calculation":
         correct_val = correct_answer.get("answer")
         user_val = user_answer.get("answer")
+        if isinstance(correct_val, bool) or isinstance(user_val, bool):
+            # bool is an int subclass — compare strictly, don't coerce to float
+            return user_val == correct_val
         if isinstance(correct_val, (int, float)) and isinstance(user_val, (int, float)):
             return _float_eq(float(correct_val), float(user_val))
         return user_val == correct_val
@@ -45,7 +48,10 @@ def check_answer(
 
     if question_type == "application":
         # Accept both "answer" and "value" keys for frontend compatibility
-        user_val = user_answer.get("answer") or user_answer.get("value")
+        # Use explicit None check — `or` would treat 0/False/"" as falsy
+        user_val = user_answer.get("answer")
+        if user_val is None:
+            user_val = user_answer.get("value")
         acceptable = correct_answer.get("acceptable", [])
         return user_val in acceptable
 

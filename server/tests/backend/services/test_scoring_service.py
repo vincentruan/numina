@@ -13,6 +13,21 @@ def test_check_calculation_wrong():
     assert check_answer("calculation", {"answer": 95}, {"answer": 96}) is False
 
 
+def test_check_calculation_float_tolerance_within():
+    """0.1 + 0.2 vs 0.3 must pass through float tolerance (TF-003)."""
+    assert check_answer("calculation", {"answer": 0.3}, {"answer": 0.1 + 0.2}) is True
+
+
+def test_check_calculation_float_tolerance_outside():
+    """Values beyond tolerance must fail."""
+    assert check_answer("calculation", {"answer": 0.3}, {"answer": 0.301}) is False
+
+
+def test_check_calculation_float_pi_consistency():
+    """π=3.14 template answers: 2 * 3.14 * 7 = 43.96, tiny rounding accepted."""
+    assert check_answer("calculation", {"answer": 43.96}, {"answer": 43.9600001}) is True
+
+
 def test_check_multiple_choice_correct():
     assert check_answer("multiple_choice", {"key": "B"}, {"key": "B"}) is True
 

@@ -92,7 +92,9 @@ def review_question_endpoint(
     questions start as 'pending' and require human review before entering
     the child-facing question bank.
     """
-    question = review_question(db, question_id=question_id, decision=req.decision)
+    question = review_question(
+        db, question_id=question_id, decision=req.decision, family_id=_user.family_id
+    )
     return QuestionPublicResponse.model_validate(question)
 
 
@@ -229,9 +231,9 @@ def finish_practice_session(
 ):
     """Finish a practice session and calculate final score.
 
-    All side effects (session end, progress update, XP/coin award) are
-    committed atomically. If any step fails, the entire operation rolls back
-    so the session remains retryable.
+    Session end + progress update are committed atomically (rollback on failure).
+    XP/coin awards are best-effort: if they fail, the session still completes
+    and the child can retry without double-award risk.
     """
     # Verify ownership first
     session = get_session(db, session_id)
@@ -588,9 +590,15 @@ def get_review_queue(
             else_=3,
         ).asc()
     ).limit(limit).all()
+    # Batch-load topics to avoid N+1 query
+    topic_ids = {q.topic_id for q in questions if q.topic_id}
+    topics_by_id: dict[int, LearningTopic] = {}
+    if topic_ids:
+        for t in db.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all():
+            topics_by_id[t.id] = t
     items = []
     for q in questions:
-        topic = db.get(LearningTopic, q.topic_id) if q.topic_id else None
+        topic = topics_by_id.get(q.topic_id) if q.topic_id else None
         items.append({
             "question_id": str(q.id),  # P1-2: Snowflake ID as string
             "topic_key": topic.topic_key if topic else None,
@@ -667,10 +675,19 @@ def get_grading_explanation(
     if not q.grading_explanation_json:
         raise AppError(ErrorCode.NOT_FOUND, details="No grading explanation available")
     explanation = q.grading_explanation
-    # Apply content safety filter to reasoning text (LLM-generated content)
-    if explanation and "reasoning" in explanation:
+    # Apply content safety filter to ALL text fields recursively (LLM-generated content)
+    if explanation:
         from apps.backend.app.services.learning.content_safety_filter import filter_tutor_output  # noqa: I001
-        filtered = filter_tutor_output(explanation["reasoning"], child_id=user.id)
-        if not filtered.safe:
-            explanation = {**explanation, "reasoning": "[内容已被过滤]"}
+
+        def _filter_recursive(obj: object, child_id: int) -> object:
+            if isinstance(obj, str):
+                filtered = filter_tutor_output(obj, child_id=child_id)
+                return obj if filtered.safe else "[内容已被过滤]"
+            if isinstance(obj, dict):
+                return {k: _filter_recursive(v, child_id) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_filter_recursive(item, child_id) for item in obj]
+            return obj
+
+        explanation = _filter_recursive(explanation, child_id=user.id)
     return explanation

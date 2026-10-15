@@ -1,6 +1,7 @@
 """Question CRUD and quality gate service."""
 
 import json
+import re
 
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,9 @@ from apps.backend.app.errors import AppError, ErrorCode
 from packages.core.logging import get_logger
 from packages.db.models.learning.question import Question, QuestionKnowledgePoint
 from packages.db.models.learning.topic import LearningTopic
+
+# Strip HTML tags from question content (defense-in-depth for children's app)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 logger = get_logger(__name__)
 
@@ -91,8 +95,8 @@ def create_question(
     question = Question(
         topic_id=topic_id,
         question_type=question_type,
-        stem=stem,
-        stem_zh=stem_zh,
+        stem=_HTML_TAG_RE.sub("", stem),
+        stem_zh=_HTML_TAG_RE.sub("", stem_zh) if stem_zh else None,
         options_json=json.dumps(options) if options else None,
         answer_json=json.dumps(answer),
         solution_json=json.dumps(solution) if solution else None,
@@ -150,17 +154,37 @@ def get_question(db: Session, question_id: int) -> Question | None:
     return db.query(Question).filter_by(id=question_id).first()
 
 
-def review_question(db: Session, question_id: int, decision: str) -> Question:
+def review_question(
+    db: Session, question_id: int, decision: str, family_id: int | None = None
+) -> Question:
     """Approve or reject a pending question (human review for non-template sources).
 
     Only 'pending' questions can be reviewed — approved questions cannot be
     silently reverted, and rejected questions stay rejected.
 
+    Args:
+        family_id: If provided, scope the query to questions owned by this family
+            or template questions (family_id IS NULL). Prevents cross-family IDOR.
+
     Raises:
-        AppError(PRACTICE_QUESTION_NOT_FOUND): if question doesn't exist.
+        AppError(PRACTICE_QUESTION_NOT_FOUND): if question doesn't exist or is
+            not accessible to the given family.
         AppError(PRACTICE_QUESTION_INVALID): if question is not pending.
     """
-    question = db.query(Question).filter_by(id=question_id).first()
+    if decision not in ("approved", "rejected", "suspended"):
+        raise AppError(
+            ErrorCode.PRACTICE_QUESTION_INVALID,
+            details=f"Invalid review decision '{decision}'; must be 'approved', 'rejected', or 'suspended'",
+        )
+
+    query = db.query(Question).filter(Question.id == question_id)
+    if family_id is not None:
+        from sqlalchemy import or_
+
+        query = query.filter(
+            or_(Question.family_id == family_id, Question.family_id.is_(None))
+        )
+    question = query.first()
     if not question:
         raise AppError(ErrorCode.PRACTICE_QUESTION_NOT_FOUND)
     if question.review_status != "pending":

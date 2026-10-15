@@ -598,21 +598,22 @@ function handleTitleUpdated(threadId: string, newTitle: string) {
 }
 
 async function handleStartChat(payload: SubmitPayload, source?: string) {
+  // C1 fix: block sending while AITask preflight reports a background task running.
+  // Without this guard the user can fire a new SSE run concurrently with the
+  // in-flight task, risking competing runs on the same session.
+  // Check BEFORE clearing stale state so the guard is meaningful.
+  if (chatTaskStatus.value === 'running') {
+    showToast({ message: t('aiChat.chatTaskRunning'), icon: 'warning-o' })
+    return
+  }
   // Clear stale task state from a previous (possibly failed) run so the
-  // 'running' guard below does not permanently block new chats after an
+  // 'running' guard above does not permanently block new chats after an
   // SSE error leaves chatTaskStatus stuck at 'running'.
   stopChatTaskPolling()
   chatTaskStatus.value = 'idle'
   chatTaskError.value = null
   chat.isLoading.value = false
   errorBarMessage.value = null
-  // C1 fix: block sending while AITask preflight reports a background task running.
-  // Without this guard the user can fire a new SSE run concurrently with the
-  // in-flight task, risking competing runs on the same session.
-  if (chatTaskStatus.value === 'running') {
-    showToast({ message: t('aiChat.chatTaskRunning'), icon: 'warning-o' })
-    return
-  }
   try {
     const thread = await createThread(source)
     // Mark this thread so the activeThreadId watcher skips loadHistory for it
@@ -749,6 +750,15 @@ function handleStop() {
 }
 
 async function handleRetry() {
+  // Guard: do not retry while a background AITask is running — the agent is
+  // still producing output and a retry would create a competing SSE run on
+  // the same thread, causing duplicate messages and title-generation failures
+  // (the title middleware requires exactly 1 user message at the head).
+  // Check BEFORE clearing stale state so the guard is meaningful.
+  if (chatTaskStatus.value === 'running') {
+    showToast({ message: t('aiChat.chatTaskRunning'), icon: 'warning-o' })
+    return
+  }
   // Clear stale task state so the 'running' guard does not permanently block
   // retries after an SSE error leaves chatTaskStatus stuck at 'running'.
   stopChatTaskPolling()
@@ -756,14 +766,6 @@ async function handleRetry() {
   chatTaskError.value = null
   chat.isLoading.value = false
   errorBarMessage.value = null
-  // Guard: do not retry while a background AITask is running — the agent is
-  // still producing output and a retry would create a competing SSE run on
-  // the same thread, causing duplicate messages and title-generation failures
-  // (the title middleware requires exactly 1 user message at the head).
-  if (chatTaskStatus.value === 'running') {
-    showToast({ message: t('aiChat.chatTaskRunning'), icon: 'warning-o' })
-    return
-  }
   if (store.activeThreadId) {
     try {
       await chat.retry(store.activeThreadId)

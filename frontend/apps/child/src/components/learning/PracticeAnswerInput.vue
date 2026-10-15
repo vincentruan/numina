@@ -131,6 +131,15 @@ watch(
   },
 )
 
+// Reset aiGrading when feedback arrives — clears the stuck-disabled state if
+// submission failed and the parent re-enables interaction (TF-005 fix)
+watch(
+  () => props.showFeedback,
+  (v) => {
+    if (v) aiGrading.value = false
+  },
+)
+
 const selectedKey = ref<string | null>(null)
 const textAnswer = ref('')
 const multiBlanks = ref<string[]>([])

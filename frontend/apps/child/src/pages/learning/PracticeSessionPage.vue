@@ -148,9 +148,7 @@ const modes = computed(() => [
 const displayTopicName = computed(() => {
   // Use topic name from session if available, otherwise fall back to i18n title
   if (session.value) {
-    return locale.value.startsWith('zh')
-      ? `练习 #${session.value.topic_id.slice(-6)}`
-      : `Practice #${session.value.topic_id.slice(-6)}`
+    return t('practice.sessionTitle', { id: session.value.topic_id.slice(-6) })
   }
   return t('practice.title')
 })

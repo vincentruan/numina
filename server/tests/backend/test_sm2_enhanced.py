@@ -127,8 +127,9 @@ class TestErrorReviewQueue:
         # Questions with errors should appear (they're not excluded with 0 recent days)
         result_ids = {q.id for q in result}
         wrong_ids = {setup["questions"][i].id for i in range(3)}
-        # At least some wrong questions should be in the result
-        assert len(result_ids & wrong_ids) > 0 or len(result) == 0
+        # Non-vacuous assertion (TF-002): result must be non-empty AND contain wrong questions
+        assert len(result) > 0, "review mode should return questions"
+        assert len(result_ids & wrong_ids) > 0, "wrong questions should be prioritized in review mode"
 
     def test_exclude_recent_days_works(self, db: Session, review_setup):
         """exclude_recent_days properly excludes recently answered questions."""

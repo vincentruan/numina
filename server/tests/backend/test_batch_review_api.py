@@ -54,6 +54,58 @@ class TestBatchReview:
         assert resp.json()["data"]["processed"] == 1
 
 
+class TestSingleReviewIDOR:
+    """PUT /practice/questions/{id}/review — cross-family isolation (SEC-001 regression)."""
+
+    def test_owner_can_review_own_family_question(self, client, db_session, auth_headers):
+        q = _make_question(db_session, family_id=None)  # template question (no family)
+        resp = client.put(
+            f"/api/v1/practice/questions/{q.id}/review",
+            json={"decision": "approved"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+
+    def test_cross_family_review_blocked(self, client, db_session, auth_headers, second_user_headers):
+        """Owner A cannot review a pending question owned by Family B."""
+        from packages.db.models.user import User
+
+        fam_b_user = (
+            db_session.query(User)
+            .filter(User.username == "testuser2")
+            .first()
+        )
+        family_b_id = fam_b_user.family_id
+
+        # Create a pending question owned by Family B
+        q = _make_question(db_session, family_id=family_b_id)
+
+        # Owner A tries to approve Family B's question
+        resp = client.put(
+            f"/api/v1/practice/questions/{q.id}/review",
+            json={"decision": "approved"},
+            headers=auth_headers,  # Family A's headers
+        )
+        # Should get NOT_FOUND (question not visible to Family A)
+        assert resp.status_code in (404, 403)
+        data = resp.json()
+        assert data.get("code") in ("PRACTICE_QUESTION_NOT_FOUND", "PRACTICE_QUESTION_INVALID", "FORBIDDEN")
+
+        # Verify question is still pending (not modified)
+        db_session.refresh(q)
+        assert q.review_status == "pending"
+
+    def test_invalid_decision_rejected(self, client, db_session, auth_headers):
+        """Decision must be 'approved' or 'rejected' — enforced by schema Literal."""
+        q = _make_question(db_session)
+        resp = client.put(
+            f"/api/v1/practice/questions/{q.id}/review",
+            json={"decision": "invalid_value"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422  # Pydantic validation error
+
+
 class TestReviewQueue:
     """GET /practice/questions/review-queue"""
 

@@ -193,6 +193,13 @@ def transition_to_mastered(
     if not progress.first_mastered_at:
         progress.first_mastered_at = now
     progress.stability = update_stability(progress, score)
+    # Update ease_factor too — update_stability only advances stability, so
+    # without this the ease stays at default 2.5 after mastery transitions.
+    quality = compute_sm2_quality(score)
+    if quality >= 3:
+        current_ease = progress.ease_factor or 2.5
+        diff = 5 - quality
+        progress.ease_factor = max(1.3, current_ease + 0.1 - diff * (0.08 + diff * 0.02))
     progress.next_review_at = compute_next_review(progress)
     db.flush()
     return progress

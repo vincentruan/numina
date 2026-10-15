@@ -70,3 +70,19 @@ class TestAiGraded:
         user = {"text": "answer"}
         result = check_answer("ai_graded", correct, user)
         assert isinstance(result, bool)
+
+
+class TestApplicationFalsyZero:
+    """Regression: application type must handle answer=0 correctly (BKT-002)."""
+
+    def test_zero_answer_via_answer_key(self):
+        assert check_answer("application", {"acceptable": [0]}, {"answer": 0}) is True
+
+    def test_zero_answer_via_value_key(self):
+        assert check_answer("application", {"acceptable": [0]}, {"value": 0}) is True
+
+    def test_wrong_answer_rejected(self):
+        assert check_answer("application", {"acceptable": [0]}, {"answer": 1}) is False
+
+    def test_string_answer_works(self):
+        assert check_answer("application", {"acceptable": ["hello"]}, {"answer": "hello"}) is True

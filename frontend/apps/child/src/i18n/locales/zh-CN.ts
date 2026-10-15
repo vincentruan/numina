@@ -811,6 +811,7 @@ export default {
   practice: {
     title: '练习',
     startPractice: '开始练习',
+    sessionTitle: '练习 #{id}',
     mode: {
       quick: '快速练习',
       standard: '标准练习',
