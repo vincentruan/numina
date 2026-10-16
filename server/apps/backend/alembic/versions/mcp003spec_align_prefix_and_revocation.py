@@ -32,17 +32,12 @@ def upgrade() -> None:
     cols = {c["name"]: c for c in bind.dialect.get_columns(bind, "family_mcp_tokens")}
 
     # 1. Widen token_prefix from String(8) to String(12)
+    # Use direct SQL — batch_alter_table.alter_column is unreliable on PostgreSQL
     if "token_prefix" in cols:
-        existing_type = cols["token_prefix"]["type"]
-        # Only alter if not already 12 chars wide
-        if "12" not in str(existing_type):
-            with op.batch_alter_table("family_mcp_tokens") as batch_op:
-                batch_op.alter_column(
-                    "token_prefix",
-                    existing_type=sa.String(8),
-                    type_=sa.String(12),
-                    existing_nullable=False,
-                )
+        existing_max = cols["token_prefix"].get("type")
+        existing_len = getattr(existing_max, "length", 0) if existing_max else 0
+        if existing_len and existing_len < 12:
+            op.execute("ALTER TABLE family_mcp_tokens ALTER COLUMN token_prefix TYPE VARCHAR(12)")
 
     # 2. Add revoked_at column
     if "revoked_at" not in cols:

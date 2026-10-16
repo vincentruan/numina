@@ -19,10 +19,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("learning_progress", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column("ease_factor", sa.Float(), nullable=True, server_default="2.5")
-        )
+    bind = op.get_bind()
+    cols = {c["name"] for c in bind.dialect.get_columns(bind, "learning_progress")}
+    if "ease_factor" not in cols:
+        with op.batch_alter_table("learning_progress", schema=None) as batch_op:
+            batch_op.add_column(
+                sa.Column("ease_factor", sa.Float(), nullable=True, server_default="2.5")
+            )
 
 
 def downgrade() -> None:
