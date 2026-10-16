@@ -186,6 +186,9 @@ server/apps/backend/data/
 /package-lock.json
 .env.production
 
+# Frontend apps use pnpm; npm lock files are Docker-only artifacts
+frontend/apps/*/package-lock.json
+
 .superpowers/
 .worktrees/
 

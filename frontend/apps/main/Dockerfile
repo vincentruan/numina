@@ -18,7 +18,10 @@ RUN --mount=type=cache,target=/root/.npm npm install
 WORKDIR /app/frontend/packages/shared
 RUN --mount=type=cache,target=/root/.npm npm install
 # Copy and install frontend app
-COPY frontend/apps/main/package*.json /app/frontend/apps/main/
+# Note: copy package.json only — the npm lock file is stale/corrupt (all @numina/*
+# resolved to packages/auth). Letting npm install generate a fresh lock avoids the
+# "Cannot read properties of null (reading 'edgesOut')" error.
+COPY frontend/apps/main/package.json /app/frontend/apps/main/
 WORKDIR /app/frontend/apps/main
 RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../packages/math"|g' package.json && \
     sed -i 's|"@numina/auth": "workspace:\*"|"@numina/auth": "file:../../packages/auth"|g' package.json && \

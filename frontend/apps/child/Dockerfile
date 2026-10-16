@@ -17,7 +17,8 @@ RUN --mount=type=cache,target=/root/.npm npm install
 WORKDIR /app/frontend/packages/shared
 RUN --mount=type=cache,target=/root/.npm npm install
 # Copy and install frontend-child app
-COPY frontend/apps/child/package*.json /app/frontend/apps/child/
+# Note: copy package.json only — the npm lock file is stale/corrupt. See main Dockerfile.
+COPY frontend/apps/child/package.json /app/frontend/apps/child/
 WORKDIR /app/frontend/apps/child
 RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../packages/math"|g' package.json && \
     sed -i 's|"@numina/auth": "workspace:\*"|"@numina/auth": "file:../../packages/auth"|g' package.json && \
