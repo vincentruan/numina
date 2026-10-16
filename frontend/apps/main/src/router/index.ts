@@ -362,6 +362,11 @@ const router = createRouter({
           component: () => import('@/pages/ChangeSecondFactorPage.vue'),
         },
         {
+          path: 'settings/about',
+          name: 'About',
+          component: () => import('@/pages/AboutPage.vue')
+        },
+        {
           // R16: old route redirects to new /finance/import (client-side redirect).
           path: 'settings/import-report',
           redirect: '/finance/import',

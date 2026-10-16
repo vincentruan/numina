@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+declare const __APP_VERSION__: string
+
 // qrcode — @types/qrcode is installed but tsconfig `types: ["vite/client"]`
 // restricts auto-inclusion of @types/* packages. Declare the module so the
 // default import resolves without adding it to the global types array.
