@@ -17,14 +17,16 @@ RUN --mount=type=cache,target=/root/.npm npm install
 WORKDIR /app/frontend/packages/shared
 RUN --mount=type=cache,target=/root/.npm npm install
 # Copy and install frontend-child app
-# Note: copy package.json only — the npm lock file is stale/corrupt. See main Dockerfile.
+# Note: copy package.json only (not the stale npm lock file).
+# --legacy-peer-deps works around an npm 10.x bug where file: references
+# cause "Cannot read properties of null (reading 'edgesOut')" in Arborist.
 COPY frontend/apps/child/package.json /app/frontend/apps/child/
 WORKDIR /app/frontend/apps/child
 RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../packages/math"|g' package.json && \
     sed -i 's|"@numina/auth": "workspace:\*"|"@numina/auth": "file:../../packages/auth"|g' package.json && \
     sed -i 's|"@numina/assets": "workspace:\*"|"@numina/assets": "file:../../packages/assets"|g' package.json && \
     sed -i 's|"@numina/shared": "workspace:\*"|"@numina/shared": "file:../../packages/shared"|g' package.json && \
-    npm install --cache /root/.npm
+    npm install --legacy-peer-deps --cache /root/.npm
 COPY frontend/apps/child/ .
 ARG VITE_MAIN_APP_URL=""
 ENV VITE_MAIN_APP_URL=$VITE_MAIN_APP_URL

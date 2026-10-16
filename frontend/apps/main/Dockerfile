@@ -18,16 +18,16 @@ RUN --mount=type=cache,target=/root/.npm npm install
 WORKDIR /app/frontend/packages/shared
 RUN --mount=type=cache,target=/root/.npm npm install
 # Copy and install frontend app
-# Note: copy package.json only — the npm lock file is stale/corrupt (all @numina/*
-# resolved to packages/auth). Letting npm install generate a fresh lock avoids the
-# "Cannot read properties of null (reading 'edgesOut')" error.
+# Note: copy package.json only (not the stale npm lock file).
+# --legacy-peer-deps works around an npm 10.x bug where file: references
+# cause "Cannot read properties of null (reading 'edgesOut')" in Arborist.
 COPY frontend/apps/main/package.json /app/frontend/apps/main/
 WORKDIR /app/frontend/apps/main
 RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../packages/math"|g' package.json && \
     sed -i 's|"@numina/auth": "workspace:\*"|"@numina/auth": "file:../../packages/auth"|g' package.json && \
     sed -i 's|"@numina/assets": "workspace:\*"|"@numina/assets": "file:../../packages/assets"|g' package.json && \
     sed -i 's|"@numina/shared": "workspace:\*"|"@numina/shared": "file:../../packages/shared"|g' package.json && \
-    npm install --cache /root/.npm
+    npm install --legacy-peer-deps --cache /root/.npm
 # Generate 256×256 WebP thumbnails BEFORE copying full app source.
 # This layer only re-runs when packages/assets icons or the script change —
 # not when app code changes. BuildKit cache mount further speeds up the case
