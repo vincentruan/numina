@@ -148,6 +148,9 @@ importers:
       '@iconify/vue':
         specifier: ^4.3.0
         version: 4.3.0(vue@3.5.34(typescript@5.9.3))
+      '@langchain/core':
+        specifier: ^1.1.48
+        version: 1.1.49(ws@8.20.0)
       '@langchain/langgraph-sdk':
         specifier: ^1.9.22
         version: 1.9.22(@langchain/core@1.1.49(ws@8.20.0))(vue@3.5.34(typescript@5.9.3))
@@ -3439,12 +3442,12 @@ packages:
     resolution: {integrity: sha512-00o4I+DVrefhv+nX0ulyi3biSHCPDe+yLv5o/p6d/UVlirijB8E16FtfwSAi4g3tcqrQ4lRAqQSoFEZJehYEcw==}
     engines: {node: '>= 0.4'}
 
-  regenerate-unicode-properties@10.2.2:
-    resolution: {integrity: sha512-m03P+zhBeQd1RGnYxrGyDAPpWX/epKirLrp8e3qevZdVkKtnCrjjWczIbYc8+xd6vcTStVlqfycTx1KR4LOr0g==}
+  regenerate-unicode-properties@10.3.0:
+    resolution: {integrity: sha512-9ns8odR8e9q3otKeHj3DE80jZYKg6zVeZKE+zQmRKXFoVUcuiTGeO6iusDhPRoIQQPVPRvH+SfBhrTud4eczuw==}
     engines: {node: '>=4'}
 
-  regenerate@1.4.2:
-    resolution: {integrity: sha512-zrceR/XhGYU/d/opr2EKO7aRHUeiBI8qjtfHqADTwZd6Szfy16la6kqD0MIUs5z5hx6AaKa+PixpPrR289+I0A==}
+  regenerate@1.5.0:
+    resolution: {integrity: sha512-1s+CxXjJ71i7LNVy8nYwg47XV4y6lAnOEhsMtSKq3WpmPfhl9LuKlTqKIn/3yUpE8lBz+W+TT88Bxyhnr0U4yw==}
 
   regenerator-runtime@0.13.11:
     resolution: {integrity: sha512-kY1AZVr2Ra+t+piVaJ4gxaFaReZVH40AKNo7UCX6W+dEwBo/2oZJzqfuN1qLq1oL45o56cPaTXELwrTh8Fpggg==}
@@ -3462,8 +3465,8 @@ packages:
     resolution: {integrity: sha512-dYqgNSZbDwkaJ2ceRd9ojCGjBq+mOm9LmtXnAnEGyHhN/5R7iDW2TRw3h+o/jCFxus3P2LfWIIiwowAjANm7IA==}
     engines: {node: '>= 0.4'}
 
-  regexpu-core@6.4.0:
-    resolution: {integrity: sha512-0ghuzq67LI9bLXpOX/ISfve/Mq33a4aFRzoQYhnnok1JOFpmE/A2TBGkNVenOGEeSBCjIiWcc6MVOG5HEQv0sA==}
+  regexpu-core@6.5.3:
+    resolution: {integrity: sha512-E8VgUoSK+LMQrLboDxavm76MTBGrQhx9RiNuomRmYnZ10Uw12HrI8fkxOOncktb2hBpzIZ9SV/347euQHG5z+g==}
     engines: {node: '>=4'}
 
   regjsgen@0.8.0:
@@ -4347,7 +4350,7 @@ snapshots:
     dependencies:
       '@babel/core': 7.29.7(supports-color@7.2.0)
       '@babel/helper-annotate-as-pure': 7.29.7
-      regexpu-core: 6.4.0
+      regexpu-core: 6.5.3
       semver: 6.3.1
 
   '@babel/helper-define-polyfill-provider@0.6.8(@babel/core@7.29.7(supports-color@7.2.0))(supports-color@7.2.0)':
@@ -7406,11 +7409,11 @@ snapshots:
       get-proto: 1.0.1
       which-builtin-type: 1.2.1
 
-  regenerate-unicode-properties@10.2.2:
+  regenerate-unicode-properties@10.3.0:
     dependencies:
-      regenerate: 1.4.2
+      regenerate: 1.5.0
 
-  regenerate@1.4.2: {}
+  regenerate@1.5.0: {}
 
   regenerator-runtime@0.13.11:
     optional: true
@@ -7434,10 +7437,10 @@ snapshots:
       gopd: 1.2.0
       set-function-name: 2.0.2
 
-  regexpu-core@6.4.0:
+  regexpu-core@6.5.3:
     dependencies:
-      regenerate: 1.4.2
-      regenerate-unicode-properties: 10.2.2
+      regenerate: 1.5.0
+      regenerate-unicode-properties: 10.3.0
       regjsgen: 0.8.0
       regjsparser: 0.13.2
       unicode-match-property-ecmascript: 2.0.0
