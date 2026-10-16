@@ -191,6 +191,10 @@ class TestClientIdentification:
 class TestRateLimitSkipPaths:
     """Tests for paths that skip rate limiting."""
 
+    def setup_method(self):
+        reset_cache()
+        init_cache(backend='memory')
+
     async def test_skip_paths_defined(self):
         """Test that skip paths are properly defined."""
         skip_paths = RateLimitMiddleware.SKIP_PATHS
