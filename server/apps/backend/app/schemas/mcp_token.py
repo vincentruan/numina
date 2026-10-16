@@ -37,6 +37,13 @@ class MCPTokenResponse(SnowflakeBase):
         return v
 
 
+class MCPTokenGenerateRequest(BaseModel):
+    """Optional body for POST /ai/mcp-token — all fields optional."""
+
+    allow_external: bool | None = None
+    allow_write: bool | None = None
+
+
 class MCPTokenGenerateResponse(MCPTokenResponse):
     """Returned once at generation/rotation — includes plaintext token."""
 

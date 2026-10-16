@@ -374,8 +374,13 @@ async function load() {
 
     // Load path context (non-blocking)
     loadPathContext()
-  } catch {
-    error.value = t('toast.loadFailed')
+  } catch (e: unknown) {
+    const err = e as { response?: { status?: number } }
+    if (err?.response?.status === 404) {
+      error.value = t('learning.topicNotFound')
+    } else {
+      error.value = t('toast.loadFailed')
+    }
   } finally {
     loading.value = false
   }

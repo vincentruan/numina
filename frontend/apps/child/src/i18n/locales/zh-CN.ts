@@ -446,6 +446,7 @@ export default {
   learning: {
     title: '知识地图',
     empty: '还没有学习内容，让爸爸妈妈帮你布置吧！',
+    topicNotFound: '知识点不存在或已下架',
     todayRecommend: '今日推荐',
     startLearning: '🎓 开始学习',
     submitAssignment: '📝 提交审核',

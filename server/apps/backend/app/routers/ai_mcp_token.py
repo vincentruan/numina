@@ -18,6 +18,7 @@ from apps.backend.app.schemas.mcp_access_log import (
     MCPToolCatalogResponse,
 )
 from apps.backend.app.schemas.mcp_token import (
+    MCPTokenGenerateRequest,
     MCPTokenGenerateResponse,
     MCPTokenResponse,
     MCPTokenUpdate,
@@ -42,13 +43,30 @@ def get_token(
 
 @router.post("", response_model=MCPTokenGenerateResponse, status_code=201)
 def generate_token(
+    body: MCPTokenGenerateRequest | None = None,
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> MCPTokenGenerateResponse:
-    """Generate a new token (or rotate existing). Returns plaintext **once**."""
+    """Generate a new token (or rotate existing). Returns plaintext **once**.
+
+    Optional body fields: ``allow_external``, ``allow_write``.
+    """
     plaintext, row = token_svc.generate_token(
         current_user.family_id, db, revoked_by=current_user.id
     )
+
+    # Apply optional flags before commit
+    import os as _os
+    _dbg = f'body={body} allow_external={getattr(body, "allow_external", "N/A") if body else "None"}'
+    _os.environ.get('')  # no-op to avoid unused import
+    with open('/tmp/mcp_debug.log', 'a') as _f:
+        _f.write(_dbg + '\n')
+    if body is not None:
+        if body.allow_external is not None:
+            row.allow_external = body.allow_external
+        if body.allow_write is not None:
+            row.allow_write = body.allow_write
+
     db.commit()
 
     base = MCPTokenResponse.model_validate(row)
