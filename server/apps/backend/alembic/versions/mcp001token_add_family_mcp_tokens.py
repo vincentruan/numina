@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "mcp001token"
-down_revision: str | None = "lrnst001"
+down_revision: str | None = "src001tax001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -42,11 +42,11 @@ def upgrade() -> None:
             sa.Column("token_hash", sa.String(64), nullable=False),
             sa.Column("token_prefix", sa.String(8), nullable=False),
             sa.Column("token_last4", sa.String(4), nullable=False),
-            sa.Column("allow_external", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-            sa.Column("allow_write", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+            sa.Column("allow_external", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+            sa.Column("allow_write", sa.Boolean(), nullable=False, server_default=sa.text("false")),
             sa.Column("expires_at", sa.DateTime(), nullable=True),
             sa.Column("last_used_at", sa.DateTime(), nullable=True),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
             sa.Column(
                 "created_at",
                 sa.DateTime(),
