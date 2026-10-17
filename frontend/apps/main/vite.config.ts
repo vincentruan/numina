@@ -26,8 +26,8 @@ export default defineConfig(({ mode }) => {
       symbolId: 'icon-[name]',
     }),
     VitePWA({
-      registerType: 'prompt',
-      injectRegister: false,
+      registerType: 'autoUpdate',
+      injectRegister: 'script',
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
