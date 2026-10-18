@@ -413,6 +413,26 @@ class RecommendationPathResponse(BaseModel):
     path: RecommendationPathDetail
 
 
+# --- Preset Learning Paths ---
+
+
+class PresetPathResponse(SnowflakeBase):
+    id: int
+    grade: int
+    semester: str
+    subject: str
+    name: str
+    name_zh: str
+    description: str | None
+    topic_count: int
+    topic_ids: list[int]
+    is_active: bool
+
+
+class AssignPresetRequest(BaseModel):
+    child_id: int
+
+
 # --- Review Dual-Track ---
 
 
