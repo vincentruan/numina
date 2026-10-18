@@ -22,20 +22,31 @@ const { t } = useI18n()
 
 <style scoped>
 .changelog-release {
-  margin-bottom: 20px;
+  position: relative;
+  padding-left: 16px;
+  margin-bottom: 24px;
+  border-left: 2px solid var(--van-border-color);
+}
+
+.changelog-release:last-child {
+  border-left-color: transparent;
 }
 
 .changelog-version {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .version-tag {
-  font-size: 14px;
-  font-weight: 600;
+  display: inline-block;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--van-primary-color);
+  background: color-mix(in srgb, var(--van-primary-color) 10%, transparent);
+  padding: 2px 10px;
+  border-radius: 6px;
 }
 
 .version-date {

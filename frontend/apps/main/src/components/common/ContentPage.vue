@@ -69,6 +69,15 @@ defineProps<{
   margin-bottom: 4px;
 }
 
+:deep(section) {
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
+:deep(section:not(:last-child)) {
+  border-bottom: 1px solid var(--van-border-color);
+}
+
 :deep(a) {
   color: var(--van-primary-color);
   text-decoration: none;
