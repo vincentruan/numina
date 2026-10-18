@@ -61,11 +61,21 @@
           <van-cell :title="t('baby.activeWishes')" :value="`${currentWishCount}`" />
           <van-cell
             v-if="selectedChildId"
+            class="learning-entry-cell"
             :title="t('baby.learningTab')"
-            :value="t('learning.studyMinutes', { minutes: currentStudyMinutes })"
+            :label="learningEntryLabel"
             is-link
             @click="$router.push('/baby/learning')"
-          />
+          >
+            <template #icon>
+              <span class="learning-entry-icon">
+                <IIcon icon="mdi:school-outline" size="22" color="var(--van-primary-color)" />
+              </span>
+            </template>
+            <template #value>
+              <span class="learning-entry-value">{{ t('learning.studyMinutes', { minutes: currentStudyMinutes }) }}</span>
+            </template>
+          </van-cell>
           <van-cell :title="t('baby.blindBoxGifts')" is-link @click="$router.push('/blind-box/gifts')" />
           <van-cell :title="t('baby.blindBoxDraws')" is-link @click="$router.push('/blind-box/draws')">
             <template v-if="pendingDrawCount > 0" #value>
@@ -713,6 +723,17 @@ const currentStudyMinutes = computed(() => {
   return overview?.total_study_minutes ?? 0
 })
 
+const learningEntryLabel = computed(() => {
+  const overview = learningOverviews.value.find(o => o.child_id === selectedChildId.value)
+  if (!overview) return ''
+  const parts = [
+    t('learning.mastered') + ' ' + overview.mastered_count,
+    t('learning.learning') + ' ' + overview.learning_count,
+  ]
+  if (overview.review_count > 0) parts.push(t('learning.pendingReview') + ' ' + overview.review_count)
+  return parts.join(' · ')
+})
+
 const filteredWishes = computed(() => {
   const base = selectedChildId.value
     ? allWishes.value.filter(w => w.child_user_id === selectedChildId.value)
@@ -1322,6 +1343,50 @@ onActivated(async () => {
 
 .summary-card {
   margin-top: 12px;
+}
+
+/* Learning entry — visually boosted vs. plain sibling cells */
+.learning-entry-cell {
+  background: rgba(124, 107, 255, 0.06);
+}
+
+[data-theme='dark'] .learning-entry-cell,
+.dark .learning-entry-cell {
+  background: rgba(189, 187, 255, 0.1);
+}
+
+.learning-entry-cell :deep(.van-cell__title) {
+  font-weight: 600;
+  color: var(--van-primary-color);
+}
+
+.learning-entry-cell :deep(.van-cell__label) {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.learning-entry-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-right: 10px;
+  border-radius: 10px;
+  background: rgba(124, 107, 255, 0.12);
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .learning-entry-icon,
+.dark .learning-entry-icon {
+  background: rgba(189, 187, 255, 0.16);
+}
+
+.learning-entry-value {
+  color: var(--van-primary-color);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .balance-row {
