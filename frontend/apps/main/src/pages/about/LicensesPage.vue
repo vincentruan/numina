@@ -7,7 +7,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <ContentPage :title="t('settings.openSourceLicenses')">
+  <ContentPage :title="t('settings.openSourceLicenses')" back-to="/settings/about">
     <p class="licenses-intro">{{ t('settings.licensedUnder') }}</p>
     <div class="licenses-list">
       <div v-for="comp in ossComponents" :key="comp.name" class="license-item">

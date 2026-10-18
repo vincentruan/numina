@@ -7,7 +7,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <ContentPage :title="t('settings.changelog')">
+  <ContentPage :title="t('settings.changelog')" back-to="/settings/about">
     <div v-for="release in changelog" :key="release.version" class="changelog-release">
       <div class="changelog-version">
         <span class="version-tag">v{{ release.version }}</span>

@@ -4,12 +4,13 @@ import PageHeader from '@/components/common/PageHeader.vue'
 defineProps<{
   title: string
   lastUpdated?: string
+  backTo?: string
 }>()
 </script>
 
 <template>
   <div class="content-page">
-    <PageHeader :title="title" />
+    <PageHeader :title="title" :back-to="backTo" />
     <div class="content-body">
       <p v-if="lastUpdated" class="content-updated">
         {{ lastUpdated }}
