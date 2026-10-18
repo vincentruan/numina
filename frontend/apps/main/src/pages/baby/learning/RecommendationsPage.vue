@@ -118,7 +118,7 @@ function handleCardClick(_topic: RecommendationTopicItem) {
 }
 
 function removeTopic(topic: RecommendationTopicItem) {
-  topics.value = topics.value.filter((t) => t.topic_id !== topic.topic_id)
+  topics.value = topics.value.filter((item) => item.topic_id !== topic.topic_id)
   showSuccessToast(t('learning.topicRemoved'))
 }
 
@@ -173,7 +173,7 @@ async function handleConfirm() {
     showSuccessToast(t('learning.assignAllSuccess', { count: orderedTopics.value.length }))
     router.push({ name: 'BabyLearning' })
   } catch {
-    showFailToast(t('common.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     confirming.value = false
   }

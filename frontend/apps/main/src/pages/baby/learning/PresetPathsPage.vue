@@ -169,7 +169,7 @@ async function handleAssign(path: PresetPathResponse) {
     showSuccessToast(t('learning.dispatchSuccess'))
     router.push({ name: 'BabyLearning' })
   } catch {
-    showFailToast(t('common.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     assigningId.value = null
   }

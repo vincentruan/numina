@@ -2146,7 +2146,6 @@ export default {
     subject: '学科',
     semesterFall: '上学期',
     semesterSpring: '下学期',
-    subjectMath: '数学',
     dispatchOneClick: '一键派发',
     dispatchSuccess: '已成功派发学习路径',
     noPresetPathsGrade: '该年级暂无预设路径',
