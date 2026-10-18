@@ -11,7 +11,11 @@
           v-for="item in group.items"
           :key="item.topic.id"
           class="topic-card"
-          :class="`topic-card--${masteryStatus(item)}`"
+          :class="{
+            [`topic-card--${masteryStatus(item)}`]: true,
+            'topic-card--review-due': isReviewDue(item),
+            'topic-card--rejected': isRejected(item),
+          }"
           @click="$emit('topicClick', item.topic.id)"
         >
           <span class="topic-card__status" aria-hidden="true">{{ statusIcon(masteryStatus(item)) }}</span>
@@ -22,6 +26,7 @@
               <span v-if="item.attempts" class="topic-card__meta">
                 {{ t('learning.attempts', { count: item.attempts }) }}
               </span>
+              <span v-if="isRejected(item)" class="topic-card__rejected-icon" aria-hidden="true">⚠️</span>
             </div>
           </div>
         </button>
@@ -64,6 +69,14 @@ function masteryStatus(item: ProgressWithTopic): MasteryStatus {
   if (level === 'learning' || level === 'assessing') return 'learning'
   if (level === 'locked') return 'locked'
   return 'available'
+}
+
+function isReviewDue(item: ProgressWithTopic): boolean {
+  return item.mastery_level === 'mastered' && item.next_review_at !== null && new Date(item.next_review_at) <= new Date()
+}
+
+function isRejected(item: ProgressWithTopic): boolean {
+  return item.mastery_level === 'parent_review'
 }
 
 function statusIcon(status: MasteryStatus): string {
@@ -168,6 +181,30 @@ function domainLabel(domain: string): string {
 
 .topic-card--review {
   border-color: var(--color-brand-ochre);
+}
+
+.topic-card--review-due {
+  position: relative;
+  animation: review-pulse 2s ease-in-out infinite;
+}
+
+@keyframes review-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(232, 185, 74, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(232, 185, 74, 0);
+  }
+}
+
+.topic-card--rejected {
+  border: 2px dashed var(--color-brand-coral);
+  background: var(--color-brand-coral-light, rgba(255, 107, 107, 0.05));
+}
+
+.topic-card__rejected-icon {
+  font-size: 14px;
+  margin-left: 4px;
 }
 
 .topic-card--learning {

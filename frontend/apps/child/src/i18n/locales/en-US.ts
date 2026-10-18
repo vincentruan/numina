@@ -514,11 +514,22 @@ export default {
     },
     todayCard: {
       assignment: 'Submit Assignment',
+      review_due: 'Time to Review',
       current: 'Continue Learning',
       recommended: 'Start New Topic',
       explore: 'Explore Learning Map',
       exploreSub: 'Explore the knowledge map',
       footer: 'Studied {minutes} min today',
+    },
+    source: {
+      systemRecommended: '🌟 System Pick',
+      parentAssigned: '📝 Parent Assigned',
+      selfSelected: '🔍 Self Selected',
+    },
+    rejection: {
+      needsPractice: 'This topic needs more practice',
+      relearn: 'Relearn',
+      goPractice: 'Go Practice',
     },
     stats: {
       streak: '{days} day streak',

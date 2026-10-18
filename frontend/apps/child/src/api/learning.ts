@@ -122,6 +122,7 @@ export interface ChildProgressOverview {
 export interface TodayLearningResponse {
   current_topic: TopicResponse | null
   pending_assignment: AssignmentResponse | null
+  review_due_topic: TopicResponse | null
   recommended_topic: TopicResponse | null
   study_minutes_today: number
   current_zone: string

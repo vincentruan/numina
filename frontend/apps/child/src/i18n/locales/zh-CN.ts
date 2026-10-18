@@ -734,11 +734,22 @@ export default {
     },
     todayCard: {
       assignment: '提交作业',
+      review_due: '该复习啦',
       current: '继续学习',
       recommended: '开始新知识',
       explore: '去学习地图探索',
       exploreSub: '探索知识地图',
       footer: '今日已学习 {minutes} 分钟',
+    },
+    source: {
+      systemRecommended: '🌟 系统推荐',
+      parentAssigned: '📝 爸妈布置',
+      selfSelected: '🔍 自己探索',
+    },
+    rejection: {
+      needsPractice: '这个知识点还需要加强练习',
+      relearn: '重新学习',
+      goPractice: '去练习场',
     },
     stats: {
       streak: '连续 {days} 天',
