@@ -18,6 +18,9 @@ from apps.backend.app.schemas.learning import (
     PathCreate,
     PathResponse,
     ProgressResponse,
+    RecommendationPathDetail,
+    RecommendationPathResponse,
+    RecommendedTopicItem,
     ReviewItemResponse,
     TopicResponse,
 )
@@ -26,6 +29,9 @@ from apps.backend.app.services.learning import (
     path_service,
     progress_service,
     stats_service,
+)
+from apps.backend.app.services.learning.recommendation_service import (
+    generate_recommendation_path,
 )
 from apps.backend.app.services.learning.topic_service import (
     locale_to_source_taxonomy,
@@ -244,6 +250,34 @@ def get_child_sessions(
             )
         )
     return result
+
+
+@router.get("/children/{child_id}/recommendations", response_model=RecommendationPathResponse)
+def get_recommendations(
+    child_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_adult),
+):
+    """Get personalized learning recommendations for a child."""
+    path = generate_recommendation_path(db, child_id)
+    topics = [
+        RecommendedTopicItem(
+            topic_id=t.topic_id,
+            topic_name=t.topic_name,
+            reasons=t.reasons,
+            centrality=t.centrality,
+            prerequisites_met=t.prerequisites_met,
+            suggested_position=t.suggested_position,
+        )
+        for t in path.topics
+    ]
+    return RecommendationPathResponse(
+        path=RecommendationPathDetail(
+            name=path.name,
+            topics=topics,
+            total_count=path.total_count,
+        )
+    )
 
 
 @router.get("/topics/{topic_id}", response_model=TopicResponse)

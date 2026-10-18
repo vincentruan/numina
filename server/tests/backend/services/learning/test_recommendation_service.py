@@ -398,3 +398,31 @@ class TestGenerateRecommendationPath:
         """Path has the expected name."""
         path = generate_recommendation_path(db, child_user["id"])
         assert path.name == "建议学习路径"
+
+
+# ---------------------------------------------------------------------------
+# Tests: Recommendation API endpoint
+# ---------------------------------------------------------------------------
+
+class TestRecommendationEndpoint:
+    def test_returns_recommendations_for_child(self, client, auth_headers, db, child_user, mixed_graph):
+        """Endpoint returns 200 with correct structure."""
+        resp = client.get(
+            f"/api/v1/family/learning/children/{child_user['id']}/recommendations",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "path" in data
+        assert data["path"]["total_count"] >= 1
+        assert len(data["path"]["topics"]) >= 1
+
+    def test_topic_ids_serialized_as_strings(self, client, auth_headers, db, child_user, mixed_graph):
+        """Snowflake IDs must be strings in JSON response."""
+        resp = client.get(
+            f"/api/v1/family/learning/children/{child_user['id']}/recommendations",
+            headers=auth_headers,
+        )
+        data = resp.json()["data"]
+        for topic in data["path"]["topics"]:
+            assert isinstance(topic["topic_id"], str)

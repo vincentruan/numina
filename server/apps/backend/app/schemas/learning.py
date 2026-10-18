@@ -382,3 +382,31 @@ class PathResponse(SnowflakeBase):
     completed_count: int = 0
     total_count: int = 0
     next_milestone: dict | None = None
+
+
+# --- Recommendation ---
+
+
+class RecommendedTopicItem(BaseModel):
+    """A single topic in a recommendation path."""
+
+    topic_id: int
+    topic_name: str
+    reasons: list[str]
+    centrality: float
+    prerequisites_met: bool
+    suggested_position: int
+
+
+class RecommendationPathDetail(BaseModel):
+    """Recommendation path with ordered topics."""
+
+    name: str
+    topics: list[RecommendedTopicItem]
+    total_count: int
+
+
+class RecommendationPathResponse(BaseModel):
+    """Wrapper for recommendation path response."""
+
+    path: RecommendationPathDetail
