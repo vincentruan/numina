@@ -14,176 +14,236 @@
         </EmptyState>
 
         <template v-else>
-          <!-- Children overview cards -->
-          <van-cell-group inset class="children-section">
-            <div
-              v-for="child in children"
-              :key="child.child_id"
-              class="child-card"
-            >
-              <div class="child-card-header">
-                <span class="child-name">{{ child.child_name }}</span>
-                <span class="child-study-time">{{ t('learning.studyMinutes', { minutes: child.total_study_minutes }) }}</span>
-              </div>
-              <div class="child-stats">
-                <div class="stat-item">
-                  <span class="stat-value stat-mastered">{{ child.mastered_count }}</span>
-                  <span class="stat-label">{{ t('learning.mastered') }}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-value stat-learning">{{ child.learning_count }}</span>
-                  <span class="stat-label">{{ t('learning.learning') }}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-value stat-available">{{ child.available_count }}</span>
-                  <span class="stat-label">{{ t('learning.available') }}</span>
-                </div>
-                <div class="stat-item" v-if="child.review_count > 0">
-                  <span class="stat-value stat-review">{{ child.review_count }}</span>
-                  <span class="stat-label">{{ t('learning.reviewQueue') }}</span>
-                </div>
-              </div>
-              <div class="child-actions">
-                <van-button
-                  size="small"
-                  plain
-                  type="primary"
-                  @click="router.push({ path: `/baby/learning/${child.child_id}/map`, query: { name: child.child_name } })"
-                >
-                  {{ t('learning.viewMap') }}
-                </van-button>
-                <van-button
-                  size="small"
-                  plain
-                  type="primary"
-                  @click="router.push({ path: '/baby/learning/assign', query: { child_id: child.child_id } })"
-                >
-                  {{ t('learning.assignTask') }}
-                </van-button>
-              </div>
+          <!-- Module 1: Smart Recommendations (default expanded) -->
+          <div class="module-card">
+            <div class="module-header" @click="toggleModule('recommendations')">
+              <span class="module-title">🌟 {{ t('learning.smartRecommendations') }}</span>
+              <van-icon :name="isExpanded('recommendations') ? 'arrow-up' : 'arrow-down'" />
             </div>
-          </van-cell-group>
-
-          <!-- Review queue section -->
-          <van-cell-group inset class="reviews-section" v-if="reviews.length > 0">
-            <template #title>
-              <div class="section-title-row">
-                <span>{{ t('learning.pendingReviews') }}</span>
-                <van-badge :content="reviews.length" />
-              </div>
-            </template>
-            <div
-              v-for="review in reviews"
-              :key="review.progress_id"
-              class="review-item"
-            >
-              <div class="review-item-header">
-                <span class="review-child-name">{{ review.child_name }}</span>
-                <span class="review-topic-name">{{ review.topic_name }}</span>
-              </div>
-              <div class="review-meta">
-                <span>{{ t('learning.attempts', { count: review.attempts }) }}</span>
-                <span>{{ t('learning.studyDuration', { seconds: review.study_duration_seconds }) }}</span>
-              </div>
-              <div class="review-actions">
-                <van-button
-                  size="mini"
-                  type="success"
-                  :loading="actioningId === review.progress_id"
-                  @click="doApprove(review)"
-                >
-                  {{ t('learning.approve') }}
-                </van-button>
-                <van-button
-                  size="mini"
-                  type="danger"
-                  :loading="actioningId === review.progress_id"
-                  @click="doReject(review)"
-                >
-                  {{ t('learning.reject') }}
-                </van-button>
-              </div>
-            </div>
-          </van-cell-group>
-
-          <!-- Empty reviews state -->
-          <van-cell-group inset class="reviews-section" v-else>
-            <template #title>
-              <span>{{ t('learning.pendingReviews') }}</span>
-            </template>
-            <div class="reviews-empty">
-              <span class="reviews-empty-icon">🎉</span>
-              <span>{{ t('learning.noPendingReviews') }}</span>
-            </div>
-          </van-cell-group>
-
-          <!-- Learning paths section -->
-          <van-cell-group inset class="paths-section">
-            <template #title>
-              <span>{{ t('learning.paths.title') }}</span>
-            </template>
-            <EmptyState v-if="paths.length === 0" :description="t('learning.paths.empty')" />
-            <template v-else>
-              <div
-                v-for="path in paths"
-                :key="path.id"
-                class="path-row"
-                @click="router.push(`/baby/learning/paths/${path.id}`)"
-              >
-                <div class="path-row-main">
-                  <span class="path-row-name">{{ pathDisplayName(path) }}</span>
-                  <span class="path-row-child">{{ pathChildName(path.child_id) }}</span>
+            <div v-show="isExpanded('recommendations')">
+              <van-skeleton v-if="recommendationsLoading" :rows="3" :round="true" />
+              <template v-else>
+                <div v-if="!familyStore.aiEnabled" class="module-fallback">
+                  <span class="fallback-icon">🔒</span>
+                  <span>{{ t('learning.parentReviewOnly') }}</span>
                 </div>
-                <div class="path-row-meta">
-                  <van-tag
-                    :type="path.status === 'completed' ? 'success' : path.status === 'archived' ? 'default' : 'primary'"
+                <div v-else-if="recommendations.length === 0" class="module-empty">
+                  <EmptyState :description="t('learning.noRecommendations')" />
+                </div>
+                <template v-else>
+                  <div class="summary-line">
+                    {{ t('learning.recommendationSummary', { count: recommendations.length }) }}
+                  </div>
+                  <div class="topic-tags">
+                    <van-tag
+                      v-for="topic in recommendations.slice(0, 5)"
+                      :key="topic.topic_id"
+                      :type="reasonToTagType(topic.reasons)"
+                      round
+                      class="topic-tag"
+                    >
+                      {{ getReasonEmoji(topic.reasons) }} {{ topic.topic_name }}
+                    </van-tag>
+                  </div>
+                  <div class="module-actions">
+                    <van-button size="small" type="primary" @click="handleConfirmAssign">
+                      {{ t('learning.confirmAssign') }}
+                    </van-button>
+                    <van-button size="small" @click="router.push('/baby/learning/recommendations')">
+                      {{ t('learning.fineTunePath') }}
+                    </van-button>
+                    <van-button size="small" plain @click="refreshRecommendations">
+                      {{ t('learning.refreshBatch') }}
+                    </van-button>
+                  </div>
+                </template>
+              </template>
+            </div>
+          </div>
+
+          <!-- Module 2: Review Queue (default expanded) -->
+          <div class="module-card">
+            <div class="module-header" @click="toggleModule('reviews')">
+              <div class="module-title-row">
+                <span class="module-title">📋 {{ t('learning.reviewQueue') }}</span>
+                <van-badge v-if="reviews.length > 0" :content="reviews.length" />
+              </div>
+              <van-icon :name="isExpanded('reviews') ? 'arrow-up' : 'arrow-down'" />
+            </div>
+            <div v-show="isExpanded('reviews')">
+              <van-skeleton v-if="reviewsLoading" :rows="3" :round="true" />
+              <template v-else>
+                <div v-if="reviews.length === 0" class="module-empty">
+                  <span class="empty-icon">🎉</span>
+                  <span>{{ t('learning.noPendingReviews') }}</span>
+                </div>
+                <template v-else>
+                  <div
+                    v-for="review in reviews.slice(0, 3)"
+                    :key="review.progress_id"
+                    class="review-item"
                   >
-                    {{ pathStatusLabel(path.status) }}
-                  </van-tag>
-                  <span class="path-row-progress">
-                    {{ t('learning.paths.progress', { completed: path.completed_count, total: path.total_count }) }}
-                  </span>
-                </div>
-              </div>
-            </template>
-          </van-cell-group>
+                    <div class="review-item-header">
+                      <span class="review-child-name">{{ review.child_name }}</span>
+                      <span class="review-topic-name">{{ review.topic_name }}</span>
+                    </div>
+                    <div class="review-meta">
+                      <span>{{ t('learning.attempts', { count: review.attempts }) }}</span>
+                      <span>{{ t('learning.studyDuration', { seconds: review.study_duration_seconds }) }}</span>
+                      <van-button
+                        size="mini"
+                        plain
+                        @click="openEvidenceSheet(review)"
+                      >
+                        {{ t('learning.expandEvidence') }}
+                      </van-button>
+                    </div>
+                  </div>
+                  <van-button
+                    v-if="reviews.length > 3"
+                    size="small"
+                    plain
+                    block
+                    class="view-all-btn"
+                    @click="expandedModules.push('reviews')"
+                  >
+                    {{ t('learning.allReviews') }}
+                  </van-button>
+                </template>
+              </template>
+            </div>
+          </div>
 
-          <!-- Navigation to full pages -->
-          <van-cell-group inset class="nav-section">
-            <van-cell
-              :title="t('learning.pathsTitle')"
-              is-link
-              @click="router.push('/baby/learning/paths')"
-            />
-            <van-cell
-              :title="t('learning.allReviews')"
-              is-link
-              @click="router.push('/baby/learning/reviews')"
-            />
-          </van-cell-group>
+          <!-- Module 3: Preset Paths (default collapsed) -->
+          <van-collapse v-model="expandedModules">
+            <van-collapse-item :title="t('learning.presetPaths')" name="presetPaths">
+              <van-skeleton v-if="presetPathsLoading" :rows="2" :round="true" />
+              <template v-else>
+                <div v-if="presetPaths.length === 0" class="module-empty">
+                  <span>{{ t('learning.presetPathsEmpty') }}</span>
+                </div>
+                <template v-else>
+                  <div
+                    v-for="pp in presetPaths.slice(0, 3)"
+                    :key="pp.id"
+                    class="preset-path-item"
+                    @click="router.push('/baby/learning/preset-paths')"
+                  >
+                    <span class="preset-path-name">{{ presetPathDisplayName(pp) }}</span>
+                    <van-tag plain type="primary">{{ pp.topic_count }} {{ t('learning.mastered') }}</van-tag>
+                  </div>
+                </template>
+              </template>
+            </van-collapse-item>
+
+            <!-- Module 4: Active Paths (default collapsed) -->
+            <van-collapse-item :title="t('learning.activePaths')" name="activePaths">
+              <van-skeleton v-if="pathsLoading" :rows="2" :round="true" />
+              <template v-else>
+                <div v-if="activePaths.length === 0" class="module-empty">
+                  <span>{{ t('learning.paths.empty') }}</span>
+                </div>
+                <template v-else>
+                  <div
+                    v-for="path in activePaths.slice(0, 3)"
+                    :key="path.id"
+                    class="path-row"
+                    @click="router.push(`/baby/learning/paths/${path.id}`)"
+                  >
+                    <div class="path-row-main">
+                      <span class="path-row-name">{{ pathDisplayName(path) }}</span>
+                      <span class="path-row-child">{{ pathChildName(path.child_id) }}</span>
+                    </div>
+                    <div class="path-row-meta">
+                      <van-tag type="primary">{{ pathStatusLabel(path.status) }}</van-tag>
+                      <span class="path-row-progress">
+                        {{ t('learning.paths.progress', { completed: path.completed_count, total: path.total_count }) }}
+                      </span>
+                    </div>
+                  </div>
+                </template>
+              </template>
+            </van-collapse-item>
+
+            <!-- Module 5: DNA Graph preview (placeholder, default collapsed) -->
+            <van-collapse-item :title="t('learning.dnaGraph')" name="dnaGraph">
+              <div class="module-empty">
+                <span>{{ t('learning.dnaGraphPlaceholder') }}</span>
+              </div>
+            </van-collapse-item>
+          </van-collapse>
         </template>
       </van-pull-refresh>
     </template>
+
+    <!-- Evidence bottom sheet -->
+    <van-popup v-model:show="showEvidencePopup" position="bottom" round :style="{ height: '60%' }">
+      <div v-if="selectedReview" class="evidence-panel">
+        <div class="evidence-panel-header">
+          <span class="evidence-panel-title">{{ t('learning.evidenceTitle') }}</span>
+          <van-icon name="cross" class="evidence-close" @click="showEvidencePopup = false" />
+        </div>
+        <div class="evidence-panel-body">
+          <div class="evidence-topic">
+            <span class="evidence-label">{{ selectedReview.topic_name }}</span>
+            <span class="evidence-desc">{{ selectedReview.topic_description }}</span>
+          </div>
+          <div class="evidence-meta">
+            <span>{{ t('learning.attempts', { count: selectedReview.attempts }) }}</span>
+            <span>{{ t('learning.studyDuration', { seconds: selectedReview.study_duration_seconds }) }}</span>
+          </div>
+          <div v-if="selectedReview.evidence.length > 0" class="evidence-list">
+            <div v-for="(ev, idx) in selectedReview.evidence" :key="idx" class="evidence-item">
+              {{ ev }}
+            </div>
+          </div>
+        </div>
+        <div class="evidence-panel-actions">
+          <van-button
+            size="small"
+            type="success"
+            :loading="actioningId === selectedReview.progress_id"
+            @click="doApprove(selectedReview)"
+          >
+            {{ t('learning.approve') }}
+          </van-button>
+          <van-button
+            size="small"
+            type="danger"
+            :loading="actioningId === selectedReview.progress_id"
+            @click="doReject(selectedReview)"
+          >
+            {{ t('learning.reject') }}
+          </van-button>
+        </div>
+      </div>
+    </van-popup>
   </div>
 </template>
 
 <script setup lang="ts">
 defineOptions({ name: 'BabyLearning' })
 
-import { ref, onMounted, onActivated } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { useFamilyStore } from '@/stores/family'
+import { useBabyStore } from '@/stores/baby'
 import {
   getLearningChildren,
   getReviews,
   approveReview,
   rejectReview,
   getPaths,
+  getRecommendations,
+  getPresetPaths,
   type ChildLearningOverview,
   type ReviewItem,
   type PathResponse,
+  type PresetPathResponse,
+  type RecommendationTopicItem,
 } from '@/api/learning'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -191,16 +251,57 @@ import EmptyState from '@/components/common/EmptyState.vue'
 const { t, locale } = useI18n()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
+const familyStore = useFamilyStore()
+const babyStore = useBabyStore()
 
 const loading = ref(true)
 const refreshing = ref(false)
 const children = ref<ChildLearningOverview[]>([])
 const reviews = ref<ReviewItem[]>([])
 const paths = ref<PathResponse[]>([])
+const presetPaths = ref<PresetPathResponse[]>([])
+const recommendations = ref<RecommendationTopicItem[]>([])
+const recommendationsLoading = ref(false)
+const reviewsLoading = ref(false)
+const presetPathsLoading = ref(false)
+const pathsLoading = ref(false)
 const actioningId = ref<string | null>(null)
 
+// Module expand state
+const expandedModules = ref<string[]>(['recommendations', 'reviews'])
+
+function isExpanded(name: string): boolean {
+  return expandedModules.value.includes(name)
+}
+
+function toggleModule(name: string) {
+  const idx = expandedModules.value.indexOf(name)
+  if (idx >= 0) {
+    expandedModules.value.splice(idx, 1)
+  } else {
+    expandedModules.value.push(name)
+  }
+}
+
+// Evidence popup
+const showEvidencePopup = ref(false)
+const selectedReview = ref<ReviewItem | null>(null)
+
+function openEvidenceSheet(review: ReviewItem) {
+  selectedReview.value = review
+  showEvidencePopup.value = true
+}
+
+// Computed
+const activePaths = computed(() => paths.value.filter(p => p.status === 'active'))
+
+// Display helpers
 function pathDisplayName(path: PathResponse): string {
   return locale.value.startsWith('zh') && path.name_zh ? path.name_zh : path.name
+}
+
+function presetPathDisplayName(pp: PresetPathResponse): string {
+  return locale.value.startsWith('zh') && pp.name_zh ? pp.name_zh : pp.name
 }
 
 function pathChildName(childId: string): string {
@@ -216,24 +317,88 @@ function pathStatusLabel(status: string): string {
   }
 }
 
-// Skip first onActivated — Vue 3 fires both onMounted and onActivated on first mount
-let hasActivated = false
+// Recommendation helpers
+function reasonToTagType(reasons: string[]): 'primary' | 'success' | 'warning' | 'default' {
+  if (reasons.includes('weak_point')) return 'warning'
+  if (reasons.includes('mastery_gained')) return 'success'
+  return 'primary'
+}
 
-async function loadData() {
+function getReasonEmoji(reasons: string[]): string {
+  if (reasons.includes('weak_point')) return '⚠️'
+  if (reasons.includes('mastery_gained')) return '✅'
+  if (reasons.includes('recommended')) return '💡'
+  return '📌'
+}
+
+// Data loading
+async function loadRecommendations() {
+  const childId = babyStore.selectedChildId
+  if (!childId || !familyStore.aiEnabled) return
+  recommendationsLoading.value = true
   try {
-    const [childrenData, reviewsData, pathsData] = await Promise.all([
-      getLearningChildren(),
-      getReviews(),
-      getPaths(),
-    ])
-    children.value = childrenData
-    reviews.value = reviewsData.slice(0, 5) // Show only first 5 on overview
-    paths.value = pathsData
+    const res = await getRecommendations(childId)
+    recommendations.value = res.path?.topics ?? []
   } catch {
-    showFailToast(t('toast.operationFailed'))
+    // best-effort: clear on failure
+    recommendations.value = []
+  } finally {
+    recommendationsLoading.value = false
   }
 }
 
+async function loadReviews() {
+  reviewsLoading.value = true
+  try {
+    reviews.value = await getReviews()
+  } catch {
+    reviews.value = []
+  } finally {
+    reviewsLoading.value = false
+  }
+}
+
+async function loadPresetPaths() {
+  presetPathsLoading.value = true
+  try {
+    presetPaths.value = await getPresetPaths()
+  } catch {
+    presetPaths.value = []
+  } finally {
+    presetPathsLoading.value = false
+  }
+}
+
+async function loadPaths() {
+  pathsLoading.value = true
+  try {
+    paths.value = await getPaths()
+  } catch {
+    paths.value = []
+  } finally {
+    pathsLoading.value = false
+  }
+}
+
+async function loadChildren() {
+  try {
+    children.value = await getLearningChildren()
+  } catch {
+    children.value = []
+  }
+}
+
+async function loadData() {
+  await Promise.all([
+    loadChildren(),
+    loadReviews(),
+    loadPaths(),
+    loadPresetPaths(),
+    loadRecommendations(),
+  ])
+}
+
+// Actions
 async function doApprove(review: ReviewItem) {
   try {
     await showConfirmDialog({
@@ -247,7 +412,8 @@ async function doApprove(review: ReviewItem) {
   try {
     await approveReview(review.progress_id)
     showSuccessToast(t('learning.approved'))
-    await loadData()
+    showEvidencePopup.value = false
+    await loadReviews()
   } catch {
     showFailToast(t('toast.operationFailed'))
   } finally {
@@ -268,7 +434,8 @@ async function doReject(review: ReviewItem) {
   try {
     await rejectReview(review.progress_id)
     showSuccessToast(t('learning.rejected'))
-    await loadData()
+    showEvidencePopup.value = false
+    await loadReviews()
   } catch {
     showFailToast(t('toast.operationFailed'))
   } finally {
@@ -276,10 +443,22 @@ async function doReject(review: ReviewItem) {
   }
 }
 
+async function handleConfirmAssign() {
+  // Navigate to recommendations page for full assign flow
+  router.push('/baby/learning/recommendations')
+}
+
+async function refreshRecommendations() {
+  await loadRecommendations()
+}
+
 async function onRefresh() {
   await loadData()
   refreshing.value = false
 }
+
+// Skip first onActivated — Vue 3 fires both onMounted and onActivated on first mount
+let hasActivated = false
 
 onMounted(async () => {
   increment()
@@ -309,100 +488,87 @@ onActivated(async () => {
   padding-bottom: 20px;
 }
 
-.children-section {
-  margin-top: 12px;
+.module-card {
+  margin: 12px;
+  background: var(--card-bg, #f5f5ff);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.child-card {
-  padding: 16px;
-  border-bottom: 1px solid var(--separator, #f5f5f5);
-}
-
-.child-card:last-child {
-  border-bottom: none;
-}
-
-.child-card-header {
+.module-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
 }
 
-.child-name {
-  font-size: 16px;
+.module-title {
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.child-study-time {
+.module-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.module-fallback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.fallback-icon {
+  font-size: 16px;
+}
+
+.module-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  justify-content: center;
+}
+
+.empty-icon {
+  font-size: 18px;
+}
+
+.summary-line {
+  padding: 0 16px 8px;
   font-size: 13px;
   color: var(--text-secondary);
 }
 
-.child-stats {
+.topic-tags {
   display: flex;
-  gap: 16px;
-  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 12px;
 }
 
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
+.topic-tag {
+  cursor: default;
 }
 
-.stat-value {
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.stat-mastered {
-  color: var(--color-success, #4CAF50);
-}
-
-.stat-learning {
-  color: var(--color-warning, #FF9800);
-}
-
-.stat-available {
-  color: var(--text-secondary);
-}
-
-.stat-review {
-  color: var(--van-danger-color, #ee0a24);
-}
-
-.stat-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-
-.child-actions {
+.module-actions {
   display: flex;
   gap: 8px;
-}
-
-.child-actions .van-button {
-  flex: 1;
-}
-
-.reviews-section {
-  margin-top: 12px;
-}
-
-.section-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  padding: 0 16px 14px;
 }
 
 .review-item {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--separator, #f5f5f5);
+  border-bottom: 1px solid var(--separator, rgba(0, 0, 0, 0.06));
 }
 
 .review-item:last-child {
@@ -423,68 +589,53 @@ onActivated(async () => {
 }
 
 .review-topic-name {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
 .review-meta {
   display: flex;
+  align-items: center;
   gap: 12px;
   font-size: 12px;
   color: var(--text-secondary);
-  margin-bottom: 8px;
 }
 
-.review-actions {
-  display: flex;
-  gap: 8px;
+.view-all-btn {
+  margin: 8px 16px 14px;
 }
 
-.reviews-empty {
+.preset-path-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  padding: 24px 16px;
-  gap: 8px;
-}
-
-.reviews-empty-icon {
-  font-size: 32px;
-}
-
-.nav-section {
-  margin-top: 12px;
-}
-
-.paths-section {
-  margin-top: 12px;
-}
-
-.path-row {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--van-cell-border-color);
+  justify-content: space-between;
+  padding: 10px 0;
   cursor: pointer;
 }
 
-.path-row:last-child {
-  border-bottom: none;
+.preset-path-name {
+  font-size: 14px;
+  color: var(--text-primary);
 }
 
-.path-row:active {
-  background: var(--van-active-color);
+.path-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  cursor: pointer;
 }
 
 .path-row-main {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .path-row-name {
   font-size: 14px;
-  font-weight: 500;
   color: var(--text-primary);
+  font-weight: 500;
 }
 
 .path-row-child {
@@ -494,13 +645,119 @@ onActivated(async () => {
 
 .path-row-meta {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
 }
 
 .path-row-progress {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+/* Evidence panel */
+.evidence-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.evidence-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--separator, rgba(0, 0, 0, 0.06));
+}
+
+.evidence-panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.evidence-close {
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.evidence-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.evidence-topic {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.evidence-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.evidence-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.evidence-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.evidence-item {
+  padding: 10px 12px;
+  background: var(--bg-primary, #ffffff);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.evidence-panel-actions {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border-top: 1px solid var(--separator, rgba(0, 0, 0, 0.06));
+}
+
+.evidence-panel-actions .van-button {
+  flex: 1;
+}
+
+/* van-collapse style overrides */
+:deep(.van-collapse) {
+  margin: 0 12px;
+}
+
+:deep(.van-collapse-item__title) {
+  background: var(--card-bg, #f5f5ff);
+  border-radius: 12px;
+  margin-bottom: 0;
+}
+
+:deep(.van-collapse-item__wrapper) {
+  background: var(--card-bg, #f5f5ff);
+  border-radius: 0 0 12px 12px;
+}
+
+:deep(.van-collapse-item__content) {
+  background: transparent;
+  padding: 8px 16px 16px;
 }
 </style>

@@ -574,7 +574,7 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'Baby' })
-import { ref, computed, onMounted, onActivated } from 'vue'
+import { ref, computed, watch, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -582,6 +582,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useChoreStore } from '@/stores/chore'
 import { useBlindBoxStore } from '@/stores/blindBox'
+import { useBabyStore } from '@/stores/baby'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UserAvatar from '@/components/common/UserAvatar.vue'
 import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
@@ -607,6 +608,7 @@ const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const choreStore = useChoreStore()
 const blindBoxStore = useBlindBoxStore()
+const babyStore = useBabyStore()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
@@ -1188,6 +1190,14 @@ async function onRefresh() {
   refreshing.value = false
 }
 
+// Sync selectedChildId to babyStore so BabyLearningPage can read it
+watch(selectedChildId, (id) => {
+  const name = id
+    ? childMembers.value.find(c => c.id === id)?.display_name ?? null
+    : null
+  babyStore.selectChild(id ? String(id) : null, name)
+})
+
 onMounted(async () => {
   increment()
   try {
@@ -1198,6 +1208,11 @@ onMounted(async () => {
     await loadData()
     await blindBoxStore.fetchDraws()
     void loadReportStatuses()
+    // Initialize babyStore with first child (if available)
+    if (childMembers.value.length > 0) {
+      const first = childMembers.value[0]
+      babyStore.selectChild(String(first.id), first.display_name)
+    }
   } finally {
     decrement()
   }
