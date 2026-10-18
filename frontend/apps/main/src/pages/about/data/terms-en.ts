@@ -319,7 +319,7 @@ export const termsContent: ContentSection[] = [
       {
         type: 'list',
         items: [
-          'Project repository: Submit an issue or contact us via GitHub;',
+          'Project repository: https://github.com/vincentruan/numina — submit an issue or contact us via GitHub;',
           'Email: Please use the contact information published in the project repository.',
         ],
       },

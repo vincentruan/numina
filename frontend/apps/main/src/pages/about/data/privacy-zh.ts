@@ -16,10 +16,6 @@ export const privacyContent: ContentSection[] = [
         type: 'paragraph',
         text: '部署模式说明：本系统目前采用自托管模式——您自行部署并运营服务端，所有数据存储在您自己的基础设施上，Numina 开发团队无法访问您的任何数据。未来我们可能提供云端 SaaS 服务，届时本政策将进行相应更新以涵盖云端场景。',
       },
-      {
-        type: 'paragraph',
-        text: '最后更新日期：2026 年 10 月 18 日。',
-      },
     ],
   },
   {
@@ -310,7 +306,7 @@ export const privacyContent: ContentSection[] = [
       {
         type: 'list',
         items: [
-          '项目仓库：https://github.com/numina-dev-space/numina',
+          '项目仓库：https://github.com/vincentruan/numina',
           '通过项目仓库的 Issues 功能提交您的问题或反馈。',
         ],
       },

@@ -16,10 +16,6 @@ export const privacyContent: ContentSection[] = [
         type: 'paragraph',
         text: 'Deployment model: The System currently operates in self-hosted mode — you deploy and operate the server on your own infrastructure, and all data resides exclusively within your environment. The Numina development team has no access to your data whatsoever. We may offer a cloud-based SaaS service in the future, in which case this policy will be updated accordingly to address the hosted scenario.',
       },
-      {
-        type: 'paragraph',
-        text: 'Last updated: October 18, 2026.',
-      },
     ],
   },
   {
@@ -310,7 +306,7 @@ export const privacyContent: ContentSection[] = [
       {
         type: 'list',
         items: [
-          'Project repository: https://github.com/numina-dev-space/numina',
+          'Project repository: https://github.com/vincentruan/numina',
           'Submit your questions or feedback via the Issues feature in the project repository.',
         ],
       },

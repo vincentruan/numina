@@ -319,7 +319,7 @@ export const termsContent: ContentSection[] = [
       {
         type: 'list',
         items: [
-          '项目代码仓库：通过 GitHub Issues 提交问题或联系；',
+          '项目代码仓库：https://github.com/vincentruan/numina — 通过 GitHub Issues 提交问题或联系；',
           '电子邮件：请通过项目代码仓库中公布的联系方式发送。',
         ],
       },
