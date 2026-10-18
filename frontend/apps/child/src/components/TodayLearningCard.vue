@@ -111,7 +111,9 @@ function navigate() {
 }
 
 // Source tag: show where this topic came from
+// Gated by displayMode — not relevant for review_due cards
 const sourceTag = computed(() => {
+  if (displayMode.value === 'review_due') return null
   if (props.data.pending_assignment) {
     const assignmentType = props.data.pending_assignment.assignment_type
     if (assignmentType === 'parent_assigned') return t('learning.source.parentAssigned')
@@ -124,10 +126,14 @@ const sourceTag = computed(() => {
 const sourceTagType = computed<'primary' | 'success' | 'warning'>(() => {
   if (props.data.pending_assignment?.assignment_type === 'parent_assigned') return 'primary'
   if (props.data.pending_assignment?.assignment_type === 'self_selected') return 'success'
-  return 'warning'
+  // Default to primary for non-assignment modes (current/recommended/explore)
+  return 'primary'
 })
 
 // Rejection feedback: show when topic failed assessment
+// TODO: Replace heuristic with actual rejection data from API.
+// Currently shows generic message when both current_topic and review_due_topic exist.
+// Needs backend to expose per-topic assessment failure data in TodayLearningResponse.
 const rejectionFeedback = computed(() => {
   const topic = props.data.current_topic || props.data.review_due_topic
   if (!topic) return null
