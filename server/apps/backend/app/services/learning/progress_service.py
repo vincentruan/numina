@@ -75,11 +75,6 @@ def check_auto_pass(
 def _increment_consecutive_override_counter(db: Session, child_id: int) -> None:
     """Increment the consecutive AI override counter on the child's stats."""
     from apps.backend.app.services.learning.stats_service import get_or_create_stats
-
-    child = db.query(LearningProgress).filter_by(child_id=child_id).first()
-    if not child:
-        return
-    # Resolve family_id from the child user
     from packages.db.models.user import User
 
     child_user = db.query(User).filter(User.id == child_id).first()

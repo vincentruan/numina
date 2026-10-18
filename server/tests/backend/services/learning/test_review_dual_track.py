@@ -1,6 +1,6 @@
 """Tests for review dual-track: AI auto-pass + parent override + circuit breaker."""
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.orm import Session
@@ -15,9 +15,12 @@ from apps.backend.app.services.learning.progress_service import (
     is_ai_auto_pass_paused,
     override_review,
 )
+from apps.backend.app.services.learning import session_service
 from packages.db.models.learning.progress import LearningProgress
+from packages.db.models.learning.session import LearningSession
 from packages.db.models.learning.topic import LearningTopic
 from packages.db.models.user import User
+from tests.backend.conftest import child_login_two_phase
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -61,6 +64,7 @@ def topic(db: Session):
         name_zh="DT 主题1",
         description="Test topic for dual track",
         age_group="mid",
+        source_taxonomy="beijing",
         centrality=50.0,
         evidence_json="[]",
         standards_json="[]",
@@ -321,3 +325,93 @@ class TestAutoPassConstants:
 
     def test_short_session_seconds_value(self):
         assert SHORT_SESSION_SECONDS == 180
+
+
+# ---------------------------------------------------------------------------
+# Helpers for API integration tests
+# ---------------------------------------------------------------------------
+
+CHILD_PASSWORD = "ChildPass1"
+PIN = ["\U0001f431", "\U0001f31f", "\U0001f388", "\U0001f436"]
+
+
+def _child_login_headers(client, username: str) -> dict:
+    """Two-phase child login — returns Bearer headers dict."""
+    token = child_login_two_phase(client, username, CHILD_PASSWORD, PIN)
+    return {"Authorization": f"Bearer {token}"}
+
+
+# ---------------------------------------------------------------------------
+# TestReviewDueTopicInTodayEndpoint
+# ---------------------------------------------------------------------------
+
+
+class TestReviewDueTopicInTodayEndpoint:
+    def test_mastered_topic_with_expired_review_appears_in_today(
+        self, db, client, child_user, topic
+    ):
+        """A mastered topic with next_review_at in the past appears as review_due_topic."""
+        child_id = child_user["id"]
+        past = datetime.now(timezone.utc) - timedelta(days=1)
+        _make_progress(
+            db,
+            child_id,
+            topic.id,
+            mastery="mastered",
+            mastery_score=0.9,
+            completed_via="ai_assessment",
+            next_review_at=past,
+        )
+
+        child_headers = _child_login_headers(client, "dualtrack_child")
+        resp = client.get("/api/v1/child/learning/today", headers=child_headers)
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["review_due_topic"] is not None
+        assert data["review_due_topic"]["id"] == str(topic.id)
+
+
+# ---------------------------------------------------------------------------
+# TestEndSessionDualTrack
+# ---------------------------------------------------------------------------
+
+
+class TestEndSessionDualTrack:
+    def test_high_score_transitions_to_mastered_via_ai(self, db, child_user, topic):
+        """end_session with score >= 0.8 transitions assessing -> mastered."""
+        child_id = child_user["id"]
+        progress = _make_progress(db, child_id, topic.id, mastery="assessing")
+
+        session = LearningSession(
+            child_id=child_id,
+            topic_id=topic.id,
+            session_type="assessment",
+        )
+        db.add(session)
+        db.flush()
+
+        result = session_service.end_session(db, session.id, score=0.85)
+
+        db.refresh(progress)
+        assert progress.mastery_level == "mastered"
+        assert progress.completed_via == "ai_assessment"
+        assert progress.mastery_score == 0.85
+
+    def test_low_score_transitions_to_parent_review(self, db, child_user, topic):
+        """end_session with score < 0.8 transitions assessing -> parent_review."""
+        child_id = child_user["id"]
+        progress = _make_progress(db, child_id, topic.id, mastery="assessing")
+
+        session = LearningSession(
+            child_id=child_id,
+            topic_id=topic.id,
+            session_type="assessment",
+        )
+        db.add(session)
+        db.flush()
+
+        result = session_service.end_session(db, session.id, score=0.5)
+
+        db.refresh(progress)
+        assert progress.mastery_level == "parent_review"
+        assert progress.mastery_score == 0.5
