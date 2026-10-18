@@ -1,11 +1,21 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/common/PageHeader.vue'
 
-defineProps<{
+const { locale } = useI18n()
+
+const props = defineProps<{
   title: string
   lastUpdated?: string
   backTo?: string
 }>()
+
+const formattedDate = computed(() => {
+  if (!props.lastUpdated) return ''
+  const d = new Date(props.lastUpdated + 'T00:00:00')
+  return d.toLocaleDateString(locale.value, { year: 'numeric', month: 'long', day: 'numeric' })
+})
 </script>
 
 <template>
@@ -13,7 +23,7 @@ defineProps<{
     <PageHeader :title="title" :back-to="backTo" />
     <div class="content-body">
       <p v-if="lastUpdated" class="content-updated">
-        {{ lastUpdated }}
+        {{ formattedDate }}
       </p>
       <slot />
     </div>

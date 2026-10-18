@@ -8,7 +8,9 @@ const { t } = useI18n()
 
 <template>
   <ContentPage :title="t('settings.openSourceLicenses')" back-to="/settings/about">
-    <p class="licenses-intro">{{ t('settings.licensedUnder') }}</p>
+    <div class="agpl-notice">
+      <p>{{ t('settings.agplNotice') }}</p>
+    </div>
     <div class="licenses-list">
       <div v-for="comp in ossComponents" :key="comp.name" class="license-item">
         <a :href="comp.url" target="_blank" rel="noopener" class="license-name">{{ comp.name }}</a>
@@ -19,14 +21,19 @@ const { t } = useI18n()
 </template>
 
 <style scoped>
-.licenses-intro {
+.agpl-notice {
   font-size: 14px;
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  line-height: 1.8;
   margin-bottom: 20px;
-  line-height: 1.6;
-  padding: 12px;
+  padding: 12px 16px;
   background: color-mix(in srgb, var(--van-primary-color) 6%, transparent);
   border-radius: 8px;
+  border-left: 3px solid var(--van-primary-color);
+}
+
+.agpl-notice p {
+  margin: 0;
 }
 
 .licenses-list {
