@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import json
 
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from packages.core.logging import get_logger
 from packages.db.models.learning.path import LearningPath, LearningPathItem
 from packages.db.models.learning.preset_path import PresetLearningPath
-from packages.db.models.learning.topic import LearningDependency, LearningTopic
+from packages.db.models.learning.topic import LearningTopic
 
 from .path_service import sort_topics_by_prerequisites
 
@@ -92,8 +91,6 @@ def generate_preset_paths(db: Session) -> list[PresetLearningPath]:
             if not semester_topic_ids:
                 continue
 
-            # Build name from first topic
-            first_topic = topics.get(semester_topic_ids[0])
             grade_min, grade_max = grade_range
             grade_label = f"{grade_min}-{grade_max}"
 
@@ -166,7 +163,7 @@ def assign_preset_path(
 
     child = db.query(User).filter(User.id == child_id).first()
     if not child:
-        raise AppError(ErrorCode.USER_NOT_FOUND, details={"child_id": str(child_id)})
+        raise AppError(ErrorCode.CHILD_NOT_FOUND, details={"child_id": str(child_id)})
 
     family_id = child.family_id
 

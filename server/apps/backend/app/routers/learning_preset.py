@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
-from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.learning import (
     AssignPresetRequest,
