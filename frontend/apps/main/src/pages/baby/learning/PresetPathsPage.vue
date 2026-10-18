@@ -13,7 +13,7 @@
           is-link
         >
           <template #value>
-            <van-tag plain type="primary">{{ pp.topic_count }} topics</van-tag>
+            <van-tag plain type="primary">{{ t('learning.topicCount', { count: pp.topic_count }) }}</van-tag>
           </template>
         </van-cell>
       </van-cell-group>

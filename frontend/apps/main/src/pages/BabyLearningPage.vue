@@ -79,7 +79,7 @@
                 </div>
                 <template v-else>
                   <div
-                    v-for="review in reviews.slice(0, 3)"
+                    v-for="review in (showAllReviews ? reviews : reviews.slice(0, 3))"
                     :key="review.progress_id"
                     class="review-item"
                   >
@@ -105,9 +105,9 @@
                     plain
                     block
                     class="view-all-btn"
-                    @click="expandedModules.push('reviews')"
+                    @click="showAllReviews = !showAllReviews"
                   >
-                    {{ t('learning.allReviews') }}
+                    {{ showAllReviews ? t('learning.collapseReviews') : t('learning.viewAllReviews') }}
                   </van-button>
                 </template>
               </template>
@@ -266,6 +266,9 @@ const reviewsLoading = ref(false)
 const presetPathsLoading = ref(false)
 const pathsLoading = ref(false)
 const actioningId = ref<string | null>(null)
+
+// Review expand state
+const showAllReviews = ref(false)
 
 // Module expand state
 const expandedModules = ref<string[]>(['recommendations', 'reviews'])

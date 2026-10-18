@@ -2138,6 +2138,9 @@ export default {
     overrideSuccess: '已覆盖审核决定',
     assignSuccess: '已派发学习路径',
     presetPathsEmpty: '暂无匹配的课标路径',
+    viewAllReviews: '查看全部审核',
+    collapseReviews: '收起',
+    topicCount: '{count} 个知识点',
     pathDetail: {
       progress: '{completed}/{total} 已完成',
       milestone: '下一个里程碑: 再完成 {threshold} 个任务获得 +{bonus} 分奖励',
