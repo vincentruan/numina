@@ -1,12 +1,13 @@
 """Zone-based recommendation service — simplified Phase 1 zone logic."""
 
-from datetime import date
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
 
 from sqlalchemy.orm import Session
 
 from packages.core.logging import get_logger
 from packages.db.models.learning.progress import LearningProgress
-from packages.db.models.learning.topic import LearningTopic
+from packages.db.models.learning.topic import LearningDependency, LearningTopic
 
 logger = get_logger(__name__)
 
@@ -159,3 +160,202 @@ def _find_zone_topic(
         .first()
     )
     return available
+
+
+# ---------------------------------------------------------------------------
+# Recommendation dataclasses
+# ---------------------------------------------------------------------------
+
+@dataclass
+class BreakpointTopic:
+    topic_id: int
+    topic_name: str
+    reasons: list[str]
+    centrality: float
+    blocking_topic_id: int  # the mastered topic whose hard dep points here
+
+
+@dataclass
+class CurriculumGapTopic:
+    topic_id: int
+    topic_name: str
+    reasons: list[str]
+    centrality: float
+
+
+@dataclass
+class ReviewDueTopic:
+    topic_id: int
+    topic_name: str
+    reasons: list[str]
+    centrality: float
+    next_review_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Recommendation query functions
+# ---------------------------------------------------------------------------
+
+def find_breakpoint_topics(
+    db: Session, child_id: int
+) -> list[BreakpointTopic]:
+    """Find topics that are hard prerequisites of mastered topics but not yet mastered.
+
+    Algorithm:
+    1. Get child's mastered topic_ids.
+    2. Find hard dependency edges where prerequisite_id is in mastered set.
+    3. Collect the dependent topic_ids (these are the "next" topics).
+    4. Exclude any that the child has already mastered.
+    5. Return as BreakpointTopic sorted by centrality desc.
+    """
+    # Step 1: mastered topic_ids for this child
+    mastered_ids: set[int] = {
+        row[0]
+        for row in db.query(LearningProgress.topic_id).filter(
+            LearningProgress.child_id == child_id,
+            LearningProgress.mastery_level == "mastered",
+        ).all()
+    }
+    if not mastered_ids:
+        return []
+
+    # Step 2: hard dependency edges where prerequisite is mastered
+    edges = (
+        db.query(LearningDependency)
+        .filter(
+            LearningDependency.prerequisite_id.in_(mastered_ids),
+            LearningDependency.strength == "hard",
+        )
+        .all()
+    )
+
+    if not edges:
+        return []
+
+    # Step 3: dependent topic_ids (topic_id is the topic that HAS the prereq)
+    dependent_ids = {e.topic_id for e in edges}
+
+    # Step 4: exclude already-mastered
+    child_mastered_dependent: set[int] = {
+        row[0]
+        for row in db.query(LearningProgress.topic_id).filter(
+            LearningProgress.child_id == child_id,
+            LearningProgress.topic_id.in_(dependent_ids),
+            LearningProgress.mastery_level == "mastered",
+        ).all()
+    }
+    remaining_ids = dependent_ids - child_mastered_dependent
+    if not remaining_ids:
+        return []
+
+    # Step 5: fetch topic details and build results
+    topics = (
+        db.query(LearningTopic)
+        .filter(LearningTopic.id.in_(remaining_ids))
+        .all()
+    )
+    topic_map = {t.id: t for t in topics}
+
+    # Build a map of dependent_id -> first mastered blocking topic_id
+    blocking_map: dict[int, int] = {}
+    for e in edges:
+        if e.topic_id in remaining_ids and e.topic_id not in blocking_map:
+            blocking_map[e.topic_id] = e.prerequisite_id
+
+    results: list[BreakpointTopic] = []
+    for tid in remaining_ids:
+        t = topic_map.get(tid)
+        if t is None:
+            continue
+        results.append(
+            BreakpointTopic(
+                topic_id=tid,
+                topic_name=t.name_zh or t.name or "",
+                reasons=["知识断点"],
+                centrality=t.centrality or 0.0,
+                blocking_topic_id=blocking_map.get(tid, 0),
+            )
+        )
+
+    results.sort(key=lambda x: x.centrality, reverse=True)
+    return results
+
+
+def find_curriculum_gap_topics(
+    db: Session, child_id: int
+) -> list[CurriculumGapTopic]:
+    """Find age-appropriate curriculum topics the child hasn't mastered, sorted by centrality."""
+    child_age_group = get_child_age_group(db, child_id)
+    if not child_age_group:
+        return []
+
+    # Mastered topic_ids for this child
+    mastered_ids: set[int] = {
+        row[0]
+        for row in db.query(LearningProgress.topic_id).filter(
+            LearningProgress.child_id == child_id,
+            LearningProgress.mastery_level == "mastered",
+        ).all()
+    }
+
+    # Age-appropriate topics with non-empty curriculum standards, not deprecated
+    candidates = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.age_group == child_age_group,
+            LearningTopic.deprecated.is_(False),
+            LearningTopic.curriculum_standards_json.isnot(None),
+            LearningTopic.curriculum_standards_json != "[]",
+        )
+        .all()
+    )
+
+    # Filter out mastered
+    unmastered = [t for t in candidates if t.id not in mastered_ids]
+
+    # Sort by centrality desc
+    unmastered.sort(key=lambda t: t.centrality or 0.0, reverse=True)
+
+    return [
+        CurriculumGapTopic(
+            topic_id=t.id,
+            topic_name=t.name_zh or t.name or "",
+            reasons=["课标必会"],
+            centrality=t.centrality or 0.0,
+        )
+        for t in unmastered
+    ]
+
+
+def find_review_due_topics(
+    db: Session, child_id: int
+) -> list[ReviewDueTopic]:
+    """Find mastered topics whose SM-2 next_review_at <= now."""
+    now = datetime.now(UTC)
+
+    rows = (
+        db.query(LearningProgress, LearningTopic)
+        .join(LearningTopic, LearningProgress.topic_id == LearningTopic.id)
+        .filter(
+            LearningProgress.child_id == child_id,
+            LearningProgress.mastery_level == "mastered",
+            LearningProgress.next_review_at.isnot(None),
+            LearningProgress.next_review_at <= now,
+        )
+        .all()
+    )
+
+    results: list[ReviewDueTopic] = []
+    for progress, topic in rows:
+        results.append(
+            ReviewDueTopic(
+                topic_id=topic.id,
+                topic_name=topic.name_zh or topic.name or "",
+                reasons=["需要复习"],
+                centrality=topic.centrality or 0.0,
+                next_review_at=progress.next_review_at,
+            )
+        )
+
+    results.sort(key=lambda x: x.centrality, reverse=True)
+    return results
