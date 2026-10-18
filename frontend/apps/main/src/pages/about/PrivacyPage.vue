@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LegalDocumentPage from './LegalDocumentPage.vue'
 import { privacyContent as privacyZh } from './data/privacy-zh'
 import { privacyContent as privacyEn } from './data/privacy-en'
+import { useLocalizedContent } from './useLocalizedContent'
 
-const { t, locale } = useI18n()
-
-const content = computed(() =>
-  locale.value.startsWith('zh') ? privacyZh : privacyEn,
-)
+const { t } = useI18n()
+const content = useLocalizedContent(privacyZh, privacyEn)
 </script>
 
 <template>
