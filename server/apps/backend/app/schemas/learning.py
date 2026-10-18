@@ -165,6 +165,7 @@ class TodayLearningResponse(SnowflakeBase):
 
     current_topic: TopicResponse | None = None
     pending_assignment: AssignmentResponse | None = None
+    review_due_topic: TopicResponse | None = None
     recommended_topic: TopicResponse | None = None
     study_minutes_today: int = 0
     current_zone: str = "growth"
@@ -410,3 +411,20 @@ class RecommendationPathResponse(BaseModel):
     """Wrapper for recommendation path response."""
 
     path: RecommendationPathDetail
+
+
+# --- Review Dual-Track ---
+
+
+class ReviewOverrideRequest(BaseModel):
+    """Parent override of AI assessment decision."""
+
+    new_decision: str  # "mastered" | "learning"
+    reason: str | None = None
+
+
+class AIReviewStatusResponse(BaseModel):
+    """AI auto-pass status for a child."""
+
+    ai_auto_pass_paused: bool
+    consecutive_overrides: int

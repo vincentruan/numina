@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
@@ -107,6 +108,31 @@ def today_learning(
     (zh-CN -> beijing, otherwise -> os-taxonomy).
     """
     taxonomy = locale_to_source_taxonomy(child.language)
+
+    # 0. review_due: mastered topics whose next_review_at has passed
+    now_utc = datetime.now(UTC)
+    review_due_progress = (
+        db.query(LearningProgress)
+        .filter(
+            LearningProgress.child_id == child.id,
+            LearningProgress.mastery_level == "mastered",
+            LearningProgress.next_review_at <= now_utc,
+            LearningProgress.next_review_at.isnot(None),
+        )
+        .order_by(LearningProgress.next_review_at.asc())
+        .first()
+    )
+    review_due_topic = None
+    if review_due_progress:
+        review_due_topic = (
+            db.query(LearningTopic)
+            .filter(
+                LearningTopic.id == review_due_progress.topic_id,
+                LearningTopic.source_taxonomy == taxonomy,
+            )
+            .first()
+        )
+
     # 1. current_topic: first progress with mastery_level=="learning", ORDER BY updated_at DESC
     current_progress = (
         db.query(LearningProgress)
@@ -165,6 +191,7 @@ def today_learning(
     return TodayLearningResponse(
         current_topic=current_topic,
         pending_assignment=pending_assignment,
+        review_due_topic=review_due_topic,
         recommended_topic=recommended_topic,
         study_minutes_today=study_minutes["today_study_minutes"],
         current_zone=stats.current_zone,

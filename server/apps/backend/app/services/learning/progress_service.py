@@ -1,5 +1,6 @@
 """Progress service — state machine + spaced repetition for learning progress."""
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func as sa_func
@@ -17,6 +18,18 @@ from packages.db.models.learning.topic import LearningDependency, LearningTopic
 
 logger = get_logger(__name__)
 
+# Auto-pass thresholds for AI assessment dual-track
+AUTO_PASS_THRESHOLD = 0.8
+CONSECUTIVE_OVERRIDE_LIMIT = 5
+SHORT_SESSION_SECONDS = 180  # 3 minutes
+
+
+@dataclass
+class AutoPassResult:
+    should_auto_pass: bool
+    reason: str  # "score_above_threshold", "score_below_threshold", "ai_paused", "no_score"
+    needs_attention: bool = False  # True for short sessions
+
 # Age group ordering for difficulty comparison
 AGE_GROUP_ORDER = {"low": 0, "mid": 1, "high": 2}
 
@@ -29,6 +42,109 @@ VALID_TRANSITIONS = {
     "mastered": {"review", "learning"},  # review via expiry; learning for re-study
     "review": {"learning"},              # fail -> re-learn; pass handled via assessing
 }
+
+
+def check_auto_pass(
+    db: Session,
+    score: float | None,
+    child_id: int,
+    ai_paused: bool = False,
+    duration_seconds: int | None = None,
+) -> AutoPassResult:
+    """Determine whether an AI assessment score should auto-pass to mastered.
+
+    Returns an AutoPassResult indicating whether to auto-pass, the reason,
+    and whether the result needs parent attention (short sessions).
+    """
+    if score is None:
+        return AutoPassResult(should_auto_pass=False, reason="no_score")
+    if ai_paused:
+        return AutoPassResult(should_auto_pass=False, reason="ai_paused")
+    if score >= AUTO_PASS_THRESHOLD:
+        needs_attention = (
+            duration_seconds is not None and duration_seconds < SHORT_SESSION_SECONDS
+        )
+        return AutoPassResult(
+            should_auto_pass=True,
+            reason="score_above_threshold",
+            needs_attention=needs_attention,
+        )
+    return AutoPassResult(should_auto_pass=False, reason="score_below_threshold")
+
+
+def _increment_consecutive_override_counter(db: Session, child_id: int) -> None:
+    """Increment the consecutive AI override counter on the child's stats."""
+    from apps.backend.app.services.learning.stats_service import get_or_create_stats
+
+    child = db.query(LearningProgress).filter_by(child_id=child_id).first()
+    if not child:
+        return
+    # Resolve family_id from the child user
+    from packages.db.models.user import User
+
+    child_user = db.query(User).filter(User.id == child_id).first()
+    if not child_user:
+        return
+    stats = get_or_create_stats(db, child_id, child_user.family_id)
+    stats.consecutive_ai_overrides = (stats.consecutive_ai_overrides or 0) + 1
+    db.flush()
+
+
+def is_ai_auto_pass_paused(db: Session, child_id: int) -> bool:
+    """Check whether AI auto-pass is paused due to consecutive parent overrides."""
+    from apps.backend.app.services.learning.stats_service import get_or_create_stats
+    from packages.db.models.user import User
+
+    child_user = db.query(User).filter(User.id == child_id).first()
+    if not child_user:
+        return False
+    stats = get_or_create_stats(db, child_id, child_user.family_id)
+    return (stats.consecutive_ai_overrides or 0) >= CONSECUTIVE_OVERRIDE_LIMIT
+
+
+def get_consecutive_override_count(db: Session, child_id: int) -> int:
+    """Get the current consecutive AI override count for a child."""
+    from apps.backend.app.services.learning.stats_service import get_or_create_stats
+    from packages.db.models.user import User
+
+    child_user = db.query(User).filter(User.id == child_id).first()
+    if not child_user:
+        return 0
+    stats = get_or_create_stats(db, child_id, child_user.family_id)
+    return stats.consecutive_ai_overrides or 0
+
+
+def override_review(
+    db: Session,
+    progress_id: int,
+    parent_id: int,
+    new_decision: str,
+    reason: str | None = None,
+) -> LearningProgress:
+    """Parent overrides AI assessment decision.
+
+    ``new_decision`` is the target mastery_level (``"mastered"`` or ``"learning"``).
+    Records override metadata and increments the consecutive override counter.
+    """
+    progress = (
+        db.query(LearningProgress).filter(LearningProgress.id == progress_id).first()
+    )
+    if not progress:
+        raise AppError(ErrorCode.LEARNING_PROGRESS_NOT_FOUND)
+
+    # Validate the transition
+    validate_transition(progress.mastery_level, new_decision)
+
+    progress.mastery_level = new_decision
+    progress.overridden_by = parent_id
+    progress.overridden_at = datetime.now(UTC)
+    progress.override_reason = reason
+    if new_decision == "mastered":
+        progress.completed_via = "parent_override"
+    db.flush()
+
+    _increment_consecutive_override_counter(db, progress.child_id)
+    return progress
 
 
 def _all_hard_prereqs_met(db: Session, child_id: int, topic_id: int) -> bool:
@@ -184,7 +300,7 @@ def transition_to_mastered(
 ) -> LearningProgress:
     """Transition progress to 'mastered' state and update stability/review schedule."""
     validate_transition(progress.mastery_level, "mastered")
-    if completed_via not in ("ai_assessment", "parent_approval", "practice_session"):
+    if completed_via not in ("ai_assessment", "parent_approval", "practice_session", "parent_override"):
         raise ValueError(f"Invalid completed_via: {completed_via}")
     now = datetime.now(UTC)
     progress.mastery_level = "mastered"
@@ -302,6 +418,13 @@ def approve_parent_review(
         raise AppError(ErrorCode.LEARNING_INVALID_STATE_TRANSITION)
 
     db.refresh(progress)
+
+    # Reset consecutive AI override counter — a normal parent approval
+    # breaks the override streak
+    from apps.backend.app.services.learning.stats_service import get_or_create_stats
+
+    stats_row = get_or_create_stats(db, progress.child_id, family_id)
+    stats_row.consecutive_ai_overrides = 0
 
     # Update spaced-repetition bookkeeping
     now = datetime.now(UTC)

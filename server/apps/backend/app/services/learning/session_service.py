@@ -178,7 +178,12 @@ def end_session(
     score: float | None = None,
     ai_evaluation: dict | None = None,
 ) -> LearningSession:
-    """End a learning session, optionally recording a score and AI evaluation."""
+    """End a learning session, optionally recording a score and AI evaluation.
+
+    If a score is provided and the progress is in 'assessing' state, the
+    dual-track logic applies: high scores may auto-pass to 'mastered' via
+    AI assessment, while lower scores go to 'parent_review'.
+    """
     session = db.query(LearningSession).filter(LearningSession.id == session_id).first()
     if not session:
         raise AppError(ErrorCode.LEARNING_SESSION_NOT_FOUND)
@@ -197,9 +202,43 @@ def end_session(
         delta = session.ended_at - session.started_at
         session.duration_seconds = int(delta.total_seconds())
 
+    # Dual-track: auto-pass logic when score is provided and progress is assessing
+    if score is not None:
+        progress = (
+            db.query(LearningProgress)
+            .filter_by(child_id=session.child_id, topic_id=session.topic_id)
+            .first()
+        )
+        if progress and progress.mastery_level == "assessing":
+            ai_available = _check_ai_available(db, session.child_id)
+            ai_paused = progress_service.is_ai_auto_pass_paused(db, session.child_id)
+            auto_result = progress_service.check_auto_pass(
+                db,
+                score,
+                session.child_id,
+                ai_paused=ai_paused,
+                duration_seconds=session.duration_seconds,
+            )
+            if ai_available and auto_result.should_auto_pass:
+                progress_service.transition_to_mastered(
+                    db, progress, score, completed_via="ai_assessment"
+                )
+            else:
+                progress.mastery_level = "parent_review"
+                progress.mastery_score = score
+
     db.flush()
     db.commit()
     return session
+
+
+def _check_ai_available(db: Session, child_id: int) -> bool:
+    """Check whether AI assessment is available for this child's family.
+
+    Placeholder: returns True for now. The real implementation would check
+    the family's AI configuration (provider availability, model access, etc.).
+    """
+    return True
 
 
 def start_assessment(
