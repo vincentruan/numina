@@ -2363,6 +2363,7 @@ export default {
     changelogV1_7: '熔断器统一 + MCP ContextVar 优化',
     copyright: '© 2024-2026 Numina Team',
     licensedUnder: 'Licensed under AGPL-3.0',
+    agplNotice: 'Numina 是自由软件，基于 GNU Affero General Public License v3.0 (AGPL-3.0) 发布。您可以自由地运行、研究、修改和分发本软件及其衍生作品，前提是衍生作品同样以 AGPL-3.0 许可发布，并向用户提供源代码。本许可确保所有用户享有相同的自由。',
   },
   changePassword: {
     title: '账户密码',

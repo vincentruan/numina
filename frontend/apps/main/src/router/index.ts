@@ -367,6 +367,26 @@ const router = createRouter({
           component: () => import('@/pages/AboutPage.vue')
         },
         {
+          path: 'settings/about/changelog',
+          name: 'AboutChangelog',
+          component: () => import('@/pages/about/ChangelogPage.vue'),
+        },
+        {
+          path: 'settings/about/terms',
+          name: 'AboutTerms',
+          component: () => import('@/pages/about/TermsPage.vue'),
+        },
+        {
+          path: 'settings/about/privacy',
+          name: 'AboutPrivacy',
+          component: () => import('@/pages/about/PrivacyPage.vue'),
+        },
+        {
+          path: 'settings/about/licenses',
+          name: 'AboutLicenses',
+          component: () => import('@/pages/about/LicensesPage.vue'),
+        },
+        {
           // R16: old route redirects to new /finance/import (client-side redirect).
           path: 'settings/import-report',
           redirect: '/finance/import',

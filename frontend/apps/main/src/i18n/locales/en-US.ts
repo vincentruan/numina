@@ -2116,6 +2116,7 @@ Keep the tone warm, like a chat between family members.`,
     changelogV1_7: 'Circuit breaker unification + MCP ContextVar optimization',
     copyright: '© 2024-2026 Numina Team',
     licensedUnder: 'Licensed under AGPL-3.0',
+    agplNotice: 'Numina is free software, released under the GNU Affero General Public License v3.0 (AGPL-3.0). You are free to run, study, modify, and distribute this software and its derivatives, provided that derivative works are also licensed under AGPL-3.0 and their source code is made available to users. This license ensures the same freedoms for all users.',
   },
   changePassword: {
     title: 'Account Password',
