@@ -388,7 +388,7 @@ class PathResponse(SnowflakeBase):
 # --- Recommendation ---
 
 
-class RecommendedTopicItem(BaseModel):
+class RecommendedTopicItem(SnowflakeBase):
     """A single topic in a recommendation path."""
 
     topic_id: int
@@ -425,7 +425,7 @@ class PresetPathResponse(SnowflakeBase):
     name_zh: str
     description: str | None
     topic_count: int
-    topic_ids: list[int]
+    topic_ids: list[str]
     is_active: bool
 
 

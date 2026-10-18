@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
+from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.learning import (
     AssignPresetRequest,
@@ -24,6 +25,7 @@ def _preset_to_response(preset: PresetLearningPath) -> dict:
     """Convert PresetLearningPath ORM object to response dict."""
     import json
 
+    raw_ids = json.loads(preset.topic_ids_json)
     return {
         "id": preset.id,
         "grade": preset.grade,
@@ -33,7 +35,7 @@ def _preset_to_response(preset: PresetLearningPath) -> dict:
         "name_zh": preset.name_zh,
         "description": preset.description,
         "topic_count": preset.topic_count,
-        "topic_ids": json.loads(preset.topic_ids_json),
+        "topic_ids": [str(tid) for tid in raw_ids],
         "is_active": preset.is_active,
     }
 
@@ -68,6 +70,19 @@ def assign_preset_path_endpoint(
 
     Creates a LearningPath + LearningPathItems for the child.
     """
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(
+            User.id == req.child_id,
+            User.family_id == current_user.family_id,
+            User.role == "child",
+        )
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND, details={"child_id": req.child_id})
+
     path = preset_path_service.assign_preset_path(
         db,
         preset_id=preset_id,

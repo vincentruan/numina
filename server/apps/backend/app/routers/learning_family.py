@@ -261,6 +261,15 @@ def get_recommendations(
     current_user: User = Depends(require_adult),
 ):
     """Get personalized learning recommendations for a child."""
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == current_user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND, details={"child_id": child_id})
+
     path = generate_recommendation_path(db, child_id)
     topics = [
         RecommendedTopicItem(
