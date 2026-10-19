@@ -4,7 +4,8 @@ import contextlib
 import json
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Query, Request
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -528,6 +529,21 @@ async def stream_assessment(
             json_body=agent_body,
             task_id=task_id,
         )
+    except httpx.HTTPStatusError as e:
+        _fdb = SessionLocal()
+        try:
+            AITaskService.fail_task(task_id, f"agent trigger failed: {type(e).__name__}", _fdb)
+        finally:
+            _fdb.close()
+        # Agent returned 409 Conflict — another run is already active on this thread.
+        # Propagate as 409 to the frontend so it can show a "session in progress"
+        # state instead of a generic 503 error.
+        if e.response.status_code == 409:
+            raise HTTPException(
+                status_code=409,
+                detail="已有活跃的学习会话，请等待当前会话完成后再试",
+            ) from e
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}) from e
     except Exception as e:
         _fdb = SessionLocal()
         try:
