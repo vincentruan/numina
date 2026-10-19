@@ -444,6 +444,7 @@ export default {
   },
   learning: {
     title: 'Knowledge Map',
+    backToMap: '← Back to Map',
     empty: 'No learning content yet — ask your parents to assign some!',
     todayRecommend: 'Today\'s Pick',
     startLearning: '🎓 Start Learning',
@@ -466,10 +467,12 @@ export default {
     status: {
       available: 'Available',
       learning: 'Learning',
+      tutorial: 'Learning',
       assessing: 'Assessing',
       mastered: 'Mastered',
       locked: 'Locked',
       review: 'Review',
+      parent_review: 'Parent Review',
     },
     session: {
       chatTitle: 'AI Tutor Session in Progress',
@@ -629,6 +632,9 @@ export default {
     },
     errors: {
       startFailed: 'Could not start practice, please try again',
+      noQuestions: 'No practice questions available for this topic yet',
+      topicLocked: 'Complete prerequisite topics before practicing this one',
+      topicNotFound: 'Topic not found',
       finishFailed: 'Could not finish practice',
       submitFailed: 'Could not submit answer, please try again',
     },

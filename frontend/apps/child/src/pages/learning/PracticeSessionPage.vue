@@ -177,14 +177,36 @@ async function startSession(count: number) {
       .map((qid) => byId.get(qid))
       .filter((q): q is QuestionResponse => !!q)
     if (questions.value.length === 0) {
-      error.value = t('practice.errors.startFailed')
+      error.value = t('practice.errors.noQuestions')
       return
     }
     phase.value = 'answering'
-  } catch (e) {
-    error.value = t('practice.errors.startFailed')
+  } catch (e: unknown) {
+    const code = extractErrorCode(e)
+    error.value = mapPracticeErrorCode(code)
+    console.error('[PracticeSession] startSession failed', code, e)
   } finally {
     starting.value = false
+  }
+}
+
+/** Extract backend error code from axios error response */
+function extractErrorCode(e: unknown): string | null {
+  const err = e as { response?: { data?: { code?: string } } }
+  return err?.response?.data?.code ?? null
+}
+
+/** Map backend practice error codes to i18n keys */
+function mapPracticeErrorCode(code: string | null): string {
+  switch (code) {
+    case 'PRACTICE_NO_QUESTIONS_AVAILABLE':
+      return t('practice.errors.noQuestions')
+    case 'PRACTICE_TOPIC_LOCKED':
+      return t('practice.errors.topicLocked')
+    case 'PRACTICE_TOPIC_NOT_FOUND':
+      return t('practice.errors.topicNotFound')
+    default:
+      return t('practice.errors.startFailed')
   }
 }
 

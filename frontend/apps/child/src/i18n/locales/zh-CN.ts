@@ -445,6 +445,7 @@ export default {
   },
   learning: {
     title: '知识地图',
+    backToMap: '← 返回知识地图',
     empty: '还没有学习内容，让爸爸妈妈帮你布置吧！',
     topicNotFound: '知识点不存在或已下架',
     todayRecommend: '今日推荐',
@@ -686,10 +687,12 @@ export default {
     status: {
       available: '可学习',
       learning: '学习中',
+      tutorial: '学习中',
       assessing: '评估中',
       mastered: '已掌握',
       locked: '未解锁',
       review: '待复习',
+      parent_review: '家长审核中',
     },
     session: {
       chatTitle: 'AI 导师对话进行中',
@@ -849,6 +852,9 @@ export default {
     },
     errors: {
       startFailed: '开始练习失败了，再试一次吧',
+      noQuestions: '这个知识点暂时还没有练习题，换一个试试吧',
+      topicLocked: '需要先完成前面的知识点才能练习这个哦',
+      topicNotFound: '找不到这个知识点',
       finishFailed: '结束练习失败了',
       submitFailed: '提交答案失败了，请重试',
     },
