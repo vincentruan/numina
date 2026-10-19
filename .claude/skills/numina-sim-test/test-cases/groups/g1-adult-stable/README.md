@@ -18,7 +18,8 @@ All three files reuse one adult session (`$SID` from G0).
 | [`area11-ai-security-adversarial.md`](./area11-ai-security-adversarial.md) | 11 — AI/agent adversarial security | C11.1–C11.20 |
 | [`area12-ai-task-resilience.md`](./area12-ai-task-resilience.md) | 12 — AI task resilience (前端不稳定处理) | C12.1–C12.9 |
 | [`area13-ai-asset-report-deep.md`](./area13-ai-asset-report-deep.md) | 13 — AI 资产报告深度验证 | C13.1–C13.5 |
-| [`area14-travel.md`](./area14-travel.md) | 14 — Travel module (家庭旅行管理 + 行程规划) | C14.1–C14.40 |
+| [`area14-travel.md`](./area14-travel.md) | 14 — Travel core (Trip/Expense/Split/Dashboard) | C14.1–C14.22 |
+| [`area14-itinerary.md`](./area14-itinerary.md) | 14b — Itinerary planning (行程规划/跨天/购买日期) | C14.23–C14.40 |
 | [`area15-ui-quality.md`](./area15-ui-quality.md) | 15 — UI quality & design system (H5/PWA/深色模式/无障碍) | UIQ.1–UIQ.10 |
 | [`area18-learning-os.md`](./area18-learning-os.md) | 18 — Learning OS (家长端 + 端到端闭环) | C18.1–C18.24 |
 | [`area20-mcp-external-token.md`](./area20-mcp-external-token.md) | 20 — MCP external API token & governance | M20.1–M20.15 |
@@ -68,8 +69,10 @@ SID="$SID_G0"   # reuse, do NOT session start a new one
 # area2 — financial management
 bsk navigate ${BASE} --session "$SID" --wait-until networkidle   # dashboard (C2.1)
 # ... C2.1–C2.25 ...
-# area14 — travel module (trip CRUD, expenses, split, graduation)
-# ... C14.1–C14.40 ...
+# area14 — travel core (trip/expense/split)
+# ... C14.1–C14.22 ...
+# area14b — itinerary planning
+# ... C14.23–C14.40 ...
 # area18 — learning OS (parent + E2E closed loop)
 # ... C18.1–C18.24 ...
 # area8 — expanded features (Manifesto/Blind Box/Baby/Settings)

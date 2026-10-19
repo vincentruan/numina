@@ -14,7 +14,8 @@ Shared conventions used by all area case files (grouped by directory — see
 - [`area11-ai-security-adversarial.md`](./groups/g1-adult-stable/area11-ai-security-adversarial.md) — AI/agent adversarial security (C11.1–C11.20)
 - [`area12-ai-task-resilience.md`](./groups/g1-adult-stable/area12-ai-task-resilience.md) — AI task resilience (前端不稳定处理)
 - [`area13-ai-asset-report-deep.md`](./groups/g1-adult-stable/area13-ai-asset-report-deep.md) — AI 资产报告深度验证
-- [`area14-travel.md`](./groups/g1-adult-stable/area14-travel.md) — Travel module (家庭旅行管理)
+- [`area14-travel.md`](./groups/g1-adult-stable/area14-travel.md) — Travel core: Trip/Expense/Split/Dashboard (C14.1–C14.22)
+- [`area14-itinerary.md`](./groups/g1-adult-stable/area14-itinerary.md) — Itinerary planning: 行程规划/跨天/购买日期 (C14.23–C14.40)
 - [`area15-ui-quality.md`](./groups/g1-adult-stable/area15-ui-quality.md) — UI quality & design system (UIQ.1–UIQ.10)
 - [`area18-learning-os.md`](./groups/g1-adult-stable/area18-learning-os.md) — Learning OS parent + E2E closed loop (C18.1–C18.24)
 - [`area20-mcp-external-token.md`](./groups/g1-adult-stable/area20-mcp-external-token.md) — MCP external API token & governance (M20.1–M20.15)

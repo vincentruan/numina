@@ -53,7 +53,7 @@ Covers **twenty** feature areas (detailed cases split by area under
 11. **AI/agent adversarial security** — 提示词注入 / 跨租户隔离 / 工具越权 / 自定义智能体隔离 / 输入边界 (C11.1–C11.20) ([`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md))
 12. **AI task resilience** — 前端不稳定处理：离开/刷新恢复、失败/中断重试、用户取消 (C12.1–C12.9) ([`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md))
 13. **AI 资产报告深度验证** — Hub 弹窗内容/z-index、报告重入步骤去重/SSE 重连/取消按钮、narrative 缓存推导 (C13.1–C13.5) ([`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md))
-14. **Travel module (家庭旅行管理)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float / 行程规划时间线 / 跨天行程 + 购买日期 (C14.1–C14.40) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md))
+14. **Travel core (Trip/Expense/Split/Dashboard)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float (C14.1–C14.22) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md)) + **Itinerary planning** (C14.23–C14.40) ([`test-cases/groups/g1-adult-stable/area14-itinerary.md`](./test-cases/groups/g1-adult-stable/area14-itinerary.md))
 15. **UI quality & design system audit** — 移动端 H5/PWA 适配 / 深色模式 / Vant4 组件规范 / 无障碍 / 安全区域 / 跨应用风格一致性 (UIQ.1–UIQ.10) ([`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md))
 16. **Learning OS taxonomy Beijing + curriculum/edge-status** — 课标徽章/callout / AI 生成边标识别 / locale 知识图谱过滤 / 深色模式可读性 (C16.1–C16.14) ([`test-cases/groups/g3-child/area16-learning-os-taxonomy.md`](./test-cases/groups/g3-child/area16-learning-os-taxonomy.md))
 17. **Learning OS core flows (child)** — 知识地图 / Topic 详情 / AI 导师对话 / 学习进度 / 今日学习卡片 / 自选学习难度提示 (C17.1–C17.21) ([`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md))
@@ -150,7 +150,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 | **ai** | "ai test", "AI测试" | Area 3 + Area 6 + Area 12 + Area 13 (G1 subset, AI 必须启用) | ~35-45 min |
 | **regression** | "regression test", "回归测试" | Area 7 only (R1–R9) | ~10-15 min |
 | **security** | "security test", "安全测试" | Area 9 (C9.1–C9.7) + Area 11 (C11.1–C11.20) + R6 | ~25-35 min |
-| **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.40) | ~45-55 min |
+| **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.40, two files) | ~45-55 min |
 | **ui-quality** | "ui quality", "设计审查", "UI 质量检查" | Area 15 only (UIQ.1–UIQ.10) | ~25-35 min |
 | **learning** | "learning test", "学习测试" | Area 16 + Area 17 (G3) + Area 18 (G1) + Area 19 (G1) + Area 20 (G1) | ~70-85 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
@@ -795,7 +795,8 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | **11 — AI/agent adversarial security (提示词注入/租户隔离/越权)** | **G1** | **C11.1–C11.20** | [`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md) |
 | **12 — AI task resilience (前端不稳定处理)** | **G1** | **C12.1–C12.9** | [`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md) |
 | **13 — AI 资产报告深度验证 (Hub 弹窗/重入去重/SSE 重连)** | **G1** | **C13.1–C13.5** | [`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md) |
-| **14 — Travel module (旅行管理: 行程/费用/分摊/转化/行程规划/跨天+购买日期)** | **G1** | **C14.1–C14.40** | [`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md) |
+| **14 — Travel core (行程/费用/分摊/转化/Dashboard)** | **G1** | **C14.1–C14.22** | [`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md) |
+| **14b — Itinerary planning (行程规划/跨天/购买日期)** | **G1** | **C14.23–C14.40** | [`test-cases/groups/g1-adult-stable/area14-itinerary.md`](./test-cases/groups/g1-adult-stable/area14-itinerary.md) |
 | **15 — UI quality & design system (H5/PWA/深色模式/无障碍/一致性)** | **G1** | **UIQ.1–UIQ.10** | [`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md) |
 | **16 — Learning OS taxonomy Beijing (课标徽章/边标/locale)** | **G3** | **C16.1–C16.14** | [`test-cases/groups/g3-child/area16-learning-os-taxonomy.md`](./test-cases/groups/g3-child/area16-learning-os-taxonomy.md) |
 | **17 — Learning OS core flows (child: 知识地图/Topic/AI 导师/进度/自选学习)** | **G3** | **C17.1–C17.21** | [`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md) |
