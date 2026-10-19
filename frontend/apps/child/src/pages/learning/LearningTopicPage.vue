@@ -818,4 +818,22 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--color-body);
 }
+
+/* ── Dark mode: boost callout + machine chip on dark card (#152828) ── */
+[data-theme="dark"] .curriculum-callout {
+  background: rgba(var(--color-brand-ochre-rgb), 0.22);
+  border-left-color: rgba(var(--color-brand-ochre-rgb), 0.65);
+}
+
+[data-theme="dark"] .curriculum-badge {
+  background: rgba(var(--color-brand-ochre-rgb), 0.28);
+}
+
+[data-theme="dark"] .topic-chip--machine {
+  border-color: var(--color-brand-ochre);
+}
+
+[data-theme="dark"] .ai-badge {
+  background: rgba(var(--color-brand-ochre-rgb), 0.28);
+}
 </style>

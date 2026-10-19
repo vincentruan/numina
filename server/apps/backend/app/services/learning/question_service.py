@@ -46,9 +46,8 @@ def validate_question(
         if "key" not in answer:
             errors.append("Multiple choice answer must have 'key' field")
 
-    if question_type == "calculation":
-        if "answer" not in answer:
-            errors.append("Calculation answer must have 'answer' field")
+    if question_type == "calculation" and "answer" not in answer:
+        errors.append("Calculation answer must have 'answer' field")
 
     return errors
 

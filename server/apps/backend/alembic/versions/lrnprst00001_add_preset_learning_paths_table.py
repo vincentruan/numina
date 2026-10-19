@@ -1,6 +1,6 @@
 """add preset_learning_paths table
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: lrnprst00001
 Revises: 1f05a4b6a5de
 Create Date: 2026-10-19 10:00:00.000000
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "a1b2c3d4e5f6"
+revision: str = "lrnprst00001"
 down_revision: str | None = "1f05a4b6a5de"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
