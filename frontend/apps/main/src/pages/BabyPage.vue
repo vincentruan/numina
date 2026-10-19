@@ -44,9 +44,12 @@
         <!-- Summary Card -->
         <van-cell-group inset class="summary-card">
           <van-cell :title="t('baby.balance')">
+            <template #icon>
+              <IIcon icon="mdi:star-circle" size="20" color="var(--color-cost, #f5a623)" class="cell-icon" />
+            </template>
             <template #value>
               <div class="balance-row">
-                <span>{{ currentBalance }} ⭐</span>
+                <span>{{ currentBalance }} </span>
                 <van-button
                   size="mini"
                   type="warning"
@@ -57,8 +60,16 @@
               </div>
             </template>
           </van-cell>
-          <van-cell :title="t('baby.weeklyChores')" :value="`${currentChoreStats.completed_this_week ?? 0}/${currentChoreStats.total_this_week ?? 0}`" />
-          <van-cell :title="t('baby.activeWishes')" :value="`${currentWishCount}`" />
+          <van-cell :title="t('baby.weeklyChores')" :value="`${currentChoreStats.completed_this_week ?? 0}/${currentChoreStats.total_this_week ?? 0}`">
+            <template #icon>
+              <IIcon icon="mdi:broom" size="20" color="var(--van-primary-color)" class="cell-icon" />
+            </template>
+          </van-cell>
+          <van-cell :title="t('baby.activeWishes')" :value="`${currentWishCount}`">
+            <template #icon>
+              <IIcon icon="mdi:gift-outline" size="20" color="var(--van-danger-color)" class="cell-icon" />
+            </template>
+          </van-cell>
           <van-cell
             v-if="selectedChildId"
             class="learning-entry-cell"
@@ -76,13 +87,24 @@
               <span class="learning-entry-value">{{ t('learning.studyMinutes', { minutes: currentStudyMinutes }) }}</span>
             </template>
           </van-cell>
-          <van-cell :title="t('baby.blindBoxGifts')" is-link @click="$router.push('/blind-box/gifts')" />
+          <van-cell :title="t('baby.blindBoxGifts')" is-link @click="$router.push('/blind-box/gifts')">
+            <template #icon>
+              <IIcon icon="mdi:gift-open-outline" size="20" color="var(--van-warning-color)" class="cell-icon" />
+            </template>
+          </van-cell>
           <van-cell :title="t('baby.blindBoxDraws')" is-link @click="$router.push('/blind-box/draws')">
+            <template #icon>
+              <IIcon icon="mdi:ticket-confirmation-outline" size="20" color="var(--van-success-color)" class="cell-icon" />
+            </template>
             <template v-if="pendingDrawCount > 0" #value>
               <van-badge :content="pendingDrawCount" />
             </template>
           </van-cell>
-          <van-cell :title="t('baby.choreTemplates')" is-link @click="$router.push('/baby/chore-templates')" />
+          <van-cell :title="t('baby.choreTemplates')" is-link @click="$router.push('/baby/chore-templates')">
+            <template #icon>
+              <IIcon icon="mdi:format-list-bulleted" size="20" color="var(--van-info-color)" class="cell-icon" />
+            </template>
+          </van-cell>
           <template v-if="selectedChildId">
             <van-cell
               v-if="familyStore.aiEnabled"
@@ -1343,6 +1365,14 @@ onActivated(async () => {
 
 .summary-card {
   margin-top: 12px;
+}
+
+.summary-card .cell-icon {
+  margin-right: 4px;
+  flex-shrink: 0;
+  align-self: center;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 /* Learning entry — visually boosted vs. plain sibling cells */

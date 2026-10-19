@@ -2124,6 +2124,8 @@ export default {
       statusArchived: '已归档',
     },
     // Task 5: Learning Hub modules
+    learningHub: '学习中心',
+    availablePaths: '条可用路径',
     smartRecommendations: '智能推荐',
     confirmAssign: '确认派发',
     fineTunePath: '微调路径',

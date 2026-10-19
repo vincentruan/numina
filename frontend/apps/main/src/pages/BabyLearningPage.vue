@@ -2,6 +2,12 @@
   <div class="baby-learning-page">
     <PageHeader :title="t('learning.parentTitle')" />
 
+    <!-- Child indicator -->
+    <div v-if="selectedChildName" class="child-indicator">
+      <span class="child-indicator-name">{{ selectedChildName }}</span>
+      <span class="child-indicator-hint">{{ t('learning.learningHub') }}</span>
+    </div>
+
     <van-skeleton v-if="loading && children.length === 0" :rows="5" :round="true" />
 
     <template v-else>
@@ -17,7 +23,10 @@
           <!-- Module 1: Smart Recommendations (default expanded) -->
           <div class="module-card">
             <div class="module-header" @click="toggleModule('recommendations')">
-              <span class="module-title">🌟 {{ t('learning.smartRecommendations') }}</span>
+              <div class="module-title-row">
+                <IIcon icon="mdi:star-shooting" size="20" color="var(--van-warning-color)" />
+                <span class="module-title">{{ t('learning.smartRecommendations') }}</span>
+              </div>
               <van-icon :name="isExpanded('recommendations') ? 'arrow-up' : 'arrow-down'" />
             </div>
             <div v-show="isExpanded('recommendations')">
@@ -65,7 +74,8 @@
           <div class="module-card">
             <div class="module-header" @click="toggleModule('reviews')">
               <div class="module-title-row">
-                <span class="module-title">📋 {{ t('learning.reviewQueue') }}</span>
+                <IIcon icon="mdi:clipboard-check-outline" size="20" color="var(--van-primary-color)" />
+                <span class="module-title">{{ t('learning.reviewQueue') }}</span>
                 <van-badge v-if="reviews.length > 0" :content="reviews.length" />
               </div>
               <van-icon :name="isExpanded('reviews') ? 'arrow-up' : 'arrow-down'" />
@@ -74,8 +84,7 @@
               <van-skeleton v-if="reviewsLoading" :rows="3" :round="true" />
               <template v-else>
                 <div v-if="reviews.length === 0" class="module-empty">
-                  <span class="empty-icon">🎉</span>
-                  <span>{{ t('learning.noPendingReviews') }}</span>
+                  <EmptyState :description="t('learning.noPendingReviews')" image-size="48" />
                 </div>
                 <template v-else>
                   <div
@@ -116,11 +125,18 @@
 
           <!-- Module 3: Preset Paths (default collapsed) -->
           <van-collapse v-model="expandedModules">
-            <van-collapse-item :title="t('learning.presetPaths')" name="presetPaths">
+            <van-collapse-item name="presetPaths">
+              <template #title>
+                <div class="collapse-title-row">
+                  <IIcon icon="mdi:book-open-page-variant-outline" size="18" color="var(--van-primary-color)" />
+                  <span>{{ t('learning.presetPaths') }}</span>
+                  <span v-if="presetPaths.length > 0" class="collapse-count">{{ presetPaths.length }} {{ t('learning.availablePaths') }}</span>
+                </div>
+              </template>
               <van-skeleton v-if="presetPathsLoading" :rows="2" :round="true" />
               <template v-else>
                 <div v-if="presetPaths.length === 0" class="module-empty">
-                  <span>{{ t('learning.presetPathsEmpty') }}</span>
+                  <EmptyState :description="t('learning.presetPathsEmpty')" image-size="48" />
                 </div>
                 <template v-else>
                   <div
@@ -137,11 +153,17 @@
             </van-collapse-item>
 
             <!-- Module 4: Active Paths (default collapsed) -->
-            <van-collapse-item :title="t('learning.activePaths')" name="activePaths">
+            <van-collapse-item name="activePaths">
+              <template #title>
+                <div class="collapse-title-row">
+                  <IIcon icon="mdi:road-variant" size="18" color="var(--van-success-color)" />
+                  <span>{{ t('learning.activePaths') }}</span>
+                </div>
+              </template>
               <van-skeleton v-if="pathsLoading" :rows="2" :round="true" />
               <template v-else>
                 <div v-if="activePaths.length === 0" class="module-empty">
-                  <span>{{ t('learning.paths.empty') }}</span>
+                  <EmptyState :description="t('learning.paths.empty')" image-size="48" />
                 </div>
                 <template v-else>
                   <div
@@ -165,11 +187,15 @@
               </template>
             </van-collapse-item>
 
-            <!-- Module 5: DNA Graph preview (placeholder, default collapsed) -->
-            <van-collapse-item :title="t('learning.dnaGraph')" name="dnaGraph">
-              <div class="module-empty">
-                <span>{{ t('learning.dnaGraphPlaceholder') }}</span>
-              </div>
+            <!-- Module 5: DNA Graph preview (default collapsed) -->
+            <van-collapse-item name="dnaGraph">
+              <template #title>
+                <div class="collapse-title-row">
+                  <IIcon icon="mdi:account-tree" size="18" color="var(--van-danger-color)" />
+                  <span>{{ t('learning.dnaGraph') }}</span>
+                </div>
+              </template>
+              <DnaGraph2D :items="dnaGraphItems" :loading="dnaGraphLoading" />
             </van-collapse-item>
           </van-collapse>
         </template>
@@ -224,7 +250,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'BabyLearning' })
 
-import { ref, computed, onMounted, onActivated } from 'vue'
+import { ref, computed, watch, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -239,14 +265,18 @@ import {
   getPaths,
   getRecommendations,
   getPresetPaths,
+  getChildMap,
   type ChildLearningOverview,
   type ReviewItem,
   type PathResponse,
   type PresetPathResponse,
   type RecommendationTopicItem,
+  type ProgressWithTopic,
 } from '@/api/learning'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import IIcon from '@/components/IIcon.vue'
+import DnaGraph2D from '@/components/learning/DnaGraph2D.vue'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -266,6 +296,8 @@ const reviewsLoading = ref(false)
 const presetPathsLoading = ref(false)
 const pathsLoading = ref(false)
 const actioningId = ref<string | null>(null)
+const dnaGraphItems = ref<ProgressWithTopic[]>([])
+const dnaGraphLoading = ref(false)
 
 // Review expand state
 const showAllReviews = ref(false)
@@ -297,6 +329,13 @@ function openEvidenceSheet(review: ReviewItem) {
 
 // Computed
 const activePaths = computed(() => paths.value.filter(p => p.status === 'active'))
+
+const selectedChildName = computed(() => {
+  if (!babyStore.selectedChildId) return ''
+  return children.value.find(c => c.child_id === babyStore.selectedChildId)?.child_name
+    ?? babyStore.selectedChildName
+    ?? ''
+})
 
 // Display helpers
 function pathDisplayName(path: PathResponse): string {
@@ -383,6 +422,20 @@ async function loadPaths() {
   }
 }
 
+async function loadDnaGraph() {
+  const childId = babyStore.selectedChildId
+  if (!childId) return
+  dnaGraphLoading.value = true
+  try {
+    const data = await getChildMap(childId)
+    dnaGraphItems.value = data as ProgressWithTopic[]
+  } catch {
+    dnaGraphItems.value = []
+  } finally {
+    dnaGraphLoading.value = false
+  }
+}
+
 async function loadChildren() {
   try {
     children.value = await getLearningChildren()
@@ -391,13 +444,19 @@ async function loadChildren() {
   }
 }
 
+async function loadChildDependentData() {
+  await Promise.all([
+    loadRecommendations(),
+    loadDnaGraph(),
+  ])
+}
+
 async function loadData() {
   await Promise.all([
     loadChildren(),
     loadReviews(),
     loadPaths(),
     loadPresetPaths(),
-    loadRecommendations(),
   ])
 }
 
@@ -456,9 +515,14 @@ async function refreshRecommendations() {
 }
 
 async function onRefresh() {
-  await loadData()
+  await Promise.all([loadData(), loadChildDependentData()])
   refreshing.value = false
 }
+
+// Reload child-dependent data when selected child changes
+watch(() => babyStore.selectedChildId, (newId) => {
+  if (newId) loadChildDependentData()
+})
 
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first mount
 let hasActivated = false
@@ -467,6 +531,12 @@ onMounted(async () => {
   increment()
   try {
     await loadData()
+    // Auto-select first child if none selected
+    if (!babyStore.selectedChildId && children.value.length > 0) {
+      const first = children.value[0]
+      babyStore.selectChild(first.child_id, first.child_name)
+      await loadChildDependentData()
+    }
   } finally {
     decrement()
   }
@@ -477,7 +547,7 @@ onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
   increment()
   try {
-    await loadData()
+    await Promise.all([loadData(), loadChildDependentData()])
   } finally {
     decrement()
   }
@@ -489,6 +559,26 @@ onActivated(async () => {
 .baby-learning-page {
   min-height: 100vh;
   padding-bottom: 20px;
+}
+
+/* Child indicator below header */
+.child-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px 4px;
+}
+
+.child-indicator-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--van-primary-color);
+}
+
+.child-indicator-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .module-card {
@@ -507,16 +597,16 @@ onActivated(async () => {
   user-select: none;
 }
 
-.module-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
 .module-title-row {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.module-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .module-fallback {
@@ -750,8 +840,9 @@ onActivated(async () => {
 
 :deep(.van-collapse-item__title) {
   background: var(--card-bg, #f5f5ff);
-  border-radius: 12px;
+  border-radius: 12px 12px 0 0;
   margin-bottom: 0;
+  padding: 12px 16px;
 }
 
 :deep(.van-collapse-item__wrapper) {
@@ -762,5 +853,25 @@ onActivated(async () => {
 :deep(.van-collapse-item__content) {
   background: transparent;
   padding: 8px 16px 16px;
+}
+
+:deep(.van-collapse-item + .van-collapse-item) {
+  margin-top: 12px;
+}
+
+.collapse-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.collapse-count {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  margin-left: 4px;
 }
 </style>
