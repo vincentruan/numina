@@ -1377,16 +1377,7 @@ onActivated(async () => {
   vertical-align: middle;
 }
 
-/* Learning entry — visually boosted vs. plain sibling cells */
-.learning-entry-cell {
-  background: rgba(124, 107, 255, 0.03);
-}
-
-[data-theme='dark'] .learning-entry-cell,
-.dark .learning-entry-cell {
-  background: rgba(189, 187, 255, 0.1);
-}
-
+/* Learning entry — text color distinguishes it; no background diff */
 .learning-entry-cell :deep(.van-cell__title) {
   font-weight: 600;
   color: var(--van-primary-color);
