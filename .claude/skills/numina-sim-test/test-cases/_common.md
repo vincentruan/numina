@@ -16,8 +16,7 @@ Shared conventions used by all area case files (grouped by directory — see
 - [`area13-ai-asset-report-deep.md`](./groups/g1-adult-stable/area13-ai-asset-report-deep.md) — AI 资产报告深度验证
 - [`area14-travel.md`](./groups/g1-adult-stable/area14-travel.md) — Travel module (家庭旅行管理)
 - [`area15-ui-quality.md`](./groups/g1-adult-stable/area15-ui-quality.md) — UI quality & design system (UIQ.1–UIQ.10)
-- [`area18-learning-os-parent.md`](./groups/g1-adult-stable/area18-learning-os-parent.md) — Learning OS parent management (C18.1–C18.16)
-- [`area19-learning-os-optimization.md`](./groups/g1-adult-stable/area19-learning-os-optimization.md) — Learning OS optimization (C19.1–C19.22)
+- [`area18-learning-os.md`](./groups/g1-adult-stable/area18-learning-os.md) — Learning OS parent + E2E closed loop (C18.1–C18.24)
 - [`area20-mcp-external-token.md`](./groups/g1-adult-stable/area20-mcp-external-token.md) — MCP external API token & governance (M20.1–M20.15)
 
 **G2 — adult-currency** (`groups/g2-adult-currency/`):

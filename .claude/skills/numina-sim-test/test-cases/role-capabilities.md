@@ -128,8 +128,7 @@ Sim-test 用例按角色视角划分覆盖范围。`demouser` 默认角色为 **
 | **Area 15 (UIQ.x)** | **owner + child** | **UI 质量审计** |
 | **Area 16 (C16.x)** | **child** | **Learning OS 课标** |
 | **Area 17 (C17.x)** | **child** | **Learning OS 核心流程** |
-| **Area 18 (C18.x)** | **owner** | **Learning OS 家长管理** |
-| **Area 19 (C19.x)** | **owner + child** | **Learning OS 优化** |
+| **Area 18 (C18.x)** | **owner + child** | **Learning OS 家长端 + 端到端闭环** |
 | **Area 20 (M20.x)** | **owner** | **MCP 外部令牌治理** |
 
 > **member 视角缺口**: 当前所有 adult 用例均以 `demouser` (owner) 运行。

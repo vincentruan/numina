@@ -20,8 +20,7 @@ All three files reuse one adult session (`$SID` from G0).
 | [`area13-ai-asset-report-deep.md`](./area13-ai-asset-report-deep.md) | 13 — AI 资产报告深度验证 | C13.1–C13.5 |
 | [`area14-travel.md`](./area14-travel.md) | 14 — Travel module (家庭旅行管理 + 行程规划) | C14.1–C14.40 |
 | [`area15-ui-quality.md`](./area15-ui-quality.md) | 15 — UI quality & design system (H5/PWA/深色模式/无障碍) | UIQ.1–UIQ.10 |
-| [`area18-learning-os-parent.md`](./area18-learning-os-parent.md) | 18 — Learning OS parent management (学习概览/派发/路径/审核) | C18.1–C18.16 |
-| [`area19-learning-os-optimization.md`](./area19-learning-os-optimization.md) | 19 — Learning OS optimization (推荐/双轨审核/预设路径/DNA图谱) | C19.1–C19.22 |
+| [`area18-learning-os.md`](./area18-learning-os.md) | 18 — Learning OS (家长端 + 端到端闭环) | C18.1–C18.24 |
 | [`area20-mcp-external-token.md`](./area20-mcp-external-token.md) | 20 — MCP external API token & governance | M20.1–M20.15 |
 
 ## State domain
@@ -53,7 +52,7 @@ all areas share the adult session and interleave writes to the same AI config /
 chat threads — a second adult agent would race on those.
 
 > **Recommended run order within G1:** area2 (finance) → area14 (travel) →
-> area18 (learning parent) → area19 (learning optimization) → area8 (expanded features) → area3 (AI) → area6 (AI chat parity) →
+> area18 (learning OS) → area8 (expanded features) → area3 (AI) → area6 (AI chat parity) →
 > area12 (task resilience) → area15 (UI quality) → area9 (security/notification) → area7 (regression sweep) → area11 (adversarial security) → area20 (MCP token).
 > Area 7 runs last-but-three because R6 (auth expiry) destroys the session.
 > Area 15 (UI quality) runs before regression since it needs a stable session for
@@ -71,10 +70,8 @@ bsk navigate ${BASE} --session "$SID" --wait-until networkidle   # dashboard (C2
 # ... C2.1–C2.25 ...
 # area14 — travel module (trip CRUD, expenses, split, graduation)
 # ... C14.1–C14.40 ...
-# area18 — learning OS parent management
-# ... C18.1–C18.16 ...
-# area19 — learning OS optimization
-# ... C19.1–C19.22 ...
+# area18 — learning OS (parent + E2E closed loop)
+# ... C18.1–C18.24 ...
 # area8 — expanded features (Manifesto/Blind Box/Baby/Settings)
 # ... F.1–F.12 ...
 # area3 — AI capabilities (AI must be enabled)
