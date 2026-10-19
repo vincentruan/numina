@@ -34,7 +34,8 @@ def generate_preset_paths(db: Session) -> list[PresetLearningPath]:
 
     Returns: list of created PresetLearningPath objects.
     """
-    # Clear existing presets (regeneration strategy)
+    # Clear existing presets. If generation fails below, the caller's
+    # transaction rollback restores them.
     db.query(PresetLearningPath).delete()
     db.flush()
 
@@ -163,12 +164,25 @@ def assign_preset_path(
 
     child = db.query(User).filter(User.id == child_id).first()
     if not child:
-        raise AppError(ErrorCode.CHILD_NOT_FOUND, details={"child_id": str(child_id)})
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND, details={"child_id": str(child_id)})
 
     family_id = child.family_id
 
     # Parse topic IDs
-    topic_ids = json.loads(preset.topic_ids_json)
+    import json as _json
+
+    try:
+        topic_ids = _json.loads(preset.topic_ids_json)
+    except (ValueError, TypeError) as exc:
+        logger.error(
+            "assign_preset_path: malformed topic_ids_json for preset %s: %s",
+            preset_id,
+            exc,
+        )
+        raise AppError(
+            ErrorCode.LEARNING_TOPIC_NOT_FOUND,
+            details={"preset_id": str(preset_id), "reason": "malformed topic_ids_json"},
+        ) from exc
 
     # Create LearningPath
     path = LearningPath(

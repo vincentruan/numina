@@ -399,7 +399,7 @@ class RecommendedTopicItem(SnowflakeBase):
     suggested_position: int
 
 
-class RecommendationPathDetail(BaseModel):
+class RecommendationPathDetail(SnowflakeBase):
     """Recommendation path with ordered topics."""
 
     name: str
@@ -407,7 +407,7 @@ class RecommendationPathDetail(BaseModel):
     total_count: int
 
 
-class RecommendationPathResponse(BaseModel):
+class RecommendationPathResponse(SnowflakeBase):
     """Wrapper for recommendation path response."""
 
     path: RecommendationPathDetail

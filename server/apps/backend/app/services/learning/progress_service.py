@@ -79,6 +79,7 @@ def _increment_consecutive_override_counter(db: Session, child_id: int) -> None:
 
     child_user = db.query(User).filter(User.id == child_id).first()
     if not child_user:
+        logger.warning("_increment_consecutive_override_counter: child %s not found", child_id)
         return
     stats = get_or_create_stats(db, child_id, child_user.family_id)
     stats.consecutive_ai_overrides = (stats.consecutive_ai_overrides or 0) + 1
@@ -92,6 +93,7 @@ def is_ai_auto_pass_paused(db: Session, child_id: int) -> bool:
 
     child_user = db.query(User).filter(User.id == child_id).first()
     if not child_user:
+        logger.warning("is_ai_auto_pass_paused: child %s not found", child_id)
         return False
     stats = get_or_create_stats(db, child_id, child_user.family_id)
     return (stats.consecutive_ai_overrides or 0) >= CONSECUTIVE_OVERRIDE_LIMIT
@@ -130,12 +132,20 @@ def override_review(
     # Validate the transition
     validate_transition(progress.mastery_level, new_decision)
 
-    progress.mastery_level = new_decision
+    # Record override metadata
     progress.overridden_by = parent_id
     progress.overridden_at = datetime.now(UTC)
     progress.override_reason = reason
+
     if new_decision == "mastered":
-        progress.completed_via = "parent_override"
+        # Use transition_to_mastered for full side-effects:
+        # SM-2 bookkeeping (stability, ease_factor, next_review_at),
+        # first_mastered_at, and dependent topic unlock.
+        transition_to_mastered(
+            db, progress, score=1.0, completed_via="parent_override"
+        )
+    else:
+        progress.mastery_level = new_decision
     db.flush()
 
     _increment_consecutive_override_counter(db, progress.child_id)

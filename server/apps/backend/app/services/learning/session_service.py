@@ -8,9 +8,12 @@ from sqlalchemy.orm import Session
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.schemas.learning import SessionCreate
 from apps.backend.app.services.learning import progress_service
+from packages.core.logging import get_logger
 from packages.db.models.learning.assignment import LearningAssignment
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
+
+logger = get_logger(__name__)
 
 
 def _build_difficulty_warning(db: Session, child_id: int, topic) -> dict | None:
@@ -209,7 +212,20 @@ def end_session(
             .filter_by(child_id=session.child_id, topic_id=session.topic_id)
             .first()
         )
-        if progress and progress.mastery_level == "assessing":
+        if not progress:
+            logger.warning(
+                "end_session: no progress record for child=%s topic=%s, skipping dual-track",
+                session.child_id,
+                session.topic_id,
+            )
+        elif progress.mastery_level != "assessing":
+            logger.info(
+                "end_session: progress in '%s' (not assessing), skipping dual-track for child=%s topic=%s",
+                progress.mastery_level,
+                session.child_id,
+                session.topic_id,
+            )
+        else:
             ai_available = _check_ai_available(db, session.child_id)
             ai_paused = progress_service.is_ai_auto_pass_paused(db, session.child_id)
             auto_result = progress_service.check_auto_pass(
@@ -219,11 +235,22 @@ def end_session(
                 ai_paused=ai_paused,
                 duration_seconds=session.duration_seconds,
             )
-            if ai_available and auto_result.should_auto_pass:
-                progress_service.transition_to_mastered(
-                    db, progress, score, completed_via="ai_assessment"
+            try:
+                if ai_available and auto_result.should_auto_pass:
+                    progress_service.transition_to_mastered(
+                        db, progress, score, completed_via="ai_assessment"
+                    )
+                else:
+                    progress.mastery_level = "parent_review"
+                    progress.mastery_score = score
+            except Exception:
+                # If transition fails, fall back to parent_review so progress
+                # does not remain stuck in "assessing" indefinitely.
+                logger.exception(
+                    "end_session: transition_to_mastered failed for child=%s topic=%s, falling back to parent_review",
+                    session.child_id,
+                    session.topic_id,
                 )
-            else:
                 progress.mastery_level = "parent_review"
                 progress.mastery_score = score
 

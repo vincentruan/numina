@@ -94,10 +94,16 @@ const topics = ref<RecommendationTopicItem[]>([])
 const childId = computed(() => babyStore.selectedChildId ?? '')
 const orderedTopics = computed(() => topics.value)
 
+// Reason constants must match backend recommendation_service.py PRIORITY_ORDER keys
+const REASON_BREAKPOINT = '知识断点'
+const REASON_CURRICULUM = '课标必会'
+const REASON_HIGH_CENTRALITY = '高基础度'
+const REASON_REVIEW = '需要复习'
+
 function reasonEmoji(reasons: string[]): string {
-  if (reasons.includes('prerequisite')) return '🔗'
-  if (reasons.includes('mastery_gained')) return '🔄'
-  if (reasons.includes('high_centrality')) return '⭐'
+  if (reasons.includes(REASON_BREAKPOINT)) return '🔗'
+  if (reasons.includes(REASON_CURRICULUM)) return '⭐'
+  if (reasons.includes(REASON_REVIEW)) return '🔄'
   return '📚'
 }
 

@@ -204,3 +204,60 @@ class TestListPresetPaths:
         paths = list_preset_paths(db, grade=None, semester=None, subject="mathematics")
         assert len(paths) >= 1
         assert all(p.subject == "mathematics" for p in paths)
+
+
+# ---------------------------------------------------------------------------
+# TestPresetPathAPIEndpoints
+# ---------------------------------------------------------------------------
+
+
+class TestPresetPathAPIEndpoints:
+    """HTTP-level tests for preset path list and assign endpoints."""
+
+    def test_list_preset_paths_returns_200(self, client, auth_headers, db, preset_path):
+        """GET /api/v1/family/learning/preset-paths returns 200 with list."""
+        resp = client.get(
+            "/api/v1/family/learning/preset-paths",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert isinstance(data, list)
+        assert len(data) >= 1
+        # Verify Snowflake ID serialization
+        first = data[0]
+        assert isinstance(first["id"], str), "id should be serialized as string"
+
+    def test_list_preset_paths_filter_by_subject(self, client, auth_headers, preset_path):
+        """GET /preset-paths?subject=mathematics filters correctly."""
+        resp = client.get(
+            "/api/v1/family/learning/preset-paths?subject=mathematics",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert all(p["subject"] == "mathematics" for p in data)
+
+    def test_assign_preset_path_creates_path(self, client, auth_headers, db, child_user, preset_path):
+        """POST /preset-paths/{id}/assign creates a learning path for the child."""
+        resp = client.post(
+            f"/api/v1/family/learning/preset-paths/{preset_path.id}/assign",
+            headers=auth_headers,
+            json={"child_id": child_user["id"]},
+        )
+        assert resp.status_code == 201
+        data = resp.json()["data"]
+        assert data["child_id"] == str(child_user["id"])
+        assert data["name"] == preset_path.name
+
+    def test_assign_preset_path_idor_rejects_other_family_child(
+        self, client, auth_headers, db, preset_path
+    ):
+        """Assigning to a child_id outside the family returns 404."""
+        fake_child_id = 999999999
+        resp = client.post(
+            f"/api/v1/family/learning/preset-paths/{preset_path.id}/assign",
+            headers=auth_headers,
+            json={"child_id": fake_child_id},
+        )
+        assert resp.status_code == 404

@@ -415,3 +415,52 @@ class TestEndSessionDualTrack:
         db.refresh(progress)
         assert progress.mastery_level == "parent_review"
         assert progress.mastery_score == 0.5
+
+
+    def test_override_to_mastered_sets_sm2_bookkeeping(
+        self, db, child_user, rejected_progress
+    ):
+        """override_review to 'mastered' must set stability, next_review_at, and unlock dependents."""
+        result = override_review(
+            db,
+            progress_id=rejected_progress.id,
+            parent_id=child_user["parent_id"],
+            new_decision="mastered",
+            reason="parent says yes",
+        )
+        assert result.mastery_level == "mastered"
+        assert result.completed_via == "parent_override"
+        assert result.stability is not None, "stability must be set by transition_to_mastered"
+        assert result.next_review_at is not None, "next_review_at must be set by transition_to_mastered"
+        assert result.first_mastered_at is not None, "first_mastered_at must be set"
+
+
+class TestEndSessionCircuitBreakerBypass:
+    def test_ai_paused_prevents_auto_pass_even_with_high_score(self, db, child_user, topic):
+        """When ai_paused is True (5+ overrides), high score goes to parent_review, not mastered."""
+        child_id = child_user["id"]
+        progress = _make_progress(db, child_id, topic.id, mastery="assessing")
+
+        # Simulate 5 consecutive overrides to pause auto-pass
+        from apps.backend.app.services.learning.progress_service import (
+            _increment_consecutive_override_counter,
+        )
+        for _ in range(CONSECUTIVE_OVERRIDE_LIMIT):
+            _increment_consecutive_override_counter(db, child_id)
+
+        assert is_ai_auto_pass_paused(db, child_id) is True
+
+        session = LearningSession(
+            child_id=child_id,
+            topic_id=topic.id,
+            session_type="assessment",
+        )
+        db.add(session)
+        db.flush()
+
+        session_service.end_session(db, session.id, score=0.95)
+
+        db.refresh(progress)
+        # Despite high score, ai_paused should force parent_review
+        assert progress.mastery_level == "parent_review"
+        assert progress.mastery_score == 0.95
