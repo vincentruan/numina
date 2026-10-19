@@ -79,9 +79,7 @@
             @click="$router.push('/baby/learning')"
           >
             <template #icon>
-              <span class="learning-entry-icon">
-                <IIcon icon="mdi:school-outline" size="22" color="var(--van-primary-color)" />
-              </span>
+              <IIcon icon="mdi:school-outline" size="22" color="var(--van-primary-color)" class="cell-icon" />
             </template>
             <template #value>
               <span class="learning-entry-value">{{ t('learning.studyMinutes', { minutes: currentStudyMinutes }) }}</span>
@@ -112,7 +110,11 @@
               :value="reportStatusLabel(String(selectedChildId))"
               is-link
               @click="navigateToReport(String(selectedChildId))"
-            />
+            >
+              <template #icon>
+                <IIcon icon="mdi:file-document-outline" size="20" color="var(--van-primary-color)" class="cell-icon" />
+              </template>
+            </van-cell>
             <AiGatedInline v-else :is-owner="authStore.user?.role === 'owner'" />
           </template>
         </van-cell-group>
@@ -1387,23 +1389,6 @@ onActivated(async () => {
   color: var(--text-secondary);
   font-size: 12px;
   margin-top: 2px;
-}
-
-.learning-entry-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin-right: 10px;
-  border-radius: 10px;
-  background: rgba(124, 107, 255, 0.12);
-  flex-shrink: 0;
-}
-
-[data-theme='dark'] .learning-entry-icon,
-.dark .learning-entry-icon {
-  background: rgba(189, 187, 255, 0.16);
 }
 
 .learning-entry-value {
