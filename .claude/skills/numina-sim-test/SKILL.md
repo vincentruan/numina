@@ -3,26 +3,26 @@ name: numina-sim-test
 description: >
   Use when the user wants to run full-stack functional verification tests,
   audit the interface, capture screenshots, or verify deployed UI flows for
-  the Numina project. Covers 18 areas: child app, financial management, AI
-  capabilities, currency, regression, expanded features, security/notification,
-  AI report, adversarial security, task resilience, AI config, travel, UI
-  quality/design system, learning OS taxonomy, learning OS core flows, and
-  learning OS parent management. Triggers on: "run sim test", "ui audit", "截图测试",
-  "仿真测试", "全栈验收", "功能验收", "ui检查", "界面审查", "check the UI",
-  "test the app visually", "儿童测试", "child frontend test",
-  "test AI chat/report/PDF import", "ui quality", "设计审查", "UI 质量检查",
-  "dark mode test", "深色模式测试", "mobile test", "移动端测试",
-  "dev server test", "5173/5174 测试", "热加载测试", "HMR test",
-  "accessibility test", "无障碍测试", "security test", "安全测试",
-  "learning test", "学习测试", "curriculum test", "课标测试",
+  the Numina project. Covers 20 areas across child app, financial management,
+  AI capabilities, currency, regression, expanded features, security/notification,
+  AI report, adversarial security, task resilience, travel, UI quality/design
+  system, learning OS (taxonomy/core/parent/optimization), and MCP token governance.
+  Triggers on: "run sim test", "ui audit", "截图测试", "仿真测试", "全栈验收",
+  "功能验收", "ui检查", "界面审查", "check the UI", "test the app visually",
+  "儿童测试", "child frontend test", "test AI chat/report/PDF import",
+  "ui quality", "设计审查", "UI 质量检查", "dark mode test", "深色模式测试",
+  "mobile test", "移动端测试", "dev server test", "5173/5174 测试",
+  "热加载测试", "HMR test", "accessibility test", "无障碍测试",
+  "security test", "安全测试", "learning test", "学习测试", "curriculum test",
+  "课标测试", "travel test", "旅行测试", "MCP token test",
   or any request to verify the deployed app's features.
 ---
 
 # Numina Full-Stack Functional Verification Pipeline
 
 End-to-end pipeline for browser-based full-stack functional verification. The pipeline
-covers 16 test areas (UI flows, AI capabilities, security adversarial, design system
-quality, learning OS taxonomy, and more). It detects the best available browser driver at startup (priority:
+covers 20 test areas (UI flows, AI capabilities, security adversarial, design system
+quality, learning OS taxonomy, MCP token governance, and more). It detects the best available browser driver at startup (priority:
 **browser-use** → **bsk** → **Chrome DevTools MCP**) and drives the user's real browser
 through authenticated flows, screenshot capture, and test report generation.
 
@@ -36,7 +36,7 @@ through authenticated flows, screenshot capture, and test report generation.
 > environment must already contain the test accounts below (see
 > "Prerequisites").
 
-Covers **eighteen** feature areas (detailed cases split by area under
+Covers **twenty** feature areas (detailed cases split by area under
 [`test-cases/`](./test-cases/), shared conventions in
 [`test-cases/_common.md`](./test-cases/_common.md), role matrix in
 [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md)):
@@ -58,6 +58,8 @@ Covers **eighteen** feature areas (detailed cases split by area under
 16. **Learning OS taxonomy Beijing + curriculum/edge-status** — 课标徽章/callout / AI 生成边标识别 / locale 知识图谱过滤 / 深色模式可读性 (C16.1–C16.14) ([`test-cases/groups/g3-child/area16-learning-os-taxonomy.md`](./test-cases/groups/g3-child/area16-learning-os-taxonomy.md))
 17. **Learning OS core flows (child)** — 知识地图 / Topic 详情 / AI 导师对话 / 学习进度 / 今日学习卡片 / 自选学习难度提示 (C17.1–C17.21) ([`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md))
 18. **Learning OS parent management** — 学习概览 / 任务派发 / 学习路径 / 审核队列 / BabyPage 入口 (C18.1–C18.16) ([`test-cases/groups/g1-adult-stable/area18-learning-os-parent.md`](./test-cases/groups/g1-adult-stable/area18-learning-os-parent.md))
+19. **Learning OS optimization** — 智能推荐 / 双轨审核 / 预设路径 / DNA图谱 / 来源标签 / 闭环流程 (C19.1–C19.22) ([`test-cases/groups/g1-adult-stable/area19-learning-os-optimization.md`](./test-cases/groups/g1-adult-stable/area19-learning-os-optimization.md))
+20. **MCP external API token & governance** — Token 生命周期 / 认证 / 两级访问控制 / 审计日志 / 速率限制 (M20.1–M20.15) ([`test-cases/groups/g1-adult-stable/area20-mcp-external-token.md`](./test-cases/groups/g1-adult-stable/area20-mcp-external-token.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching
@@ -67,6 +69,10 @@ Covers **eighteen** feature areas (detailed cases split by area under
 > and flags **design divergences** (D1 `/goal`, D2 `/compact`, D3 input-polish,
 > D4 user-selectable reasoning_effort, D5 TodoList bar, D6 Scheduled Tasks,
 > D7 Thread Channel Source).
+>
+> Areas 16–19 form the **Learning OS** cluster: Area 16/17 run in the child app
+> (G3), Area 18/19 run in the adult app (G1). Area 19 includes some child-side
+> cases (C19.16–C19.22) that reuse `$SID_CHILD` within the G1 agent.
 
 ## Parallel Run Structure (3 agents, dev mode)
 
@@ -86,22 +92,23 @@ schedule + verified browser concurrency evidence.
 | Group | Dir | Areas | Session | State domain | Parallel with |
 |-------|-----|-------|---------|--------------|---------------|
 | **G0** preconditions | [`g0-preconditions/`](./test-cases/groups/g0-preconditions/) | Phase 0/1/1.5/2 | serial | establishes login | none — first |
-| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 9, 12, 13, 14, 15, 18 | `$SID` (adult) | reads global; per-entity writes | **G3** |
+| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 9, 11, 12, 13, 14, 15, 18, 19, 20 | `$SID` (adult) | reads global; per-entity writes | **G3** |
 | **G2** adult-currency | [`g2-adult-currency/`](./test-cases/groups/g2-adult-currency/) | 4 | adult (own) | **mutates `default_currency`** | **G3** |
 | **G3** child | [`g3-child/`](./test-cases/groups/g3-child/) | 1, 5, 10, 16, 17 | `$SID_CHILD` | child origin (isolated dev) | **G1 or G2** |
 
 **Schedule:** `G0 (serial) → G1 ‖ G3 (parallel) → G2 (after G1)`. Three agents
 cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
-> **G1 internal order:** area2 → area14 → area18 → area8 → area3 → area6 → area13 → area12 → area15 → area9 → area7 → area11. Area 7
-> (regression) runs just before Area 11, with R6 (auth expiry) destroying the
+> **G1 internal order:** area2 → area14 → area18 → area19 → area8 → area3 → area6 → area13 → area12 → area15 → area9 → area7 → area11 → area20. Area 7
+> (regression) runs near the end, with R6 (auth expiry) destroying the
 > session **last** so earlier areas have a live session. Area 14 (travel) runs
 > after area2 since both create financial entities. Area 13 (AI report deep)
 > runs after area6 (AI chat parity) since both exercise AI surfaces. Area 15
 > (UI quality) runs before regression since it needs a stable session for
 > dark-mode toggling and viewport tests. Area 9 (security/notification) runs
 > after area15 since it exercises WebAuthn/2FA flows. Area 11 uses adult
-> session read-only probes.
+> session read-only probes. Area 20 (MCP token) runs last since it
+> generates/consumes tokens.
 
 > **Docker mode caveat:** nginx serves adult + child under **one origin** (:80)
 > → G3 is NOT parallel-safe with G1/G2 (shared cookie + localStorage). The
@@ -137,7 +144,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
 | Mode | 触发词 | 覆盖范围 | 预计耗时 |
 |------|--------|----------|----------|
-| **full** | "run sim test", "全量测试" | Area 1–18 (所有用例) | ~200-250 min |
+| **full** | "run sim test", "全量测试" | Area 1–20 (所有用例) | ~220-270 min |
 | **smoke** | "smoke test", "快速检查" | C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2, C9.4 | ~18-25 min |
 | **child** | "child test", "儿童测试" | Area 1 + Area 5 (G3 only) | ~20-30 min |
 | **finance** | "finance test", "财务测试" | Area 2 only (G1 subset, C2.1–C2.25) | ~20-25 min |
@@ -146,7 +153,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 | **security** | "security test", "安全测试" | Area 9 (C9.1–C9.7) + Area 11 (C11.1–C11.20) + R6 | ~25-35 min |
 | **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.40) | ~45-55 min |
 | **ui-quality** | "ui quality", "设计审查", "UI 质量检查" | Area 15 only (UIQ.1–UIQ.10) | ~25-35 min |
-| **learning** | "learning test", "学习测试" | Area 16 + Area 17 (G3) + Area 18 (G1) | ~45-60 min |
+| **learning** | "learning test", "学习测试" | Area 16 + Area 17 (G3) + Area 18 (G1) + Area 19 (G1) + Area 20 (G1) | ~70-85 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
 
 **选择逻辑:**
@@ -1036,7 +1043,7 @@ the skill log.
 - 截图目录: dogfood-output/
 
 ## 成功摘要
-- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.8/F.11/F.12, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.40, Area15: UIQ.1–UIQ.10)
+- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.8/F.11/F.12, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.40, Area15: UIQ.1–UIQ.10, Area16: C16.1–C16.14, Area17: C17.1–C17.21, Area18: C18.1–C18.16, Area19: C19.1–C19.22, Area20: M20.1–M20.15)
 - 通过: X
 - 失败: Y
 - 跳过: Z (注明原因, 如 AI 未启用、数据不足)
@@ -1340,6 +1347,8 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | **16 — Learning OS taxonomy Beijing (课标徽章/边标/locale)** | **G3** | **C16.1–C16.14** | [`test-cases/groups/g3-child/area16-learning-os-taxonomy.md`](./test-cases/groups/g3-child/area16-learning-os-taxonomy.md) |
 | **17 — Learning OS core flows (child: 知识地图/Topic/AI 导师/进度/自选学习)** | **G3** | **C17.1–C17.21** | [`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md) |
 | **18 — Learning OS parent management (概览/派发/路径/审核)** | **G1** | **C18.1–C18.16** | [`test-cases/groups/g1-adult-stable/area18-learning-os-parent.md`](./test-cases/groups/g1-adult-stable/area18-learning-os-parent.md) |
+| **19 — Learning OS optimization (推荐/双轨审核/预设路径/DNA图谱/闭环)** | **G1** | **C19.1–C19.22** | [`test-cases/groups/g1-adult-stable/area19-learning-os-optimization.md`](./test-cases/groups/g1-adult-stable/area19-learning-os-optimization.md) |
+| **20 — MCP external API token & governance (Token 生命周期/认证/审计/速率限制)** | **G1** | **M20.1–M20.15** | [`test-cases/groups/g1-adult-stable/area20-mcp-external-token.md`](./test-cases/groups/g1-adult-stable/area20-mcp-external-token.md) |
 
 ### Supporting References
 

@@ -119,6 +119,18 @@ Sim-test 用例按角色视角划分覆盖范围。`demouser` 默认角色为 **
 | Area 6 (C6.x) | owner | AI chat 对等性 |
 | **Area 7 (R.x)** | **owner** | **回归用例** |
 | **Area 8 (F.x)** | **owner + member** | **扩展功能覆盖** |
+| **Area 9 (C9.x)** | **owner** | **安全 + 通知** |
+| **Area 10 (C10.x)** | **guest → adult** | **来宾注册 + 加入家庭** |
+| **Area 11 (C11.x)** | **owner** | **AI 安全对抗** |
+| **Area 12 (C12.x)** | **owner** | **AI 任务韧性** |
+| **Area 13 (C13.x)** | **owner** | **AI 资产报告深度** |
+| **Area 14 (C14.x)** | **owner** | **旅行管理** |
+| **Area 15 (UIQ.x)** | **owner + child** | **UI 质量审计** |
+| **Area 16 (C16.x)** | **child** | **Learning OS 课标** |
+| **Area 17 (C17.x)** | **child** | **Learning OS 核心流程** |
+| **Area 18 (C18.x)** | **owner** | **Learning OS 家长管理** |
+| **Area 19 (C19.x)** | **owner + child** | **Learning OS 优化** |
+| **Area 20 (M20.x)** | **owner** | **MCP 外部令牌治理** |
 
 > **member 视角缺口**: 当前所有 adult 用例均以 `demouser` (owner) 运行。
 > member 角色的权限边界测试 (owner-only 页面返回 403) 列入 Area 8 (F.8.x)。
