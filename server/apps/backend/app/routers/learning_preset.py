@@ -34,6 +34,7 @@ def _preset_to_response(preset: PresetLearningPath) -> dict:
         "name": preset.name,
         "name_zh": preset.name_zh,
         "description": preset.description,
+        "description_zh": preset.description_zh,
         "topic_count": preset.topic_count,
         "topic_ids": [str(tid) for tid in raw_ids],
         "is_active": preset.is_active,

@@ -25,6 +25,32 @@ AGE_GROUP_TO_GRADE = {
 # Semester determination based on topic position (simplified heuristic)
 SEMESTER_OPTIONS = ["fall", "spring"]
 
+# English subject key → Chinese name (matches learning.topic.subject values)
+SUBJECT_ZH: dict[str, str] = {
+    "mathematics": "数学",
+    "chinese": "语文",
+    "english": "英语",
+    "science": "科学",
+    "biology": "生物",
+    "physics": "物理",
+    "chemistry": "化学",
+    "geography": "地理",
+    "history": "历史",
+    "politics": "政治",
+    "ethics_law": "道德与法治",
+    "art": "艺术",
+    "music": "音乐",
+    "pe_health": "体育与健康",
+    "labor": "劳动",
+    "computing": "计算机",
+    "information_technology": "信息科技",
+    "general_technology": "通用技术",
+    "life_skills": "生活技能",
+    "learning_to_learn": "学会学习",
+    "personal_social": "个人与社会",
+    "comprehensive_practical": "综合实践活动",
+}
+
 
 def generate_preset_paths(db: Session) -> list[PresetLearningPath]:
     """Generate preset paths from topics with curriculum_standards_json.
@@ -110,6 +136,7 @@ def generate_preset_paths(db: Session) -> list[PresetLearningPath]:
                 name=f"Grade {grade_label} {semester.title()} · {subject.title()}",
                 name_zh=f"{grade_min}-{grade_max}年级 {semester} · {subject}",
                 description=f"Preset learning path for {subject} ({grade_label} {semester})",
+                description_zh=f"{grade_min}-{grade_max}年级{semester} · {SUBJECT_ZH.get(subject, subject)} 预设学习路径",
                 topic_ids_json=json.dumps(semester_topic_ids),
                 topic_count=len(semester_topic_ids),
                 age_group=age_group,

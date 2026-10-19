@@ -5,6 +5,12 @@
     <template v-else-if="topic">
       <!-- Breadcrumb -->
       <div class="breadcrumb">
+        <button class="breadcrumb__back" @click="goBack" :aria-label="t('learning.backToMap')">
+          ← {{ t('learning.backToMap') }}
+        </button>
+      </div>
+
+      <div class="breadcrumb__trail">
         <span class="breadcrumb__item" @click="goBack">{{ t('learning.title') }}</span>
         <span class="breadcrumb__sep">/</span>
         <span class="breadcrumb__item">{{ subjectLabel(topic.subject) }}</span>
@@ -502,6 +508,35 @@ onMounted(async () => {
   font-family: Inter, sans-serif;
   font-size: 13px;
   color: var(--color-body);
+  flex-wrap: wrap;
+}
+
+.breadcrumb__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+  color: var(--color-ink);
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 36px;
+  transition: background 0.15s;
+}
+
+.breadcrumb__back:active {
+  background: var(--color-hairline);
+}
+
+.breadcrumb__trail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
 }
 
 .breadcrumb__item {

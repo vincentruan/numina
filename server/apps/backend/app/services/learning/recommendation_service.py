@@ -41,7 +41,7 @@ class RecommendationPath:
 
 
 def generate_recommendation_path(
-    db: Session, child_id: int
+    db: Session, child_id: int, limit: int = 20
 ) -> RecommendationPath:
     """Merge breakpoint + curriculum + review topics into a ranked path.
 
@@ -51,6 +51,7 @@ def generate_recommendation_path(
     3. Sort by: primary = highest-priority reason (PRIORITY_ORDER), secondary = centrality desc.
     4. Compute prerequisites_met for each topic.
     5. Assign 1-based suggested_position.
+    6. Truncate to ``limit`` topics.
     """
     breakpoints = find_breakpoint_topics(db, child_id)
     gaps = find_curriculum_gap_topics(db, child_id)
@@ -115,7 +116,7 @@ def generate_recommendation_path(
         )
         return (best_priority, -item["centrality"])
 
-    sorted_items = sorted(merged.values(), key=sort_key)
+    sorted_items = sorted(merged.values(), key=sort_key)[:limit]
 
     # Build final list with prerequisites_met and suggested_position
     topics: list[RecommendationTopic] = []

@@ -26,6 +26,7 @@ class PresetLearningPath(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     name_zh: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description_zh: Mapped[str | None] = mapped_column(Text, nullable=True)
     topic_ids_json: Mapped[str] = mapped_column(Text, nullable=False)
     topic_count: Mapped[int] = mapped_column(Integer, nullable=False)
     age_group: Mapped[str] = mapped_column(String(10), nullable=False)

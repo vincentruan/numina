@@ -257,10 +257,15 @@ def get_child_sessions(
 @router.get("/children/{child_id}/recommendations", response_model=RecommendationPathResponse)
 def get_recommendations(
     child_id: int,
+    limit: int = Query(20, ge=1, le=100, description="Max topics to return (default 20)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_adult),
 ):
-    """Get personalized learning recommendations for a child."""
+    """Get personalized learning recommendations for a child.
+
+    Returns up to ``limit`` topics ranked by priority
+    (知识断点 > 课标必会 > 高基础度 > 需要复习).
+    """
     # Verify child belongs to this family
     child = (
         db.query(User)
@@ -270,7 +275,7 @@ def get_recommendations(
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND, details={"child_id": child_id})
 
-    path = generate_recommendation_path(db, child_id)
+    path = generate_recommendation_path(db, child_id, limit=limit)
     topics = [
         RecommendedTopicItem(
             topic_id=t.topic_id,

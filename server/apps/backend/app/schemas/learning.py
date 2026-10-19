@@ -424,6 +424,7 @@ class PresetPathResponse(SnowflakeBase):
     name: str
     name_zh: str
     description: str | None
+    description_zh: str | None
     topic_count: int
     topic_ids: list[str]
     is_active: bool
