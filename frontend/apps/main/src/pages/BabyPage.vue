@@ -1368,6 +1368,8 @@ onActivated(async () => {
 }
 
 .summary-card .cell-icon {
+  width: 22px;
+  height: 22px;
   margin-right: 4px;
   flex-shrink: 0;
   align-self: center;
@@ -1377,7 +1379,7 @@ onActivated(async () => {
 
 /* Learning entry — visually boosted vs. plain sibling cells */
 .learning-entry-cell {
-  background: rgba(124, 107, 255, 0.06);
+  background: rgba(124, 107, 255, 0.03);
 }
 
 [data-theme='dark'] .learning-entry-cell,
