@@ -2,11 +2,19 @@
   <div class="baby-learning-page">
     <PageHeader :title="t('learning.parentTitle')" />
 
-    <!-- Child indicator -->
-    <div v-if="selectedChildName" class="child-indicator">
-      <span class="child-indicator-name">{{ selectedChildName }}</span>
-      <span class="child-indicator-hint">{{ t('learning.learningHub') }}</span>
-    </div>
+    <!-- Child switcher tabs (spec §2.3) -->
+    <van-tabs
+      v-if="children.length > 0"
+      v-model:active="childTabIndex"
+      class="child-tabs"
+      shrink
+    >
+      <van-tab
+        v-for="child in children"
+        :key="child.child_id"
+        :title="child.child_name"
+      />
+    </van-tabs>
 
     <van-skeleton v-if="loading && children.length === 0" :rows="5" :round="true" />
 
@@ -32,11 +40,7 @@
             <div v-show="isExpanded('recommendations')">
               <van-skeleton v-if="recommendationsLoading" :rows="3" :round="true" />
               <template v-else>
-                <div v-if="!familyStore.aiEnabled" class="module-fallback">
-                  <span class="fallback-icon">🔒</span>
-                  <span>{{ t('learning.parentReviewOnly') }}</span>
-                </div>
-                <div v-else-if="recommendations.length === 0" class="module-empty">
+                <div v-if="recommendations.length === 0" class="module-empty">
                   <EmptyState :description="t('learning.noRecommendations')" />
                 </div>
                 <template v-else>
@@ -255,7 +259,6 @@ import { useRouter } from 'vue-router'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { usePageLoading } from '@/composables/usePageLoading'
-import { useFamilyStore } from '@/stores/family'
 import { useBabyStore } from '@/stores/baby'
 import {
   getLearningChildren,
@@ -281,7 +284,6 @@ import DnaGraph2D from '@/components/learning/DnaGraph2D.vue'
 const { t, locale } = useI18n()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
-const familyStore = useFamilyStore()
 const babyStore = useBabyStore()
 
 const loading = ref(true)
@@ -330,11 +332,20 @@ function openEvidenceSheet(review: ReviewItem) {
 // Computed
 const activePaths = computed(() => paths.value.filter(p => p.status === 'active'))
 
-const selectedChildName = computed(() => {
-  if (!babyStore.selectedChildId) return ''
-  return children.value.find(c => c.child_id === babyStore.selectedChildId)?.child_name
-    ?? babyStore.selectedChildName
-    ?? ''
+// Child switcher (spec §2.3): tab index synced with babyStore.selectedChildId
+const childTabIndex = ref(0)
+
+watch(childTabIndex, (idx) => {
+  const child = children.value[idx]
+  if (child && child.child_id !== babyStore.selectedChildId) {
+    babyStore.selectChild(child.child_id, child.child_name)
+  }
+})
+
+// Keep tab index in sync when selection changes from outside (BabyPage / auto-select)
+watch(() => babyStore.selectedChildId, (id) => {
+  const idx = children.value.findIndex(c => c.child_id === id)
+  if (idx >= 0) childTabIndex.value = idx
 })
 
 // Display helpers
@@ -376,7 +387,7 @@ function getReasonEmoji(reasons: string[]): string {
 // Data loading
 async function loadRecommendations() {
   const childId = babyStore.selectedChildId
-  if (!childId || !familyStore.aiEnabled) return
+  if (!childId) return
   recommendationsLoading.value = true
   try {
     const res = await getRecommendations(childId)
@@ -561,24 +572,10 @@ onActivated(async () => {
   padding-bottom: 20px;
 }
 
-/* Child indicator below header */
-.child-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 16px 4px;
-}
-
-.child-indicator-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--van-primary-color);
-}
-
-.child-indicator-hint {
-  font-size: 12px;
-  color: var(--text-secondary);
+/* Child switcher tabs (spec §2.3) */
+.child-tabs {
+  --van-tabs-bottom-bar-color: var(--van-primary-color);
+  padding: 0 16px;
 }
 
 .module-card {
@@ -607,19 +604,6 @@ onActivated(async () => {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
-}
-
-.module-fallback {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.fallback-icon {
-  font-size: 16px;
 }
 
 .module-empty {
