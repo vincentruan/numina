@@ -5,7 +5,7 @@ import json
 from datetime import UTC, datetime
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -631,10 +631,7 @@ async def stream_assessment(
         # Propagate as 409 to the frontend so it can show a "session in progress"
         # state instead of a generic 503 error.
         if e.response.status_code == 409:
-            raise HTTPException(
-                status_code=409,
-                detail="已有活跃的学习会话，请等待当前会话完成后再试",
-            ) from e
+            raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}) from e
     except Exception as e:
         _fdb = SessionLocal()
