@@ -468,7 +468,6 @@ export default {
       otherDomain: '其他',
     },
     domainSection: {
-      progress: '{mastered}/{total} 已掌握',
       expandSection: '展开',
       collapseSection: '收起',
     },

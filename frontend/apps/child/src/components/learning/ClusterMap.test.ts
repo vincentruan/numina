@@ -339,10 +339,78 @@ describe('ClusterMap', () => {
 
     // mock.contexts is the `this` of each call — the element scrollIntoView
     // was invoked on. (mock.instances only records `new`-style construction.)
-    const scrolledDomains = scrollSpy.mock.contexts
-      .map((c) => (c as Element).getAttribute('data-domain'))
-      .filter(Boolean)
+    // The scroll anchors on the territory card; fall back to the section.
+    const scrolledDomains = scrollSpy.mock.contexts.map(
+      (c) =>
+        (c as Element).getAttribute('data-cluster-domain') ??
+        (c as Element).getAttribute('data-domain'),
+    )
     expect(scrolledDomains).toContain('Units')
+    scrollSpy.mockRestore()
+  })
+
+  it('auto-expands a collapsed bridge target before scrolling (R6)', async () => {
+    const bridge: BridgeResponse = {
+      from_cluster_domain: 'Addition',
+      from_subject: 'mathematics',
+      to_cluster_domain: 'Units',
+      to_subject: 'science',
+      edge_count: 1,
+    }
+    mockGetBridges.mockResolvedValue([bridge])
+    const wrapper = mountMap([makeItem()])
+    await flushPromises()
+
+    // Capture the section's class list at the moment of the scroll — the
+    // `--instant` marker is only present while the scroll is firing.
+    const headersAtScrollTime: string[] = []
+    const scrollSpy = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(function (this: Element) {
+        // The flag lives on the header, a sibling of the collapse wrapper;
+        // find the enclosing section and read its header.
+        const section = (this.closest?.('.domain-section[data-domain]') ?? null) as HTMLElement | null
+        if (section) {
+          const header = section.querySelector('.domain-section__header')
+          if (header instanceof HTMLElement) {
+            headersAtScrollTime.push(...header.classList)
+          }
+        }
+        return undefined
+      })
+    scrollSpy.mockClear()
+
+    await wrapper.find('.bridge-badge').trigger('click')
+    await flushPromises()
+
+    // The science target holds only locked topics, so it starts collapsed —
+    // the auto-expand path, not the already-expanded one.
+    mockGetClusters.mockResolvedValue([
+      makeCluster({ id: 'cl2', subject: 'science', domain: 'Units' }),
+    ])
+    await wrapper.setProps({
+      selectedSubject: 'science',
+      items: [
+        makeItem({
+          id: 'p2',
+          mastery_level: 'locked',
+          topic: makeTopic({ id: 't2', subject: 'science', domain: 'Units' }),
+        }),
+      ],
+    })
+    await flushPromises()
+    await nextTick()
+    await flushPromises()
+
+    const section = wrapper.find('.domain-section[data-domain="Units"]')
+    expect(section.exists()).toBe(true)
+    expect(
+      section.find('.domain-section__header').attributes('aria-expanded'),
+    ).toBe('true')
+    // The section was at final geometry when the scroll happened: the
+    // suppressed-transition class is only present during the scroll itself.
+    expect(headersAtScrollTime).toContain('domain-section__header--instant')
+    expect(scrollSpy.mock.contexts.length).toBeGreaterThan(0)
     scrollSpy.mockRestore()
   })
 
@@ -435,5 +503,120 @@ describe('ClusterMap', () => {
       .findAll('.cluster-territory')
       .map((t) => t.attributes('data-cluster-domain'))
     expect(domains).toEqual(['Addition', '__other__'])
+  })
+
+  // --- Domain grouping and collapse behaviour (U1-U4 / R1-R8) ---
+
+  function headerFor(wrapper: ReturnType<typeof mountMap>, domain: string) {
+    return wrapper.find(`.domain-section[data-domain="${domain}"] .domain-section__header`)
+  }
+
+  it('groups clusters sharing a domain into one section and sums their progress', async () => {
+    mockGetClusters.mockResolvedValue([
+      makeCluster({ id: 'cl1', domain: 'Addition', age_group: 'low' }),
+      makeCluster({ id: 'cl2', domain: 'Addition', age_group: 'mid' }),
+      makeCluster({ id: 'cl3', domain: 'Multiplication' }),
+    ])
+    const wrapper = mountMap([
+      makeItem({ id: 'p1', mastery_level: 'mastered', topic: makeTopic({ id: 't1', domain: 'Addition', age_group: 'low' }) }),
+      makeItem({ id: 'p2', mastery_level: 'locked', topic: makeTopic({ id: 't2', domain: 'Addition', age_group: 'mid' }) }),
+      makeItem({ id: 'p3', mastery_level: 'available', topic: makeTopic({ id: 't3', domain: 'Multiplication' }) }),
+    ])
+    await flushPromises()
+
+    const sections = wrapper.findAll('.domain-section')
+    expect(sections).toHaveLength(2)
+
+    const addition = wrapper.find('.domain-section[data-domain="Addition"]')
+    expect(addition.findAll('.cluster-territory')).toHaveLength(2)
+    // progress aggregates across both age_group clusters: 1 of 2 mastered
+    expect(addition.find('.domain-section__progress').text()).toBe('1/2 已掌握')
+  })
+
+  it('auto-expands a domain with active learning and collapses an all-locked one', async () => {
+    mockGetClusters.mockResolvedValue([
+      makeCluster({ id: 'cl1', domain: 'Addition' }),
+      makeCluster({ id: 'cl2', domain: 'Multiplication' }),
+    ])
+    const wrapper = mountMap([
+      makeItem({ id: 'p1', mastery_level: 'available', topic: makeTopic({ id: 't1', domain: 'Addition' }) }),
+      makeItem({ id: 'p2', mastery_level: 'locked', topic: makeTopic({ id: 't2', domain: 'Multiplication' }) }),
+    ])
+    await flushPromises()
+
+    expect(headerFor(wrapper, 'Addition').attributes('aria-expanded')).toBe('true')
+    expect(headerFor(wrapper, 'Multiplication').attributes('aria-expanded')).toBe('false')
+  })
+
+  it('auto-expands a domain whose mastered topics are due for review', async () => {
+    mockGetClusters.mockResolvedValue([makeCluster({ domain: 'Addition' })])
+    const wrapper = mountMap([
+      makeItem({
+        mastery_level: 'mastered',
+        next_review_at: new Date(Date.now() - 86_400_000).toISOString(),
+        topic: makeTopic({ domain: 'Addition' }),
+      }),
+    ])
+    await flushPromises()
+
+    expect(headerFor(wrapper, 'Addition').attributes('aria-expanded')).toBe('true')
+  })
+
+  it('keeps a manual collapse after switching subject and back (R5 / AE3)', async () => {
+    mockGetClusters.mockResolvedValue([makeCluster({ domain: 'Addition' })])
+    const wrapper = mountMap([
+      makeItem({ id: 'p1', mastery_level: 'available', topic: makeTopic({ id: 't1', domain: 'Addition' }) }),
+    ])
+    await flushPromises()
+    expect(headerFor(wrapper, 'Addition').attributes('aria-expanded')).toBe('true')
+
+    await headerFor(wrapper, 'Addition').trigger('click')
+    expect(headerFor(wrapper, 'Addition').attributes('aria-expanded')).toBe('false')
+
+    // away to a subject with its own data, then back
+    mockGetClusters.mockResolvedValue([makeCluster({ id: 'cl2', subject: 'science', domain: 'Units' })])
+    await wrapper.setProps({ selectedSubject: 'science', items: [] })
+    await flushPromises()
+
+    mockGetClusters.mockResolvedValue([makeCluster({ domain: 'Addition' })])
+    await wrapper.setProps({
+      selectedSubject: 'mathematics',
+      items: [makeItem({ id: 'p1', mastery_level: 'available', topic: makeTopic({ id: 't1', domain: 'Addition' }) })],
+    })
+    await flushPromises()
+
+    expect(headerFor(wrapper, 'Addition').attributes('aria-expanded')).toBe('false')
+  })
+
+  it('keeps a manual collapse when a data refresh recomputes the groups', async () => {
+    mockGetClusters.mockResolvedValue([makeCluster({ domain: 'Addition' })])
+    const wrapper = mountMap([
+      makeItem({ id: 'p1', mastery_level: 'available', topic: makeTopic({ id: 't1', domain: 'Addition' }) }),
+    ])
+    await flushPromises()
+
+    await headerFor(wrapper, 'Addition').trigger('click')
+    expect(headerFor(wrapper, 'Addition').attributes('aria-expanded')).toBe('false')
+
+    // a refetch lands with the same active topic
+    mockGetClusters.mockResolvedValue([makeCluster({ domain: 'Addition' })])
+    await wrapper.setProps({
+      items: [makeItem({ id: 'p1b', mastery_level: 'available', topic: makeTopic({ id: 't1', domain: 'Addition' }) })],
+    })
+    await flushPromises()
+
+    expect(headerFor(wrapper, 'Addition').attributes('aria-expanded')).toBe('false')
+  })
+
+  it('toggles a collapsed domain open on header tap', async () => {
+    mockGetClusters.mockResolvedValue([makeCluster({ domain: 'Multiplication' })])
+    const wrapper = mountMap([
+      makeItem({ mastery_level: 'locked', topic: makeTopic({ domain: 'Multiplication' }) }),
+    ])
+    await flushPromises()
+    expect(headerFor(wrapper, 'Multiplication').attributes('aria-expanded')).toBe('false')
+
+    await headerFor(wrapper, 'Multiplication').trigger('click')
+    expect(headerFor(wrapper, 'Multiplication').attributes('aria-expanded')).toBe('true')
   })
 })

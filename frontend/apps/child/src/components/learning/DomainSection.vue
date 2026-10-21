@@ -4,17 +4,18 @@
       type="button"
       class="domain-section__header"
       :aria-expanded="expanded"
-      :aria-label="expanded ? t('learning.domainSection.collapseSection') : t('learning.domainSection.expandSection')"
+      :aria-label="`${domainLabel}，${t(expanded ? 'learning.domainSection.collapseSection' : 'learning.domainSection.expandSection')}`"
+      :class="{ 'domain-section__header--instant': instant }"
       @click="$emit('toggle')"
     >
       <span class="domain-section__label">{{ domainLabel }}</span>
       <span class="domain-section__progress">
-        {{ t('learning.domainSection.progress', { mastered: masteredCount, total: totalCount }) }}
+        {{ t('learning.cluster.progress', { mastered: masteredCount, total: totalCount }) }}
       </span>
       <span class="domain-section__chevron" :class="{ 'domain-section__chevron--expanded': expanded }" />
     </button>
 
-    <div class="domain-section__collapse-wrapper">
+    <div class="domain-section__collapse-wrapper" :inert="!expanded">
       <div class="domain-section__content">
         <slot />
       </div>
@@ -35,6 +36,9 @@ defineProps<{
   masteredCount: number
   totalCount: number
   expanded: boolean
+  /** Programmatic expand (frontier/bridge): skip the height transition so
+   *  `scrollIntoView` measures final geometry instead of an animating row. */
+  instant?: boolean
 }>()
 
 defineEmits<{
@@ -120,6 +124,12 @@ defineEmits<{
 
 .domain-section__header[aria-expanded="true"] + .domain-section__collapse-wrapper {
   grid-template-rows: 1fr;
+}
+
+/* Programmatic expand (frontier/bridge auto-expand): no transition, so the
+   section is at final height when the scroll measures it. */
+.domain-section__header--instant + .domain-section__collapse-wrapper {
+  transition: none;
 }
 
 .domain-section__content {

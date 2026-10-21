@@ -37,10 +37,11 @@
         v-for="group in domainGroups"
         :key="group.domainKey"
         :domain="extractDomain(group.domainKey)"
-        :domain-label="domainLabel(group.domainKey)"
+        :domain-label="translateDomain(t, extractDomain(group.domainKey))"
         :mastered-count="group.masteredCount"
         :total-count="group.totalCount"
-        :expanded="expandedDomains.has(group.domainKey)"
+        :expanded="isExpanded(group)"
+        :instant="instantExpandKeys.has(group.domainKey)"
         @toggle="toggleDomain(group.domainKey)"
       >
         <div class="cluster-map__territories">
@@ -85,6 +86,7 @@ import { getClusters, getBridges } from '@/api/learning'
 import ClusterTerritory from './ClusterTerritory.vue'
 import DomainSection from './DomainSection.vue'
 import PrerequisiteGuidance from './PrerequisiteGuidance.vue'
+import { domainLabel as translateDomain } from '@/utils/domainLabel'
 import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
 
@@ -108,8 +110,12 @@ const scrollTargetDomain = ref<string | null>(null)
 
 // ── Collapse state (KTD6) ──
 
-const expandedDomains = reactive(new Set<string>())
-const domainDefaultsInitialized = new Set<string>()
+/** Explicit user toggles, keyed by `{subject}:{domain}`. Written *only* by
+ *  `toggleDomain`, so a manual collapse can never be overwritten by the
+ *  auto-expand defaults (R5). Domains absent from this map fall back to the
+ *  computed default, which keeps the first render correct instead of
+ *  collapsing everything and animating it open on the next flush. */
+const userExpanded = reactive(new Map<string, boolean>())
 
 // ── Data loading ──
 
@@ -166,6 +172,10 @@ function buildTerritories(): Territory[] {
   const clusterMap = new Map<string, ProgressWithTopic[]>()
   const unmatched: ProgressWithTopic[] = []
 
+  // Prefer the exact 3-key match; the API now returns one row per key, but
+  // a key it never had (e.g. a topic whose age_group is missing from
+  // clusters.json) should still land in its domain territory rather than be
+  // dropped into "其他".
   for (const item of subjectItems) {
     const domain = item.topic.domain ?? ''
     const matchingCluster =
@@ -186,6 +196,10 @@ function buildTerritories(): Territory[] {
     }
   }
 
+  // Only render territories that actually hold nodes. ``topic_count`` is the
+  // taxonomy's count for the (subject, domain, age_group) key, not this
+  // child's — trusting it would render empty cards wherever the API's row set
+  // and the progress rows disagree.
   const result: Territory[] = clusters.value
     .filter((c) => clusterMap.has(c.id))
     .map((c) => ({
@@ -194,6 +208,7 @@ function buildTerritories(): Territory[] {
       bridges: bridges.value.filter((b) => b.from_cluster_domain === c.domain),
     }))
 
+  // Append "Other" territory for unmatched items
   if (unmatched.length > 0) {
     result.push({
       cluster: {
@@ -249,50 +264,32 @@ const subjectItems = computed(() =>
 
 // ── Collapse defaults (KTD3) ──
 
-/** Reset default-initialization tracking when data changes so new items can
- *  flip a domain from collapsed to expanded. */
-watch(
-  () => [domainGroups.value, subjectItems.value.length],
-  () => {
-    domainDefaultsInitialized.clear()
-  },
-)
+/** A domain opens by default when it holds active learning — anything the
+ *  child is working on now, or has mastered but is due to review. Locked and
+ *  not-yet-due mastered topics stay hidden. */
+function defaultExpanded(group: DomainGroup): boolean {
+  return group.territories.some((territory) =>
+    territory.items.some((i) => {
+      const level = i.mastery_level
+      if (level === 'learning' || level === 'assessing' || level === 'available') return true
+      if (level === 'mastered' && i.next_review_at && new Date(i.next_review_at) <= new Date()) return true
+      return false
+    }),
+  )
+}
 
-/** Reset when switching subjects so the new subject's domains get defaults,
- *  but do NOT clear expandedDomains — R5 requires global persistence. */
-watch(() => props.selectedSubject, () => {
-  domainDefaultsInitialized.clear()
-})
-
-function initializeDomainDefaults() {
-  if (subjectItems.value.length === 0) return
-
-  for (const group of domainGroups.value) {
-    if (domainDefaultsInitialized.has(group.domainKey)) continue
-
-    const hasActive = group.territories.some((territory) =>
-      territory.items.some((i) => {
-        const level = i.mastery_level
-        if (level === 'learning' || level === 'assessing' || level === 'available') return true
-        if (level === 'mastered' && i.next_review_at && new Date(i.next_review_at) <= new Date()) return true
-        return false
-      }),
-    )
-
-    if (hasActive) {
-      expandedDomains.add(group.domainKey)
-    }
-
-    domainDefaultsInitialized.add(group.domainKey)
-  }
+/** Derived, not seeded: a user toggle always wins, otherwise the default is
+ *  recomputed from current data. Deriving it means the first paint already has
+ *  the final expanded state (no collapse-then-animate-open flash) and no
+ *  watcher can reset a manual choice. */
+function isExpanded(group: DomainGroup): boolean {
+  return userExpanded.get(group.domainKey) ?? defaultExpanded(group)
 }
 
 function toggleDomain(domainKey: string) {
-  if (expandedDomains.has(domainKey)) {
-    expandedDomains.delete(domainKey)
-  } else {
-    expandedDomains.add(domainKey)
-  }
+  const group = domainGroups.value.find((g) => g.domainKey === domainKey)
+  const current = group ? isExpanded(group) : (userExpanded.get(domainKey) ?? false)
+  userExpanded.set(domainKey, !current)
 }
 
 // ── Progress (derived from subjectItems) ──
@@ -314,6 +311,7 @@ const progressText = computed(() =>
 // ── Frontier detection (U5) ──
 
 const frontierTopic = computed<ProgressWithTopic | null>(() => {
+  // Priority: learning > available > review
   const learning = subjectItems.value.find((i) => i.mastery_level === 'learning' || i.mastery_level === 'assessing')
   if (learning) return learning
   const available = subjectItems.value.find((i) => i.mastery_level === 'available')
@@ -336,45 +334,65 @@ const frontierClusterDomain = computed(() => {
 
 // ── Auto-scroll to frontier on load, or to bridge target ──
 
+// The frontier scroll is one-shot (it brings the child to their place on
+// first view); a bridge tap must work on *every* subject switch, because
+// the target territory only exists in the DOM after the new clusters and
+// topics resolve. Tracking the two modes separately is what the previous
+// `{ once: … }` could not express — it disabled the bridge scroll too
+// whenever the child had a frontier.
 let frontierScrolled = false
 
-watch(domainGroups, () => {
-  initializeDomainDefaults()
+/** Domains that were expanded programmatically rather than by the child.
+ *  Their height transition is suppressed for the scroll so `scrollIntoView`
+ *  resolves its target against final geometry, not a 44px collapsing row. */
+const instantExpandKeys = reactive(new Set<string>())
 
+/** Bumped per scroll attempt so an in-flight one can tell it was superseded. */
+let scrollSeq = 0
+
+/** Scroll to the section for `targetDomain`, preferring the territory card
+ *  the child actually navigated to over the section header. Returns false
+ *  when the node is not mounted yet. */
+function scrollToDomain(targetDomain: string): boolean {
+  const section = document.querySelector(
+    `.domain-section[data-domain="${CSS.escape(targetDomain)}"]`,
+  )
+  if (!section) return false
+
+  const anchor =
+    section.querySelector(`[data-cluster-domain="${CSS.escape(targetDomain)}"]`) ??
+    section
+  anchor.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  return true
+}
+
+// flush: 'post' — the section this scrolls to only exists once the component
+// has re-rendered with the new subject's clusters/topics.
+watch(domainGroups, async () => {
   const bridgeTarget = scrollTargetDomain.value
   const targetDomain =
     bridgeTarget || (frontierScrolled ? null : frontierClusterDomain.value)
   if (!targetDomain) return
 
+  const seq = ++scrollSeq
   const targetKey = `${props.selectedSubject}:${targetDomain}`
+  const group = domainGroups.value.find((g) => g.domainKey === targetKey)
 
-  // Auto-expand collapsed domain before scrolling (R6)
-  if (!expandedDomains.has(targetKey)) {
-    expandedDomains.add(targetKey)
-    // Wait for DOM to render expanded content — nextTick resolves after
-    // the reactive change has been flushed.
-    nextTick(() => {
-      const el = document.querySelector(
-        `.domain-section[data-domain="${CSS.escape(targetDomain)}"]`,
-      )
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        if (bridgeTarget) {
-          scrollTargetDomain.value = null
-        } else {
-          frontierScrolled = true
-        }
-      }
-    })
-    return
+  // Auto-expand a collapsed target before scrolling (R6). The `instant` flag
+  // suppresses the height transition, so one nextTick is enough for the
+  // section to reach final geometry — no animating row to measure against.
+  if (group && !isExpanded(group)) {
+    userExpanded.set(targetKey, true)
+    instantExpandKeys.add(targetKey)
+    await nextTick()
+    if (seq !== scrollSeq) return
   }
 
-  const el = document.querySelector(
-    `.domain-section[data-domain="${CSS.escape(targetDomain)}"]`,
-  )
-  if (!el) return
+  // Keep the target armed when the node is not mounted yet: a subject switch
+  // re-renders from the props change first and only later from the fetch.
+  if (!scrollToDomain(targetDomain)) return
 
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  instantExpandKeys.delete(targetKey)
   if (bridgeTarget) {
     scrollTargetDomain.value = null
   } else {
@@ -418,6 +436,7 @@ function onTopicTap(item: ProgressWithTopic) {
 
 function onBridgeTap(bridge: BridgeResponse) {
   scrollTargetDomain.value = bridge.to_cluster_domain
+  // Switch to target subject tab
   emit('switchSubject', bridge.to_subject)
 }
 
@@ -426,16 +445,6 @@ function onBridgeTap(bridge: BridgeResponse) {
 function onPrereqGoTo(topicId: string) {
   prereqTopic.value = null
   router.push(`/learning/topic/${topicId}`)
-}
-
-// ── Domain label helper ──
-
-function domainLabel(domainKey: string): string {
-  const domain = extractDomain(domainKey)
-  if (domain === '__other__') return t('learning.cluster.otherDomain')
-  const key = `learning.domains.${domain}`
-  const translated = t(key)
-  return translated === key ? domain : translated
 }
 </script>
 

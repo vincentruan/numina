@@ -6,7 +6,7 @@
   >
     <div class="cluster-territory__header">
       <h3 class="cluster-territory__title">
-        {{ domainLabel(cluster.domain) }}
+        {{ translateDomain(t, cluster.domain) }}
         <span class="cluster-territory__count">({{ items.length }})</span>
       </h3>
       <span v-if="isFrontierCluster" class="cluster-territory__frontier-badge">📍</span>
@@ -23,7 +23,7 @@
         @click="$emit('bridgeTap', bridge)"
       >
         <span class="bridge-badge__icon">🔗</span>
-        <span class="bridge-badge__label">{{ subjectLabel(bridge.to_subject) }} → {{ domainLabel(bridge.to_cluster_domain) }}</span>
+        <span class="bridge-badge__label">{{ subjectLabel(bridge.to_subject) }} → {{ translateDomain(t, bridge.to_cluster_domain) }}</span>
       </button>
       <span v-if="bridges.length > 2" class="bridge-badge__overflow">+{{ bridges.length - 2 }}</span>
     </div>
@@ -47,6 +47,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProgressWithTopic, ClusterResponse, BridgeResponse } from '@/api/learning'
 import TopicNode from './TopicNode.vue'
+import { domainLabel as translateDomain } from '@/utils/domainLabel'
 
 const { t } = useI18n()
 
@@ -64,15 +65,6 @@ defineEmits<{
 }>()
 
 const displayBridges = computed(() => props.bridges.slice(0, 2))
-
-function domainLabel(domain: string): string {
-  // The synthetic bucket for topics whose domain has no cluster. Its raw id
-  // ("__other__") must never reach the UI.
-  if (domain === '__other__') return t('learning.cluster.otherDomain')
-  const key = `learning.domains.${domain}`
-  const translated = t(key)
-  return translated === key ? domain : translated
-}
 
 function subjectLabel(subject: string): string {
   const key = `learning.subject.${subject}`

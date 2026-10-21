@@ -5,7 +5,7 @@
       :key="group.domain"
       class="domain-group"
     >
-      <h3 class="domain-group__title">{{ domainLabel(group.domain) }}</h3>
+      <h3 class="domain-group__title">{{ translateDomain(t, group.domain) }}</h3>
       <div class="domain-group__cards">
         <button
           v-for="item in group.items"
@@ -42,6 +42,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProgressWithTopic } from '@/api/learning'
 import ZoneBadge from './ZoneBadge.vue'
+import { domainLabel as translateDomain } from '@/utils/domainLabel'
 
 const { t, locale } = useI18n()
 
@@ -123,11 +124,6 @@ const domainGroups = computed<DomainGroup[]>(() => {
   return Array.from(map.entries()).map(([domain, items]) => ({ domain, items }))
 })
 
-function domainLabel(domain: string): string {
-  const key = `learning.domains.${domain}`
-  const translated = t(key)
-  return translated === key ? domain : translated
-}
 </script>
 
 <style scoped>

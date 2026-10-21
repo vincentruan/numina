@@ -15,7 +15,7 @@
         <span class="breadcrumb__sep">/</span>
         <span class="breadcrumb__item">{{ subjectLabel(topic.subject) }}</span>
         <span v-if="topic.domain" class="breadcrumb__sep">/</span>
-        <span v-if="topic.domain" class="breadcrumb__item breadcrumb__item--active">{{ domainLabel(topic.domain) }}</span>
+        <span v-if="topic.domain" class="breadcrumb__item breadcrumb__item--active">{{ translateDomain(t, topic.domain) }}</span>
       </div>
 
       <!-- Topic title row with curriculum badge -->
@@ -200,6 +200,7 @@ import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { showSuccessToast, showFailToast, type TagType } from 'vant'
 import axios from 'axios'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { domainLabel as translateDomain } from '@/utils/domainLabel'
 import {
   getTopicDetail,
   getTopicGraph,
@@ -228,12 +229,6 @@ function subjectLabel(subject: string): string {
   const key = `learning.subject.${subject}`
   const translated = t(key)
   return translated === key ? subject.charAt(0).toUpperCase() + subject.slice(1) : translated
-}
-
-function domainLabel(domain: string): string {
-  const key = `learning.domains.${domain}`
-  const translated = t(key)
-  return translated === key ? domain : translated
 }
 
 const topicId = computed(() => route.params.id as string)
