@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import type {
   ProgressWithTopic,
@@ -91,6 +92,16 @@ function makeCluster(overrides: Partial<ClusterResponse> = {}): ClusterResponse 
   }
 }
 
+// Mounted hosts are attached to the document (the scroll path resolves its
+// target with document.querySelector), so they must be torn down between
+// tests — otherwise stale territory nodes from earlier mounts leak into
+// every later query.
+const hosts: HTMLElement[] = []
+
+afterEach(() => {
+  for (const host of hosts.splice(0)) host.remove()
+})
+
 function mountMap(items: ProgressWithTopic[], subject = 'mathematics') {
   const i18n = createI18n({
     legacy: false,
@@ -101,6 +112,7 @@ function mountMap(items: ProgressWithTopic[], subject = 'mathematics') {
   // document.querySelector, which needs the tree in the document.
   const host = document.createElement('div')
   document.body.appendChild(host)
+  hosts.push(host)
   return mount(ClusterMap, {
     attachTo: host,
     props: { items, selectedSubject: subject },
@@ -319,13 +331,18 @@ describe('ClusterMap', () => {
         }),
       ],
     })
+    // Let the switch's getClusters/getBridges resolve, then the post-flush
+    // watcher that scrolls once the new territory is actually rendered.
+    await flushPromises()
+    await nextTick()
     await flushPromises()
 
-    const scrolled = scrollSpy.mock.instances as unknown as Element[]
-    const target = scrolled.find(
-      (el) => el?.getAttribute?.('data-cluster-domain') === 'Units',
+    // mock.contexts is the `this` of each call — the element scrollIntoView
+    // was invoked on. (mock.instances only records `new`-style construction.)
+    const scrolledDomains = scrollSpy.mock.contexts.map((c) =>
+      (c as Element).getAttribute('data-cluster-domain'),
     )
-    expect(target).toBeTruthy()
+    expect(scrolledDomains).toContain('Units')
     scrollSpy.mockRestore()
   })
 

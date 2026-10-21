@@ -222,22 +222,39 @@ const frontierClusterDomain = computed(() => {
 
 // ── Auto-scroll to frontier on load, or to bridge target ──
 
-// Fires on every territories recomputation (not just once): a bridge tap
-// switches subject, which triggers a fresh clusters/batch fetch, and the
-// target territory only exists in the DOM after those async loads land.
+// The frontier scroll is one-shot (it brings the child to their place on
+// first view); a bridge tap must work on *every* subject switch, because
+// the target territory only exists in the DOM after the new clusters and
+// topics resolve. Tracking the two modes separately is what the previous
+// `{ once: … }` could not express — it disabled the bridge scroll too
+// whenever the child had a frontier.
+let frontierScrolled = false
+
+// flush: 'post' — the territory this scrolls to only exists once the
+// component has re-rendered with the new subject's clusters/topics.
 watch(territories, async () => {
-  const targetDomain = scrollTargetDomain.value || frontierClusterDomain.value
-  if (targetDomain) {
-    await nextTick()
-    const el = document.querySelector(
-      `[data-cluster-domain="${CSS.escape(targetDomain)}"]`,
-    )
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
+  const bridgeTarget = scrollTargetDomain.value
+  const targetDomain =
+    bridgeTarget || (frontierScrolled ? null : frontierClusterDomain.value)
+  if (!targetDomain) return
+
+  const el = document.querySelector(
+    `[data-cluster-domain="${CSS.escape(targetDomain)}"]`,
+  )
+  // The target territory may still be pending: a subject switch re-renders
+  // territories from the props change first, and only later from the
+  // clusters/topics fetch. Keep the target armed until the node is really
+  // there, so the scroll fires on a later recomputation instead of being
+  // silently dropped.
+  if (!el) return
+
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  if (bridgeTarget) {
     scrollTargetDomain.value = null
+  } else {
+    frontierScrolled = true
   }
-})
+}, { flush: 'post' })
 
 // ── Tap handlers (U3) ──
 
