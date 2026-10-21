@@ -222,6 +222,9 @@ const frontierClusterDomain = computed(() => {
 
 // ── Auto-scroll to frontier on load, or to bridge target ──
 
+// Fires on every territories recomputation (not just once): a bridge tap
+// switches subject, which triggers a fresh clusters/batch fetch, and the
+// target territory only exists in the DOM after those async loads land.
 watch(territories, async () => {
   const targetDomain = scrollTargetDomain.value || frontierClusterDomain.value
   if (targetDomain) {
@@ -234,7 +237,7 @@ watch(territories, async () => {
     }
     scrollTargetDomain.value = null
   }
-}, { once: !frontierClusterDomain.value })
+})
 
 // ── Tap handlers (U3) ──
 
