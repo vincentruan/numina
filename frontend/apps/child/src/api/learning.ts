@@ -50,6 +50,11 @@ export interface ProgressResponse {
   stability: number | null
   next_review_at: string | null
   ability_dimensions_score: Record<string, number> | null
+  /** Navigation index from /child/learning/map — lets the cluster map build
+   *  subject tabs and mastery nodes without fetching full topic detail. */
+  subject?: string | null
+  domain?: string | null
+  age_group?: string | null
 }
 
 export interface AssignmentResponse {
@@ -162,6 +167,22 @@ export interface ProgressWithTopic extends ProgressResponse {
 
 export async function getMyLearningMap(): Promise<ProgressResponse[]> {
   const res = await http.get('/child/learning/map')
+  return res.data
+}
+
+/** Slim per-row index for the cluster map — only topic_id, mastery_level,
+ *  next_review_at, subject, domain, age_group. */
+export async function getMyLearningMapIndex(): Promise<
+  Array<{
+    topic_id: string
+    mastery_level: string
+    next_review_at: string | null
+    subject?: string | null
+    domain?: string | null
+    age_group?: string | null
+  }>
+> {
+  const res = await http.get('/child/learning/map/index')
   return res.data
 }
 

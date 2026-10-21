@@ -20,6 +20,7 @@ from apps.backend.app.schemas.learning import (
     ChildProgressOverview,
     ClusterResponse,
     LearningStatsResponse,
+    MapIndexItem,
     OnboardingCompleteResponse,
     PathResponse,
     ProgressResponse,
@@ -78,10 +79,19 @@ def my_knowledge_map(
     Locale filter applied: progress rows for topics that no longer belong to
     the child's source taxonomy are hidden (taxonomy switched since the
     progress was created, or topic was deprecated).
+
+    Subject/domain/age_group are joined in so the cluster map can build its
+    subject tabs and mastery-coloured nodes without a second round-trip that
+    fetches every topic's full detail.
     """
     taxonomy = locale_to_source_taxonomy(child.language)
-    return (
-        db.query(LearningProgress)
+    rows = (
+        db.query(
+            LearningProgress,
+            LearningTopic.subject,
+            LearningTopic.domain,
+            LearningTopic.age_group,
+        )
         .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
         .filter(
             LearningProgress.child_id == child.id,
@@ -89,6 +99,58 @@ def my_knowledge_map(
         )
         .all()
     )
+    result = []
+    for progress, subject, domain, age_group in rows:
+        item = ProgressResponse.model_validate(progress)
+        item.subject = subject
+        item.domain = domain
+        item.age_group = age_group
+        result.append(item)
+    return result
+
+
+@router.get("/map/index", response_model=list[MapIndexItem])
+def my_knowledge_map_index(
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Slim per-row index for the cluster map.
+
+    Returns only ``topic_id``, ``mastery_level``, ``next_review_at``,
+    ``subject``, ``domain``, ``age_group`` — the minimum the cluster map
+    needs to render subject tabs and mastery-coloured nodes.  Omits the
+    heavy ``ProgressResponse`` fields (evidence, standards,
+    assessment_prompt, ability_dimensions_score, …) that drive the
+    original ``/map`` payload well above 3G budgets.
+    """
+    taxonomy = locale_to_source_taxonomy(child.language)
+    rows = (
+        db.query(
+            LearningTopic.id,
+            LearningProgress.mastery_level,
+            LearningProgress.next_review_at,
+            LearningTopic.subject,
+            LearningTopic.domain,
+            LearningTopic.age_group,
+        )
+        .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
+        .filter(
+            LearningProgress.child_id == child.id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .all()
+    )
+    return [
+        MapIndexItem(
+            topic_id=topic_id,
+            mastery_level=mastery_level,
+            next_review_at=next_review_at,
+            subject=subject,
+            domain=domain,
+            age_group=age_group,
+        )
+        for topic_id, mastery_level, next_review_at, subject, domain, age_group in rows
+    ]
 
 
 @router.get("/clusters", response_model=list[ClusterResponse])

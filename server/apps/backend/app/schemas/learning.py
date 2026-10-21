@@ -134,6 +134,30 @@ class ProgressResponse(SnowflakeBase):
     stability: float | None
     next_review_at: datetime | None
     ability_dimensions_score: dict | None
+    # Navigation index fields — let the cluster map build subject tabs and
+    # mastery-coloured nodes without fetching every topic's full detail
+    # (description/evidence/standards), which dominates a 3G payload.
+    subject: str | None = None
+    domain: str | None = None
+    age_group: str | None = None
+
+
+class MapIndexItem(SnowflakeBase):
+    """Slim per-row index for the cluster map — only what it needs to render
+    subject tabs and mastery-coloured nodes.  Omits the heavy fields
+    (evidence, standards, assessment_prompt, ability_dimensions_score, …)
+    that drive the original /map payload well above 3G budgets.
+
+    Extends ``SnowflakeBase`` so ``topic_id`` serializes as a string, matching
+    the frontend's string-typed IDs (and ``TopicResponse.id`` keys).
+    """
+
+    topic_id: int
+    mastery_level: str
+    next_review_at: datetime | None
+    subject: str | None = None
+    domain: str | None = None
+    age_group: str | None = None
 
 
 # --- Assignment ---

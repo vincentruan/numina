@@ -59,13 +59,13 @@
 <script setup lang="ts">
 defineOptions({ name: 'LearningMap' })
 
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { usePageLoading } from '@/composables/usePageLoading'
-import { getMyLearningMap, getTopicsBatch, type ProgressResponse, type TopicResponse } from '@/api/learning'
+import { getMyLearningMapIndex, getTopicsBatch, type TopicResponse } from '@/api/learning'
 import type { ProgressWithTopic } from '@/api/learning'
 import SubjectTabs from '@/components/learning/SubjectTabs.vue'
 import type { SubjectTab } from '@/components/learning/SubjectTabs.vue'
@@ -83,24 +83,50 @@ const loading = ref(true)
 const refreshing = ref(false)
 const error = ref('')
 const selectedSubject = ref('')
-const progressList = ref<ProgressResponse[]>([])
+const progressList = ref<Array<{
+  topic_id: string
+  mastery_level: string
+  next_review_at: string | null
+  subject?: string | null
+  domain?: string | null
+  age_group?: string | null
+}>>([])
 const topicMap = ref<Map<string, TopicResponse>>(new Map())
+// Subjects whose topic details have been fetched (R10 progressive loading).
+const loadedSubjects = ref<Set<string>>(new Set())
+// In-flight fetches, so the selectedSubject watcher and load() don't both fire
+// the same batch request (a duplicate round trip on a throttled link).
+const inflightSubjects = new Map<string, Promise<void>>()
 
 // Composite items: progress + topic
 const mapItems = computed<ProgressWithTopic[]>(() =>
   progressList.value
     .filter((p) => topicMap.value.has(p.topic_id))
     .map((p) => ({
-      ...p,
+      id: p.topic_id,
+      child_id: '',
+      topic_id: p.topic_id,
+      mastery_level: p.mastery_level,
+      mastery_score: null,
+      completed_via: null,
+      attempts: 0,
+      xp_earned: 0,
+      last_practice_at: null,
+      first_mastered_at: null,
+      stability: null,
+      next_review_at: p.next_review_at,
+      ability_dimensions_score: null,
       topic: topicMap.value.get(p.topic_id)!,
     })),
 )
 
-// Subject tabs derived from items
+// Subject tabs derived from the progress index (subject is joined into
+// /child/learning/map/index), so tabs render before any topic detail is fetched.
 const subjectTabs = computed<SubjectTab[]>(() => {
   const counts = new Map<string, number>()
-  for (const item of mapItems.value) {
-    const s = item.topic.subject
+  for (const p of progressList.value) {
+    const s = p.subject
+    if (!s) continue
     counts.set(s, (counts.get(s) || 0) + 1)
   }
   return Array.from(counts.entries())
@@ -114,6 +140,37 @@ watch(subjectTabs, (tabs) => {
   if (tabs.length > 0 && !tabs.find((t) => t.subject === selectedSubject.value)) {
     selectedSubject.value = tabs[0].subject
   }
+})
+
+// Fetch topic details for one subject only, then merge into the topic map.
+// R10: the selected subject loads first; other subjects load on tab switch.
+function loadSubjectTopics(subject: string): Promise<void> {
+  if (!subject || loadedSubjects.value.has(subject)) return Promise.resolve()
+  const inflight = inflightSubjects.get(subject)
+  if (inflight) return inflight
+  const ids = progressList.value
+    .filter((p) => p.subject === subject)
+    .map((p) => p.topic_id)
+  const task = getTopicsBatch(ids)
+    .then((topics) => {
+      const next = new Map(topicMap.value)
+      for (const topic of topics) next.set(topic.id, topic)
+      topicMap.value = next
+      loadedSubjects.value = new Set([...loadedSubjects.value, subject])
+    })
+    .catch(() => {
+      // Leave the subject unmarked so a later switch retries.
+    })
+    .finally(() => {
+      inflightSubjects.delete(subject)
+    })
+  inflightSubjects.set(subject, task)
+  return task
+}
+
+// Load details for the selected subject whenever the selection changes.
+watch(selectedSubject, (subject) => {
+  void loadSubjectTopics(subject)
 })
 
 // Bridge navigation: switch subject tab
@@ -145,20 +202,19 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    // Fetch progress list
-    const progress = await getMyLearningMap()
-    progressList.value = progress
+    // Fetch the slim progress index (only topic_id, mastery_level,
+    // next_review_at, subject, domain, age_group) so the cluster map can
+    // render subject tabs and mastery-coloured nodes without the heavy
+    // ProgressResponse payload (evidence, standards, assessment_prompt, …).
+    progressList.value = await getMyLearningMapIndex()
 
-    // Fetch topic details for each unique topic_id (batch)
-    const uniqueTopicIds = [...new Set(progress.map((p) => p.topic_id))]
-    const topicDetails = uniqueTopicIds.length > 0
-      ? await getTopicsBatch(uniqueTopicIds)
-      : []
-    const newMap = new Map<string, TopicResponse>()
-    for (const topic of topicDetails) {
-      newMap.set(topic.id, topic)
+    await nextTick()
+    const subject =
+      selectedSubject.value || subjectTabs.value[0]?.subject || ''
+    if (subject) {
+      selectedSubject.value = subject
+      await loadSubjectTopics(subject)
     }
-    topicMap.value = newMap
   } catch {
     error.value = t('toast.loadFailed')
   } finally {

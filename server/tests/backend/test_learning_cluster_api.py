@@ -186,6 +186,101 @@ class TestListClusters:
 
 
 # ---------------------------------------------------------------------------
+# GET /map — navigation index (subject/domain/age_group joined in)
+# ---------------------------------------------------------------------------
+
+
+class TestMapNavigationIndex:
+    def test_map_carries_subject_domain_age_group(
+        self, client, child_auth_headers, db
+    ):
+        """The map index lets the client build tabs without topic detail."""
+
+        from packages.db.models.learning.progress import LearningProgress
+
+        t = _make_topic(
+            db, key="idx-topic", subject="mathematics", domain="Addition",
+            source_taxonomy="beijing",
+        )
+        db.flush()
+        from apps.backend.app.models.user import User
+
+        child = db.query(User).filter(User.username == "clusterchild").first()
+        db.add(
+            LearningProgress(
+                child_id=child.id, topic_id=t.id, mastery_level="available"
+            )
+        )
+        db.commit()
+
+        resp = client.get("/api/v1/child/learning/map", headers=child_auth_headers)
+        assert resp.status_code == 200
+        rows = resp.json()["data"]
+        target = next(r for r in rows if r["topic_id"] == str(t.id))
+        assert target["subject"] == "mathematics"
+        assert target["domain"] == "Addition"
+        assert target["age_group"] == "mid"
+
+
+class TestMapIndex:
+    """The slim /map/index payload the cluster map actually loads."""
+
+    def _seed_progress(self, db, child_username="clusterchild"):
+        from apps.backend.app.models.user import User
+        from packages.db.models.learning.progress import LearningProgress
+
+        t = _make_topic(
+            db, key="slim-topic", subject="mathematics", domain="Addition",
+            source_taxonomy="beijing",
+        )
+        other = _make_topic(
+            db, key="slim-topic-other-tax", subject="mathematics", domain="Addition",
+            source_taxonomy="os-taxonomy",
+        )
+        db.flush()
+        child = db.query(User).filter(User.username == child_username).first()
+        db.add(LearningProgress(child_id=child.id, topic_id=t.id, mastery_level="learning"))
+        db.add(LearningProgress(child_id=child.id, topic_id=other.id, mastery_level="available"))
+        db.commit()
+        return t
+
+    def test_rows_carry_map_fields(self, client, child_auth_headers, db):
+        t = self._seed_progress(db)
+        resp = client.get(
+            "/api/v1/child/learning/map/index", headers=child_auth_headers
+        )
+        assert resp.status_code == 200
+        rows = resp.json()["data"]
+        assert len(rows) == 1, "other-taxonomy progress must be filtered out"
+        row = rows[0]
+        assert row["topic_id"] == str(t.id)
+        assert row["mastery_level"] == "learning"
+        assert row["subject"] == "mathematics"
+        assert row["domain"] == "Addition"
+        assert row["age_group"] == "mid"
+        assert "next_review_at" in row
+
+    def test_payload_omits_heavy_fields(self, client, child_auth_headers, db):
+        """The slim index must not carry the fields that blow the 3G budget."""
+        self._seed_progress(db)
+        resp = client.get(
+            "/api/v1/child/learning/map/index", headers=child_auth_headers
+        )
+        row = resp.json()["data"][0]
+        for heavy in ("ability_dimensions_score", "evidence", "id", "child_id"):
+            assert heavy not in row
+
+    def test_is_smaller_than_full_map(self, client, child_auth_headers, db):
+        self._seed_progress(db)
+        slim = client.get(
+            "/api/v1/child/learning/map/index", headers=child_auth_headers
+        )
+        full = client.get("/api/v1/child/learning/map", headers=child_auth_headers)
+        assert slim.status_code == 200 and full.status_code == 200
+        assert len(slim.content) < len(full.content)
+
+
+# ---------------------------------------------------------------------------
 # GET /bridges
 # ---------------------------------------------------------------------------
 
