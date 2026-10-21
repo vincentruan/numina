@@ -62,6 +62,7 @@ defineOptions({ name: 'LearningMap' })
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { showToast } from 'vant'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { getMyLearningMap, getTopicsBatch, type ProgressResponse, type TopicResponse } from '@/api/learning'
@@ -117,7 +118,15 @@ watch(subjectTabs, (tabs) => {
 
 // Bridge navigation: switch subject tab
 function onSwitchSubject(subject: string) {
-  selectedSubject.value = subject
+  // Tabs are derived from the child's progress items, but bridge targets come
+  // from cluster domains. A bridge can point at a subject the child has no
+  // progress in — that subject has no tab, and setting it here would leave
+  // every tab inactive with no way back. Keep the current tab and explain.
+  if (subjectTabs.value.some((tab) => tab.subject === subject)) {
+    selectedSubject.value = subject
+    return
+  }
+  showToast(t('learning.cluster.bridgeNoContent'))
 }
 
 // Today recommendation: pick first non-mastered topic

@@ -461,6 +461,7 @@ export default {
       frontierBanner: '📍 从这里开始你的学习之旅',
       allMastered: '🎉 太棒了！这个学科的全部内容都已掌握，试试其他学科吧！',
       bridgeLabel: '连接到：{subjects}',
+      bridgeNoContent: '该学科还没有你的学习内容',
       hereMarker: '📍 当前学习',
       progress: '{mastered}/{total} 已掌握',
       prereqTitle: '解锁 "{topic}" 需要先掌握：',
