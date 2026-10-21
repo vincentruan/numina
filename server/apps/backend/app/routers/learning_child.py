@@ -197,8 +197,8 @@ def today_learning(
     """Today's learning summary — drives the TodayLearningCard on ChildHomePage.
 
     Locale filter applied: current topic, pending assignment topic, and
-    recommended topic are scoped to the child's source taxonomy
-    (zh-CN -> beijing, otherwise -> os-taxonomy).
+    recommended topic are scoped to the child's effective taxonomy
+    (locale-mapped, falling back to os-taxonomy when unseeded).
     """
     taxonomy = get_effective_source_taxonomy(db, child.language)
 
@@ -334,8 +334,8 @@ def get_topic_detail(
 ):
     """Get topic detail — public topic info (no per-child progress embedded).
 
-    Locale filter applied: topic must belong to the taxonomy matching the
-    child's language (zh-CN -> beijing, otherwise -> os-taxonomy).
+    Locale filter applied: topic must belong to the child's effective
+    taxonomy (locale-mapped, falling back to os-taxonomy when unseeded).
     """
     taxonomy = get_effective_source_taxonomy(db, child.language)
     topic = (

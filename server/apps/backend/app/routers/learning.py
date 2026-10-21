@@ -10,7 +10,6 @@ endpoints and any endpoint that touches family-scoped progress live behind
 """
 
 import json
-from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Query
@@ -29,13 +28,11 @@ from apps.backend.app.schemas.learning import (
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.learning import topic_service
 from apps.backend.app.services.learning.topic_service import (
+    SourceTaxonomy,
     get_effective_source_taxonomy,
 )
 from packages.core.logging import get_logger
 from packages.db.models.learning.topic import LearningTopic
-
-#: Valid values for the ``source_taxonomy`` query parameter.
-SourceTaxonomy = Literal["beijing", "os-taxonomy"]
 
 logger = get_logger(__name__)
 
@@ -143,7 +140,7 @@ def list_topics(
 ):
     """List topics. ``source_taxonomy`` filters by taxonomy source; when
     omitted the requesting user's language selects it
-    (zh-CN -> beijing, otherwise -> os-taxonomy).
+    (zh-CN -> beijing when seeded, otherwise -> os-taxonomy).
     """
     if source_taxonomy is None:
         source_taxonomy = get_effective_source_taxonomy(db, user.language)

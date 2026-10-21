@@ -100,5 +100,5 @@ class LearningCluster(Base):
     summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
     summary_zh: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_taxonomy: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="os-taxonomy"
+        String(20), nullable=False, default="os-taxonomy", index=True
     )
