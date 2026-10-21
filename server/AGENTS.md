@@ -80,26 +80,9 @@ obj = MySchema.model_validate(orm_instance)
 
 ## Cross-Cutting Conventions
 
-### URL Style — No Trailing Slash, No Redirects
+### URL Style & API Return Codes
 
-All API endpoints must respond with 200 directly — no 307 redirects.
-
-`redirect_slashes=False` is set in `app/main.py`. Router root-path decorators must use `""` not `"/"`:
-
-```python
-# ✅ Correct
-@router.get("")
-@router.post("")
-
-# ❌ Wrong — FastAPI issues 307 redirect, breaks HTTPS behind nginx
-@router.get("/")
-```
-
-### API Return Code Conventions
-
-- **Auth endpoints return 200** — `register`, `login`, `join-family` return `TokenResponse` with status 200, not 201.
-- **Asset/Liability POST endpoints return 201** — explicit `status_code=201` on router decorators.
-- `TokenResponse` does not include `user` — frontend must call `/auth/me` after login.
+See root [AGENTS.md](../AGENTS.md) §URL Style and §API Return Code Conventions — the root file owns both rules.
 
 ### Error Messages
 

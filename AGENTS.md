@@ -18,6 +18,8 @@ Numina (Family Asset Visualization) is a privacy-first, self-hosted family asset
 
 This repository keeps its agent instructions in `AGENTS.md` files: one at the repository root (this file) and one in each module directory. There is no second, parallel instruction system.
 
+**Do not add a `CLAUDE.md`.** Where a `CLAUDE.md` exists alongside an `AGENTS.md` in the same directory, Claude Code loads only the `CLAUDE.md` and silently skips the `AGENTS.md` at that level.
+
 **Precedence.** The closest module `AGENTS.md` wins over a parent `AGENTS.md`, which wins over this root file. Module files may restate or specialize root rules; where they conflict, the module file governs inside its own directory.
 
 **Workflow contract.** Before editing:
@@ -42,25 +44,18 @@ These supersede general defaults in this repo:
 
 ## Repository Structure
 
-Three top-level workspaces, each with its own `AGENTS.md`:
+Repository layout — two workspaces plus supporting trees:
 
 ```
 numina/
-├── server/          # uv workspace — Python apps + shared packages
-│   ├── apps/        # backend, agent, scheduler_worker
-│   └── packages/    # core, db, domain, security, storage, stream_bridge
-├── frontend/        # pnpm workspace — Vue 3 H5 apps + shared packages
-│   ├── apps/        # main (adult), child
-│   └── packages/    # auth, math, assets, shared
-├── site/            # brand/marketing static site (not part of the Vue app)
-├── tests/           # E2E / visual regression / test tooling
-├── docs/            # architecture, specs, solutions, plans
-└── .claude/skills/  # project-scoped agent workflows (functional tooling, kept intentionally)
+├── server/               # uv workspace — apps (backend, agent, scheduler_worker) + packages
+├── frontend/             # pnpm workspace — apps (main, child) + packages
+└── site/  tests/  docs/  # marketing site · E2E/visual tests · architecture, specs, solutions
 ```
 
 ## Cross-Cutting Conventions
 
-Rules in this section apply to every module. Module files reference them rather than restating them.
+Rules in this section apply to every module. Module files should reference them rather than restating them — root owns these rules.
 
 ### URL Style — No Trailing Slash, No Redirects
 
@@ -127,11 +122,11 @@ docker-compose down           # Stop all
 
 Verification is scoped to the module you changed. Run the commands its `AGENTS.md` defines before reporting completion, and state which commands you ran.
 
-| Area | Command | Owner |
-|------|---------|-------|
-| Python apps + packages | `uv run pytest tests/<module>/ -v` | [`server/AGENTS.md`](./server/AGENTS.md) §Quality Commands |
-| Frontend | `pnpm -r lint && pnpm -r typecheck && pnpm -r test:run` | [`frontend/AGENTS.md`](./frontend/AGENTS.md) §Commands |
-| E2E / visual regression | `pnpm exec playwright test` | [`tests/AGENTS.md`](./tests/AGENTS.md) §Commands |
+| Area | Commands defined in |
+|------|---------------------|
+| Python apps + packages | [`server/AGENTS.md`](./server/AGENTS.md) §Quality Commands |
+| Frontend | [`frontend/AGENTS.md`](./frontend/AGENTS.md) §Commands |
+| E2E / visual regression | [`tests/AGENTS.md`](./tests/AGENTS.md) §Commands |
 
 Python backend tests live in `server/tests/backend/`.
 
