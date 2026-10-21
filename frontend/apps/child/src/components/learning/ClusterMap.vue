@@ -151,6 +151,12 @@ const territories = computed<Territory[]>(() => {
       ) ??
       clusters.value.find(
         (c) => c.subject === item.topic.subject && c.domain === domain,
+      ) ??
+      // Tier 3: subject-only — catches topics with null domain or a domain
+      // that has no cluster at all. Better to group them under a same-subject
+      // cluster than to dump them into "其他".
+      clusters.value.find(
+        (c) => c.subject === item.topic.subject,
       )
     if (matchingCluster) {
       if (!clusterMap.has(matchingCluster.id)) clusterMap.set(matchingCluster.id, [])
@@ -174,6 +180,17 @@ const territories = computed<Territory[]>(() => {
 
   // Append "Other" territory for unmatched items
   if (unmatched.length > 0) {
+    if (import.meta.env.DEV) {
+      console.warn(
+        `[ClusterMap] ${unmatched.length} topic(s) unmatched — no cluster found:`,
+        unmatched.map((i) => ({
+          topic_id: i.topic.id,
+          subject: i.topic.subject,
+          domain: i.topic.domain,
+          age_group: i.topic.age_group,
+        })),
+      )
+    }
     result.push({
       cluster: {
         id: '__other__',

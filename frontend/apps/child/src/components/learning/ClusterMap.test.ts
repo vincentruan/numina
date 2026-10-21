@@ -424,16 +424,63 @@ describe('ClusterMap', () => {
   })
 
   it('collects unmatched topics into an "other" territory', async () => {
+    // With tier-3 subject-only fallback, a topic with an unknown domain still
+    // matches a same-subject cluster. Only a topic whose subject has NO
+    // clusters at all should land in __other__.
     mockGetClusters.mockResolvedValue([makeCluster({ topic_count: 1 })])
-    const wrapper = mountMap([
-      makeItem({ id: 'p1', topic: makeTopic({ id: 't1', domain: 'Addition' }) }),
-      makeItem({ id: 'p2', topic: makeTopic({ id: 't2', domain: 'NoSuchDomain' }) }),
-    ])
+    const wrapper = mountMap(
+      [
+        makeItem({ id: 'p1', topic: makeTopic({ id: 't1', domain: 'Addition' }) }),
+        makeItem({
+          id: 'p2',
+          topic: makeTopic({ id: 't2', subject: 'art', domain: 'Painting' }),
+        }),
+      ],
+      'mathematics',
+    )
+    // selectedSubject is 'mathematics', so the art topic is filtered out by
+    // the subject filter. Only the Addition topic matches.
     await flushPromises()
 
     const domains = wrapper
       .findAll('.cluster-territory')
       .map((t) => t.attributes('data-cluster-domain'))
-    expect(domains).toEqual(['Addition', '__other__'])
+    expect(domains).toEqual(['Addition'])
+  })
+
+  it('falls back to subject-only match when domain is null', async () => {
+    mockGetClusters.mockResolvedValue([
+      makeCluster({ id: 'cl1', domain: 'Addition', age_group: 'mid', topic_count: 2 }),
+    ])
+    const wrapper = mountMap([
+      makeItem({
+        id: 'p1',
+        topic: makeTopic({ id: 't1', domain: 'Addition', age_group: 'mid' }),
+      }),
+      makeItem({
+        id: 'p2',
+        topic: makeTopic({ id: 't2', domain: null, age_group: 'mid' }),
+      }),
+    ])
+    await flushPromises()
+
+    // The null-domain topic matched via tier 3 (subject-only) to the Addition
+    // cluster rather than falling into __other__.
+    const territories = wrapper.findAll('.cluster-territory')
+    expect(territories).toHaveLength(1)
+    expect(territories[0].attributes('data-cluster-domain')).toBe('Addition')
+    expect(wrapper.text()).not.toContain('__other__')
+  })
+
+  it('routes to __other__ only when no cluster exists for the subject', async () => {
+    mockGetClusters.mockResolvedValue([])
+    const wrapper = mountMap([
+      makeItem({ topic: makeTopic({ id: 't1', domain: 'SomeDomain' }) }),
+    ])
+    await flushPromises()
+
+    const territories = wrapper.findAll('.cluster-territory')
+    expect(territories).toHaveLength(1)
+    expect(territories[0].attributes('data-cluster-domain')).toBe('__other__')
   })
 })
