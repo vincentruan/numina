@@ -98,6 +98,17 @@ class ClusterResponse(SnowflakeBase):
     age_range_start: int | None
     age_group: str
     summary: str
+    topic_count: int = 0
+
+
+class BridgeResponse(BaseModel):
+    """Cross-subject bridge between two cluster domains."""
+
+    from_cluster_domain: str
+    from_subject: str
+    to_cluster_domain: str
+    to_subject: str
+    edge_count: int
 
 
 class SubjectSummary(BaseModel):

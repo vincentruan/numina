@@ -153,6 +153,103 @@ def list_clusters(
     return q.order_by(LearningCluster.subject, LearningCluster.domain).all()
 
 
+def get_cross_subject_bridges(
+    db: Session,
+    source_taxonomy: str,
+    subject: str | None = None,
+) -> list[dict]:
+    """Compute cross-subject bridge edges between cluster domains.
+
+    Joins ``learning_dependencies`` with ``learning_topics`` twice (for topic
+    and prerequisite) and filters where the two topics belong to different
+    subjects.  Results are grouped by ``(subject, domain)`` pairs so each row
+    represents a bridge between two cluster areas.
+    """
+    from sqlalchemy.orm import aliased
+
+    TopicAlias = aliased(LearningTopic)
+    PrereqAlias = aliased(LearningTopic)
+
+    query = (
+        db.query(
+            TopicAlias.domain.label("from_cluster_domain"),
+            TopicAlias.subject.label("from_subject"),
+            PrereqAlias.domain.label("to_cluster_domain"),
+            PrereqAlias.subject.label("to_subject"),
+            sa_func.count().label("edge_count"),
+        )
+        .join(
+            LearningDependency,
+            LearningDependency.topic_id == TopicAlias.id,
+        )
+        .join(
+            PrereqAlias,
+            LearningDependency.prerequisite_id == PrereqAlias.id,
+        )
+        .filter(TopicAlias.subject != PrereqAlias.subject)
+        .filter(TopicAlias.source_taxonomy == source_taxonomy)
+        .filter(PrereqAlias.source_taxonomy == source_taxonomy)
+        .group_by("from_cluster_domain", "from_subject", "to_cluster_domain", "to_subject")
+    )
+    if subject:
+        query = query.filter(TopicAlias.subject == subject)
+    rows = query.all()
+    return [
+        {
+            "from_cluster_domain": r.from_cluster_domain,
+            "from_subject": r.from_subject,
+            "to_cluster_domain": r.to_cluster_domain,
+            "to_subject": r.to_subject,
+            "edge_count": r.edge_count,
+        }
+        for r in rows
+    ]
+
+
+def list_clusters_with_topic_counts(
+    db: Session,
+    subject: str | None = None,
+    source_taxonomy: str | None = None,
+) -> list[dict]:
+    """List clusters enriched with topic counts via GROUP BY."""
+    topic_count_q = (
+        db.query(
+            LearningTopic.subject,
+            LearningTopic.domain,
+            LearningTopic.age_group,
+            sa_func.count(LearningTopic.id).label("topic_count"),
+        )
+        .filter(LearningTopic.deprecated.is_(False))
+    )
+    if source_taxonomy:
+        topic_count_q = topic_count_q.filter(
+            LearningTopic.source_taxonomy == source_taxonomy
+        )
+    topic_count_q = topic_count_q.group_by(
+        LearningTopic.subject, LearningTopic.domain, LearningTopic.age_group
+    )
+    counts = {
+        (r.subject, r.domain, r.age_group): r.topic_count for r in topic_count_q.all()
+    }
+
+    clusters = list_clusters(db, subject=subject, source_taxonomy=source_taxonomy)
+    result = []
+    for c in clusters:
+        count = counts.get((c.subject, c.domain, c.age_group), 0)
+        result.append(
+            {
+                "id": c.id,
+                "subject": c.subject,
+                "domain": c.domain,
+                "age_range_start": c.age_range_start,
+                "age_group": c.age_group,
+                "summary": c.summary,
+                "topic_count": count,
+            }
+        )
+    return result
+
+
 def list_subjects(
     db: Session, source_taxonomy: str | None = None
 ) -> list[dict]:

@@ -16,7 +16,9 @@ from apps.backend.app.models.user import User
 from apps.backend.app.schemas.learning import (
     AssessStreamRequest,
     AssignmentResponse,
+    BridgeResponse,
     ChildProgressOverview,
+    ClusterResponse,
     LearningStatsResponse,
     OnboardingCompleteResponse,
     PathResponse,
@@ -35,6 +37,8 @@ from apps.backend.app.services.learning import (
     zone_service,
 )
 from apps.backend.app.services.learning.topic_service import (
+    get_cross_subject_bridges,
+    list_clusters_with_topic_counts,
     locale_to_source_taxonomy,
 )
 from apps.backend.app.services.notification.dispatcher import (
@@ -85,6 +89,30 @@ def my_knowledge_map(
         )
         .all()
     )
+
+
+@router.get("/clusters", response_model=list[ClusterResponse])
+def list_my_clusters(
+    subject: str | None = Query(None),
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """List clusters enriched with topic counts for the child's taxonomy."""
+    taxonomy = locale_to_source_taxonomy(child.language)
+    return list_clusters_with_topic_counts(
+        db, subject=subject, source_taxonomy=taxonomy
+    )
+
+
+@router.get("/bridges", response_model=list[BridgeResponse])
+def list_my_bridges(
+    subject: str | None = Query(None),
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """List cross-subject bridge edges between cluster domains."""
+    taxonomy = locale_to_source_taxonomy(child.language)
+    return get_cross_subject_bridges(db, source_taxonomy=taxonomy, subject=subject)
 
 
 @router.get("/assignments", response_model=list[AssignmentResponse])
