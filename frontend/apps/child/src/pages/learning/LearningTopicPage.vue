@@ -5,6 +5,12 @@
     <template v-else-if="topic">
       <!-- Breadcrumb -->
       <div class="breadcrumb">
+        <button class="breadcrumb__back" @click="goBack" :aria-label="t('learning.backToMap')">
+          {{ t('learning.backToMap') }}
+        </button>
+      </div>
+
+      <div class="breadcrumb__trail">
         <span class="breadcrumb__item" @click="goBack">{{ t('learning.title') }}</span>
         <span class="breadcrumb__sep">/</span>
         <span class="breadcrumb__item">{{ subjectLabel(topic.subject) }}</span>
@@ -169,12 +175,12 @@
       @confirm="proceedToSession"
       @cancel="goToSuggestedTopic"
     >
-      <div style="padding: 16px; text-align: center">
-        <div style="font-size: 32px; margin-bottom: 8px">⚠️</div>
-        <p>{{ difficultyMessage }}</p>
+      <div class="difficulty-dialog__content">
+        <div class="difficulty-dialog__icon">️</div>
+        <p class="difficulty-dialog__message">{{ difficultyMessage }}</p>
         <p
           v-if="suggestedTopicName"
-          style="color: var(--van-primary-color); cursor: pointer"
+          class="difficulty-dialog__suggestion"
           @click="goToSuggestedTopic"
         >
           {{ t('learning.difficultyWarning.suggestion', { name: suggestedTopicName }) }}
@@ -502,6 +508,35 @@ onMounted(async () => {
   font-family: Inter, sans-serif;
   font-size: 13px;
   color: var(--color-body);
+  flex-wrap: wrap;
+}
+
+.breadcrumb__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+  color: var(--color-ink);
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 36px;
+  transition: background 0.15s;
+}
+
+.breadcrumb__back:active {
+  background: var(--color-hairline);
+}
+
+.breadcrumb__trail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
 }
 
 .breadcrumb__item {
@@ -706,6 +741,33 @@ onMounted(async () => {
   cursor: not-allowed;
 }
 
+/* Difficulty dialog */
+.difficulty-dialog__content {
+  padding: 16px;
+  text-align: center;
+}
+
+.difficulty-dialog__icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.difficulty-dialog__message {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  color: var(--van-dialog-message-text-color);
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.difficulty-dialog__suggestion {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  color: var(--van-primary-color);
+  cursor: pointer;
+  margin: 0;
+}
+
 /* Error state */
 .error-state {
   text-align: center;
@@ -782,5 +844,23 @@ onMounted(async () => {
   font-family: Inter, sans-serif;
   font-size: 13px;
   color: var(--color-body);
+}
+
+/* ── Dark mode: boost callout + machine chip on dark card (#152828) ── */
+[data-theme="dark"] .curriculum-callout {
+  background: rgba(var(--color-brand-ochre-rgb), 0.22);
+  border-left-color: rgba(var(--color-brand-ochre-rgb), 0.65);
+}
+
+[data-theme="dark"] .curriculum-badge {
+  background: rgba(var(--color-brand-ochre-rgb), 0.28);
+}
+
+[data-theme="dark"] .topic-chip--machine {
+  border-color: var(--color-brand-ochre);
+}
+
+[data-theme="dark"] .ai-badge {
+  background: rgba(var(--color-brand-ochre-rgb), 0.28);
 }
 </style>

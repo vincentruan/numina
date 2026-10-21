@@ -3,26 +3,26 @@ name: numina-sim-test
 description: >
   Use when the user wants to run full-stack functional verification tests,
   audit the interface, capture screenshots, or verify deployed UI flows for
-  the Numina project. Covers 18 areas: child app, financial management, AI
-  capabilities, currency, regression, expanded features, security/notification,
-  AI report, adversarial security, task resilience, AI config, travel, UI
-  quality/design system, learning OS taxonomy, learning OS core flows, and
-  learning OS parent management. Triggers on: "run sim test", "ui audit", "截图测试",
-  "仿真测试", "全栈验收", "功能验收", "ui检查", "界面审查", "check the UI",
-  "test the app visually", "儿童测试", "child frontend test",
-  "test AI chat/report/PDF import", "ui quality", "设计审查", "UI 质量检查",
-  "dark mode test", "深色模式测试", "mobile test", "移动端测试",
-  "dev server test", "5173/5174 测试", "热加载测试", "HMR test",
-  "accessibility test", "无障碍测试", "security test", "安全测试",
-  "learning test", "学习测试", "curriculum test", "课标测试",
+  the Numina project. Covers 20 areas across child app, financial management,
+  AI capabilities, currency, regression, expanded features, security/notification,
+  AI report, adversarial security, task resilience, travel, UI quality/design
+  system, learning OS (taxonomy/core/parent/optimization), and MCP token governance.
+  Triggers on: "run sim test", "ui audit", "截图测试", "仿真测试", "全栈验收",
+  "功能验收", "ui检查", "界面审查", "check the UI", "test the app visually",
+  "儿童测试", "child frontend test", "test AI chat/report/PDF import",
+  "ui quality", "设计审查", "UI 质量检查", "dark mode test", "深色模式测试",
+  "mobile test", "移动端测试", "dev server test", "5173/5174 测试",
+  "热加载测试", "HMR test", "accessibility test", "无障碍测试",
+  "security test", "安全测试", "learning test", "学习测试", "curriculum test",
+  "课标测试", "travel test", "旅行测试", "MCP token test",
   or any request to verify the deployed app's features.
 ---
 
 # Numina Full-Stack Functional Verification Pipeline
 
 End-to-end pipeline for browser-based full-stack functional verification. The pipeline
-covers 16 test areas (UI flows, AI capabilities, security adversarial, design system
-quality, learning OS taxonomy, and more). It detects the best available browser driver at startup (priority:
+covers 20 test areas (UI flows, AI capabilities, security adversarial, design system
+quality, learning OS taxonomy, MCP token governance, and more). It detects the best available browser driver at startup (priority:
 **browser-use** → **bsk** → **Chrome DevTools MCP**) and drives the user's real browser
 through authenticated flows, screenshot capture, and test report generation.
 
@@ -36,7 +36,7 @@ through authenticated flows, screenshot capture, and test report generation.
 > environment must already contain the test accounts below (see
 > "Prerequisites").
 
-Covers **eighteen** feature areas (detailed cases split by area under
+Covers **twenty** feature areas (detailed cases split by area under
 [`test-cases/`](./test-cases/), shared conventions in
 [`test-cases/_common.md`](./test-cases/_common.md), role matrix in
 [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md)):
@@ -53,11 +53,12 @@ Covers **eighteen** feature areas (detailed cases split by area under
 11. **AI/agent adversarial security** — 提示词注入 / 跨租户隔离 / 工具越权 / 自定义智能体隔离 / 输入边界 (C11.1–C11.20) ([`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md))
 12. **AI task resilience** — 前端不稳定处理：离开/刷新恢复、失败/中断重试、用户取消 (C12.1–C12.9) ([`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md))
 13. **AI 资产报告深度验证** — Hub 弹窗内容/z-index、报告重入步骤去重/SSE 重连/取消按钮、narrative 缓存推导 (C13.1–C13.5) ([`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md))
-14. **Travel module (家庭旅行管理)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float / 行程规划时间线 / 跨天行程 + 购买日期 (C14.1–C14.40) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md))
+14. **Travel core (Trip/Expense/Split/Dashboard)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float (C14.1–C14.22) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md)) + **Itinerary planning** (C14.23–C14.40) ([`test-cases/groups/g1-adult-stable/area14-itinerary.md`](./test-cases/groups/g1-adult-stable/area14-itinerary.md))
 15. **UI quality & design system audit** — 移动端 H5/PWA 适配 / 深色模式 / Vant4 组件规范 / 无障碍 / 安全区域 / 跨应用风格一致性 (UIQ.1–UIQ.10) ([`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md))
 16. **Learning OS taxonomy Beijing + curriculum/edge-status** — 课标徽章/callout / AI 生成边标识别 / locale 知识图谱过滤 / 深色模式可读性 (C16.1–C16.14) ([`test-cases/groups/g3-child/area16-learning-os-taxonomy.md`](./test-cases/groups/g3-child/area16-learning-os-taxonomy.md))
 17. **Learning OS core flows (child)** — 知识地图 / Topic 详情 / AI 导师对话 / 学习进度 / 今日学习卡片 / 自选学习难度提示 (C17.1–C17.21) ([`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md))
-18. **Learning OS parent management** — 学习概览 / 任务派发 / 学习路径 / 审核队列 / BabyPage 入口 (C18.1–C18.16) ([`test-cases/groups/g1-adult-stable/area18-learning-os-parent.md`](./test-cases/groups/g1-adult-stable/area18-learning-os-parent.md))
+18. **Learning OS (家长端 + 端到端闭环)** — 学习 Hub / 智能推荐 / 预设路径 / DNA图谱 / 双轨审核 / 来源标签 / 闭环流程 (C18.1–C18.24) ([`test-cases/groups/g1-adult-stable/area18-learning-os.md`](./test-cases/groups/g1-adult-stable/area18-learning-os.md))
+19. **MCP external API token & governance** — Token 生命周期 / 认证 / 两级访问控制 / 审计日志 / 速率限制 (M20.1–M20.15) ([`test-cases/groups/g1-adult-stable/area20-mcp-external-token.md`](./test-cases/groups/g1-adult-stable/area20-mcp-external-token.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching
@@ -67,6 +68,10 @@ Covers **eighteen** feature areas (detailed cases split by area under
 > and flags **design divergences** (D1 `/goal`, D2 `/compact`, D3 input-polish,
 > D4 user-selectable reasoning_effort, D5 TodoList bar, D6 Scheduled Tasks,
 > D7 Thread Channel Source).
+>
+> Areas 16–18 form the **Learning OS** cluster: Area 16/17 run in the child app
+> (G3), Area 18 runs in the adult app (G1) with some child-side cases
+> (C18.18–C18.24) that reuse `$SID_CHILD` within the G1 agent.
 
 ## Parallel Run Structure (3 agents, dev mode)
 
@@ -86,22 +91,23 @@ schedule + verified browser concurrency evidence.
 | Group | Dir | Areas | Session | State domain | Parallel with |
 |-------|-----|-------|---------|--------------|---------------|
 | **G0** preconditions | [`g0-preconditions/`](./test-cases/groups/g0-preconditions/) | Phase 0/1/1.5/2 | serial | establishes login | none — first |
-| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 9, 12, 13, 14, 15, 18 | `$SID` (adult) | reads global; per-entity writes | **G3** |
+| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 9, 11, 12, 13, 14, 15, 18, 19, 20 | `$SID` (adult) | reads global; per-entity writes | **G3** |
 | **G2** adult-currency | [`g2-adult-currency/`](./test-cases/groups/g2-adult-currency/) | 4 | adult (own) | **mutates `default_currency`** | **G3** |
 | **G3** child | [`g3-child/`](./test-cases/groups/g3-child/) | 1, 5, 10, 16, 17 | `$SID_CHILD` | child origin (isolated dev) | **G1 or G2** |
 
 **Schedule:** `G0 (serial) → G1 ‖ G3 (parallel) → G2 (after G1)`. Three agents
 cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
-> **G1 internal order:** area2 → area14 → area18 → area8 → area3 → area6 → area13 → area12 → area15 → area9 → area7 → area11. Area 7
-> (regression) runs just before Area 11, with R6 (auth expiry) destroying the
+> **G1 internal order:** area2 → area14 → area18 → area8 → area3 → area6 → area13 → area12 → area15 → area9 → area7 → area11 → area20. Area 7
+> (regression) runs near the end, with R6 (auth expiry) destroying the
 > session **last** so earlier areas have a live session. Area 14 (travel) runs
 > after area2 since both create financial entities. Area 13 (AI report deep)
 > runs after area6 (AI chat parity) since both exercise AI surfaces. Area 15
 > (UI quality) runs before regression since it needs a stable session for
 > dark-mode toggling and viewport tests. Area 9 (security/notification) runs
 > after area15 since it exercises WebAuthn/2FA flows. Area 11 uses adult
-> session read-only probes.
+> session read-only probes. Area 20 (MCP token) runs last since it
+> generates/consumes tokens.
 
 > **Docker mode caveat:** nginx serves adult + child under **one origin** (:80)
 > → G3 is NOT parallel-safe with G1/G2 (shared cookie + localStorage). The
@@ -137,16 +143,16 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
 | Mode | 触发词 | 覆盖范围 | 预计耗时 |
 |------|--------|----------|----------|
-| **full** | "run sim test", "全量测试" | Area 1–18 (所有用例) | ~200-250 min |
+| **full** | "run sim test", "全量测试" | Area 1–20 (所有用例) | ~220-270 min |
 | **smoke** | "smoke test", "快速检查" | C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2, C9.4 | ~18-25 min |
 | **child** | "child test", "儿童测试" | Area 1 + Area 5 (G3 only) | ~20-30 min |
 | **finance** | "finance test", "财务测试" | Area 2 only (G1 subset, C2.1–C2.25) | ~20-25 min |
 | **ai** | "ai test", "AI测试" | Area 3 + Area 6 + Area 12 + Area 13 (G1 subset, AI 必须启用) | ~35-45 min |
 | **regression** | "regression test", "回归测试" | Area 7 only (R1–R9) | ~10-15 min |
 | **security** | "security test", "安全测试" | Area 9 (C9.1–C9.7) + Area 11 (C11.1–C11.20) + R6 | ~25-35 min |
-| **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.40) | ~45-55 min |
+| **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.40, two files) | ~45-55 min |
 | **ui-quality** | "ui quality", "设计审查", "UI 质量检查" | Area 15 only (UIQ.1–UIQ.10) | ~25-35 min |
-| **learning** | "learning test", "学习测试" | Area 16 + Area 17 (G3) + Area 18 (G1) | ~45-60 min |
+| **learning** | "learning test", "学习测试" | Area 16 + Area 17 (G3) + Area 18 (G1) + Area 19 (G1) + Area 20 (G1) | ~70-85 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
 
 **选择逻辑:**
@@ -387,176 +393,12 @@ If any service is DOWN, tell the user:
 
 ## Phase 1.5 — Precondition Gate (MANDATORY before UI phases)
 
-Verify the `demouser` family exists **with enough data** to satisfy the
-assertions in `test-cases/`. This skill does NOT seed data — it only checks
-that the prerequisite data is present, and **blocks** the run if it isn't.
-Running UI cases against a missing/incomplete family would produce misleading
-test reports (assertions failing on absent data, not on real bugs).
+Verify the `demouser` family has enough data to satisfy test assertions.
+The gate runs 8 checks via curl (login, /auth/me role, ≥1 child member,
+assets > 0, AI provider, wish savings, high-interest liabilities, child auth).
+Stop at first failure — do NOT proceed to Phase 2 if gate fails.
 
-> **Why a gate, not a seed:** the login endpoint deliberately returns the same
-> `AUTH_INVALID_CREDENTIALS` for "user not found" and "wrong password"
-> (anti-enumeration). So we cannot probe existence with a wrong password — we
-> must log in with the known `demouser`/`DemoPass123` credentials. Captcha is
-> skipped in non-production environments (docker/dev), so a plain curl works.
-
-Run all checks via curl (no browser session yet). Stop at the first failure.
-
-> **Envelope:** every API response is wrapped as `{"code":"OK","message":"","data":<payload>}`.
-> All `jq` paths below extract from `.data`.
-
-```bash
-API="${API_BASE}"            # e.g. http://localhost/api/v1  or  http://localhost:8000/api/v1
-
-# --- 1) Login with known demouser credentials ---
-LOGIN=$(curl -s -w "\n%{http_code}" -X POST "$API/auth/login" \
-  -H 'Content-Type: application/json' \
-  -d '{"username":"demouser","password":"DemoPass123"}')
-CODE=$(echo "$LOGIN" | tail -1)
-BODY=$(echo "$LOGIN" | sed '$d')
-
-if [ "$CODE" != "200" ]; then
-  echo "GATE FAIL: demouser login returned HTTP $CODE (body: $BODY)"
-  echo "→ demouser account does not exist or credentials differ."
-  exit 1
-fi
-
-TOKEN=$(echo "$BODY" | jq -r '.data.access_token')
-[ -n "$TOKEN" ] && [ "$TOKEN" != "null" ] || { echo "GATE FAIL: no access_token in login response (body: $BODY)"; exit 1; }
-AUTH="Authorization: Bearer $TOKEN"
-
-# --- 2) /auth/me — account belongs to a family, role is adult owner ---
-ME=$(curl -s -H "$AUTH" "$API/auth/me")
-ME_USER=$(echo "$ME" | jq -r '.data.username')
-ME_ROLE=$(echo "$ME" | jq -r '.data.role')
-ME_FAM=$(echo "$ME" | jq -r '.data.family_id')
-if [ "$ME_USER" != "demouser" ] || [ -z "$ME_FAM" ] || [ "$ME_FAM" = "null" ]; then
-  echo "GATE FAIL: /auth/me not a valid demouser adult (username=$ME_USER, family_id=$ME_FAM)"
-  exit 1
-fi
-[ "$ME_ROLE" = "owner" ] || [ "$ME_ROLE" = "adult" ] || { echo "GATE FAIL: demouser role=$ME_ROLE (expected owner/adult)"; exit 1; }
-
-# --- 3) /family/members — at least 1 child present (names discovered, not hard-coded) ---
-# The docker seed creates 小宝 + 大宝 under demouser, but dev/other deployments
-# may have different child display_names (e.g. demochild, 小明). The gate must
-# NOT hard-code specific names — it asserts "≥1 child exists" and records the
-# actual display_names found, so downstream cases (and the report) use the real
-# names. See test-cases/_common.md "Child account names" for the convention.
-MEMBERS=$(curl -s -H "$AUTH" "$API/family/members")
-# Children have role=="child" and username may be null; display_name is the label.
-CHILD_NAMES=$(echo "$MEMBERS" | jq -r '[.data[] | select(.role=="child") | .display_name] | join(",")')
-CHILD_COUNT=$(echo "$MEMBERS" | jq -r '[.data[] | select(.role=="child")] | length')
-if [ "$CHILD_COUNT" -lt 1 ] 2>/dev/null || [ -z "$CHILD_NAMES" ]; then
-  echo "GATE FAIL: demouser family has no child members (child_count=$CHILD_COUNT)"
-  exit 1
-fi
-echo "  (discovered child display_names: $CHILD_NAMES)"
-
-# --- 4) /dashboard/overview — demouser has real asset data (>0) ---
-OV=$(curl -s -H "$AUTH" "$API/dashboard/overview")
-ASSET_COUNT=$(echo "$OV" | jq -r '.data.asset_count')
-TOTAL_LIAB=$(echo "$OV" | jq -r '.data.total_liabilities')
-[ "$ASSET_COUNT" -gt 0 ] 2>/dev/null || { echo "GATE FAIL: demouser has no assets (asset_count=$ASSET_COUNT)"; exit 1; }
-echo "$TOTAL_LIAB" | awk '{if ($1+0 <= 0) exit 1}' || echo "  (note: demouser has no liabilities — liability cases C2.5/C2.6 may show empty states)"
-
-# --- 5) AI provider check — warn if not configured (Area 3/6 will SKIP-AI) ---
-# Correct endpoint: GET /ai/config returns per-family AI provider configs.
-# (NOT /ai/config/defaults — that's a form helper that requires model_id query param.)
-AI_CONFIGS=$(curl -s -H "$AUTH" "$API/ai/config" 2>/dev/null || echo '{"data":{"configs":[]}}')
-AI_ACTIVE=$(echo "$AI_CONFIGS" | jq '[.data.configs[]? | select(.is_active == true)] | length' 2>/dev/null || echo "0")
-AI_FIRST_PROVIDER=$(echo "$AI_CONFIGS" | jq -r '.data.configs[0].provider // empty' 2>/dev/null || echo "")
-if [ "$AI_ACTIVE" -lt 1 ] 2>/dev/null || [ -z "$AI_FIRST_PROVIDER" ]; then
-  echo "  (WARNING: AI provider not configured — Area 3/6 cases will be SKIP-AI)"
-else
-  echo "  (AI provider: $AI_FIRST_PROVIDER, active configs: $AI_ACTIVE)"
-fi
-
-# --- 6) Wish savings data check — warn if no wishes with savings (C2.14 will show empty state) ---
-WISHES=$(curl -s -H "$AUTH" "$API/wishes" 2>/dev/null || echo '{"data":[]}')
-WISH_SAVINGS=$(echo "$WISHES" | jq '[.data[] | select(.saved_amount != null and .saved_amount != "0" and .saved_amount != "0.00")] | length' 2>/dev/null || echo "0")
-if [ "$WISH_SAVINGS" -lt 1 ] 2>/dev/null; then
-  echo "  (WARNING: no wishes with savings data — C2.14 savings log will show empty state)"
-else
-  echo "  (wishes with savings: $WISH_SAVINGS)"
-fi
-
-# --- 7) High-interest liability check — warn if none (C2.15 debt hint won't trigger) ---
-LIABILITIES=$(curl -s -H "$AUTH" "$API/liabilities" 2>/dev/null || echo '{"data":[]}')
-HIGH_RATE=$(echo "$LIABILITIES" | jq '[.data[] | select(.interest_rate != null and (.interest_rate | tonumber) >= 15)] | length' 2>/dev/null || echo "0")
-if [ "$HIGH_RATE" -lt 1 ] 2>/dev/null; then
-  echo "  (WARNING: no high-interest liabilities (rate ≥ 15%) — C2.15 debt warning hint won't trigger)"
-else
-  echo "  (high-interest liabilities: $HIGH_RATE)"
-fi
-
-# --- 8) Child app auth bootstrap check — warn if child cannot authenticate in dev mode ---
-# In dev mode adult (:5173) and child (:5174) are different origins; child app has
-# no standalone login pages and redirects to adult login on 401. Verify that the
-# child step1/step2 auth endpoints exist and can return a temp_token for the first
-# discovered child, so the skill can establish a child session when Phase 5 runs.
-FIRST_CHILD_NAME=$(echo "$MEMBERS" | jq -r '[.data[] | select(.role=="child") | .display_name] | first // empty')
-FIRST_CHILD_USER=$(echo "$MEMBERS" | jq -r '[.data[] | select(.role=="child") | .username] | first // empty')
-CHILD_USERNAME=${FIRST_CHILD_USER:-"$FIRST_CHILD_NAME"}
-CHILD_PASSWORD="DemoPass123"
-STEP1=$(curl -s -w "\n%{http_code}" -X POST "$API/auth/login/step1" \
-  -H 'Content-Type: application/json' \
-  -d "{\"username\":\"$CHILD_USERNAME\",\"password\":\"$CHILD_PASSWORD\"}")
-STEP1_CODE=$(echo "$STEP1" | tail -1)
-STEP1_BODY=$(echo "$STEP1" | sed '$d')
-if [ "$STEP1_CODE" != "200" ]; then
-  echo "  (WARNING: child auth step1 returned HTTP $STEP1_CODE — Area 1/5 cases will be SKIP-CHILD)"
-  echo "    body: $STEP1_BODY"
-else
-  echo "  (child auth step1 OK for user=$CHILD_USERNAME)"
-
-  # --- 8b) Child auth step2 (emoji PIN) pre-check ---
-  # Verify step2 endpoint accepts the temp_token from step1. If step2 fails
-  # (e.g. backend PIN config changed), Area 1/5 cases would silently fail at
-  # session injection time. Check now so the gate catches it early.
-  TEMP_TOKEN=$(echo "$STEP1_BODY" | jq -r '.data.temp_token // empty')
-  if [ -n "$TEMP_TOKEN" ]; then
-    STEP2=$(curl -s -w "\n%{http_code}" -X POST "$API/auth/login/step2" \
-      -H 'Content-Type: application/json' \
-      -d "{\"username\":\"$CHILD_USERNAME\",\"temp_token\":\"$TEMP_TOKEN\",\"pin\":\"0000\"}")
-    STEP2_CODE=$(echo "$STEP2" | tail -1)
-    if [ "$STEP2_CODE" != "200" ] && [ "$STEP2_CODE" != "401" ]; then
-      # 401 = wrong PIN (expected, we sent dummy "0000") — endpoint works
-      echo "  (WARNING: child auth step2 returned HTTP $STEP2_CODE — emoji PIN endpoint may be misconfigured)"
-    else
-      echo "  (child auth step2 endpoint OK — emoji PIN flow functional)"
-    fi
-    unset STEP2 STEP2_CODE TEMP_TOKEN
-  fi
-fi
-
-# Export CHILD_NAMES for downstream phases/report (single source of truth).
-echo "export SIM_CHILD_NAMES=\"$CHILD_NAMES\""
-echo "GATE OK: demouser family present with $CHILD_COUNT child(ren) [$CHILD_NAMES] and $ASSET_COUNT assets."
-
-# --- 9) Token cleanup — do not leave auth material in shell environment ---
-unset LOGIN BODY ME ME_USER ME_ROLE ME_FAM MEMBERS CHILD_COUNT OV ASSET_COUNT TOTAL_LIAB
-unset AI_CONFIGS AI_ACTIVE WISHES WISH_SAVINGS LIABILITIES HIGH_RATE
-unset STEP1 STEP1_CODE STEP1_BODY FIRST_CHILD_NAME FIRST_CHILD_USER CHILD_USERNAME CHILD_PASSWORD
-# Keep TOKEN and AUTH for subsequent phases; unset after Phase 5 cleanup.
-```
-
-### Gate failure → block
-
-If any check fails, **do not proceed to Phase 2**. Tell the user:
-
-> Precondition check failed: `<specific failure>`.
-> The `demouser` family is missing or its data is incomplete — this skill does
-> not seed data. Prepare the database out-of-band, then re-run:
->   `./tests/data/seed-data.sh`   (docker: inside the `numina-backend` container; dev: local `uv run`)
-> Verify `demouser`/`DemoPass123` exists with at least 1 child member and
-> assets before retrying. Child display_names are discovered at gate time
-> (not hard-coded) — see `test-cases/_common.md`.
-
-> **Liabilities are soft.** `demouser`'s seed profile includes liabilities, but
-> if only liabilities are missing (assets + children present), the gate still
-> passes and liability cases (C2.5/C2.6) will simply show empty states — note
-> this in the report rather than blocking.
-
----
+> **Full gate script:** [`references/phase-1-5-gate.md`](./references/phase-1-5-gate.md)
 
 ## Phase 2 — Login + Session Setup (browser)
 
@@ -643,324 +485,71 @@ Or via browser: navigate to `${BASE}ai`, take a snapshot, look for "AI 已启用
 
 ---
 
-## Phase 3 — Area 2: Main App Financial Management (browser flows)
-
-Run the **Area 2** cases from [`test-cases/groups/g1-adult-stable/area2-finance.md`](./test-cases/groups/g1-adult-stable/area2-finance.md) using the
-session from Phase 2:
-
-- C2.1 Dashboard — totals, net worth, trend chart
-- C2.2 Wish list — savings progress + advice card + debt hint bar
-- C2.3 Wish detail — savings log/record dialogs + afford bar + A1b button
-- C2.4 Wish savings record dialog — amount input + submit
-- C2.5 Liability list — strategy card + interest forecast + payment countdown
-- C2.6 Liability detail — simulate extra payment dialog
-- C2.7 Liability create/edit form
-- C2.8 Asset list + detail + sell flow
-
-For each case:
-1. Navigate to the case's route, wait for page load
-2. Take a snapshot → capture element refs + assert expected text is present
-3. Interact (click / fill) → re-snapshot → assert outcome
-4. Take a screenshot for the report: `dogfood-output/<case>.png`
-5. Check for console errors (see test-cases/_common.md "Console error capture")
-
-**Driver-specific commands:** See [`references/browser-drivers.md`](./references/browser-drivers.md).
-
-Record any failure with: case id, route, expected vs actual, screenshot path.
-
----
-
-## Phase 4 — Area 3: AI Capabilities (browser flows)
-
-Continue with the **same session** (`$SID`). AI must be enabled for the family
-first — if `aiStore.aiEnabled` is false, configure a provider at
-`/settings/ai/provider/new` (or skip AI cases and note in report).
-
-Run the **Area 3** cases from [`test-cases/groups/g1-adult-stable/area3-ai.md`](./test-cases/groups/g1-adult-stable/area3-ai.md):
-
-- C3.1 AI Hub — report card + 数鸣 (NuminaAgentCard) + agents + chat input
-- C3.2 AI chat — send message + stream response (assert no blank/duplicate/error-stuck)
-- C3.3 AI chat — agent consult (数鸣 / custom agent → `/ai/chat?agentId=`)
-- C3.4 AI asset report — 3-step timeline generation (cached + fresh + failure fallback)
-- C3.5 PDF import — upload → parse → preview → confirm (see file-upload note)
-- C3.6 AI time machine
-- C3.7 AI settings — provider config
-
-**Streaming cases (C3.2, C3.4):** AI generation is slow. Wait between snapshots
-(e.g. 5 seconds), or poll the snapshot until the expected terminal text appears.
-Do not assume one snapshot suffices.
-
-**PDF upload (C3.5):** Click on `<van-uploader>` does not open the OS file
-picker in most drivers. See test-cases/_common.md "File upload note" — either
-evaluate JS to set `input.files` via DataTransfer, or call the backend parse
-endpoint with `curl` and load the preview page with the returned token.
-
----
-
-## Phase 5 — Area 1: Child App (browser flows)
-
-**docker mode:** the child SPA shares the adult session's cookie (same origin
-via nginx). The adult `access_token` cookie causes the child SPA's route guard
-(`verifyChildSession()`) to fail — it calls `GET /auth/child/me` which returns
-4xx for non-child role. **Before starting G3 in docker mode**, clear all
-cookies + localStorage (see [`area1-child.md`](./test-cases/groups/g3-child/area1-child.md)
-"Docker mode — cookie clearing required"), close the adult session, start a
-fresh session, then inject the child session via step1/step2 PIN login.
-
-**dev mode:** adult (:5173) and child (:5174) are different origins — the
-adult cookie does NOT carry over. Start a fresh session and inject the child
-session via the two-step emoji PIN API from the child origin's page context
-(see `test-cases/_common.md` "Child session injection (dev mode — password-manager
-fallback)"). The child app has no standalone login pages; auth is cookie-based
-and the router guard checks `GET /auth/child/me`.
-
-**Steps:**
-1. If docker mode: clear cookies + localStorage, close adult session, start fresh
-2. If dev mode: start a new session for the child origin
-3. Navigate to `$CHILD_BASE`, wait for page load
-4. Snapshot to confirm: ChildSelectPage showing "选择孩子" + discovered child name cards (see `SIM_CHILD_NAMES` from gate)
-
-Run the **Area 1** cases from [`test-cases/groups/g3-child/area1-child.md`](./test-cases/groups/g3-child/area1-child.md):
-
-- C1.1 Child home — hero, balance, today's chores, wish preview
-- C1.2 Child ledger — transaction list + sibling gift popup
-- C1.3 Child session verification — confirm auth injection landed on child home
-- C1.4 Child wishes — list + status variants
-- C1.5 Child wish create — form submission + validation
-- C1.6 Child tasks — chore list + completion → 待审批
-- C1.7 Child treasures/blind-box (note: `/child/blind-box` → redirect `/treasures`)
-- C1.8 Child asset detail — no adult-only field leak
-- C1.9 Child settings — child-role-scoped only
-
-**Auth injection (C1.3):** after step1/step2 fetch completes, assert the child
-home page renders with `display_name` from the authenticated child. There is no
-emoji-grid PIN UI in the child app; the PIN is consumed only via the step2 API
-call.
-
-### End the browser session(s)
-
-Close/stop the browser session(s) when done (including any child session).
-Run this in a `finally`-style path so the session closes even if a case errored mid-flow.
-
-**Server-side cleanup:** After closing browser tabs, revoke the auth token to
-invalidate the server-side session:
-
-```bash
-# Invalidate auth token + clear shell environment
-curl -sf -X POST "${API_BASE}/auth/logout" -H "$AUTH" 2>/dev/null || true
-unset TOKEN AUTH SIM_CHILD_NAMES
-```
-
-> If the backend has no logout endpoint, the httpOnly cookie persists in the
-> shared browser profile. In that case, clear cookies via the browser driver
-> before ending the session.
-
-### Driver crash recovery
-
-If the browser process crashes or the driver daemon dies mid-run:
-
-1. **Verify driver is alive** — re-run `--doctor` (or equivalent health check)
-2. **If dead, mark remaining cases as `SKIP-INFRA`** — do NOT mark as FAIL
-3. **Preserve completed results** — write partial report with results so far
-4. **Attempt recovery** — restart driver + re-establish session via Phase 2 fallback
-5. **Resume** from the last completed case; note the restart in the report
-
-> Add `SKIP-INFRA` to the failure taxonomy when infrastructure fails:
-> `SKIP-INFRA | 基础设施故障 | 浏览器驱动崩溃、driver daemon 断开、MCP 服务器不可用`
-
----
-
-## Phase 5.5 — Navigation coverage + AI chat parity suites
-
-After the feature areas (Phase 3/4/5), run the navigation-coverage and parity
-suites. These reuse the same sessions (`$SID` adult; `$SID_CHILD` child).
-
-> **AI Pre-check** has already been executed before Phase 4 (see above).
-> If AI was not enabled, skip Area 6 cases below and continue with Area 4/5/7.
-
-### Area 4 — Main app navigation coverage (`$SID`)
-
-Run [`test-cases/groups/g2-adult-currency/area4-navigation.md`](./test-cases/groups/g2-adult-currency/area4-navigation.md):
-
-- **C4.0** Currency switch — the bug-class smoke test (switch `default_currency`, compare displayed amounts across pages; dashboard aggregates convert server-side, per-record pages do NOT — the confirmed bug)
-- **C4.1–C4.2** Dashboard tab + analytics sub-page
-- **C4.3–C4.5** Wishes tab + form + detail
-- **C4.6** AI hub + every AI sub-route renders
-- **C4.7–C4.8** Liabilities tab + form
-- **C4.9** Baby tab (owner-only) + chore-approvals + templates + blind-box
-- **C4.10–C4.11** Settings tab + ALL sub-pages render + currency switch round-trip
-- **C4.12–C4.13** activeTab correctness + back-navigation/route-guard integrity
-- **C4.14–C4.16** Edit-mode form coverage (asset edit, liability edit, baby chore create — the 3 edit/new routes absent from C4.1–C4.13; all navigate via `router.back()`)
-
-> **Currency-switch prerequisite:** at least one asset/liability with
-> `currency ≠ CNY`. If all records are CNY, the bug is masked — note in report.
-
-### Area 5 — Child app navigation coverage (`$SID_CHILD`)
-
-Run [`test-cases/groups/g3-child/area5-child-navigation.md`](./test-cases/groups/g3-child/area5-child-navigation.md):
-
-- **C5.1–C5.6** All 5 child tabs (home/wishes/tasks/treasures/ledger) render + core ops
-- **C5.7–C5.9** Sub-pages: asset detail / day detail / settings (no adult-only leak)
-- **C5.10** activeTab correctness + route guard
-
-> **No currency layer in child app** — coin-based (integer). The currency bug
-> class does NOT apply here.
-
-### Area 6 — AI chat DeerFlow-fidelity parity (`$SID`)
-
-Run [`test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md`](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md).
-AI must be enabled + provider configured.
-
-- **C6.1–C6.8** Input fidelity (mode presets, model selector, attachments, voice, slash-skill, polish-D3-divergence, submit states, suggestion chips)
-- **C6.9–C6.17** Output: conversation (groups, markdown, ChainOfThought, HumanInputCard, SubtaskCard, backfill, token-usage, artifacts)
-- **C6.18** Output: 3-step AI report (separate surface)
-- **C6.19–C6.22** History + threading (infinite scroll, title sync, orphan threads, branch, regenerate)
-- **C6.23–C6.27** System integration (cookie-auth + X-Family-Id/X-User-Id, family race, execution-mode flags, error/retry/resume, popup Teleport + copy fallback)
-
-> **Design divergences (跟设计出入) to flag, not fail:** D1 `/goal`, D2 `/compact`,
-> D3 input-polish button, D4 user-selectable `reasoning_effort`, D5 TodoList bar,
-> D6 Scheduled Tasks (功能级缺口, 独立提案), D7 Thread Channel Source (DeerFlow 特有, 设计不引入).
-> See the parity matrix at the bottom of the case file. Record absent features as
-> divergences citing grep evidence; do not mark them as regressions.
-
-### Area 7 — Regression sweep (`$SID`)
-
-Run [`test-cases/groups/g1-adult-stable/area7-regression.md`](./test-cases/groups/g1-adult-stable/area7-regression.md).
-9 regression cases (R1–R9) covering known historical defects:
-
-- **R1** ¥¥ double-currency symbol
-- **R2** Snowflake ID / bigint precision loss
-- **R3** en-US locale missing keys
-- **R4** NProgress stuck after rapid navigation
-- **R5** KeepAlive double-load (onMounted + onActivated)
-- **R6** Auth session expiry redirect (**session-destroying — run last**)
-- **R7** AI Chat blank response / error cleanup
-- **R8** Child coin display no ¥ symbol leak
-- **R9** CSP unsafe-eval (docker mode only)
-
-> **R6 caveat:** R6 clears `localStorage` to simulate session expiry.
-> Run R6 as the very last regression case. If session is needed after R6,
-> re-login via Phase 2 fallback.
-
-### Area 8 — Expanded feature coverage (`$SID` + `$SID_CHILD` + guest)
-
-Run [`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md).
-Coverage for previously untested feature modules:
-
-- **F.1** Manifesto flow (template-select → edit → sign → preview → settings)
-- **F.2** Blind box management (draws / gifts / config)
-- **F.3** Baby management (overview / calendar / chores / templates / literacy report / approvals)
-- **F.4** Settings deep coverage (notifications / password / 2FA / devices / family config)
-- **F.5** Guest pages (welcome / register / join-family / promo) — **needs fresh browser session**
-- **F.6** Child extended features (scenario / badges / calendar / manifesto sign)
-- **F.7** AI settings deep (MCP / web-search / ASR / skills / agents)
-- **F.8** Owner vs member permission boundary (**deferred** — requires member account)
-- **F.11** FamilyPage member management
-- **F.12** ChildResetPage child password/PIN reset
-
-### Cross-cutting: Mobile Viewport Rules (all areas)
-
-All functional test cases (Areas 1–14) should be run at **375×812** viewport
-when possible. If the browser driver forces a desktop viewport, note it in the
-report and be aware that mobile-specific issues (overflow, touch targets, safe
-areas) may not surface.
-
-**Red flags to watch for during ANY functional test:**
-- Horizontal scrollbar at 375px → report as `UI-OVERFLOW`
-- Text unreadable after dark mode toggle → report as `UI-DARK`
-- Popup clipped inside swipeable tabs → report as `UI-VANT`
-- Button/field unclickable (touch target too small) → report as `UI-TOUCH`
-- Content behind notch/home indicator → report as `UI-SAFE`
-
-> These are NOT blockers for the functional test — continue the functional
-> assertion and note the UI issue separately. Area 15 covers these in depth.
-
----
-
-## Phase 5.6 — Area 15: UI Quality & Design System Audit
-
-After functional areas complete, run the UI quality audit. This is a
-cross-cutting suite that checks design-system compliance, mobile H5/PWA
-adaptation, dark mode correctness, and Vant4 component patterns.
-
-Run [`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md):
-
-**Viewport setup:** Set browser to **375×812** (iPhone 13/14 baseline).
-Also test at **320×568** (iPhone SE 1st gen — smallest supported) and
-**768×1024** (tablet breakpoint) for UIQ.1. Record which width surfaced each issue.
-
-- **UIQ.1** Mobile viewport baseline — no horizontal scroll at 320px/375px/768px, tab bars visible
-- **UIQ.2** Dark mode (main app) — `van-config-provider` theme toggle, no inline-style leaks;
-  verify WCAG AA contrast (≥4.5:1 normal text, ≥3:1 large text) on 5+ text elements per page
-  (primary, secondary, amount, placeholder, disabled) via `getComputedStyle`
-- **UIQ.3** Dark mode (child app) — CSS `[data-theme="dark"]` overrides, Clay palette check;
-  same contrast verification as UIQ.2; also check transition flash (screenshot within 200ms of toggle)
-- **UIQ.4** Vant4 component patterns — `:model-value` vs `:value`, popup teleport, three-state
-  rendering (skeleton/empty/error/content); for error state: trigger validation on a required-field
-  form (e.g., asset create), verify error messages appear adjacent to fields, readable in both modes,
-  and use design tokens not inline colors
-- **UIQ.5** Touch target sizing — ≥ 44×44px for all interactive elements
-- **UIQ.6** Safe area compliance — `env(safe-area-inset-bottom)` for tab bars and fixed bottoms
-- **UIQ.7** PWA offline behavior — offline banner, SW registration, install prompt
-- **UIQ.8** Accessibility — enumerate **all** icon-only buttons per app (not spot-check 5);
-  verify aria-labels on each; measure WCAG AA contrast ratios on key text/background pairs;
-  test modal focus trap (open van-popup/showConfirmDialog, tab through, verify focus stays inside);
-  verify `prefers-reduced-motion` emulation suppresses child celebration animations
-- **UIQ.9** NProgress behavior — no flicker, no stuck spinner, visible when scrolled
-- **UIQ.10** Cross-app style consistency — empty states, skeleton, toast, pull-refresh match between apps;
-  use quantitative thresholds: skeleton within 300ms, EmptyState vertical center ±20px
-
-> **Prerequisites:** Both adult (`$SID`) and child (`$SID_CHILD`) sessions active.
-> Area 15 uses the adult session for UIQ.1–UIQ.9 and switches to child session
-> for UIQ.3 + UIQ.10 child-side checks.
->
-> **Design system reference:** [`references/ui-quality-checklist.md`](./references/ui-quality-checklist.md)
-> contains full design token tables, dark mode methodology, and Vant4 patterns.
-
----
-
-## Phase 5.7 — UI 体验审查 agent (functional + experiential)
-
-功能断言 (snapshot 文本命中 = pass) 无法发现"页面错位、图标丢失、交互不连贯"
-类问题。对每个有 UI 交互的 Area 完成后, 派生一个**体验审查子 agent** (Agent
-tool, 一般 1 agent / Area 组), 从用户视角综合判断。
-
-### Agent 派生模板
-
-```
-你是 Numina 仿真测试的 UI 体验审查员。基于本 Area 的截图
-(dogfood-output/<case>.png, 用 Read 工具查看) 与 snapshot 记录, 逐 case 评估:
-
-1. 功能输入输出: 断言是否真实满足 (不只看 pass 标记)
-2. 交互连贯性: 点击→反馈→页面转换是否有断点 (按钮无反馈、加载态缺失、
-   转场突兀、弹层遮挡输入焦点)
-3. 视觉友好度: 元素错位/重叠、图标丢失或代字形 (□/□/私用区字符)、
-   空间挤压 (文本截断/溢出)、对比度不足、移动端 375px 适配
-4. 状态完整性: 骨架屏/空态/错误态是否合理呈现
-
-输出格式 (每 case 一行 + 问题项展开):
-- {case-id}: PASS|ISSUE — {一句体验结论}
-ISSUE 项展开: {现象描述} / {影响面 (阻断/降级体验/轻微)} / {建议 (查什么)}
-
-不要重新执行测试流程, 只做审查。不要修改任何文件。
-```
-
-### 编排规则
-
-- **时机**: 每个 Area 组 (G1/G2/G3) 的功能 case 跑完后立即派生, 与下一组
-  并行不冲突 (审查 agent 只读截图, 不操作浏览器)。
-- **输入**: 该 Area 的截图 + 每case 的 snapshot 摘要 (失败/关键交互处)。
-- **UI 观察复用**: Area 15 专项审计照旧独立运行; Phase 5.7 是对**全部功能
-  Area** 的补充层, 两者发现合并进报告 "UI 质量观察" 段, 标注来源
-  (`UI-EXP` = 体验审查 agent 发现)。
-- **冒烟模式** (smoke) 可跳过本 phase; full/ai/travel/ui-quality 模式必须跑。
-- **失败 taxonomy 新增**: `UI-EXP` | 体验审查发现 | 输入输出正确但存在
-  错位/图标丢失/不连贯等体验缺陷
-
-> **为什么是派生 agent 而不是主 agent 顺手看**: 主 agent 上下文里装满了
-> 断言与驱动命令, 容易"输入输出满足即 pass"的认知 tunnel; 独立 agent 只带
-> 截图与预期, 以纯用户视角复查, 与 OMC "authoring 与 review 分离" 原则
-> 一致。
+## Test Execution (Phases 3–5.7)
+
+Each phase below references a test case file with detailed assertions,
+expected results, and step-by-step instructions. Read the case file for
+full details before executing.
+
+### Phase 3 — Area 2: Financial Management
+
+Run [area2-finance](./test-cases/groups/g1-adult-stable/area2-finance.md)
+(C2.1–C2.25) using the session from Phase 2. Covers Dashboard, wishes,
+liabilities, assets.
+
+### Phase 4 — Area 3: AI Capabilities
+
+Run [area3-ai](./test-cases/groups/g1-adult-stable/area3-ai.md)
+(C3.1–C3.23). AI must be enabled.
+**Streaming wait:** AI generation is slow — wait between snapshots (e.g. 5s),
+do not assume one snapshot suffices.
+**PDF upload (C3.5):** Click on `<van-uploader>` does not open file picker.
+See `test-cases/_common.md` "File upload note" for JS DataTransfer or
+curl fallback.
+
+### Phase 5 — Area 1: Child App
+
+Run [area1-child](./test-cases/groups/g3-child/area1-child.md)
+(C1.1–C1.17).
+**Docker mode:** child shares adult origin — clear cookies + localStorage
+before child testing (adult cookie breaks child routes). See area1-child.md.
+**Dev mode:** separate child origin (:5174) — start fresh session, inject
+child auth via step1/step2 emoji PIN.
+End browser session(s) when done. Revoke auth token:
+`curl -sf -X POST ${API_BASE}/auth/logout -H "$AUTH" 2>/dev/null || true`
+**Driver crash recovery:** verify driver alive → mark remaining as
+`SKIP-INFRA` → preserve partial report → attempt recovery → resume.
+
+### Phase 5.5 — Navigation Coverage + AI Chat Parity
+
+**Area 4** — [area4-navigation](./test-cases/groups/g2-adult-currency/area4-navigation.md) (C4.0–C4.16):
+nav coverage + currency-switch bug class.
+**Area 5** — [area5-child-navigation](./test-cases/groups/g3-child/area5-child-navigation.md) (C5.1–C5.10):
+child nav coverage.
+**Area 6** — [area6-ai-chat-parity](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md)
+(C6.1–C6.27): DeerFlow parity. **Design divergences (D1–D7): flag, do NOT fail.**
+**Area 7** — [area7-regression](./test-cases/groups/g1-adult-stable/area7-regression.md) (R1–R9):
+regression sweep. **R6 destroys session — run last.**
+**Area 8** — [area8-expanded](./test-cases/groups/g1-adult-stable/area8-expanded-features.md)
+(F.1–F.12): expanded feature coverage.
+**Area 9–14** — run per G1 internal order (see "Parallel Run Structure" above).
+**Mobile viewport:** All functional cases at **375×812** when possible.
+Watch for: `UI-OVERFLOW` (horizontal scroll), `UI-DARK` (unreadable text),
+`UI-VANT` (popup clipped in tabs), `UI-TOUCH` (< 44×44px target),
+`UI-SAFE` (content behind notch).
+
+### Phase 5.6 — Area 15: UI Quality Audit
+
+Run [area15-ui-quality](./test-cases/groups/g1-adult-stable/area15-ui-quality.md)
+(UIQ.1–UIQ.10). Viewport 375×812 required. Both adult + child sessions needed.
+> **Details:** [`references/phase-5-6-7-ui-audit.md`](./references/phase-5-6-7-ui-audit.md)
+
+### Phase 5.7 — UX Review Agent
+
+After functional cases complete, spawn a **UX review sub-agent** to review
+screenshots from user perspective. Issues tagged `UI-EXP`.
+Skip in smoke mode.
+> **Agent template + orchestration:** [`references/phase-5-6-7-ui-audit.md`](./references/phase-5-6-7-ui-audit.md)
 
 ---
 
@@ -1036,7 +625,7 @@ the skill log.
 - 截图目录: dogfood-output/
 
 ## 成功摘要
-- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.8/F.11/F.12, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.40, Area15: UIQ.1–UIQ.10)
+- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.8/F.11/F.12, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.40, Area15: UIQ.1–UIQ.10, Area16: C16.1–C16.14, Area17: C17.1–C17.21, Area18: C18.1–C18.24, Area20: M20.1–M20.15)
 - 通过: X
 - 失败: Y
 - 跳过: Z (注明原因, 如 AI 未启用、数据不足)
@@ -1145,146 +734,17 @@ Also write to file if possible: `tests/reports/ui-audit-{date}.md`
 
 ## Phase 7 — Checklist Todo + Categorized Fix Commits (OPTIONAL)
 
-> **触发:** 用户看到 Phase 6 报告后说 "修复" / "fix" / "按分类提交" /
-> "跟进失败项"。默认不执行 — 仅记录结果。
+> **Trigger:** User says "修复" / "fix" / "按分类提交" after Phase 6 report.
+> Default: do NOT execute — only records results.
 
-### Step 1 — 解析报告, 提取失败项
+Extract failures from report → categorize → create checklist → fix by
+category → commit per category → verify each fix → final summary.
 
-读取 `tests/reports/ui-audit-{date}.md` 的 "失败详情" 段, 提取每个
-失败用例的:
-- Case ID (C2.3 / R4 / F.3.6 / ...)
-- 分类代码 (RENDER / NAV / AUTH / DATA / I18N / AI / INTERACT / PERF / REGRESS / UI-EXP)
-- 路由
-- 初步判断
+**Dev mode:** check `server/.dev-logs/*-app.log` in failure time window
+(±5 min) for server-side error correlation.
+**Docker mode:** `docker logs numina-backend --since 10m` equivalent.
 
-### Step 1.5 — .dev-logs 协同排查 (dev 模式必做; docker 模式跳到 Step 1.6)
-
-dev 模式 (`LOG=1` 或 `MODE=bg`) 下 Python 服务写日志到
-`server/.dev-logs/`, 修复前先读日志缩小根因范围:
-
-```bash
-LOGDIR="server/.dev-logs"
-# 失败 case 的复测时间窗 (从报告/复测时间戳取 ±5 分钟)
-SINCE="2026-10-14 15:00" UNTIL="2026-10-14 15:10"
-awk -v s="$SINCE" -v e="$UNTIL" '$0 >= s && $0 <= e' \
-  "$LOGDIR/backend-app.log" "$LOGDIR/agent-app.log" \
-  "$LOGDIR/scheduler_worker-app.log" 2>/dev/null | \
-  grep -Ei "error|exception|traceback|500 |4[0-9]{2} |failed|timeout" | head -40
-```
-
-- 日志格式: `YYYY-MM-DD HH:MM:SS,mmm - logger - LEVEL - message` (backend,
-  含 security 流); agent/worker 为 `YYYY-MM-DD HH:MM:SS,mmm [LEVEL] logger: msg`。
-- 按 case 失败时刻取时间窗, 只看 ERROR/WARNING + HTTP 状态码行; 命中后把
-  日志行 (去掉 user_id 等敏感值) 摘录进该失败项的 "初步判断", 将猜测升级
-  为证据。
-- 若 `server/.dev-logs/` 不存在或为空 → 服务以 `LOG=0` 启动, 无法文件化
-  协同排查。记入该失败项 "(dev-logs 未启用, 无法协同排查; 建议
-  `make dev-all MODE=bg LOG=1`)", **不要**当作测试失败。docker 模式无
-  server/.dev-logs, 用 Step 1.6 的 `docker logs` 等价排查。
-- 分类增益: 日志排查对 DATA / AI / AUTH / PERF 类失败有增益 (服务端可
-  观测); UI-EXP / RENDER / NAV / I18N 主要是前端侧问题, 服务端日志通常无
-  信号 — 直接进入 Step 2, 不空耗日志检索。
-
-### Step 1.6 — docker 模式日志等价物
-
-```bash
-docker logs numina-backend --since 10m 2>&1 | grep -Ei "error|exception|500" | head -30
-docker logs numina-agent --since 10m 2>&1 | tail -40
-```
-
-### Step 2 — 生成 Checklist Todo
-
-按 **分类代码** 分组, 为每个失败项创建一条 todo:
-
-```markdown
-## 修复 Checklist — {date} 仿真测试
-
-### 🔴 RENDER (渲染错误) — N 项
-- [ ] C2.3 — 心愿详情页 dialog 未挂载 → `WishDetailPage.vue` 检查 v-model:show 绑定
-- [ ] F.3.1 — Baby 总览页空白 → 检查数据加载 + 空态处理
-
-### 🟠 NAV (导航/路由) — N 项
-- [ ] C4.12 — activeTab 高亮错误 → 检查 route metadata 的 activeTab 映射
-
-### 🟡 AUTH (认证/权限) — N 项
-- [ ] (none)
-
-### 🔵 DATA (数据/显示) — N 项
-- [ ] C2.20 — 金额科学计数法 → 检查 MoneyDisplay 的 Number() 转换
-
-### 🟣 AI (AI 功能) — N 项
-- [ ] C3.4 — AI 报告 step1 卡住 → 检查 agent stream 终结帧
-
-### 🟤 INTERACT (交互) — N 项
-- [ ] C2.4 — 储蓄记录 dialog 提交无反应 → 检查 form submit handler
-
-### ⚫ REGRESS (回归) — N 项
-- [ ] R4 — NProgress 再次卡住 → 检查 out-in transition race 修复是否被回退
-```
-
-每个 todo 行的格式:
-```
-- [ ] {Case ID} — {简短描述} → `{修复线索 (文件/组件/方向)}`
-```
-
-修复线索来自报告中的 "初步判断" 段, 加上 agent 自己的代码定位 (grep /
-codegraph 找到相关文件)。
-
-### Step 3 — 按分类逐个修复 + 提交
-
-**提交顺序:** 按分类代码批量提交, 一个分类 = 一个 commit (除非单分类内
-有多个不相关的修复, 可拆为多个 commit)。
-
-**Commit message 模板:**
-```
-fix({scope}): {分类} — {N} 项仿真测试失败修复
-
-- {Case ID}: {修复内容} ({file}:{line})
-- {Case ID}: {修复内容} ({file}:{line})
-
-Ref: tests/reports/ui-audit-{date}.md
-```
-
-**scope 选择:**
-- RENDER → `ui` 或具体组件名 (如 `wish-detail`)
-- NAV → `router`
-- AUTH → `auth`
-- DATA → `display` 或 `money`
-- I18N → `i18n`
-- AI → `ai`
-- INTERACT → `ui` 或具体组件名
-- PERF → `perf`
-- REGRESS → `regression`
-
-**单分类多 commit 的拆分条件:**
-- 涉及不同模块 (如一个改 backend router, 一个改 frontend component)
-- 修复量差异大 (一个一行 fix, 一个需要重构)
-- 有依赖关系 (A 修复后 B 才能验证)
-
-### Step 4 — 验证 + 更新 Checklist
-
-每个 commit 后:
-1. 跑对应的 sim-test case (单 case 模式: `area-N` 或直接浏览器驱动该路由)
-2. 通过 → 在 checklist 打勾: `- [x] C2.3 — ...`
-3. 未通过 → 保留 `[ ]`, 在行末追加 `(retry {N}: {新发现})`
-4. 全部修复完 → 跑一次 `smoke` 模式全量回归, 确认无引入新 bug
-
-### Step 5 — 最终报告
-
-```markdown
-## 修复结果 — {date}
-- 总失败: {N} 项
-- 已修复: {X} 项 ({commits} commits)
-- 遗留: {Y} 项 (原因: {需产品决策 / 需后端配合 / ...})
-- 回归测试: smoke 模式 {通过/失败}
-```
-
-按分类汇总:
-| 分类 | 失败 | 已修 | 遗留 |
-|------|------|------|------|
-| RENDER | 3 | 3 | 0 |
-| NAV | 1 | 0 | 1 (需路由重构) |
-| AI | 2 | 1 | 1 (需 LLM provider 排查) |
+> **Full fix workflow:** [`references/phase-7-fix-workflow.md`](./references/phase-7-fix-workflow.md)
 
 ---
 
@@ -1335,11 +795,13 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | **11 — AI/agent adversarial security (提示词注入/租户隔离/越权)** | **G1** | **C11.1–C11.20** | [`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md) |
 | **12 — AI task resilience (前端不稳定处理)** | **G1** | **C12.1–C12.9** | [`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md) |
 | **13 — AI 资产报告深度验证 (Hub 弹窗/重入去重/SSE 重连)** | **G1** | **C13.1–C13.5** | [`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md) |
-| **14 — Travel module (旅行管理: 行程/费用/分摊/转化/行程规划/跨天+购买日期)** | **G1** | **C14.1–C14.40** | [`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md) |
+| **14 — Travel core (行程/费用/分摊/转化/Dashboard)** | **G1** | **C14.1–C14.22** | [`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md) |
+| **14b — Itinerary planning (行程规划/跨天/购买日期)** | **G1** | **C14.23–C14.40** | [`test-cases/groups/g1-adult-stable/area14-itinerary.md`](./test-cases/groups/g1-adult-stable/area14-itinerary.md) |
 | **15 — UI quality & design system (H5/PWA/深色模式/无障碍/一致性)** | **G1** | **UIQ.1–UIQ.10** | [`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md) |
 | **16 — Learning OS taxonomy Beijing (课标徽章/边标/locale)** | **G3** | **C16.1–C16.14** | [`test-cases/groups/g3-child/area16-learning-os-taxonomy.md`](./test-cases/groups/g3-child/area16-learning-os-taxonomy.md) |
 | **17 — Learning OS core flows (child: 知识地图/Topic/AI 导师/进度/自选学习)** | **G3** | **C17.1–C17.21** | [`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md) |
-| **18 — Learning OS parent management (概览/派发/路径/审核)** | **G1** | **C18.1–C18.16** | [`test-cases/groups/g1-adult-stable/area18-learning-os-parent.md`](./test-cases/groups/g1-adult-stable/area18-learning-os-parent.md) |
+| **18 — Learning OS 家长端 + 端到端闭环 (Hub/推荐/路径/DNA/双轨审核/闭环)** | **G1** | **C18.1–C18.24** | [`test-cases/groups/g1-adult-stable/area18-learning-os.md`](./test-cases/groups/g1-adult-stable/area18-learning-os.md) |
+| **20 — MCP external API token & governance (Token 生命周期/认证/审计/速率限制)** | **G1** | **M20.1–M20.15** | [`test-cases/groups/g1-adult-stable/area20-mcp-external-token.md`](./test-cases/groups/g1-adult-stable/area20-mcp-external-token.md) |
 
 ### Supporting References
 
@@ -1347,6 +809,9 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 |------|---------|
 | [`references/browser-drivers.md`](./references/browser-drivers.md) | Browser driver detection + command reference (browser-use / bsk / Chrome DevTools MCP) |
 | [`references/ui-quality-checklist.md`](./references/ui-quality-checklist.md) | UI quality reference: design tokens, dark mode methodology, Vant4 patterns, accessibility checklist, cross-app consistency matrix |
+| [`references/phase-1-5-gate.md`](./references/phase-1-5-gate.md) | Precondition gate bash script (login, family, assets, AI, child auth checks) |
+| [`references/phase-5-6-7-ui-audit.md`](./references/phase-5-6-7-ui-audit.md) | UI audit case details (UIQ.1–10) + UX review agent template + orchestration rules |
+| [`references/phase-7-fix-workflow.md`](./references/phase-7-fix-workflow.md) | Fix workflow: dev-logs correlation, checklist generation, categorized commits |
 | [`test-cases/_common.md`](./test-cases/_common.md) | Shared conventions (session, refs, console capture, child injection) |
 | [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md) | Role capability matrix (owner/member/child 权限边界 + 页面清单) |
 | [`test-cases/groups/README.md`](./test-cases/groups/README.md) | Parallel run structure + state-isolation boundaries |

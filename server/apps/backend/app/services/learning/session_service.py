@@ -8,9 +8,12 @@ from sqlalchemy.orm import Session
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.schemas.learning import SessionCreate
 from apps.backend.app.services.learning import progress_service
+from packages.core.logging import get_logger
 from packages.db.models.learning.assignment import LearningAssignment
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
+
+logger = get_logger(__name__)
 
 
 def _build_difficulty_warning(db: Session, child_id: int, topic) -> dict | None:
@@ -178,7 +181,12 @@ def end_session(
     score: float | None = None,
     ai_evaluation: dict | None = None,
 ) -> LearningSession:
-    """End a learning session, optionally recording a score and AI evaluation."""
+    """End a learning session, optionally recording a score and AI evaluation.
+
+    If a score is provided and the progress is in 'assessing' state, the
+    dual-track logic applies: high scores may auto-pass to 'mastered' via
+    AI assessment, while lower scores go to 'parent_review'.
+    """
     session = db.query(LearningSession).filter(LearningSession.id == session_id).first()
     if not session:
         raise AppError(ErrorCode.LEARNING_SESSION_NOT_FOUND)
@@ -197,9 +205,67 @@ def end_session(
         delta = session.ended_at - session.started_at
         session.duration_seconds = int(delta.total_seconds())
 
+    # Dual-track: auto-pass logic when score is provided and progress is assessing
+    if score is not None:
+        progress = (
+            db.query(LearningProgress)
+            .filter_by(child_id=session.child_id, topic_id=session.topic_id)
+            .first()
+        )
+        if not progress:
+            logger.warning(
+                "end_session: no progress record for child=%s topic=%s, skipping dual-track",
+                session.child_id,
+                session.topic_id,
+            )
+        elif progress.mastery_level != "assessing":
+            logger.info(
+                "end_session: progress in '%s' (not assessing), skipping dual-track for child=%s topic=%s",
+                progress.mastery_level,
+                session.child_id,
+                session.topic_id,
+            )
+        else:
+            ai_available = _check_ai_available(db, session.child_id)
+            ai_paused = progress_service.is_ai_auto_pass_paused(db, session.child_id)
+            auto_result = progress_service.check_auto_pass(
+                db,
+                score,
+                session.child_id,
+                ai_paused=ai_paused,
+                duration_seconds=session.duration_seconds,
+            )
+            try:
+                if ai_available and auto_result.should_auto_pass:
+                    progress_service.transition_to_mastered(
+                        db, progress, score, completed_via="ai_assessment"
+                    )
+                else:
+                    progress.mastery_level = "parent_review"
+                    progress.mastery_score = score
+            except Exception:
+                # If transition fails, fall back to parent_review so progress
+                # does not remain stuck in "assessing" indefinitely.
+                logger.exception(
+                    "end_session: transition_to_mastered failed for child=%s topic=%s, falling back to parent_review",
+                    session.child_id,
+                    session.topic_id,
+                )
+                progress.mastery_level = "parent_review"
+                progress.mastery_score = score
+
     db.flush()
     db.commit()
     return session
+
+
+def _check_ai_available(db: Session, child_id: int) -> bool:
+    """Check whether AI assessment is available for this child's family.
+
+    Placeholder: returns True for now. The real implementation would check
+    the family's AI configuration (provider availability, model access, etc.).
+    """
+    return True
 
 
 def start_assessment(

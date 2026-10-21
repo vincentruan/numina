@@ -1,20 +1,33 @@
 # Numina Simulation Test Cases — Shared Conventions
 
-Shared conventions used by all area case files:
-- [`area1-child.md`](./area1-child.md) — Child app (儿童页面优化)
-- [`area2-finance.md`](./area2-finance.md) — Main app financial management (财务管理能力优化)
-- [`area3-ai.md`](./area3-ai.md) — AI capabilities (PDF/AI报告/数鸣/对话)
-- [`area4-navigation.md`](./area4-navigation.md) — Main app nav coverage (页签+子页面+币种切换)
-- [`area5-child-navigation.md`](./area5-child-navigation.md) — Child app nav coverage (页签+子页面)
-- [`area6-ai-chat-parity.md`](./area6-ai-chat-parity.md) — AI chat DeerFlow-fidelity parity (输入/输出/集成+设计出入 D1–D7)
-- [`area7-regression.md`](./area7-regression.md) — Regression sweep (历史缺陷回归 R1–R9)
-- [`area8-expanded-features.md`](./area8-expanded-features.md) — Expanded coverage (Manifesto/盲盒/Baby/Settings/Guest F.1–F.8)
-- [`area9-security-notification.md`](./area9-security-notification.md) — Account security + notification (WebAuthn/2FA/devices/notifications)
-- [`area11-ai-security-adversarial.md`](./area11-ai-security-adversarial.md) — AI/agent adversarial security testing (prompt injection, tenant isolation, tool escalation)
-- [`area12-ai-task-resilience.md`](./area12-ai-task-resilience.md) — AI task resilience (前端不稳定处理：离开/刷新恢复、失败/中断重试、用户取消)
-- [`area16-learning-os-taxonomy.md`](./groups/g3-child/area16-learning-os-taxonomy.md) — Learning OS taxonomy Beijing localization + curriculum badge/edge-status UI (C16.1–C16.14)
-- [`area17-learning-os-core.md`](./groups/g3-child/area17-learning-os-core.md) — Learning OS core flows: knowledge map, topic detail, AI tutor, progress, self-selected learning (C17.1–C17.21)
-- [`area18-learning-os-parent.md`](./groups/g1-adult-stable/area18-learning-os-parent.md) — Learning OS parent management: overview, assignment, paths, reviews (C18.1–C18.16)
+Shared conventions used by all area case files (grouped by directory — see
+[`groups/README.md`](./groups/README.md) for the parallel-run structure):
+
+**G1 — adult-stable** (`groups/g1-adult-stable/`):
+- [`area2-finance.md`](./groups/g1-adult-stable/area2-finance.md) — Main app financial management
+- [`area3-ai.md`](./groups/g1-adult-stable/area3-ai.md) — AI capabilities (PDF/报告/数鸣/对话)
+- [`area6-ai-chat-parity.md`](./groups/g1-adult-stable/area6-ai-chat-parity.md) — AI chat DeerFlow-fidelity parity (D1–D7)
+- [`area7-regression.md`](./groups/g1-adult-stable/area7-regression.md) — Regression sweep (R1–R9)
+- [`area8-expanded-features.md`](./groups/g1-adult-stable/area8-expanded-features.md) — Expanded coverage (F.1–F.12)
+- [`area9-security-notification.md`](./groups/g1-adult-stable/area9-security-notification.md) — Account security + notification
+- [`area10-guest-join-flow.md`](./groups/g1-adult-stable/area10-guest-join-flow.md) — Guest 端到端注册 + 加入家庭
+- [`area11-ai-security-adversarial.md`](./groups/g1-adult-stable/area11-ai-security-adversarial.md) — AI/agent adversarial security (C11.1–C11.20)
+- [`area12-ai-task-resilience.md`](./groups/g1-adult-stable/area12-ai-task-resilience.md) — AI task resilience (前端不稳定处理)
+- [`area13-ai-asset-report-deep.md`](./groups/g1-adult-stable/area13-ai-asset-report-deep.md) — AI 资产报告深度验证
+- [`area14-travel.md`](./groups/g1-adult-stable/area14-travel.md) — Travel core: Trip/Expense/Split/Dashboard (C14.1–C14.22)
+- [`area14-itinerary.md`](./groups/g1-adult-stable/area14-itinerary.md) — Itinerary planning: 行程规划/跨天/购买日期 (C14.23–C14.40)
+- [`area15-ui-quality.md`](./groups/g1-adult-stable/area15-ui-quality.md) — UI quality & design system (UIQ.1–UIQ.10)
+- [`area18-learning-os.md`](./groups/g1-adult-stable/area18-learning-os.md) — Learning OS parent + E2E closed loop (C18.1–C18.24)
+- [`area20-mcp-external-token.md`](./groups/g1-adult-stable/area20-mcp-external-token.md) — MCP external API token & governance (M20.1–M20.15)
+
+**G2 — adult-currency** (`groups/g2-adult-currency/`):
+- [`area4-navigation.md`](./groups/g2-adult-currency/area4-navigation.md) — Main app nav coverage (页签+币种切换)
+
+**G3 — child** (`groups/g3-child/`):
+- [`area1-child.md`](./groups/g3-child/area1-child.md) — Child app (儿童页面优化)
+- [`area5-child-navigation.md`](./groups/g3-child/area5-child-navigation.md) — Child app nav coverage (页签+子页面)
+- [`area16-learning-os-taxonomy.md`](./groups/g3-child/area16-learning-os-taxonomy.md) — Learning OS taxonomy Beijing + curriculum/edge-status (C16.1–C16.14)
+- [`area17-learning-os-core.md`](./groups/g3-child/area17-learning-os-core.md) — Learning OS core flows (C17.1–C17.21)
 
 **角色能力矩阵 (Role Capabilities Matrix):** [`role-capabilities.md`](./role-capabilities.md)
 — 每个角色 (owner/member/child) 的权限边界和可见页面清单。

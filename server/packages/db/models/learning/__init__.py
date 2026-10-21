@@ -1,5 +1,6 @@
 from packages.db.models.learning.path import LearningPath, LearningPathItem
 from packages.db.models.learning.practice import PracticeAttempt, PracticeSession
+from packages.db.models.learning.preset_path import PresetLearningPath
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.question import Question, QuestionKnowledgePoint
 from packages.db.models.learning.stats import ChildLearningStats
@@ -10,6 +11,7 @@ __all__ = [
     "LearningProgress",
     "PracticeAttempt",
     "PracticeSession",
+    "PresetLearningPath",
     "Question",
     "QuestionKnowledgePoint",
     "ChildLearningStats",

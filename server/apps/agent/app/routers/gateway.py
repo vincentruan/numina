@@ -720,14 +720,27 @@ async def trigger_learning_tutor_run(
         multitask_strategy="reject",
     )
 
-    record = await start_run(
-        run_body,
-        thread_id,
-        request,
-        body.family_id,
-        body.user_id,
-        internal=True,
-    )
+    try:
+        record = await start_run(
+            run_body,
+            thread_id,
+            request,
+            body.family_id,
+            body.user_id,
+            internal=True,
+        )
+    except ConflictError:
+        logger.warning(
+            "[gateway] learning-tutor ConflictError thread=%s — "
+            "another run is already active",
+            thread_id,
+        )
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": f"Thread {thread_id} already has an active run",
+            },
+        )
     run_mgr = get_run_manager(request)
 
     async def sse_generator():

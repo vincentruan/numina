@@ -2,7 +2,9 @@
 
 import contextlib
 import json
+from datetime import UTC, datetime
 
+import httpx
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -14,8 +16,11 @@ from apps.backend.app.models.user import User
 from apps.backend.app.schemas.learning import (
     AssessStreamRequest,
     AssignmentResponse,
+    BridgeResponse,
     ChildProgressOverview,
+    ClusterResponse,
     LearningStatsResponse,
+    MapIndexItem,
     OnboardingCompleteResponse,
     PathResponse,
     ProgressResponse,
@@ -33,6 +38,8 @@ from apps.backend.app.services.learning import (
     zone_service,
 )
 from apps.backend.app.services.learning.topic_service import (
+    get_cross_subject_bridges,
+    list_clusters_with_topic_counts,
     locale_to_source_taxonomy,
 )
 from apps.backend.app.services.notification.dispatcher import (
@@ -72,17 +79,104 @@ def my_knowledge_map(
     Locale filter applied: progress rows for topics that no longer belong to
     the child's source taxonomy are hidden (taxonomy switched since the
     progress was created, or topic was deprecated).
+
+    Subject/domain/age_group are joined in so the cluster map can build its
+    subject tabs and mastery-coloured nodes without a second round-trip that
+    fetches every topic's full detail.
     """
     taxonomy = locale_to_source_taxonomy(child.language)
-    return (
-        db.query(LearningProgress)
+    rows = (
+        db.query(
+            LearningProgress,
+            LearningTopic.subject,
+            LearningTopic.domain,
+            LearningTopic.age_group,
+        )
         .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
         .filter(
             LearningProgress.child_id == child.id,
+            # taxonomy filter here is intentional — drops orphan progress rows; matches /map behavior.
             LearningTopic.source_taxonomy == taxonomy,
         )
         .all()
     )
+    result = []
+    for progress, subject, domain, age_group in rows:
+        item = ProgressResponse.model_validate(progress)
+        item.subject = subject
+        item.domain = domain
+        item.age_group = age_group
+        result.append(item)
+    return result
+
+
+@router.get("/map/index", response_model=list[MapIndexItem])
+def my_knowledge_map_index(
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Slim per-row index for the cluster map.
+
+    Returns only ``topic_id``, ``mastery_level``, ``next_review_at``,
+    ``subject``, ``domain``, ``age_group`` — the minimum the cluster map
+    needs to render subject tabs and mastery-coloured nodes.  Omits the
+    heavy ``ProgressResponse`` fields (evidence, standards,
+    assessment_prompt, ability_dimensions_score, …) that drive the
+    original ``/map`` payload well above 3G budgets.
+    """
+    taxonomy = locale_to_source_taxonomy(child.language)
+    rows = (
+        db.query(
+            LearningTopic.id,
+            LearningProgress.mastery_level,
+            LearningProgress.next_review_at,
+            LearningTopic.subject,
+            LearningTopic.domain,
+            LearningTopic.age_group,
+        )
+        .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
+        .filter(
+            LearningProgress.child_id == child.id,
+            # taxonomy filter here is intentional — drops orphan progress rows; matches /map behavior.
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .all()
+    )
+    return [
+        MapIndexItem(
+            topic_id=topic_id,
+            mastery_level=mastery_level,
+            next_review_at=next_review_at,
+            subject=subject,
+            domain=domain,
+            age_group=age_group,
+        )
+        for topic_id, mastery_level, next_review_at, subject, domain, age_group in rows
+    ]
+
+
+@router.get("/clusters", response_model=list[ClusterResponse])
+def list_my_clusters(
+    subject: str | None = Query(None),
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """List clusters enriched with topic counts for the child's taxonomy."""
+    taxonomy = locale_to_source_taxonomy(child.language)
+    return list_clusters_with_topic_counts(
+        db, subject=subject, source_taxonomy=taxonomy
+    )
+
+
+@router.get("/bridges", response_model=list[BridgeResponse])
+def list_my_bridges(
+    subject: str | None = Query(None),
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """List cross-subject bridge edges between cluster domains."""
+    taxonomy = locale_to_source_taxonomy(child.language)
+    return get_cross_subject_bridges(db, source_taxonomy=taxonomy, subject=subject)
 
 
 @router.get("/assignments", response_model=list[AssignmentResponse])
@@ -107,6 +201,31 @@ def today_learning(
     (zh-CN -> beijing, otherwise -> os-taxonomy).
     """
     taxonomy = locale_to_source_taxonomy(child.language)
+
+    # 0. review_due: mastered topics whose next_review_at has passed
+    now_utc = datetime.now(UTC)
+    review_due_progress = (
+        db.query(LearningProgress)
+        .filter(
+            LearningProgress.child_id == child.id,
+            LearningProgress.mastery_level == "mastered",
+            LearningProgress.next_review_at <= now_utc,
+            LearningProgress.next_review_at.isnot(None),
+        )
+        .order_by(LearningProgress.next_review_at.asc())
+        .first()
+    )
+    review_due_topic = None
+    if review_due_progress:
+        review_due_topic = (
+            db.query(LearningTopic)
+            .filter(
+                LearningTopic.id == review_due_progress.topic_id,
+                LearningTopic.source_taxonomy == taxonomy,
+            )
+            .first()
+        )
+
     # 1. current_topic: first progress with mastery_level=="learning", ORDER BY updated_at DESC
     current_progress = (
         db.query(LearningProgress)
@@ -165,6 +284,7 @@ def today_learning(
     return TodayLearningResponse(
         current_topic=current_topic,
         pending_assignment=pending_assignment,
+        review_due_topic=review_due_topic,
         recommended_topic=recommended_topic,
         study_minutes_today=study_minutes["today_study_minutes"],
         current_zone=stats.current_zone,
@@ -501,6 +621,18 @@ async def stream_assessment(
             json_body=agent_body,
             task_id=task_id,
         )
+    except httpx.HTTPStatusError as e:
+        _fdb = SessionLocal()
+        try:
+            AITaskService.fail_task(task_id, f"agent trigger failed: {type(e).__name__}", _fdb)
+        finally:
+            _fdb.close()
+        # Agent returned 409 Conflict — another run is already active on this thread.
+        # Propagate as 409 to the frontend so it can show a "session in progress"
+        # state instead of a generic 503 error.
+        if e.response.status_code == 409:
+            raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}) from e
     except Exception as e:
         _fdb = SessionLocal()
         try:

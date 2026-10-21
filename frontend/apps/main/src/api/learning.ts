@@ -250,3 +250,69 @@ export async function archivePath(pathId: string): Promise<PathResponse> {
   const res = await http.post(`/family/learning/paths/${pathId}/archive`)
   return res.data
 }
+
+// --- Preset Paths & Recommendations (Task 4/5) ---
+
+export interface PresetPathResponse {
+  id: string
+  name: string
+  name_zh: string | null
+  description: string | null
+  description_zh: string | null
+  grade: number
+  semester: string
+  subject: string
+  topic_count: number
+  created_at: string
+}
+
+export interface RecommendationTopicItem {
+  topic_id: string
+  topic_name: string
+  reasons: string[]
+}
+
+export interface RecommendationPathResponse {
+  path: {
+    name: string
+    topics: RecommendationTopicItem[]
+    total_count: number
+  }
+}
+
+export interface AiReviewStatusResponse {
+  ai_auto_pass_paused: boolean
+  consecutive_overrides: number
+}
+
+export async function getRecommendations(childId: string): Promise<RecommendationPathResponse> {
+  const res = await http.get(`/family/learning/children/${childId}/recommendations`)
+  return res.data
+}
+
+export async function getPresetPaths(params?: { grade?: number; semester?: string; subject?: string }): Promise<PresetPathResponse[]> {
+  const res = await http.get('/family/learning/preset-paths', { params })
+  return res.data
+}
+
+export async function assignPresetPath(presetId: string, childId: string): Promise<PathResponse> {
+  const res = await http.post(`/family/learning/preset-paths/${presetId}/assign`, { child_id: childId })
+  return res.data
+}
+
+export async function overrideReview(
+  progressId: string,
+  newDecision: string,
+  reason?: string,
+): Promise<ProgressResponse> {
+  const res = await http.post(`/family/learning/reviews/${progressId}/override`, {
+    new_decision: newDecision,
+    reason,
+  })
+  return res.data
+}
+
+export async function getAiReviewStatus(childId: string): Promise<AiReviewStatusResponse> {
+  const res = await http.get(`/family/learning/children/${childId}/ai-review-status`)
+  return res.data
+}

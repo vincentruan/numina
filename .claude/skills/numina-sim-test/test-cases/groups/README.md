@@ -25,14 +25,14 @@ runs are safe by construction, not by luck.
 | Group | Dir | Files | Session | State domain | Parallel with |
 |-------|-----|-------|---------|--------------|---------------|
 | **G0** preconditions | [`g0-preconditions/`](./g0-preconditions/) | (Phase 0/1/1.5/2 index) | serial | establishes login | none — runs first |
-| **G1** adult-stable | [`g1-adult-stable/`](./g1-adult-stable/) | area2, area3, area6, area7, area8, **area9**, **area12**, **area13**, **area14**, **area15**, **area18**, area11 | `$SID` (adult) | reads global; per-entity writes only | **G3** |
+| **G1** adult-stable | [`g1-adult-stable/`](./g1-adult-stable/) | area2, area3, area6, area7, area8, **area9**, **area11**, **area12**, **area13**, **area14**, **area15**, **area18**, **area20** | `$SID` (adult) | reads global; per-entity writes only | **G3** |
 | **G2** adult-currency | [`g2-adult-currency/`](./g2-adult-currency/) | area4 | adult (own) | **mutates `default_currency`** | **G3** |
 | **G3** child | [`g3-child/`](./g3-child/) | area1, area5, area10, **area16**, **area17** | `$SID_CHILD` | child origin (isolated in dev) | **G1 or G2** |
 
 ## Parallel schedule
 
 ```
-        ┌── G1 (adult-stable: area2→area14→area18→area8→area3→area6→area13→area12→area15→area9→area7→area11) ──┐
+        ┌── G1 (adult-stable: area2→area14→area18→area8→area3→area6→area13→area12→area15→area9→area7→area11→area20) ──┐
 G0 ─────┤                                                                                                       ├── G2 (adult-currency: area4)
         └── G3 (child: area1→area5→area10→area16→area17) ──────────────────────────────────────────────────────┘
 ```
@@ -45,7 +45,7 @@ G0 ─────┤                                                           
 - **G2 after G1** — G2 flips `default_currency`; must not overlap G1 (both
   adult origin). G2 CAN overlap G3 (child origin isolated).
 
-Net: 3 agents (G1, G3, then G2) cover all 111 cases. Wall-clock ≈ G0 + max(G1,
+Net: 3 agents (G1, G3, then G2) cover all cases across 20 areas. Wall-clock ≈ G0 + max(G1,
 G3) + G2, instead of G0 + G1 + G2 + G3 sequential.
 
 ## Docker vs dev mode

@@ -444,6 +444,7 @@ export default {
   },
   learning: {
     title: 'Knowledge Map',
+    backToMap: '← Back to Map',
     empty: 'No learning content yet — ask your parents to assign some!',
     todayRecommend: 'Today\'s Pick',
     startLearning: '🎓 Start Learning',
@@ -453,6 +454,17 @@ export default {
     attempts: '{count} attempts',
     evidence: 'Learning Goals',
     general: 'General',
+    cluster: {
+      empty: 'No learning content for this subject yet. Try another one!',
+      frontierBanner: '📍 Start your learning journey here',
+      allMastered: '🎉 Amazing! You\'ve mastered everything in this subject. Try another one!',
+      bridgeNoContent: 'No learning content in that subject yet',
+      progress: '{mastered}/{total} mastered',
+      prereqTitle: 'To unlock "{topic}", master these first:',
+      prereqGoTo: 'Go learn',
+      prereqAllMet: '✅ All prerequisites met!',
+      otherDomain: 'Other',
+    },
     subject: {
       mathematics: 'Math',
       science: 'Science',
@@ -466,10 +478,12 @@ export default {
     status: {
       available: 'Available',
       learning: 'Learning',
+      tutorial: 'Learning',
       assessing: 'Assessing',
       mastered: 'Mastered',
       locked: 'Locked',
       review: 'Review',
+      parent_review: 'Parent Review',
     },
     session: {
       chatTitle: 'AI Tutor Session in Progress',
@@ -514,11 +528,22 @@ export default {
     },
     todayCard: {
       assignment: 'Submit Assignment',
+      review_due: 'Time to Review',
       current: 'Continue Learning',
       recommended: 'Start New Topic',
       explore: 'Explore Learning Map',
       exploreSub: 'Explore the knowledge map',
       footer: 'Studied {minutes} min today',
+    },
+    source: {
+      systemRecommended: '🌟 System Pick',
+      parentAssigned: '📝 Parent Assigned',
+      selfSelected: '🔍 Self Selected',
+    },
+    rejection: {
+      needsPractice: 'This topic needs more practice',
+      relearn: 'Relearn',
+      goPractice: 'Go Practice',
     },
     stats: {
       streak: '{days} day streak',
@@ -618,6 +643,9 @@ export default {
     },
     errors: {
       startFailed: 'Could not start practice, please try again',
+      noQuestions: 'No practice questions available for this topic yet',
+      topicLocked: 'Complete prerequisite topics before practicing this one',
+      topicNotFound: 'Topic not found',
       finishFailed: 'Could not finish practice',
       submitFailed: 'Could not submit answer, please try again',
     },

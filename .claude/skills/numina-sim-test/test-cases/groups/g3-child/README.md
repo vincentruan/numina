@@ -4,7 +4,7 @@
 
 ## Scope
 
-G3 runs the **child-app cases**. Two files, one child session (`$SID_CHILD`
+G3 runs the **child-app cases**. Four files, one child session (`$SID_CHILD`
 from G0).
 
 | File | Area | Cases |
@@ -62,4 +62,6 @@ bsk navigate "$CHILD_BASE" --session "$SID_CHILD" --wait-until networkidle   # C
 # ... C5.1–C5.10 ...
 # area16 (learning OS taxonomy + curriculum/edge-status)
 # ... C16.1–C16.14 ...
+# area17 (learning OS core flows: knowledge map, AI tutor, progress)
+# ... C17.1–C17.21 ...
 ```

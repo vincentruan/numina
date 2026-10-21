@@ -98,6 +98,17 @@ class ClusterResponse(SnowflakeBase):
     age_range_start: int | None
     age_group: str
     summary: str
+    topic_count: int = 0
+
+
+class BridgeResponse(BaseModel):
+    """Cross-subject bridge between two cluster domains."""
+
+    from_cluster_domain: str
+    from_subject: str
+    to_cluster_domain: str
+    to_subject: str
+    edge_count: int
 
 
 class SubjectSummary(BaseModel):
@@ -123,6 +134,30 @@ class ProgressResponse(SnowflakeBase):
     stability: float | None
     next_review_at: datetime | None
     ability_dimensions_score: dict | None
+    # Navigation index fields — let the cluster map build subject tabs and
+    # mastery-coloured nodes without fetching every topic's full detail
+    # (description/evidence/standards), which dominates a 3G payload.
+    subject: str | None = None
+    domain: str | None = None
+    age_group: str | None = None
+
+
+class MapIndexItem(SnowflakeBase):
+    """Slim per-row index for the cluster map — only what it needs to render
+    subject tabs and mastery-coloured nodes.  Omits the heavy fields
+    (evidence, standards, assessment_prompt, ability_dimensions_score, …)
+    that drive the original /map payload well above 3G budgets.
+
+    Extends ``SnowflakeBase`` so ``topic_id`` serializes as a string, matching
+    the frontend's string-typed IDs (and ``TopicResponse.id`` keys).
+    """
+
+    topic_id: int
+    mastery_level: str
+    next_review_at: datetime | None
+    subject: str | None = None
+    domain: str | None = None
+    age_group: str | None = None
 
 
 # --- Assignment ---
@@ -165,6 +200,7 @@ class TodayLearningResponse(SnowflakeBase):
 
     current_topic: TopicResponse | None = None
     pending_assignment: AssignmentResponse | None = None
+    review_due_topic: TopicResponse | None = None
     recommended_topic: TopicResponse | None = None
     study_minutes_today: int = 0
     current_zone: str = "growth"
@@ -382,3 +418,69 @@ class PathResponse(SnowflakeBase):
     completed_count: int = 0
     total_count: int = 0
     next_milestone: dict | None = None
+
+
+# --- Recommendation ---
+
+
+class RecommendedTopicItem(SnowflakeBase):
+    """A single topic in a recommendation path."""
+
+    topic_id: int
+    topic_name: str
+    reasons: list[str]
+    centrality: float
+    prerequisites_met: bool
+    suggested_position: int
+
+
+class RecommendationPathDetail(SnowflakeBase):
+    """Recommendation path with ordered topics."""
+
+    name: str
+    topics: list[RecommendedTopicItem]
+    total_count: int
+
+
+class RecommendationPathResponse(SnowflakeBase):
+    """Wrapper for recommendation path response."""
+
+    path: RecommendationPathDetail
+
+
+# --- Preset Learning Paths ---
+
+
+class PresetPathResponse(SnowflakeBase):
+    id: int
+    grade: int
+    semester: str
+    subject: str
+    name: str
+    name_zh: str
+    description: str | None
+    description_zh: str | None
+    topic_count: int
+    topic_ids: list[str]
+    is_active: bool
+
+
+class AssignPresetRequest(BaseModel):
+    child_id: int
+
+
+# --- Review Dual-Track ---
+
+
+class ReviewOverrideRequest(BaseModel):
+    """Parent override of AI assessment decision."""
+
+    new_decision: str  # "mastered" | "learning"
+    reason: str | None = None
+
+
+class AIReviewStatusResponse(BaseModel):
+    """AI auto-pass status for a child."""
+
+    ai_auto_pass_paused: bool
+    consecutive_overrides: int

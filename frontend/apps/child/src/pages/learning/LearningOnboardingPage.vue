@@ -114,8 +114,12 @@ function prevStep() {
 }
 
 function goToTopic(topicId: string) {
-  // Persist step 3 completion and hand off to the topic page
-  void completeOnboarding().catch(() => {})
+  // Persist step 3 completion and hand off to the topic page. The guard flag
+  // is set only after the server accepts the completion, so a failed request
+  // leaves the child gated rather than silently marked as onboarded.
+  void completeOnboarding()
+    .then(() => sessionStorage.setItem('learning_onboarding_done', '1'))
+    .catch(() => {})
   router.replace(`/learning/topic/${topicId}`)
 }
 

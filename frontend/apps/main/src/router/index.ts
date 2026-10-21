@@ -490,19 +490,14 @@ const router = createRouter({
           meta: { hasSkeleton: true }
         },
         {
-          path: 'baby/learning/assign',
-          name: 'LearningAssign',
-          component: () => import('@/pages/LearningAssignPage.vue')
+          path: 'baby/learning/preset-paths',
+          name: 'PresetPaths',
+          component: () => import('@/pages/baby/learning/PresetPathsPage.vue')
         },
         {
-          path: 'baby/learning/reviews',
-          name: 'LearningReviews',
-          component: () => import('@/pages/LearningReviewsPage.vue')
-        },
-        {
-          path: 'baby/learning/paths',
-          name: 'LearningPaths',
-          component: () => import('@/pages/LearningPathsPage.vue')
+          path: 'baby/learning/recommendations',
+          name: 'Recommendations',
+          component: () => import('@/pages/baby/learning/RecommendationsPage.vue')
         },
         {
           path: 'baby/learning/paths/:pathId',

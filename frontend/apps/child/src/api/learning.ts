@@ -50,6 +50,11 @@ export interface ProgressResponse {
   stability: number | null
   next_review_at: string | null
   ability_dimensions_score: Record<string, number> | null
+  /** Navigation index from /child/learning/map — lets the cluster map build
+   *  subject tabs and mastery nodes without fetching full topic detail. */
+  subject?: string | null
+  domain?: string | null
+  age_group?: string | null
 }
 
 export interface AssignmentResponse {
@@ -122,6 +127,7 @@ export interface ChildProgressOverview {
 export interface TodayLearningResponse {
   current_topic: TopicResponse | null
   pending_assignment: AssignmentResponse | null
+  review_due_topic: TopicResponse | null
   recommended_topic: TopicResponse | null
   study_minutes_today: number
   current_zone: string
@@ -161,6 +167,22 @@ export interface ProgressWithTopic extends ProgressResponse {
 
 export async function getMyLearningMap(): Promise<ProgressResponse[]> {
   const res = await http.get('/child/learning/map')
+  return res.data
+}
+
+/** Slim per-row index for the cluster map — only topic_id, mastery_level,
+ *  next_review_at, subject, domain, age_group. */
+export async function getMyLearningMapIndex(): Promise<
+  Array<{
+    topic_id: string
+    mastery_level: string
+    next_review_at: string | null
+    subject?: string | null
+    domain?: string | null
+    age_group?: string | null
+  }>
+> {
+  const res = await http.get('/child/learning/map/index')
   return res.data
 }
 
@@ -283,6 +305,40 @@ export async function getMyPaths(): Promise<PathResponse[]> {
 
 export async function getMyPath(pathId: string): Promise<PathResponse> {
   const res = await http.get(`/child/learning/paths/${pathId}`)
+  return res.data
+}
+
+// --- Cluster Map types (U2) ---
+
+export interface ClusterResponse {
+  id: string
+  subject: string
+  domain: string
+  age_range_start: number | null
+  age_group: string
+  summary: string
+  topic_count: number
+}
+
+export interface BridgeResponse {
+  from_cluster_domain: string
+  from_subject: string
+  to_cluster_domain: string
+  to_subject: string
+  edge_count: number
+}
+
+export async function getClusters(subject?: string): Promise<ClusterResponse[]> {
+  const res = await http.get('/child/learning/clusters', {
+    params: subject ? { subject } : {},
+  })
+  return res.data
+}
+
+export async function getBridges(subject?: string): Promise<BridgeResponse[]> {
+  const res = await http.get('/child/learning/bridges', {
+    params: subject ? { subject } : {},
+  })
   return res.data
 }
 

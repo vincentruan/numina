@@ -1,16 +1,16 @@
-# Area 16 — MCP External API Token & Governance (外部 MCP 令牌与治理)
+# Area 20 — MCP External API Token & Governance (外部 MCP 令牌与治理)
 
 Shared conventions in [`_common.md`](../../_common.md).
 
-Auth: adult session as `demouser` (owner)。另需 member 角色账户 (M16.4.x 权限边界)。
+Auth: adult session as `demouser` (owner)。另需 member 角色账户 (M20.4.x 权限边界)。
 本 Area 覆盖 Issue #118 的两个阶段:
 
-- **Phase 1** (M16.1 – M16.7): Backend MCP 外部 API Token 生命周期、认证、两级访问控制、前端管理卡片
-- **Phase 2** (M16.8 – M16.15): Per-tool 白名单、审计日志、速率限制、异常检测、统计面板
+- **Phase 1** (M20.1 – M20.7): Backend MCP 外部 API Token 生命周期、认证、两级访问控制、前端管理卡片
+- **Phase 2** (M20.8 – M20.15): Per-tool 白名单、审计日志、速率限制、异常检测、统计面板
 
 > **运行时机:** G1 内排在 area14 (travel) 之后, area8 (expanded features) 之前。
 > 本 Area 依赖 AI provider 已启用 (Phase 1 F2 流程需要 MCP 工具可调用)。
-> 部分用例 (M16.4.x) 需要 member 角色账户, 当前标记为 deferred。
+> 部分用例 (M20.4.x) 需要 member 角色账户, 当前标记为 deferred。
 
 > **API 测试说明:** 本 Area 大量使用 `curl` 直接验证后端行为 (SSE 连接、token 认证、
 > 速率限制), 因为 MCP 协议交互无法纯浏览器驱动。浏览器部分覆盖前端 UI。
@@ -41,18 +41,18 @@ curl -s -H "$AUTH" -X PATCH "${API_BASE}/ai/mcp-token" \
 
 ---
 
-## M16.1 — Token 生命周期: 首次生成 (Phase 1, F1)
+## M20.1 — Token 生命周期: 首次生成 (Phase 1, F1)
 
 Route: `/settings/ai/mcp`
 Component: `BackendMCPCard.vue`
 API: `POST /api/v1/ai/mcp-token`
 
-### M16.1.1 无 token 时卡片初始状态
+### M20.1.1 无 token 时卡片初始状态
 
 ```
 bsk navigate ${BASE}settings/ai/mcp --session <id> --wait-until networkidle
 bsk snapshot --session <id>
-bsk screenshot --session <id> --out dogfood-output/m16.1.1-mcp-card-empty.png
+bsk screenshot --session <id> --out dogfood-output/m20.1.1-mcp-card-empty.png
 ```
 
 Assertions:
@@ -61,7 +61,7 @@ Assertions:
 - [ ] 无 token 掩码显示区域
 - [ ] `[console]` zero errors
 
-### M16.1.2 首次生成 token
+### M20.1.2 首次生成 token
 
 ```
 # 点击 "生成令牌" 按钮
@@ -69,7 +69,7 @@ bsk snapshot --session <id>   # 获取按钮 ref
 bsk click @eN --session <id>  # 点击生成
 # 确认对话框弹出 (如有)
 bsk snapshot --session <id>
-bsk screenshot --session <id> --out dogfood-output/m16.1.2-mcp-token-generated.png
+bsk screenshot --session <id> --out dogfood-output/m20.1.2-mcp-token-generated.png
 ```
 
 Assertions:
@@ -80,7 +80,7 @@ Assertions:
 - [ ] `allow_external` 和 `allow_write` 开关默认关闭
 - [ ] `[console]` zero errors
 
-### M16.1.3 API 验证: 生成返回明文
+### M20.1.3 API 验证: 生成返回明文
 
 ```bash
 # 用 curl 直接调用 (清除刚才浏览器生成的 token, 重新测试)
@@ -102,12 +102,12 @@ Assertions:
 
 ---
 
-## M16.2 — Token 显示与交互 (Phase 1, R16-R19)
+## M20.2 — Token 显示与交互 (Phase 1, R16-R19)
 
 Route: `/settings/ai/mcp`
 Component: `BackendMCPCard.vue`
 
-### M16.2.1 Token 掩码显示
+### M20.2.1 Token 掩码显示
 
 ```
 bsk navigate ${BASE}settings/ai/mcp --session <id> --wait-until networkidle
@@ -118,7 +118,7 @@ Assertions:
 - [ ] Token 默认显示为 `mcp_••••••••••••{last4}` 格式
 - [ ] 眼睛图标 (eye toggle) 可见
 
-### M16.2.2 眼睛切换显示明文 + 10s 自动遮罩
+### M20.2.2 眼睛切换显示明文 + 10s 自动遮罩
 
 ```
 # 点击眼睛图标
@@ -131,7 +131,7 @@ Assertions:
 - [ ] 10 秒后重新 snapshot → token 恢复掩码显示
 - [ ] `[console]` zero errors
 
-### M16.2.3 复制到剪贴板
+### M20.2.3 复制到剪贴板
 
 ```
 bsk snapshot --session <id>
@@ -146,14 +146,14 @@ Assertions:
 
 > 剪贴板内容无法直接从 bsk 验证, 依赖 API 测试覆盖。
 
-### M16.2.4 过期时间选择器
+### M20.2.4 过期时间选择器
 
 ```
 # 点击过期时间字段
 bsk snapshot --session <id>
 bsk click @eN --session <id>   # expiration field ref
 bsk snapshot --session <id>
-bsk screenshot --session <id> --out dogfood-output/m16.2.4-expiration-picker.png
+bsk screenshot --session <id> --out dogfood-output/m20.2.4-expiration-picker.png
 ```
 
 Assertions:
@@ -164,14 +164,14 @@ Assertions:
 
 ---
 
-## M16.3 — 外部 MCP SSE 连接与认证 (Phase 1, R5-R9)
+## M20.3 — 外部 MCP SSE 连接与认证 (Phase 1, R5-R9)
 
 API: `GET /api/v1/mcp/public/{family_id}/sse`, `POST /api/v1/mcp/public/messages`
 
 > **注意:** 以下测试使用 `curl` 直接验证, 不需要浏览器。
 > `$FAMILY_ID` 从 `curl -s -H "$AUTH" "$API_BASE/auth/me" | jq -r '.data.family_id'` 获取。
 
-### M16.3.1 Bearer token 认证连接
+### M20.3.1 Bearer token 认证连接
 
 ```bash
 FAMILY_ID=$(curl -s -H "$AUTH" "${API_BASE}/auth/me" | jq -r '.data.family_id')
@@ -187,7 +187,7 @@ Assertions:
 - [ ] HTTP 200 (SSE 连接建立成功)
 - [ ] 响应 Content-Type 包含 `text/event-stream`
 
-### M16.3.2 无效 token → 401
+### M20.3.2 无效 token → 401
 
 ```bash
 timeout 5 curl -s -N \
@@ -199,7 +199,7 @@ timeout 5 curl -s -N \
 Assertions:
 - [ ] HTTP 401
 
-### M16.3.3 allow_external=False → 403
+### M20.3.3 allow_external=False → 403
 
 ```bash
 # 先关闭 allow_external
@@ -222,7 +222,7 @@ curl -s -H "$AUTH" -X PATCH "${API_BASE}/ai/mcp-token" \
 Assertions:
 - [ ] HTTP 403
 
-### M16.3.4 过期 token → 401
+### M20.3.4 过期 token → 401
 
 ```bash
 # 设置 token 过期时间为过去 (通过 PATCH expires_at)
@@ -247,7 +247,7 @@ curl -s -H "$AUTH" -X PATCH "${API_BASE}/ai/mcp-token" \
 Assertions:
 - [ ] HTTP 401
 
-### M16.3.5 Query param 认证 → 连接成功 + 审计 WARNING
+### M20.3.5 Query param 认证 → 连接成功 + 审计 WARNING
 
 ```bash
 # 使用 ?token= 方式连接
@@ -261,7 +261,7 @@ Assertions:
 - [ ] 后端日志中出现 WARNING: 包含 family_id 和 token prefix
   (需检查 backend 日志: `docker logs numina-backend 2>&1 | grep "query param" | tail -1`)
 
-### M16.3.6 已撤销 token → 401
+### M20.3.6 已撤销 token → 401
 
 ```bash
 # 生成新 token (旋转), 旧 token 应该失效
@@ -286,7 +286,7 @@ Assertions:
 - [ ] 旧 token → HTTP 401
 - [ ] 新 token → HTTP 200
 
-### M16.3.7 User-Agent 控制字符清洗 (P3 修复验证)
+### M20.3.7 User-Agent 控制字符清洗 (P3 修复验证)
 
 > 验证入口端清洗 User-Agent 中的 C0/C1 控制字符, 防止日志注入攻击。
 > 恶意 UA 如 `"Mozilla\nINFO  [fake] injected log line"` 不应被原样写入审计日志。
@@ -316,14 +316,14 @@ Assertions:
 
 ---
 
-## M16.4 — 两级访问控制 (Phase 1, R5, R12)
+## M20.4 — 两级访问控制 (Phase 1, R5, R12)
 
 API: `tools/list` via MCP protocol
 
 > 以下验证工具列表在不同 access 配置下的行为。
 > 使用 MCP JSON-RPC 协议通过 SSE + messages 端点交互。
 
-### M16.4.1 allow_external=True, allow_write=False → 仅读工具
+### M20.4.1 allow_external=True, allow_write=False → 仅读工具
 
 ```bash
 # 确保 allow_external=True, allow_write=False
@@ -340,7 +340,7 @@ Assertions:
 - [ ] `tools/list` 返回 12 个读工具 (`get_*` 系列, `requires_write=False`)
 - [ ] `tools/list` 不包含写工具 (`import_*`, `record_*` 系列)
 
-### M16.4.2 allow_write=True → 包含写工具
+### M20.4.2 allow_write=True → 包含写工具
 
 ```bash
 # 开启 allow_write
@@ -362,7 +362,7 @@ curl -s -H "$AUTH" -X PATCH "${API_BASE}/ai/mcp-token" \
   -d '{"allow_write": false}' > /dev/null
 ```
 
-### M16.4.3 前端 allow_external 开关确认对话框
+### M20.4.3 前端 allow_external 开关确认对话框
 
 ```
 bsk navigate ${BASE}settings/ai/mcp --session <id> --wait-until networkidle
@@ -370,7 +370,7 @@ bsk snapshot --session <id>
 # 点击 allow_external 开关
 bsk click @eN --session <id>   # allow_external toggle ref
 bsk snapshot --session <id>
-bsk screenshot --session <id> --out dogfood-output/m16.4.3-allow-external-confirm.png
+bsk screenshot --session <id> --out dogfood-output/m20.4.3-allow-external-confirm.png
 ```
 
 Assertions:
@@ -378,7 +378,7 @@ Assertions:
 - [ ] 确认后开关切换, 显示成功 toast
 - [ ] `[console]` zero errors
 
-### M16.4.4 前端 allow_write 开关确认对话框
+### M20.4.4 前端 allow_write 开关确认对话框
 
 ```
 # 在 allow_external 已开启的前提下
@@ -386,7 +386,7 @@ bsk snapshot --session <id>
 # 点击 allow_write 开关
 bsk click @eN --session <id>   # allow_write toggle ref
 bsk snapshot --session <id>
-bsk screenshot --session <id> --out dogfood-output/m16.4.4-allow-write-confirm.png
+bsk screenshot --session <id> --out dogfood-output/m20.4.4-allow-write-confirm.png
 ```
 
 Assertions:
@@ -396,11 +396,11 @@ Assertions:
 
 ---
 
-## M16.5 — 合成用户隔离 (Phase 1, R4)
+## M20.5 — 合成用户隔离 (Phase 1, R4)
 
 API: `GET /api/v1/family/members`, `POST /api/v1/auth/login`
 
-### M16.5.1 合成用户不在成员列表中
+### M20.5.1 合成用户不在成员列表中
 
 ```bash
 # 获取家庭成员列表
@@ -412,7 +412,7 @@ Assertions:
 - [ ] 成员列表中不包含 `role == "external_token"` 的用户
 - [ ] 仅显示人类成员 (owner + adult + child)
 
-### M16.5.2 合成用户无法登录
+### M20.5.2 合成用户无法登录
 
 ```bash
 # 尝试用合成用户名登录 (用户名通常是 family_mcp_token_{family_id} 或类似)
@@ -427,7 +427,7 @@ Assertions:
 - [ ] 返回 `AUTH_INVALID_CREDENTIALS` 错误 (与普通错误凭证相同)
 - [ ] 不泄露合成用户存在的信息
 
-### M16.5.3 合成用户 role 字段长度 (仿真测试 bug 修复验证)
+### M20.5.3 合成用户 role 字段长度 (仿真测试 bug 修复验证)
 
 > 仿真测试发现: `users.role` 列在 DB 中为 `VARCHAR(10)`,
 > 但 `external_token` 有 14 字符, 导致 `DataError: value too long for type character varying(10)`。
@@ -441,7 +441,7 @@ HTTP_CODE=$(echo "$RESP" | tail -1)
 echo "Generate token after synthetic user creation: HTTP $HTTP_CODE"
 
 # 2. 验证合成用户存在于数据库 (通过 API 间接验证)
-# 合成用户不应出现在成员列表中 (M16.5.1 已覆盖)
+# 合成用户不应出现在成员列表中 (M20.5.1 已覆盖)
 # 但 token 生成成功意味着合成用户创建成功 (role='external_token' 写入无报错)
 ```
 
@@ -467,9 +467,9 @@ Assertions:
 
 ---
 
-## M16.6 — 内部 MCP 路径不受影响 (Phase 1, R21-R23)
+## M20.6 — 内部 MCP 路径不受影响 (Phase 1, R21-R23)
 
-### M16.6.1 内部 agent JWT 路径仍工作
+### M20.6.1 内部 agent JWT 路径仍工作
 
 ```bash
 # 内部 MCP 路径使用 X-Agent-Token (由 agent 模块获取)
@@ -484,7 +484,7 @@ Assertions:
 - [ ] 内部路径不接受 Bearer token (返回 401 — 它只接受 JWT agent token)
 - [ ] 内部路径的代码路径未引入 `mcp_public` 模块 (代码审查)
 
-### M16.6.2 bootstrap 系统 MCP server 记录不变
+### M20.6.2 bootstrap 系统 MCP server 记录不变
 
 ```bash
 # 检查 /ai/mcp-servers 列表中 backend 类型的 server 仍存在且不可删除
@@ -498,12 +498,12 @@ Assertions:
 
 ---
 
-## M16.7 — Token 轮转与撤销 (Phase 1, R3, R13)
+## M20.7 — Token 轮转与撤销 (Phase 1, R3, R13)
 
 Route: `/settings/ai/mcp`
 API: `POST /api/v1/ai/mcp-token` (rotation), `DELETE /api/v1/ai/mcp-token`
 
-### M16.7.1 前端轮转确认对话框
+### M20.7.1 前端轮转确认对话框
 
 ```
 bsk navigate ${BASE}settings/ai/mcp --session <id> --wait-until networkidle
@@ -511,7 +511,7 @@ bsk snapshot --session <id>
 # 点击 "重新生成" / "Regenerate" 按钮
 bsk click @eN --session <id>
 bsk snapshot --session <id>
-bsk screenshot --session <id> --out dogfood-output/m16.7.1-rotate-confirm.png
+bsk screenshot --session <id> --out dogfood-output/m20.7.1-rotate-confirm.png
 ```
 
 Assertions:
@@ -520,7 +520,7 @@ Assertions:
 - [ ] 旧的 "copy now" 提示重新出现
 - [ ] `[console]` zero errors
 
-### M16.7.2 撤销 token (DELETE)
+### M20.7.2 撤销 token (DELETE)
 
 ```bash
 # DELETE 撤销
@@ -532,7 +532,7 @@ Assertions:
 - [ ] 随后 GET 返回 404 (无 token)
 - [ ] 外部连接使用被撤销的 token → 401
 
-### M16.7.3 撤销后前端状态
+### M20.7.3 撤销后前端状态
 
 ```
 bsk navigate ${BASE}settings/ai/mcp --session <id> --wait-until networkidle
@@ -540,18 +540,18 @@ bsk snapshot --session <id>
 ```
 
 Assertions:
-- [ ] 卡片回到 "生成令牌" 按钮状态 (M16.1.1 初始状态)
+- [ ] 卡片回到 "生成令牌" 按钮状态 (M20.1.1 初始状态)
 - [ ] 无掩码 token 显示
 - [ ] `[console]` zero errors
 
 ---
 
-## M16.8 — Per-Tool 白名单 (Phase 2, P2-R1 — P2-R3)
+## M20.8 — Per-Tool 白名单 (Phase 2, P2-R1 — P2-R3)
 
 Route: `/settings/ai/mcp` → 工具权限 popup
 API: `PATCH /api/v1/ai/mcp-token` with `allowed_tools`
 
-### M16.8.1 默认 allowed_tools=null → 全部可用
+### M20.8.1 默认 allowed_tools=null → 全部可用
 
 ```bash
 # 确认当前 allowed_tools 为 null
@@ -562,7 +562,7 @@ Assertions:
 - [ ] `allowed_tools == null`
 - [ ] 前端卡片显示 "全部可用（未限制）" 或 "All tools available"
 
-### M16.8.2 前端工具权限弹窗 — 全选状态
+### M20.8.2 前端工具权限弹窗 — 全选状态
 
 ```
 bsk navigate ${BASE}settings/ai/mcp --session <id> --wait-until networkidle
@@ -570,7 +570,7 @@ bsk snapshot --session <id>
 # 点击 "工具权限" 行
 bsk click @eN --session <id>   # tool permissions row ref
 bsk snapshot --session <id>
-bsk screenshot --session <id> --out dogfood-output/m16.8.2-tool-permissions-popup.png
+bsk screenshot --session <id> --out dogfood-output/m20.8.2-tool-permissions-popup.png
 ```
 
 Assertions:
@@ -581,7 +581,7 @@ Assertions:
 - [ ] 顶部有 "全部启用" 和 "清空" 快捷按钮
 - [ ] `[console]` zero errors
 
-### M16.8.3 取消勾选一个工具并保存
+### M20.8.3 取消勾选一个工具并保存
 
 ```
 # 在弹窗中取消勾选一个工具 (如 get_recent_alerts)
@@ -597,7 +597,7 @@ Assertions:
 - [ ] 卡片显示 "11 / 12 已启用" 或类似计数
 - [ ] `[console]` zero errors
 
-### M16.8.4 API: 无效工具名 → 400
+### M20.8.4 API: 无效工具名 → 400
 
 ```bash
 curl -s -X PATCH "${API_BASE}/ai/mcp-token" \
@@ -610,7 +610,7 @@ Assertions:
 - [ ] HTTP 400
 - [ ] 错误消息包含 "invalid tool name: nonexistent_tool"
 
-### M16.8.5 API: allowed_tools=null 重置为全部可用
+### M20.8.5 API: allowed_tools=null 重置为全部可用
 
 ```bash
 # 先设置一个子集
@@ -634,7 +634,7 @@ Assertions:
 - [ ] 设置后: `allowed_tools == ["get_assets"]`
 - [ ] 重置后: `allowed_tools == null`
 
-### M16.8.6 API: allowed_tools=[] 表示无工具
+### M20.8.6 API: allowed_tools=[] 表示无工具
 
 ```bash
 curl -s -H "$AUTH" -X PATCH "${API_BASE}/ai/mcp-token" \
@@ -651,11 +651,11 @@ curl -s -H "$AUTH" -X PATCH "${API_BASE}/ai/mcp-token" \
 Assertions:
 - [ ] `allowed_tools == []` (空数组, 不是 null)
 
-### M16.8.7 前端 "全部启用" → PATCH null
+### M20.8.7 前端 "全部启用" → PATCH null
 
 ```
 bsk navigate ${BASE}settings/ai/mcp --session <id> --wait-until networkidle
-# 先设置一个子集 (如果 M16.8.3 已执行)
+# 先设置一个子集 (如果 M20.8.3 已执行)
 # 打开工具权限弹窗
 bsk click @eN --session <id>
 bsk snapshot --session <id>
@@ -669,7 +669,7 @@ Assertions:
 - [ ] 卡片恢复显示 "全部可用（未限制）"
 - [ ] `[console]` zero errors
 
-### M16.8.8 隐藏写工具不被保存到后端 (P1 修复验证)
+### M20.8.8 隐藏写工具不被保存到后端 (P1 修复验证)
 
 > 当 `allow_write=False` 时，写工具从弹窗中隐藏。
 > 验证：如果之前的选中状态包含写工具，保存时这些写工具会被过滤掉，不会发送到后端。
@@ -696,7 +696,7 @@ bsk navigate ${BASE}settings/ai/mcp --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 bsk click @eN --session <id>   # 工具权限行
 bsk snapshot --session <id>
-bsk screenshot --session <id> --out dogfood-output/m16.8.8-hidden-write-tools.png
+bsk screenshot --session <id> --out dogfood-output/m20.8.8-hidden-write-tools.png
 # 点击保存 (不修改选中状态)
 bsk click @eN --session <id>   # 保存按钮
 ```
@@ -715,11 +715,11 @@ Assertions:
 
 ---
 
-## M16.9 — 审计日志写入 (Phase 2, P2-R4 — P2-R8)
+## M20.9 — 审计日志写入 (Phase 2, P2-R4 — P2-R8)
 
 API: `GET /api/v1/ai/mcp-token/access-logs`
 
-### M16.9.1 外部连接产生 connect 事件
+### M20.9.1 外部连接产生 connect 事件
 
 ```bash
 # 确保 allow_external=True
@@ -746,16 +746,16 @@ Assertions:
 - [ ] 记录包含 `family_id`, `session_id`, `client_ip`, `created_at`
 - [ ] `created_at` 为近期时间 (1 分钟内)
 
-### M16.9.2 工具调用产生 tool_call 事件
+### M20.9.2 工具调用产生 tool_call 事件
 
 > 需要通过 MCP 协议发送 `tools/call` JSON-RPC 请求。
-> 简化: 使用 stats API 间接验证 (M16.12)。
+> 简化: 使用 stats API 间接验证 (M20.12)。
 
 Assertions (通过 API 间接验证):
 - [ ] 如果有工具调用, `mcp_access_logs` 存在 `event_type == "tool_call"` 的记录
 - [ ] 记录包含 `tool_name`, `status`, `duration_ms`
 
-### M16.9.3 内部 agent 路径不产生审计行
+### M20.9.3 内部 agent 路径不产生审计行
 
 ```bash
 # 内部 agent 调用 MCP 工具 (通过正常 AI chat 流程触发工具调用)
@@ -769,7 +769,7 @@ Assertions:
 - [ ] 内部 agent 路径不向 `mcp_access_logs` 写入行 (代码审查 + 单元测试覆盖)
 - [ ] `audit_callback` 默认为 `None`
 
-### M16.9.4 args_digest 密钥脱敏
+### M20.9.4 args_digest 密钥脱敏
 
 ```bash
 # 如果有包含敏感参数的工具调用, 检查 args_digest
@@ -784,7 +784,7 @@ Assertions:
 - [ ] 匹配密钥模式 (`password`, `secret`, `token`, `api_key`) 的值被替换为 `[REDACTED]`
 - [ ] `args_digest` 长度不超过 1024 字符
 
-### M16.9.5 审计日志分页查询
+### M20.9.5 审计日志分页查询
 
 ```bash
 # 分页测试
@@ -796,7 +796,7 @@ Assertions:
 - [ ] `items` 按 `created_at` 降序排列
 - [ ] 非 owner 访问 → 403
 
-### M16.9.6 审计日志过滤
+### M20.9.6 审计日志过滤
 
 ```bash
 # 按 event_type 过滤
@@ -814,7 +814,7 @@ Assertions:
 - [ ] `tool_name` 过滤仅返回匹配工具
 - [ ] `date_from` / `date_to` 过滤正确排除范围外数据
 
-### M16.9.7 嵌套结构递归脱敏 (P2 修复验证)
+### M20.9.7 嵌套结构递归脱敏 (P2 修复验证)
 
 > 验证 `_redact_obj()` 对嵌套 dict/list 中的敏感值进行递归脱敏。
 > 通过单元测试直接验证 (仿真环境难以构造包含嵌套密钥的工具调用)。
@@ -832,11 +832,11 @@ Assertions (单元测试):
 
 ---
 
-## M16.10 — Per-Token 速率限制 (Phase 2, P2-R9 — P2-R10)
+## M20.10 — Per-Token 速率限制 (Phase 2, P2-R9 — P2-R10)
 
 API: `GET /api/v1/mcp/public/{family_id}/sse`
 
-### M16.10.1 正常速率内全部通过
+### M20.10.1 正常速率内全部通过
 
 ```bash
 # 快速发送 10 次连接 (远低于 30/min 限制)
@@ -852,7 +852,7 @@ done
 Assertions:
 - [ ] 全部 10 次返回 HTTP 200
 
-### M16.10.2 超过 30/min → 429
+### M20.10.2 超过 30/min → 429
 
 ```bash
 # 快速发送 35 次连接
@@ -872,7 +872,7 @@ Assertions:
 - [ ] 在第 31 次左右开始返回 HTTP 429
 - [ ] 429 响应包含 `RATE_LIMITED` 错误码
 
-### M16.10.3 不同 IP 独立计数
+### M20.10.3 不同 IP 独立计数
 
 > 无法在本地模拟不同 IP, 通过代码审查确认:
 > 速率限制 key 为 `(token_prefix, client_ip)`, 不同 IP 使用独立计数器。
@@ -881,7 +881,7 @@ Assertions (代码审查):
 - [ ] 速率限制 key 包含 client_ip 分量
 - [ ] X-Forwarded-For 正确处理 (信任代理配置)
 
-### M16.10.4 无效 token 不消耗速率限额
+### M20.10.4 无效 token 不消耗速率限额
 
 ```bash
 # 用无效 token 发送请求
@@ -909,7 +909,7 @@ echo "Rate limited count: $LIMITED (expected: 0)"
 Assertions:
 - [ ] 无效 token 请求后, 有效 token 的 30 次请求全部通过 (429 count = 0)
 
-### M16.10.5 速率限制 fail-open (缓存不可用时)
+### M20.10.5 速率限制 fail-open (缓存不可用时)
 
 > 验证当缓存后端不可用时，速率限制 fail-open（允许请求通过）而不是 fail-closed（拒绝请求）。
 > 此测试需要代码审查或 mock 缓存不可用场景。
@@ -928,12 +928,12 @@ Assertions (代码审查):
 
 ---
 
-## M16.11 — 异常检测与通知 (Phase 2, P2-R11 — P2-R13)
+## M20.11 — 异常检测与通知 (Phase 2, P2-R11 — P2-R13)
 
 Scheduler: `mcp_anomaly_scan_job` (every 5 min)
 Notification: `mcp_security` / `mcp_anomaly_detected`
 
-### M16.11.1 频率突增告警
+### M20.11.1 频率突增告警
 
 > 需要 seed 数据或使用测试环境触发。
 
@@ -946,7 +946,7 @@ Assertions:
 - [ ] 5 分钟内 >100 次工具调用 → 产生 `mcp_anomaly_detected` Reminder
 - [ ] Reminder 包含异常类型描述和摘要
 
-### M16.11.2 新来源 IP 告警 (P2-R11b)
+### M20.11.2 新来源 IP 告警 (P2-R11b)
 
 > 30 天窗口内首次出现的来源 IP 触发告警。
 > **基线前提:** 仅当 family 已存在历史审计记录时才检测 — 否则首个连接会被误判为"新 IP"。
@@ -965,9 +965,9 @@ Assertions:
 - [ ] 配置项: `MCP_ANOMALY_NEW_IP_WINDOW_MINUTES` (默认 5), `MCP_ANOMALY_NEW_IP_HISTORY_DAYS` (默认 30)
 
 > **去重语义:** 每个条件（不同 `anomaly_type` / 不同 IP）拥有独立的告警身份，
-> 互不抑制。同一条件 1 小时内只告警一次。见 M16.11.4。
+> 互不抑制。同一条件 1 小时内只告警一次。见 M20.11.4。
 
-### M16.11.3 高失败率告警
+### M20.11.3 高失败率告警
 
 ```bash
 cd server && uv run pytest tests/backend/services/test_mcp_anomaly.py -v -k failure_rate
@@ -976,7 +976,7 @@ cd server && uv run pytest tests/backend/services/test_mcp_anomaly.py -v -k fail
 Assertions:
 - [ ] 10 分钟内 >50% 失败 (至少 5 次调用) → 产生告警
 
-### M16.11.4 告警去重 (按条件, 1 小时窗口)
+### M20.11.4 告警去重 (按条件, 1 小时窗口)
 
 > 去重键为 `(family_id, reminder_type, title)`，其中 title 是**条件标识**
 > （如 `MCP 异常 [new_source_ip]: 新来源 IP 1.2.3.4`）。
@@ -994,7 +994,7 @@ Assertions:
 - [ ] 度量值漂移不破坏去重 (`test_drift_in_measurement_does_not_defeat_dedup`)
 - [ ] `ensure_reminder` 默认行为不变（其他 reminder_type 仍按 type 幂等，61 个通知测试通过）
 
-### M16.11.5 通知注册表包含 mcp_security 类别
+### M20.11.5 通知注册表包含 mcp_security 类别
 
 ```bash
 # 检查通知设置页面是否有 MCP 安全类别
@@ -1003,7 +1003,7 @@ Assertions:
 ```
 bsk navigate ${BASE}settings/notifications --session <id> --wait-until networkidle
 bsk snapshot --session <id>
-bsk screenshot --session <id> --out dogfood-output/m16.11.5-notification-settings.png
+bsk screenshot --session <id> --out dogfood-output/m20.11.5-notification-settings.png
 ```
 
 Assertions:
@@ -1012,7 +1012,7 @@ Assertions:
 - [ ] i18n key 正确 (中英文均渲染正常)
 - [ ] `[console]` zero errors
 
-### M16.11.6 ReminderSummary 包含 mcp_anomaly_detected 计数
+### M20.11.6 ReminderSummary 包含 mcp_anomaly_detected 计数
 
 ```bash
 # 通过 /notifications/summary API 验证
@@ -1023,7 +1023,7 @@ Assertions:
 - [ ] `ReminderSummary` 包含 `mcp_anomaly_detected` 字段
 - [ ] 无告警时值为 0
 
-### M16.11.7 动态 count 不影响去重 (P3 修复验证)
+### M20.11.7 动态 count 不影响去重 (P3 修复验证)
 
 > 修复前: 告警 title 包含动态 count (如 "5 分钟内 120 次工具调用"),
 > 导致每次扫描 count 变化时 dedup 失效, 持续产生重复告警。
@@ -1043,18 +1043,18 @@ Assertions (单元测试):
 
 ---
 
-## M16.12 — 统计面板 (Phase 2, P2-R14 — P2-R17)
+## M20.12 — 统计面板 (Phase 2, P2-R14 — P2-R17)
 
 Route: `/settings/ai/mcp/stats`
 API: `GET /api/v1/ai/mcp-token/stats`
 Component: `MCPStatsPage.vue`
 
-### M16.12.1 卡片摘要行
+### M20.12.1 卡片摘要行
 
 ```
 bsk navigate ${BASE}settings/ai/mcp --session <id> --wait-until networkidle
 bsk snapshot --session <id>
-bsk screenshot --session <id> --out dogfood-output/m16.12.1-mcp-card-summary.png
+bsk screenshot --session <id> --out dogfood-output/m20.12.1-mcp-card-summary.png
 ```
 
 Assertions:
@@ -1062,7 +1062,7 @@ Assertions:
 - [ ] 如果有异常 (24h 内), 显示警告图标
 - [ ] 点击摘要行可导航到统计页
 
-### M16.12.2 Stats API 返回聚合数据
+### M20.12.2 Stats API 返回聚合数据
 
 ```bash
 STATS=$(curl -s -H "$AUTH" "${API_BASE}/ai/mcp-token/stats")
@@ -1077,7 +1077,7 @@ Assertions:
 - [ ] 包含 `ip_breakdown` 数组
 - [ ] 默认范围为最近 7 天
 
-### M16.12.3 Stats API 日期范围过滤
+### M20.12.3 Stats API 日期范围过滤
 
 ```bash
 # 自定义日期范围
@@ -1092,12 +1092,12 @@ Assertions:
 - [ ] 日期范围过滤正确影响聚合结果
 - [ ] `from` 和 `to` 参数可选
 
-### M16.12.4 统计页面渲染
+### M20.12.4 统计页面渲染
 
 ```
 bsk navigate ${BASE}settings/ai/mcp/stats --session <id> --wait-until networkidle
 bsk snapshot --session <id>
-bsk screenshot --session <id> --out dogfood-output/m16.12.4-stats-page.png
+bsk screenshot --session <id> --out dogfood-output/m20.12.4-stats-page.png
 ```
 
 Assertions:
@@ -1109,7 +1109,7 @@ Assertions:
 - [ ] 失败率趋势折线图渲染 (或空态)
 - [ ] `[console]` zero errors
 
-### M16.12.5 统计页面日期切换
+### M20.12.5 统计页面日期切换
 
 ```
 bsk snapshot --session <id>
@@ -1126,7 +1126,7 @@ Assertions:
 - [ ] 图表重新渲染
 - [ ] `[console]` zero errors
 
-### M16.12.6 空数据状态
+### M20.12.6 空数据状态
 
 ```bash
 # 对无审计数据的 family 查询
@@ -1145,7 +1145,7 @@ Assertions:
 - [ ] 无渲染错误
 - [ ] `[console]` zero errors
 
-### M16.12.7 非 owner 无法访问统计页
+### M20.12.7 非 owner 无法访问统计页
 
 ```
 # 使用 member 角色账户 (deferred — 需要 member 账户)
@@ -1156,7 +1156,7 @@ Assertions:
 - [ ] 非 owner 访问统计页 → 重定向到 `/settings/ai/mcp` + toast 提示
 - [ ] 非 owner 卡片摘要行只读 (不可点击导航)
 
-### M16.12.8 非 owner GET /stats → 403
+### M20.12.8 非 owner GET /stats → 403
 
 ```bash
 # 使用 member token (deferred)
@@ -1168,11 +1168,11 @@ Assertions:
 
 ---
 
-## M16.13 — 工具目录 API (Phase 2, P2-R3 UI side)
+## M20.13 — 工具目录 API (Phase 2, P2-R3 UI side)
 
 API: `GET /api/v1/ai/mcp-token/tools`
 
-### M16.13.1 工具目录返回完整列表
+### M20.13.1 工具目录返回完整列表
 
 ```bash
 TOOLS=$(curl -s -H "$AUTH" "${API_BASE}/ai/mcp-token/tools")
@@ -1188,11 +1188,11 @@ Assertions:
 
 ---
 
-## M16.14 — GET /ai/mcp-token 元数据只读安全 (Phase 1, R14)
+## M20.14 — GET /ai/mcp-token 元数据只读安全 (Phase 1, R14)
 
 API: `GET /api/v1/ai/mcp-token`
 
-### M16.14.1 GET 不返回 hash 或明文
+### M20.14.1 GET 不返回 hash 或明文
 
 ```bash
 RESP=$(curl -s -H "$AUTH" "${API_BASE}/ai/mcp-token")
@@ -1206,7 +1206,7 @@ Assertions:
 - [ ] `token_prefix` 为 8 字符
 - [ ] `token_last4` 为 4 字符
 
-### M16.14.2 无 token 时 GET → 404
+### M20.14.2 无 token 时 GET → 404
 
 ```bash
 # 先删除 token
@@ -1220,9 +1220,9 @@ Assertions:
 
 ---
 
-## M16.15 — 权限边界 (Phase 1 & 2, R10, R20)
+## M20.15 — 权限边界 (Phase 1 & 2, R10, R20)
 
-### M16.15.1 非 owner (adult member) 查看 token 状态 (只读)
+### M20.15.1 非 owner (adult member) 查看 token 状态 (只读)
 
 > Deferred: 需要 member 角色账户。
 
@@ -1231,7 +1231,7 @@ Assertions:
 - [ ] 开关和按钮 disabled
 - [ ] 无 "生成令牌" / "重新生成" 按钮
 
-### M16.15.2 非 owner 调用管理 API → 403
+### M20.15.2 非 owner 调用管理 API → 403
 
 ```bash
 # 以下 API 全部需要 owner 权限
@@ -1269,72 +1269,72 @@ unset MCP_TOKEN OLD_TOKEN FAMILY_ID
 
 | Case | 标题 | 类型 | 覆盖需求 |
 |------|------|------|----------|
-| M16.1.1 | 无 token 时卡片初始状态 | UI | R15, R16 |
-| M16.1.2 | 首次生成 token | UI | R2, R11, R16 |
-| M16.1.3 | API 验证: 生成返回明文 | API | R1, R2, R11 |
-| M16.2.1 | Token 掩码显示 | UI | R16 |
-| M16.2.2 | 眼睛切换 + 10s 自动遮罩 | UI | R16 |
-| M16.2.3 | 复制到剪贴板 | UI | R16 |
-| M16.2.4 | 过期时间选择器 | UI | R18 |
-| M16.3.1 | Bearer token 认证连接 | API | R7, R9 |
-| M16.3.2 | 无效 token → 401 | API | R9 |
-| M16.3.3 | allow_external=False → 403 | API | R5, R9 |
-| M16.3.4 | 过期 token → 401 | API | R9 |
-| M16.3.5 | Query param 认证 + 审计 WARNING | API | R6, R7 |
-| M16.3.6 | 已撤销 token → 401 | API | R3, R9 |
-| M16.3.7 | User-Agent 控制字符清洗 | API | P3-sec |
-| M16.4.1 | 仅读工具 (allow_write=False) | API | R5 |
-| M16.4.2 | 包含写工具 (allow_write=True) | API | R5, R12 |
-| M16.4.3 | allow_external 开关确认对话框 | UI | R17 |
-| M16.4.4 | allow_write 开关确认对话框 | UI | R17 |
-| M16.5.1 | 合成用户不在成员列表 | API | R4 |
-| M16.5.2 | 合成用户无法登录 | API | R4 |
-| M16.5.3 | 合成用户 role 字段长度 | API | bug-fix |
-| M16.6.1 | 内部 agent 路径不受影响 | API | R21 |
-| M16.6.2 | bootstrap 系统 MCP server 不变 | API | R22 |
-| M16.7.1 | 前端轮转确认对话框 | UI | R3, R16 |
-| M16.7.2 | 撤销 token (DELETE) | API | R13 |
-| M16.7.3 | 撤销后前端状态 | UI | R13, R15 |
-| M16.8.1 | 默认 allowed_tools=null | API | P2-R1 |
-| M16.8.2 | 工具权限弹窗 — 全选状态 | UI | P2-R3 |
-| M16.8.3 | 取消勾选一个工具并保存 | UI | P2-R3 |
-| M16.8.4 | 无效工具名 → 400 | API | P2-R3 |
-| M16.8.5 | allowed_tools=null 重置 | API | P2-R3 |
-| M16.8.6 | allowed_tools=[] 无工具 | API | P2-R3 |
-| M16.8.7 | "全部启用" → PATCH null | UI | P2-R3 |
-| M16.8.8 | 隐藏写工具不被保存到后端 | UI | P1-fix |
-| M16.9.1 | connect 事件审计 | API | P2-R4, P2-R6 |
-| M16.9.2 | tool_call 事件审计 | API | P2-R4, P2-R6 |
-| M16.9.3 | 内部路径无审计行 | API | P2-R5, P2-AE10 |
-| M16.9.4 | args_digest 密钥脱敏 | API | P2-R4 |
-| M16.9.5 | 审计日志分页 | API | P2-R8 |
-| M16.9.6 | 审计日志过滤 | API | P2-R8 |
-| M16.9.7 | 嵌套结构递归脱敏 | Unit | P2-fix |
-| M16.10.1 | 正常速率全部通过 | API | P2-R9 |
-| M16.10.2 | 超过 30/min → 429 | API | P2-R9 |
-| M16.10.3 | 不同 IP 独立计数 | Review | P2-R9 |
-| M16.10.4 | 无效 token 不消耗配额 | API | P2-R10 |
-| M16.10.5 | 速率限制 fail-open | Review | P1-fix |
-| M16.11.1 | 频率突增告警 | Unit | P2-R11 |
-| M16.11.2 | 新来源 IP 告警 | Unit | P2-R11b |
-| M16.11.3 | 高失败率告警 | Unit | P2-R11 |
-| M16.11.4 | 告警去重 | Unit | P2-R13 |
-| M16.11.5 | 通知注册表 mcp_security | UI | P2-R12 |
-| M16.11.6 | ReminderSummary 计数 | API | P2-R12 |
-| M16.11.7 | 动态 count 不影响去重 | Unit | P3-fix |
-| M16.12.1 | 卡片摘要行 | UI | P2-R14 |
-| M16.12.2 | Stats API 聚合数据 | API | P2-R15 |
-| M16.12.3 | Stats API 日期范围 | API | P2-R15 |
-| M16.12.4 | 统计页面渲染 | UI | P2-R16 |
-| M16.12.5 | 统计页面日期切换 | UI | P2-R16 |
-| M16.12.6 | 空数据状态 | UI | P2-R16 |
-| M16.12.7 | 非 owner 无法访问统计页 | UI | P2-R17 |
-| M16.12.8 | 非 owner GET /stats → 403 | API | P2-R17 |
-| M16.13.1 | 工具目录完整列表 | API | P2-R3 |
-| M16.14.1 | GET 不返回 hash 或明文 | API | R14 |
-| M16.14.2 | 无 token 时 GET → 404 | API | R14 |
-| M16.15.1 | 非 owner 只读查看 | UI | R20 |
-| M16.15.2 | 非 owner API → 403 | API | R10 |
+| M20.1.1 | 无 token 时卡片初始状态 | UI | R15, R16 |
+| M20.1.2 | 首次生成 token | UI | R2, R11, R16 |
+| M20.1.3 | API 验证: 生成返回明文 | API | R1, R2, R11 |
+| M20.2.1 | Token 掩码显示 | UI | R16 |
+| M20.2.2 | 眼睛切换 + 10s 自动遮罩 | UI | R16 |
+| M20.2.3 | 复制到剪贴板 | UI | R16 |
+| M20.2.4 | 过期时间选择器 | UI | R18 |
+| M20.3.1 | Bearer token 认证连接 | API | R7, R9 |
+| M20.3.2 | 无效 token → 401 | API | R9 |
+| M20.3.3 | allow_external=False → 403 | API | R5, R9 |
+| M20.3.4 | 过期 token → 401 | API | R9 |
+| M20.3.5 | Query param 认证 + 审计 WARNING | API | R6, R7 |
+| M20.3.6 | 已撤销 token → 401 | API | R3, R9 |
+| M20.3.7 | User-Agent 控制字符清洗 | API | P3-sec |
+| M20.4.1 | 仅读工具 (allow_write=False) | API | R5 |
+| M20.4.2 | 包含写工具 (allow_write=True) | API | R5, R12 |
+| M20.4.3 | allow_external 开关确认对话框 | UI | R17 |
+| M20.4.4 | allow_write 开关确认对话框 | UI | R17 |
+| M20.5.1 | 合成用户不在成员列表 | API | R4 |
+| M20.5.2 | 合成用户无法登录 | API | R4 |
+| M20.5.3 | 合成用户 role 字段长度 | API | bug-fix |
+| M20.6.1 | 内部 agent 路径不受影响 | API | R21 |
+| M20.6.2 | bootstrap 系统 MCP server 不变 | API | R22 |
+| M20.7.1 | 前端轮转确认对话框 | UI | R3, R16 |
+| M20.7.2 | 撤销 token (DELETE) | API | R13 |
+| M20.7.3 | 撤销后前端状态 | UI | R13, R15 |
+| M20.8.1 | 默认 allowed_tools=null | API | P2-R1 |
+| M20.8.2 | 工具权限弹窗 — 全选状态 | UI | P2-R3 |
+| M20.8.3 | 取消勾选一个工具并保存 | UI | P2-R3 |
+| M20.8.4 | 无效工具名 → 400 | API | P2-R3 |
+| M20.8.5 | allowed_tools=null 重置 | API | P2-R3 |
+| M20.8.6 | allowed_tools=[] 无工具 | API | P2-R3 |
+| M20.8.7 | "全部启用" → PATCH null | UI | P2-R3 |
+| M20.8.8 | 隐藏写工具不被保存到后端 | UI | P1-fix |
+| M20.9.1 | connect 事件审计 | API | P2-R4, P2-R6 |
+| M20.9.2 | tool_call 事件审计 | API | P2-R4, P2-R6 |
+| M20.9.3 | 内部路径无审计行 | API | P2-R5, P2-AE10 |
+| M20.9.4 | args_digest 密钥脱敏 | API | P2-R4 |
+| M20.9.5 | 审计日志分页 | API | P2-R8 |
+| M20.9.6 | 审计日志过滤 | API | P2-R8 |
+| M20.9.7 | 嵌套结构递归脱敏 | Unit | P2-fix |
+| M20.10.1 | 正常速率全部通过 | API | P2-R9 |
+| M20.10.2 | 超过 30/min → 429 | API | P2-R9 |
+| M20.10.3 | 不同 IP 独立计数 | Review | P2-R9 |
+| M20.10.4 | 无效 token 不消耗配额 | API | P2-R10 |
+| M20.10.5 | 速率限制 fail-open | Review | P1-fix |
+| M20.11.1 | 频率突增告警 | Unit | P2-R11 |
+| M20.11.2 | 新来源 IP 告警 | Unit | P2-R11b |
+| M20.11.3 | 高失败率告警 | Unit | P2-R11 |
+| M20.11.4 | 告警去重 | Unit | P2-R13 |
+| M20.11.5 | 通知注册表 mcp_security | UI | P2-R12 |
+| M20.11.6 | ReminderSummary 计数 | API | P2-R12 |
+| M20.11.7 | 动态 count 不影响去重 | Unit | P3-fix |
+| M20.12.1 | 卡片摘要行 | UI | P2-R14 |
+| M20.12.2 | Stats API 聚合数据 | API | P2-R15 |
+| M20.12.3 | Stats API 日期范围 | API | P2-R15 |
+| M20.12.4 | 统计页面渲染 | UI | P2-R16 |
+| M20.12.5 | 统计页面日期切换 | UI | P2-R16 |
+| M20.12.6 | 空数据状态 | UI | P2-R16 |
+| M20.12.7 | 非 owner 无法访问统计页 | UI | P2-R17 |
+| M20.12.8 | 非 owner GET /stats → 403 | API | P2-R17 |
+| M20.13.1 | 工具目录完整列表 | API | P2-R3 |
+| M20.14.1 | GET 不返回 hash 或明文 | API | R14 |
+| M20.14.2 | 无 token 时 GET → 404 | API | R14 |
+| M20.15.1 | 非 owner 只读查看 | UI | R20 |
+| M20.15.2 | 非 owner API → 403 | API | R10 |
 
 **Total: 66 cases** (21 UI + 37 API + 6 Unit + 2 Code Review)
 
@@ -1342,17 +1342,17 @@ unset MCP_TOKEN OLD_TOKEN FAMILY_ID
 
 | Case | 验证的修复 | 严重度 |
 |------|-----------|--------|
-| M16.3.7 | User-Agent 控制字符清洗 | P3 |
-| M16.5.3 | `users.role` VARCHAR(20) 扩展 | 仿真 bug |
-| M16.8.8 | 工具选择器隐藏工具过滤 | P1 |
-| M16.9.7 | 嵌套结构递归脱敏 | P2 |
-| M16.10.5 | 速率限制 fail-open | P1 |
-| M16.11.7 | 动态 count 不影响去重 | P3 |
+| M20.3.7 | User-Agent 控制字符清洗 | P3 |
+| M20.5.3 | `users.role` VARCHAR(20) 扩展 | 仿真 bug |
+| M20.8.8 | 工具选择器隐藏工具过滤 | P1 |
+| M20.9.7 | 嵌套结构递归脱敏 | P2 |
+| M20.10.5 | 速率限制 fail-open | P1 |
+| M20.11.7 | 动态 count 不影响去重 | P3 |
 
 > 其余修复项通过既有用例间接覆盖:
-> - **P0 dialect-aware 日期格式化**: M16.12.2 (Stats API 在 PostgreSQL 上运行)
-> - **P1 timing-safe hash**: M16.3.x (认证行为正确性)
-> - **P2 per-alert commit**: M16.11.1-3 (告警产生正确性)
+> - **P0 dialect-aware 日期格式化**: M20.12.2 (Stats API 在 PostgreSQL 上运行)
+> - **P1 timing-safe hash**: M20.3.x (认证行为正确性)
+> - **P2 per-alert commit**: M20.11.1-3 (告警产生正确性)
 
 ### 需求补齐记录
 
@@ -1363,7 +1363,7 @@ unset MCP_TOKEN OLD_TOKEN FAMILY_ID
 - 实现: `mcp_anomaly.py` Threshold 3，`new_source_ip` 告警类型
 - 配置: `MCP_ANOMALY_NEW_IP_WINDOW_MINUTES` (默认 5) / `MCP_ANOMALY_NEW_IP_HISTORY_DAYS` (默认 30)
 - 基线语义: family 无历史记录时不告警 (首个连接无参照基线，否则必然误报)
-- 覆盖: M16.11.2 (7 个单元测试)
+- 覆盖: M20.11.2 (7 个单元测试)
 
 **2. P2-R13 按条件去重** — 初版实际被 `ensure_reminder` 的
 `(family_id, reminder_type, asset_id, active)` 幂等键覆盖，导致每个家庭同时只能存在
@@ -1371,6 +1371,6 @@ unset MCP_TOKEN OLD_TOKEN FAMILY_ID
 
 - 修复: `ensure_reminder(..., dedup_by_title=True)` 选择性让 title 参与幂等判断（opt-in，其他调用方行为不变）
 - 标题改为条件标识（IP / 固定短语），度量值移入 body
-- 覆盖: M16.11.4 (4 个单元测试 + 61 个通知测试回归)
+- 覆盖: M20.11.4 (4 个单元测试 + 61 个通知测试回归)
 
 ---
