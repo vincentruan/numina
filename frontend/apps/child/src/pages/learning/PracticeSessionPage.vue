@@ -291,7 +291,7 @@ function load() {
 <style scoped>
 .practice-session-page {
   min-height: 100%;
-  padding-bottom: 24px;
+  padding-bottom: calc(var(--van-tabbar-height) + env(safe-area-inset-bottom));
 }
 
 .page-title {

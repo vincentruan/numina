@@ -87,8 +87,6 @@ function subjectLabel(subject: string): string {
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-lg);
   padding: 16px;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 200px;
 }
 
 .cluster-territory--frontier {
