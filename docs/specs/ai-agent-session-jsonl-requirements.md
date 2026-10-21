@@ -588,7 +588,7 @@ session_id = "sess-{YYYYMMDD}-{uuid8}"
 
 ### 10.1 优先复用 DeerFlow 已有能力
 
-按照 agent/CLAUDE.md 的原则：优先复用 DeerFlow Harness 能力，只在确认需求超出 harness 边界后才引入新方案。
+按照 agent/AGENTS.md 的原则：优先复用 DeerFlow Harness 能力，只在确认需求超出 harness 边界后才引入新方案。
 
 ┌───────────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────┐
 │         DeerFlow 能力         │                                        复用方式                                        │

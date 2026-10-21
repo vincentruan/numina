@@ -865,7 +865,7 @@ async function handleBranch(messageId: string, messageIds: string[]) {
     const cloneWarnKey = branchCloneWarnKey(response.workspace_clone_mode)
     if (cloneWarnKey) {
       // Vant 4 ToastType is text|loading|success|fail — 'warning' is invalid
-      // and renders no icon. Use icon: 'warning-o' per frontend/CLAUDE.md
+      // and renders no icon. Use icon: 'warning-o' per frontend/AGENTS.md
       // §Key Invariants (cf. ChangePasswordPage.vue).
       showToast({ message: t(cloneWarnKey), icon: 'warning-o' })
     }

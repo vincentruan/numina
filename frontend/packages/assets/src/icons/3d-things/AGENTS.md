@@ -1,4 +1,4 @@
-# 3D Icon Directory — CLAUDE.md
+# 3D Icon Directory — AGENTS.md
 
 ## Directory Structure
 
@@ -131,7 +131,7 @@ Preset resources, not user-created — no watermark protection needed.
 3. Update `CATEGORY_DEFS` array in `scripts/build-icon-manifest.ts`
 4. Update `exports` field in `frontend/packages/assets/package.json`
 5. Run deploy + generate + build scripts
-6. Update this CLAUDE.md's directory structure
+6. Update this AGENTS.md's directory structure
 
 ### Removing categories
 

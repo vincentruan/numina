@@ -222,7 +222,7 @@ All services behind `docker-compose` + nginx on port 80.
 
 ### Mode `dev` (local vite + uvicorn, separate ports)
 
-Local dev servers started manually (NOT by this skill — see CLAUDE.md "Never
+Local dev servers started manually (NOT by this skill — see AGENTS.md "Never
 run dev servers from automated agents"). The user must already have running:
 `pnpm dev` (main:5173, child:5174) + `uv run uvicorn` (backend:8000, agent:8001,
 worker:8002). Vite proxies `/api` → backend:8000 and `/api/threads` → agent:8001,

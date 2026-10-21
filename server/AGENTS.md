@@ -1,4 +1,4 @@
-# server/CLAUDE.md
+# server/AGENTS.md
 
 Server workspace guidance. All Python apps (`backend`, `agent`, `scheduler_worker`) and shared packages (`core`, `db`, `domain`, `security`, `storage`, `stream_bridge`) live here in a single `uv` workspace.
 
@@ -80,40 +80,23 @@ obj = MySchema.model_validate(orm_instance)
 
 ## Cross-Cutting Conventions
 
-### URL Style — No Trailing Slash, No Redirects
+### URL Style & API Return Codes
 
-All API endpoints must respond with 200 directly — no 307 redirects.
-
-`redirect_slashes=False` is set in `app/main.py`. Router root-path decorators must use `""` not `"/"`:
-
-```python
-# ✅ Correct
-@router.get("")
-@router.post("")
-
-# ❌ Wrong — FastAPI issues 307 redirect, breaks HTTPS behind nginx
-@router.get("/")
-```
-
-### API Return Code Conventions
-
-- **Auth endpoints return 200** — `register`, `login`, `join-family` return `TokenResponse` with status 200, not 201.
-- **Asset/Liability POST endpoints return 201** — explicit `status_code=201` on router decorators.
-- `TokenResponse` does not include `user` — frontend must call `/auth/me` after login.
+See root [AGENTS.md](../AGENTS.md) §URL Style and §API Return Code Conventions — the root file owns both rules.
 
 ### Error Messages
 
-Backend HTTP exceptions use Chinese detail strings: `raise HTTPException(status_code=404, detail="Asset not found")`. Note: actual code uses Chinese strings (e.g., `"资产不存在"`) — this documents the pattern, not the literal string to use.
+Backend HTTP exceptions use Chinese detail strings: `raise HTTPException(status_code=404, detail="资产不存在")`.
 
 Backend uses `AppError` (`app/errors/exceptions.py`) with `ErrorCode` enum. The global `error_handlers.py` catches `AppError`, `RequestValidationError`, `StarletteHTTPException`, and `StorageError`, returning a unified JSON envelope: `{"code": "ERROR_CODE", "message": "localized message", "data": null, "request_id": "..."}`. Language is selected via `Accept-Language` header.
 
 ### Snowflake ID Serialization
 
-All response schemas containing IDs inherit from `SnowflakeBase` (defined in `apps/backend/app/schemas/base.py`). IDs defined as `int` in schemas are automatically serialized as `str` in JSON output (JS loses precision on integers > 2⁵³). See `apps/backend/CLAUDE.md` §Snowflake ID Serialization for the full pattern.
+All response schemas containing IDs inherit from `SnowflakeBase` (defined in `apps/backend/app/schemas/base.py`). IDs defined as `int` in schemas are automatically serialized as `str` in JSON output (JS loses precision on integers > 2⁵³). See `apps/backend/AGENTS.md` §Snowflake ID Serialization for the full pattern.
 
 ### Scheduler Worker Conventions
 
-All `scheduler.add_job()` calls must include `max_instances=1`, `coalesce=True`, `replace_existing=True`. See `apps/scheduler_worker/CLAUDE.md` for details.
+All `scheduler.add_job()` calls must include `max_instances=1`, `coalesce=True`, `replace_existing=True`. See `apps/scheduler_worker/AGENTS.md` for details.
 
 ### Run Commands from Workspace Root
 
@@ -192,5 +175,5 @@ Check these docs before working in `server/` — they document verified fixes fo
 
 ## Links
 
-- Root [`CLAUDE.md`](../CLAUDE.md) — behavioral guidelines, project overview
-- Module CLAUDE.md files: [`apps/backend`](./apps/backend/CLAUDE.md), [`apps/agent`](./apps/agent/CLAUDE.md), [`apps/scheduler_worker`](./apps/scheduler_worker/CLAUDE.md), [`packages/core`](./packages/core/CLAUDE.md), [`packages/db`](./packages/db/CLAUDE.md), [`packages/domain`](./packages/domain/CLAUDE.md), [`packages/security`](./packages/security/CLAUDE.md), [`packages/storage`](./packages/storage/CLAUDE.md)
+- Root [`AGENTS.md`](../AGENTS.md) — behavioral guidelines, project overview
+- Module AGENTS.md files: [`apps/backend`](./apps/backend/AGENTS.md), [`apps/agent`](./apps/agent/AGENTS.md), [`apps/scheduler_worker`](./apps/scheduler_worker/AGENTS.md), [`packages/core`](./packages/core/AGENTS.md), [`packages/db`](./packages/db/AGENTS.md), [`packages/domain`](./packages/domain/AGENTS.md), [`packages/security`](./packages/security/AGENTS.md), [`packages/storage`](./packages/storage/AGENTS.md)

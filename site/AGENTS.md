@@ -1,6 +1,6 @@
-# CLAUDE.md
+# site/AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for AI coding agents working in the site module. See root [`AGENTS.md`](../AGENTS.md) for repository-wide rules.
 
 ## Site Module Purpose
 

@@ -130,9 +130,9 @@ DeerFlow 适配器已经实现了 **强多租户隔离**：
 3. `SKILL.md` 的「Run modes」中增加 `security` 模式（指向 Area 11）。
 4. `SKILL.md` 的「Area summary」表格中增加 Area 11。
 
-### Step 2: 更新 agent CLAUDE.md 安全规则
+### Step 2: 更新 agent AGENTS.md 安全规则
 
-将本次评估识别的安全规则写入 `server/apps/agent/CLAUDE.md`，包括：
+将本次评估识别的安全规则写入 `server/apps/agent/AGENTS.md`，包括：
 
 - 用户输入必须视为不可信数据，进入 LLM 前需过滤/包裹。
 - `/ai/chat` 主路径必须增加注入防御（当前缺口）。
@@ -141,7 +141,7 @@ DeerFlow 适配器已经实现了 **强多租户隔离**：
 - 自定义 agent 必须声明 `allowed-tools`（禁止 `None` → 全部工具）。
 - Thread goal 文本必须过滤/包裹。
 - agent 层必须实现基于 family_id + user_id 的速率限制。
-- 新增/修改 AI 调用或智能体时，必须同步更新 `agent/CLAUDE.md` 安全规则。
+- 新增/修改 AI 调用或智能体时，必须同步更新 `agent/AGENTS.md` 安全规则。
 
 ### Step 3: 修复 R1-R6 后补充回归用例
 
@@ -196,11 +196,11 @@ DeerFlow 适配器已经实现了 **强多租户隔离**：
    - 长度限制
 3. 如果使用 DeerFlow 多步执行，确认 `skill_id` 已声明 `allowed-tools` 且范围最小化。
 4. 如果新增自定义 agent / skill 配置入口，确认 `family_id` 过滤、`RESERVED_NAMES` 保护、`allowed-tools` 必填。
-5. 调用 `/oh-my-claudecode:claude-md-improver` 技能（或手动按相同标准）将新增安全规则追加到 `server/apps/agent/CLAUDE.md` 的 §Security Rules。
+5. 调用 `/oh-my-claudecode:claude-md-improver` 技能（或手动按相同标准）将新增安全规则追加到 `server/apps/agent/AGENTS.md` 的 §Security Rules。
 
 ---
 
-## 附录：建议纳入 agent/CLAUDE.md 的安全规则（最终文本见 claude-md-improver 输出）
+## 附录：建议纳入 agent/AGENTS.md 的安全规则（最终文本见 claude-md-improver 输出）
 
 ```markdown
 ## Security Rules for AI/Agent Inputs

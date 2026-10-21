@@ -104,5 +104,5 @@ The framework angle: in a Vue 3 SFC with `<style scoped>`, scoped styles are pos
 
 - `frontend/apps/main/src/components/insights/InsightsTab.vue` — original site of the bug; refactored to modifier classes (`.isc-card--{yoy,high,low,long,top}`)
 - `frontend/apps/main/src/style.css` — design tokens (`--text-primary`, `--text-secondary`, `--card-bg`, `--color-lavender`) consumed by the dark-mode rules
-- `frontend/apps/main/CLAUDE.md §Dark/Light mode` — project rule mandating CSS variable consumption over hardcoded colors; this bug was a violation of that rule via inline `style` attribute, not via raw color literals in a class
+- `frontend/apps/main/AGENTS.md §Dark/Light mode` — project rule mandating CSS variable consumption over hardcoded colors; this bug was a violation of that rule via inline `style` attribute, not via raw color literals in a class
 - `frontend/apps/main/DESIGN.md` — Together AI-inspired dual-atmosphere palette; dark mode uses `#010120` / `#12122a` as the canvas

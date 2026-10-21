@@ -1,7 +1,7 @@
-# backend/CLAUDE.md
+# backend/AGENTS.md
 
 Module-specific guidance for the Python FastAPI backend.
-See root [`CLAUDE.md`](../CLAUDE.md) for behavioral guidelines and cross-cutting conventions.
+See root [`AGENTS.md`](../../../AGENTS.md) for behavioral guidelines and cross-cutting conventions.
 
 ## Cache Backend
 
@@ -10,13 +10,13 @@ Controlled by `CACHE_BACKEND` env var (default: `"memory"`). Set to `"redis"` to
 ## Key Invariants
 
 - **Always run `alembic upgrade head` before starting the app on an existing database.** `Base.metadata.create_all()` only creates tables for fresh installs — it does not apply migrations. Skipping causes `OperationalError: no such column` on endpoints that read newly added columns.
-- **Import direction** — see [server/CLAUDE.md](../../CLAUDE.md) §Import Direction.
+- **Import direction** — see [server/AGENTS.md](../../AGENTS.md) §Import Direction.
 - **Error detail convention** — backend uses `AppError` (`app/errors/exceptions.py`) with `ErrorCode` enum (`app/errors/codes.py`). Each error code maps to a status code via `ERROR_META` and to i18n messages via `app/errors/locales/{zh-CN,en-US}.json`. The global `error_handlers.py` catches `AppError`, `RequestValidationError`, `StarletteHTTPException`, and `StorageError`, returning a unified JSON envelope: `{"code": "ERROR_CODE", "message": "localized message", "data": null, "request_id": "..."}`. Language is selected via `Accept-Language` header. Frontend catches via axios interceptor and maps `code` to i18n key `t('errors.ERROR_CODE')`.
 - **Agent Communication** — Never use raw `httpx.AsyncClient` to call Agent microservices. Always use `apps.backend.app.services.agent_client.AgentClient`. It guarantees tenant isolation by automatically injecting `X-Family-Id`, `X-User-Id`, and `X-Agent-Token` headers.
 
 ## Snowflake ID Serialization
 
-See [`server/CLAUDE.md`](../../CLAUDE.md) §Snowflake ID Serialization for the full pattern. Backend-specific pitfalls:
+See [`server/AGENTS.md`](../../AGENTS.md) §Snowflake ID Serialization for the full pattern. Backend-specific pitfalls:
 
 - **SSE endpoints bypass `EnvelopeResponse`** → Use `SnowflakeResponse` (from `app.responses`) instead of raw `JSONResponse` for endpoints that return BigInteger IDs outside the envelope (e.g. queued-task 202 responses). `SnowflakeResponse` has the same `_convert_snowflake_ids` logic but no envelope wrapping.
 - **Don't use plain BaseModel for schemas with IDs** → Use `SnowflakeBase`
@@ -25,7 +25,7 @@ See [`server/CLAUDE.md`](../../CLAUDE.md) §Snowflake ID Serialization for the f
 
 ## Backend Troubleshooting Guide
 
-For backend-specific troubleshooting, see [`server/CLAUDE.md`](../../CLAUDE.md) §Solutions (Backend/Agent Lessons Learned).
+For backend-specific troubleshooting, see [`server/AGENTS.md`](../../AGENTS.md) §Solutions (Backend/Agent Lessons Learned).
 
 ## App Layout
 
@@ -112,7 +112,7 @@ All routers live in `app/routers/` and are mounted with `prefix="/api/v1"` in `a
 
 ### AI (frontend → backend → agent dispatch)
 
-Backend AI routers are the frontend's entry point. Multi-step capabilities proxy to the agent via `AgentClient.stream` (SSE, `X-Agent-Token`); the agent runs them as `stream_run` apps (`numina`/`asset-report`/`import-parse`/`finance-coach`/`wish-advice`/`learning-tutor`) — see `server/apps/agent/CLAUDE.md` §Runtime & Dispatch. Lightweight single-call capabilities (suggest) call the agent's lightweight LLM endpoint directly.
+Backend AI routers are the frontend's entry point. Multi-step capabilities proxy to the agent via `AgentClient.stream` (SSE, `X-Agent-Token`); the agent runs them as `stream_run` apps (`numina`/`asset-report`/`import-parse`/`finance-coach`/`wish-advice`/`learning-tutor`) — see `server/apps/agent/AGENTS.md` §Runtime & Dispatch. Lightweight single-call capabilities (suggest) call the agent's lightweight LLM endpoint directly.
 
 | Router | Final prefix | Purpose | Dispatch |
 |--------|--------------|---------|----------|
@@ -144,7 +144,7 @@ Backend AI routers are the frontend's entry point. Multi-step capabilities proxy
 | `admin_ai_extraction` | `/api/v1/admin` | Admin tooling for AI extraction review |
 | `admin_audit_logs` | `/api/v1/admin` | Admin audit log viewing |
 
-When adding a new router: register it in `app/main.py`, set `prefix=""` for root-path decorators (see §URL Style in root [CLAUDE.md](../../../CLAUDE.md)), and inherit response schemas from `SnowflakeBase`.
+When adding a new router: register it in `app/main.py`, set `prefix=""` for root-path decorators (see §URL Style in root [AGENTS.md](../../../AGENTS.md)), and inherit response schemas from `SnowflakeBase`.
 
 ## Patterns
 
@@ -199,6 +199,6 @@ These must hold for all MCP tool execution paths:
 
 ## Links
 
-- Root [`CLAUDE.md`](../CLAUDE.md) — behavioral guidelines, cross-cutting conventions
+- Root [`AGENTS.md`](../../../AGENTS.md) — behavioral guidelines, cross-cutting conventions
 - Module [`README.md`](./README.md) — quick start, architecture, API endpoints
-- [`docs/solutions/`](../docs/solutions/) — documented solutions to past problems
+- [`docs/solutions/`](../../../docs/solutions/) — documented solutions to past problems
