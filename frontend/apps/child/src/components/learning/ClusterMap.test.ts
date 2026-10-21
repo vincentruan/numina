@@ -346,6 +346,61 @@ describe('ClusterMap', () => {
     scrollSpy.mockRestore()
   })
 
+  it('never renders a territory card without nodes', async () => {
+    // Regression: clusters.json stores 183 rows over only 82 distinct
+    // (subject, domain, age_group) tuples, and every row of a colliding key
+    // reported the same nonzero topic_count. Filtering on topic_count alone
+    // therefore rendered ~100 titled "(0)" cards.
+    mockGetClusters.mockResolvedValue([
+      // Two rows sharing one match key — the API now collapses these, but
+      // the UI must stay safe if a colliding row ever reappears.
+      makeCluster({ id: 'cl1', domain: 'Addition', topic_count: 9 }),
+      makeCluster({ id: 'cl2', domain: 'Addition', topic_count: 9 }),
+      // A cluster this child has no progress in: topic_count is the
+      // taxonomy's, not the child's.
+      makeCluster({ id: 'cl3', domain: 'Fractions', topic_count: 7 }),
+    ])
+    const wrapper = mountMap([makeItem({ topic: makeTopic({ id: 't1', domain: 'Addition' }) })])
+    await flushPromises()
+
+    const territories = wrapper.findAll('.cluster-territory')
+    expect(territories).toHaveLength(1)
+    expect(territories[0].attributes('data-cluster-domain')).toBe('Addition')
+    // Every rendered territory holds at least one node.
+    for (const t of territories) {
+      expect(t.findAll('.topic-node').length).toBeGreaterThan(0)
+    }
+    expect(wrapper.text()).not.toContain('(0)')
+  })
+
+  it('falls back to the domain when no cluster matches the age_group', async () => {
+    mockGetClusters.mockResolvedValue([
+      makeCluster({ id: 'cl1', domain: 'Addition', age_group: 'low', topic_count: 1 }),
+    ])
+    const wrapper = mountMap([
+      makeItem({ topic: makeTopic({ id: 't1', domain: 'Addition', age_group: 'mid' }) }),
+    ])
+    await flushPromises()
+
+    // Matched on subject+domain, so it belongs to Addition rather than the
+    // "other" bucket.
+    const territories = wrapper.findAll('.cluster-territory')
+    expect(territories).toHaveLength(1)
+    expect(territories[0].attributes('data-cluster-domain')).toBe('Addition')
+    expect(wrapper.text()).not.toContain('__other__')
+  })
+
+  it('labels the synthetic bucket with a translated name, not its raw id', async () => {
+    mockGetClusters.mockResolvedValue([])
+    const wrapper = mountMap([
+      makeItem({ topic: makeTopic({ id: 't1', domain: 'Unclustered Domain' }) }),
+    ])
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('其他')
+    expect(wrapper.text()).not.toContain('__other__')
+  })
+
   it('only matches topics of the selected subject', async () => {
     mockGetClusters.mockResolvedValue([makeCluster({ topic_count: 1 })])
     const wrapper = mountMap(

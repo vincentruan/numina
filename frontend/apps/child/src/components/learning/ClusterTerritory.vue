@@ -66,6 +66,9 @@ defineEmits<{
 const displayBridges = computed(() => props.bridges.slice(0, 2))
 
 function domainLabel(domain: string): string {
+  // The synthetic bucket for topics whose domain has no cluster. Its raw id
+  // ("__other__") must never reach the UI.
+  if (domain === '__other__') return t('learning.cluster.otherDomain')
   const key = `learning.domains.${domain}`
   const translated = t(key)
   return translated === key ? domain : translated

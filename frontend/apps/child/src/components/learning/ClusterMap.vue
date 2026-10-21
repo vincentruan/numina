@@ -60,7 +60,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'ClusterMap' })
 
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type {
@@ -137,9 +137,21 @@ const territories = computed<Territory[]>(() => {
   const unmatched: ProgressWithTopic[] = []
 
   for (const item of subjectItems) {
-    const matchingCluster = clusters.value.find(
-      (c) => c.subject === item.topic.subject && c.domain === (item.topic.domain ?? '') && c.age_group === item.topic.age_group,
-    )
+    // Prefer the exact 3-key match; the API now returns one row per key, but
+    // a key it never had (e.g. a topic whose age_group is missing from
+    // clusters.json) should still land in its domain territory rather than be
+    // dropped into "其他".
+    const domain = item.topic.domain ?? ''
+    const matchingCluster =
+      clusters.value.find(
+        (c) =>
+          c.subject === item.topic.subject &&
+          c.domain === domain &&
+          c.age_group === item.topic.age_group,
+      ) ??
+      clusters.value.find(
+        (c) => c.subject === item.topic.subject && c.domain === domain,
+      )
     if (matchingCluster) {
       if (!clusterMap.has(matchingCluster.id)) clusterMap.set(matchingCluster.id, [])
       clusterMap.get(matchingCluster.id)!.push(item)
@@ -148,11 +160,15 @@ const territories = computed<Territory[]>(() => {
     }
   }
 
+  // Only render territories that actually hold nodes. ``topic_count`` is the
+  // taxonomy's count for the (subject, domain, age_group) key, not this
+  // child's — trusting it would render empty cards wherever the API's row set
+  // and the progress rows disagree.
   const result: Territory[] = clusters.value
-    .filter((c) => clusterMap.has(c.id) || c.topic_count > 0)
+    .filter((c) => clusterMap.has(c.id))
     .map((c) => ({
       cluster: c,
-      items: clusterMap.get(c.id) || [],
+      items: clusterMap.get(c.id)!,
       bridges: bridges.value.filter((b) => b.from_cluster_domain === c.domain),
     }))
 

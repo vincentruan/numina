@@ -222,6 +222,71 @@ class TestMapNavigationIndex:
         assert target["age_group"] == "mid"
 
 
+class TestClusterRowCollapse:
+    """clusters.json stores 183 rows over only 82 (subject, domain, age_group)
+    tuples. The endpoint must return one row per match key, or the client
+    renders duplicate territories whose nodes can only land in the first."""
+
+    def test_collapses_rows_sharing_a_match_key(self, client, child_auth_headers, db):
+        # Three stored rows, same (subject, domain, age_group) — as the seeder
+        # produces when several clusters.json entries bucket into one age_group.
+        for start in (5, 8, 11):
+            db.add(
+                LearningCluster(
+                    subject="mathematics",
+                    domain="Addition",
+                    age_range_start=start,
+                    age_group="low",
+                    summary=f"ages {start}+",
+                    source_taxonomy="beijing",
+                )
+            )
+        db.commit()
+
+        resp = client.get(
+            "/api/v1/child/learning/clusters?subject=mathematics",
+            headers=child_auth_headers,
+        )
+        assert resp.status_code == 200
+        rows = [r for r in resp.json()["data"] if r["domain"] == "Addition"]
+        assert len(rows) == 1, "colliding rows must collapse to one territory"
+        # The representative starts at the earliest age the territory covers.
+        assert rows[0]["age_range_start"] == 5
+
+    def test_collapsed_count_is_the_key_total_once(
+        self, client, child_auth_headers, db
+    ):
+        db.add(
+            LearningCluster(
+                subject="mathematics", domain="Addition", age_range_start=5,
+                age_group="low", summary="a", source_taxonomy="beijing",
+            )
+        )
+        db.add(
+            LearningCluster(
+                subject="mathematics", domain="Addition", age_range_start=8,
+                age_group="low", summary="b", source_taxonomy="beijing",
+            )
+        )
+        t = _make_topic(
+            db, key="collapse-topic", subject="mathematics", domain="Addition",
+            source_taxonomy="beijing", age_group="low",
+        )
+        db.flush()
+        from apps.backend.app.models.user import User  # noqa: F401  (ensure mapper)
+        db.commit()
+        assert t.id
+
+        resp = client.get(
+            "/api/v1/child/learning/clusters?subject=mathematics",
+            headers=child_auth_headers,
+        )
+        rows = [r for r in resp.json()["data"] if r["domain"] == "Addition"]
+        assert len(rows) == 1
+        # Counted once for the key, not repeated per stored row.
+        assert rows[0]["topic_count"] == 1
+
+
 class TestMapIndex:
     """The slim /map/index payload the cluster map actually loads."""
 

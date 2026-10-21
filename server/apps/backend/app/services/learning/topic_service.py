@@ -238,11 +238,24 @@ def list_clusters_with_topic_counts(
     }
 
     clusters = list_clusters(db, subject=subject, source_taxonomy=source_taxonomy)
-    result = []
+
+    # ``learning_clusters`` is unique on (subject, domain, age_range_start), so
+    # one territory can be stored several times — clusters.json has 183 rows
+    # but only 82 distinct (subject, domain, age_group) tuples. Topics are
+    # grouped by that 3-key, so every row of a colliding key reports the same
+    # topic_count and the client cannot tell them apart; matching by the key
+    # then leaves all but the first row with no nodes at all.
+    #
+    # Collapse to one row per 3-key here so the contract is unique by
+    # construction. The representative keeps the lowest age_range_start (the
+    # entry the territory begins at) and the count for the key, counted once.
+    collapsed: dict[tuple[str, str | None, str], dict] = {}
     for c in clusters:
-        count = counts.get((c.subject, c.domain, c.age_group), 0)
-        result.append(
-            {
+        key = (c.subject, c.domain, c.age_group)
+        count = counts.get(key, 0)
+        existing = collapsed.get(key)
+        if existing is None:
+            collapsed[key] = {
                 "id": c.id,
                 "subject": c.subject,
                 "domain": c.domain,
@@ -251,8 +264,17 @@ def list_clusters_with_topic_counts(
                 "summary": c.summary,
                 "topic_count": count,
             }
-        )
-    return result
+            continue
+        start = c.age_range_start
+        if start is not None and (
+            existing["age_range_start"] is None or start < existing["age_range_start"]
+        ):
+            existing["age_range_start"] = start
+            existing["summary"] = c.summary or existing["summary"]
+        elif not existing["summary"] and c.summary:
+            existing["summary"] = c.summary
+
+    return list(collapsed.values())
 
 
 def list_subjects(
