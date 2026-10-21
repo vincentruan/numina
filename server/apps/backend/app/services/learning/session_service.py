@@ -26,7 +26,7 @@ def _build_difficulty_warning(db: Session, child_id: int, topic) -> dict | None:
         get_unmet_prerequisites,
     )
     from apps.backend.app.services.learning.topic_service import (
-        locale_to_source_taxonomy,
+        get_effective_source_taxonomy,
     )
     from packages.db.models.user import User
 
@@ -36,7 +36,7 @@ def _build_difficulty_warning(db: Session, child_id: int, topic) -> dict | None:
 
     child_age = _compute_age(child.birthday)
     child_age_group = _age_to_group(child_age)
-    source_taxonomy = locale_to_source_taxonomy(child.language)
+    source_taxonomy = get_effective_source_taxonomy(db, child.language)
 
     # Age difficulty check
     age_warning = None
@@ -84,7 +84,7 @@ def create_session(
     age group exceeds the child's or prerequisites are unmet.
     """
     from apps.backend.app.services.learning.topic_service import (
-        locale_to_source_taxonomy,
+        get_effective_source_taxonomy,
     )
     from packages.db.models.learning.topic import LearningTopic
     from packages.db.models.user import User
@@ -95,7 +95,7 @@ def create_session(
 
     # Cross-source guard: ensure the topic belongs to the child's locale taxonomy
     child = db.query(User).filter(User.id == child_id).first()
-    expected_source = locale_to_source_taxonomy(child.language if child else None)
+    expected_source = get_effective_source_taxonomy(db, child.language if child else None)
     if topic.source_taxonomy != expected_source:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
 

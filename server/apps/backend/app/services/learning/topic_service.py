@@ -22,6 +22,35 @@ def locale_to_source_taxonomy(language: str | None) -> str:
     return SOURCE_TAXONOMY_BEIJING if language == "zh-CN" else SOURCE_TAXONOMY_OS
 
 
+def get_effective_source_taxonomy(db: Session, language: str | None) -> str:
+    """Return the taxonomy to actually use, falling back to os-taxonomy when
+    the locale-mapped taxonomy has no seeded data.
+
+    Calls :func:`locale_to_source_taxonomy` first, then checks whether any
+    ``LearningTopic`` or ``LearningCluster`` rows exist for the mapped
+    taxonomy.  If none exist and the mapped taxonomy is not already
+    ``os-taxonomy``, returns ``SOURCE_TAXONOMY_OS`` as fallback.
+    """
+    mapped = locale_to_source_taxonomy(language)
+    if mapped == SOURCE_TAXONOMY_OS:
+        return mapped
+    has_topic = (
+        db.query(LearningTopic.id)
+        .filter(LearningTopic.source_taxonomy == mapped)
+        .limit(1)
+        .first()
+    )
+    if has_topic:
+        return mapped
+    has_cluster = (
+        db.query(LearningCluster.id)
+        .filter(LearningCluster.source_taxonomy == mapped)
+        .limit(1)
+        .first()
+    )
+    return mapped if has_cluster else SOURCE_TAXONOMY_OS
+
+
 def list_topics(
     db: Session,
     subject: str | None = None,
