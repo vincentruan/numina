@@ -617,6 +617,28 @@ def test_create_session_rejects_cross_source_topic(client, db, auth_headers):
     assert resp.status_code == 404
 
 
+def test_create_session_accepts_os_taxonomy_topic_under_fallback(
+    client, db, auth_headers
+):
+    """Covers AE1 for the write path.  A zh-CN child with no beijing data
+    resolves to os-taxonomy via fallback, so the cross-source guard must
+    accept an os-taxonomy topic rather than rejecting it."""
+    child = _create_child(
+        client, auth_headers, username="fallbacksession", language="zh-CN"
+    )
+    child_headers = _child_login(client, child["username"])
+
+    # No beijing rows anywhere — the helper falls back to os-taxonomy.
+    os_topic = _create_topic(db, "fb_session_os", source_taxonomy="os-taxonomy")
+
+    resp = client.post(
+        "/api/v1/child/learning/sessions",
+        headers=child_headers,
+        json={"topic_id": str(os_topic.id), "session_type": "tutorial"},
+    )
+    assert resp.status_code in (200, 201)
+
+
 def test_create_session_accepts_matching_source(client, db, auth_headers):
     """zh-CN child can start a session on a beijing topic."""
     child = _create_child(
