@@ -35,7 +35,7 @@ class RentalContract(Base):
     # landlord=房东(收租) / tenant=租客(付租)
     role: Mapped[str] = mapped_column(String(10), nullable=False)
     # Money fields are NUMERIC(18,2) — Decimal in Python, serialized as str on
-    # the wire (SnowflakeBase money-as-str convention, CLAUDE.md §bigint).
+    # the wire (SnowflakeBase money-as-str convention, AGENTS.md §Bigint Serialization).
     monthly_rent: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     deposit: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)

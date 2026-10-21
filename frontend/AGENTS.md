@@ -1,6 +1,6 @@
-# frontend/CLAUDE.md
+# frontend/AGENTS.md
 
-Frontend pnpm workspace. Inherits root [`CLAUDE.md`](../CLAUDE.md) project-level constraints.
+Frontend pnpm workspace. Inherits root [`AGENTS.md`](../AGENTS.md) project-level constraints.
 
 ## Workspace Structure
 
@@ -18,7 +18,7 @@ frontend/
 
 ## Commands
 
-Dev commands — see root [`CLAUDE.md`](../CLAUDE.md) §Development Commands. Workspace-wide:
+Dev commands — see root [`AGENTS.md`](../AGENTS.md) §Development Commands. Workspace-wide:
 
 ```bash
 pnpm -r lint && pnpm -r typecheck && pnpm -r test:run
@@ -168,7 +168,7 @@ Check these docs before working in `frontend/` — they document verified fixes 
 
 ## Links
 
-- [`packages/CLAUDE.md`](packages/CLAUDE.md) — @numina/auth + @numina/math exports
-- [`apps/main/CLAUDE.md`](apps/main/CLAUDE.md) — main app specific config
-- [`apps/child/CLAUDE.md`](apps/child/CLAUDE.md) — child app specific config
-- Root [`CLAUDE.md`](../CLAUDE.md) — project-level constraints
+- [`packages/AGENTS.md`](packages/AGENTS.md) — @numina/auth + @numina/math exports
+- [`apps/main/AGENTS.md`](apps/main/AGENTS.md) — main app specific config
+- [`apps/child/AGENTS.md`](apps/child/AGENTS.md) — child app specific config
+- Root [`AGENTS.md`](../AGENTS.md) — project-level constraints

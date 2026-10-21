@@ -1,7 +1,7 @@
-# scheduler_worker/CLAUDE.md
+# scheduler_worker/AGENTS.md
 
 Module-specific guidance for the APScheduler background job worker.
-See root [`CLAUDE.md`](../../../CLAUDE.md) for behavioral guidelines and cross-cutting conventions.
+See root [`AGENTS.md`](../../../AGENTS.md) for behavioral guidelines and cross-cutting conventions.
 
 ## Quality Commands
 
@@ -116,5 +116,5 @@ Step 3 — Add a row to the job inventory table in `apps/scheduler_worker/README
 
 ## Links
 
-- Root [`CLAUDE.md`](../../../CLAUDE.md) — behavioral guidelines, cross-cutting conventions
+- Root [`AGENTS.md`](../../../AGENTS.md) — behavioral guidelines, cross-cutting conventions
 - Module [`README.md`](./README.md) — purpose statement, job inventory table, dev commands

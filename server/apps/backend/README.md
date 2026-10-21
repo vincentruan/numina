@@ -166,7 +166,7 @@ uv run alembic upgrade head
 
 ## Code Style
 
-See root [`CLAUDE.md`](../CLAUDE.md) for full conventions. Key points:
+See root [`AGENTS.md`](../../../AGENTS.md) for full conventions. Key points:
 - Imports: stdlib → third-party → local (`app.*`), blank line between groups
 - Type annotations: `str | None`, `list[str]` (Python 3.10+ syntax)
 - Error messages in Chinese: `raise HTTPException(status_code=404, detail="资产不存在")`

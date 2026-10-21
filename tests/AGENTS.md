@@ -1,4 +1,4 @@
-# tests/CLAUDE.md
+# tests/AGENTS.md
 
 E2E, visual regression, and test infrastructure guidance.
 
@@ -35,7 +35,7 @@ pnpm exec playwright test --config=tests/visual/visual.config.ts
 
 - New E2E specs go in `tests/e2e/`, shell scripts in `tests/e2e/scripts/`
 - Screenshot outputs (`.png`) are `.gitignore`-excluded — do not commit
-- Backend tests live in `server/tests/` (see [`server/CLAUDE.md`](../server/CLAUDE.md) §Quality Commands)
+- Backend tests live in `server/tests/` (see [`server/AGENTS.md`](../server/AGENTS.md) §Quality Commands)
 
 ## Solutions (Test/Seed Lessons Learned)
 
@@ -46,6 +46,6 @@ pnpm exec playwright test --config=tests/visual/visual.config.ts
 
 ## Links
 
-- Root [`CLAUDE.md`](../CLAUDE.md) — behavioral guidelines, project overview
-- [`server/CLAUDE.md`](../server/CLAUDE.md) — backend quality commands
-- [`frontend/CLAUDE.md`](../frontend/CLAUDE.md) — frontend quality commands
+- Root [`AGENTS.md`](../AGENTS.md) — behavioral guidelines, project overview
+- [`server/AGENTS.md`](../server/AGENTS.md) — backend quality commands
+- [`frontend/AGENTS.md`](../frontend/AGENTS.md) — frontend quality commands

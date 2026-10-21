@@ -26,7 +26,7 @@ class DraftImport(Base):
     source_format: Mapped[str] = mapped_column(String(20), nullable=False)  # pdf/png/jpeg/xlsx/csv
     file_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)  # SHA-256
     # JSON-serialized list[dict] — stored as Text for DB portability (SQLite + PostgreSQL).
-    # Mirrors Asset.properties pattern (CLAUDE.md §bigint).
+    # Mirrors Asset.properties pattern (AGENTS.md §Bigint Serialization).
     parsed_items: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     # JSON-serialized list of committed Asset/Liability IDs (strings for snowflake safety).
     committed_record_ids: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -1,7 +1,7 @@
-# agent/CLAUDE.md
+# agent/AGENTS.md
 
 Module-specific guidance for the Python FastAPI AI agent microservice.
-See root [`CLAUDE.md`](../CLAUDE.md) for behavioral guidelines and cross-cutting conventions.
+See root [`AGENTS.md`](../../../AGENTS.md) for behavioral guidelines and cross-cutting conventions.
 
 > **Test root:** `tests/agent/` (canonical; auto-collected). Legacy `apps/agent/tests/` has stale tests — do not add new tests there.
 
@@ -16,7 +16,7 @@ These must hold in every code path — never bypass them:
 
 ## DeerFlow Troubleshooting Guide
 
-For agent-specific troubleshooting, see [`server/CLAUDE.md`](../../CLAUDE.md) §Solutions (Backend/Agent Lessons Learned).
+For agent-specific troubleshooting, see [`server/AGENTS.md`](../../AGENTS.md) §Solutions (Backend/Agent Lessons Learned).
 
 ## DeerFlow Execution
 
@@ -365,6 +365,6 @@ update this section and add adversarial test cases to `numina-sim-test` Area 11.
 
 ## Links
 
-- Root [`CLAUDE.md`](../CLAUDE.md) — behavioral guidelines, cross-cutting conventions
+- Root [`AGENTS.md`](../../../AGENTS.md) — behavioral guidelines, cross-cutting conventions
 - Module [`README.md`](./README.md) — quick start, architecture, API endpoints
 - [`deerflow_config/HARNESS_API.md`](./deerflow_config/HARNESS_API.md) — DeerFlow harness API reference

@@ -229,7 +229,7 @@ async def stream_agent_dispatch(
 
     def _emit_audit(error_type: str | None) -> None:
         """Emit one AuditEntry — wraps audit_logger.log_call so the audit
-        invariant from agent/CLAUDE.md Key Invariants #3 is satisfied on
+        invariant from agent/AGENTS.md Key Invariants #3 is satisfied on
         every code path (success, denial, exception). Never raises."""
         # Audit must never break the main path. Mirrors AuditLogger.log_call's
         # internal swallow.
@@ -307,7 +307,7 @@ async def stream_agent_dispatch(
         ).to_ndjson()
         return
 
-    # 2a. Policy guard — required by agent/CLAUDE.md Key Invariants #2.
+    # 2a. Policy guard — required by agent/AGENTS.md Key Invariants #2.
     # CapabilityPolicy fields come from BackendClient.get_family_ai_config; the
     # skill_id scoped to this dispatch is the agent_name (e.g. "numina"), so
     # families can whitelist agents by name in allowed_capabilities.
@@ -941,7 +941,7 @@ async def _persist_session_metadata(
 
     All inputs that came from user content (DeerFlow-generated title and the
     streamed assistant answer) pass through ``pii_redactor.redact_text``
-    before being written — required by agent/CLAUDE.md Key Invariant #1.
+    before being written — required by agent/AGENTS.md Key Invariant #1.
 
     Failure modes:
     - ``aget_state`` missing or raising → fall back to date+name template

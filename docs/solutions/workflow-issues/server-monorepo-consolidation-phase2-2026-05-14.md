@@ -354,5 +354,5 @@ These failure patterns were encountered during the Phase 2 execution and are wor
 
 - `docs/solutions/workflow-issues/backend-module-extraction-workflow-2026-05-14.md` — companion guide covering the extraction workflow in detail: Strangler Fig sequencing, shim re-exports, import direction rules, job isolation patterns, and Alembic model migration
 - `docs/solutions/test-failures/audit-service-session-closure-test-isolation-2026-05-14.md` — downstream pitfall: session closure bug exposed by the extraction, and the optional-session pattern fix
-- `server/apps/backend/CLAUDE.md` — backend-specific dev commands and Snowflake ID serialization pattern
-- `server/apps/agent/CLAUDE.md` — agent-specific dev commands and DeerFlow guardrails
+- `server/apps/backend/AGENTS.md` — backend-specific dev commands and Snowflake ID serialization pattern
+- `server/apps/agent/AGENTS.md` — agent-specific dev commands and DeerFlow guardrails

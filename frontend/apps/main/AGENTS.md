@@ -1,10 +1,10 @@
-# frontend/apps/main/CLAUDE.md
+# frontend/apps/main/AGENTS.md
 
-Adult H5 application. Inherits [`frontend/CLAUDE.md`](../../CLAUDE.md) common constraints.
+Adult H5 application. Inherits [`frontend/AGENTS.md`](../../AGENTS.md) common constraints.
 
 ## Commands
 
-`pnpm dev` — http://localhost:5173. Other commands — see parent [`CLAUDE.md`](../../CLAUDE.md).
+`pnpm dev` — http://localhost:5173. Other commands — see parent [`AGENTS.md`](../../AGENTS.md).
 
 ## Directory Structure
 
@@ -110,5 +110,5 @@ For the following issues, refer to the corresponding solution document:
 
 ## Links
 
-- Parent [`CLAUDE.md`](../../CLAUDE.md) — frontend workspace constraints
-- [`apps/child/CLAUDE.md`](../child/CLAUDE.md) — child app config
+- Parent [`AGENTS.md`](../../AGENTS.md) — frontend workspace constraints
+- [`apps/child/AGENTS.md`](../child/AGENTS.md) — child app config

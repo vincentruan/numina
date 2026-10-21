@@ -37,7 +37,7 @@ Numina 后端需要统一、可配置的日志基础设施，涵盖：
 - 应用启动时调用 `setup_logging()`，系统初始化控制台 handler、文件 handler 和安全日志 handler，并完成一次过期日志清理
 - 各模块调用 `get_logger(__name__)` 获取 logger，返回已配置格式和级别的 logger 实例
 
-> 注意：`packages/core/CLAUDE.md` 规定，项目内所有模块必须通过 `get_logger(__name__)` 获取 logger，禁止直接调用 `logging.getLogger()`。
+> 注意：`packages/core/AGENTS.md` 规定，项目内所有模块必须通过 `get_logger(__name__)` 获取 logger，禁止直接调用 `logging.getLogger()`。
 
 ### 2. 日志目录结构
 

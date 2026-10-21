@@ -1,11 +1,11 @@
-# domain/CLAUDE.md
+# domain/AGENTS.md
 
 Module-specific guidance for the business logic layer.
-See root [`CLAUDE.md`](../../../CLAUDE.md) for behavioral guidelines and cross-cutting conventions.
+See root [`AGENTS.md`](../../../AGENTS.md) for behavioral guidelines and cross-cutting conventions.
 
 ## Key Invariants
 
-1. **Import direction** — `packages/domain` must never import from `apps/` (see [server/CLAUDE.md](../../CLAUDE.md) §Import Direction).
+1. **Import direction** — `packages/domain` must never import from `apps/` (see [server/AGENTS.md](../../AGENTS.md) §Import Direction).
 2. **No cross-subdomain imports** — subpackages (`audit`, `device`, `exchange_rate`, `notification`, `snapshot`) must not import from each other. Cross-subdomain calls go through the app layer, not directly between domain services.
 3. **Domain services receive a `Session` parameter** — they never create their own `SessionLocal()`. The caller (app router or scheduler job) is responsible for session lifecycle. Exception: `audit.service.purge_old_audit_logs` is permitted to create its own `SessionLocal()` because it is called by the scheduler worker outside a request context where no session is passed in.
 
@@ -44,5 +44,5 @@ def my_service_function(...) -> ...:
 
 ## Links
 
-- Root [`CLAUDE.md`](../../../CLAUDE.md) — behavioral guidelines, cross-cutting conventions
+- Root [`AGENTS.md`](../../../AGENTS.md) — behavioral guidelines, cross-cutting conventions
 - Module [`README.md`](./README.md) — purpose statement, subpackage inventory

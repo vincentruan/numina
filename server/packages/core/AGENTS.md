@@ -1,11 +1,11 @@
-# core/CLAUDE.md
+# core/AGENTS.md
 
 Module-specific guidance for the shared configuration and logging package.
-See root [`CLAUDE.md`](../../../CLAUDE.md) for behavioral guidelines and cross-cutting conventions.
+See root [`AGENTS.md`](../../../AGENTS.md) for behavioral guidelines and cross-cutting conventions.
 
 ## Key Invariants
 
-1. **Import direction** — `packages/core` must never import from `apps/` (see [server/CLAUDE.md](../../CLAUDE.md) §Import Direction).
+1. **Import direction** — `packages/core` must never import from `apps/` (see [server/AGENTS.md](../../AGENTS.md) §Import Direction).
 2. **`settings` is a singleton** — always import the pre-built instance: `from packages.core.settings import settings`. Never instantiate `Settings()` directly — it re-reads the environment and breaks singleton guarantees.
 3. **`get_logger(__name__)` is the only approved logger** — never call `logging.getLogger()` directly. `get_logger` applies the project's log format, level, and rotation configuration.
 
@@ -47,5 +47,5 @@ logger = get_logger(__name__)
 
 ## Links
 
-- Root [`CLAUDE.md`](../../../CLAUDE.md) — behavioral guidelines, cross-cutting conventions
+- Root [`AGENTS.md`](../../../AGENTS.md) — behavioral guidelines, cross-cutting conventions
 - Module [`README.md`](./README.md) — purpose statement, exports table

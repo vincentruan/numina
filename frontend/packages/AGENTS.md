@@ -1,6 +1,6 @@
-# frontend/packages/CLAUDE.md
+# frontend/packages/AGENTS.md
 
-Shared packages. Inherits [`frontend/CLAUDE.md`](../CLAUDE.md) for common constraints.
+Shared packages. Inherits [`frontend/AGENTS.md`](../AGENTS.md) for common constraints.
 
 Code changes here affect both `apps/main` and `apps/child`.
 
@@ -95,4 +95,4 @@ Import from `@numina/shared`:
 
 ## Links
 
-- Parent [`CLAUDE.md`](../CLAUDE.md) — frontend workspace constraints
+- Parent [`AGENTS.md`](../AGENTS.md) — frontend workspace constraints

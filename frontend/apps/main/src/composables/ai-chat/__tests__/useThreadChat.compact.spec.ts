@@ -28,7 +28,7 @@ vi.mock('@/api/ai-chat', () => ({
 
 // Mock vant toasts so no DOM is required. handleCompact uses showToast for
 // the informational skip path and showSuccessToast/showFailToast for the
-// success/failure paths (frontend/CLAUDE.md §Key Invariants).
+// success/failure paths (frontend/AGENTS.md §Key Invariants).
 vi.mock('vant', () => ({
   showSuccessToast: vi.fn(),
   showFailToast: vi.fn(),
