@@ -129,7 +129,7 @@ beforeEach(() => {
 // --- Tests ---
 
 describe('ClusterMap', () => {
-  it('renders one territory per cluster with its topic nodes', async () => {
+  it('renders one territory per domain with its topic nodes', async () => {
     mockGetClusters.mockResolvedValue([
       makeCluster({ id: 'cl1', domain: 'Addition' }),
       makeCluster({ id: 'cl2', domain: 'Subtraction' }),
@@ -491,18 +491,93 @@ describe('ClusterMap', () => {
     expect(wrapper.text()).not.toContain('科学项')
   })
 
-  it('collects unmatched topics into an "other" territory', async () => {
-    mockGetClusters.mockResolvedValue([makeCluster({ topic_count: 1 })])
+  it('keeps topics in their own domain and sends unknown domains to "other"', async () => {
+    mockGetClusters.mockResolvedValue([
+      makeCluster({ id: 'cl1', domain: 'Addition', topic_count: 1 }),
+      makeCluster({ id: 'cl2', domain: 'Fractions', topic_count: 1 }),
+    ])
     const wrapper = mountMap([
       makeItem({ id: 'p1', topic: makeTopic({ id: 't1', domain: 'Addition' }) }),
-      makeItem({ id: 'p2', topic: makeTopic({ id: 't2', domain: 'NoSuchDomain' }) }),
+      makeItem({ id: 'p2', topic: makeTopic({ id: 't2', domain: 'Fractions' }) }),
+      // A domain with no cluster must not be attributed to a sibling domain.
+      makeItem({ id: 'p3', topic: makeTopic({ id: 't3', domain: 'NoSuchDomain' }) }),
     ])
     await flushPromises()
 
     const domains = wrapper
       .findAll('.cluster-territory')
       .map((t) => t.attributes('data-cluster-domain'))
-    expect(domains).toEqual(['Addition', '__other__'])
+    expect(domains).toEqual(['Addition', 'Fractions', '__other__'])
+  })
+
+  it('merges the age groups of one domain into a single territory', async () => {
+    // clusters.json stores one row per (domain, age_group); the map must still
+    // show one card per domain.
+    mockGetClusters.mockResolvedValue([
+      makeCluster({ id: 'cl1', domain: 'Addition', age_group: 'low' }),
+      makeCluster({ id: 'cl2', domain: 'Addition', age_group: 'mid' }),
+      makeCluster({ id: 'cl3', domain: 'Fractions', age_group: 'mid' }),
+    ])
+    const wrapper = mountMap([
+      makeItem({ topic: makeTopic({ id: 't1', domain: 'Addition', age_group: 'mid' }) }),
+      makeItem({ topic: makeTopic({ id: 't2', domain: 'Addition', age_group: 'low' }) }),
+      makeItem({ topic: makeTopic({ id: 't3', domain: 'Fractions', age_group: 'mid' }) }),
+    ])
+    await flushPromises()
+
+    const territories = wrapper.findAll('.cluster-territory')
+    expect(territories.map((t) => t.attributes('data-cluster-domain'))).toEqual([
+      'Addition',
+      'Fractions',
+    ])
+    expect(territories[0].findAll('.topic-node')).toHaveLength(2)
+  })
+
+  it('matches a null-domain topic by subject instead of dropping it', async () => {
+    mockGetClusters.mockResolvedValue([
+      makeCluster({ id: 'cl1', domain: 'Addition', age_group: 'mid', topic_count: 2 }),
+    ])
+    const wrapper = mountMap([
+      makeItem({
+        id: 'p1',
+        topic: makeTopic({ id: 't1', domain: 'Addition', age_group: 'mid' }),
+      }),
+      makeItem({
+        id: 'p2',
+        topic: makeTopic({ id: 't2', domain: null, age_group: 'mid' }),
+      }),
+    ])
+    await flushPromises()
+
+    // The null-domain topic joined the Addition card instead of falling into
+    // __other__. ClusterTerritory never renders the raw id, so assert on the
+    // node count rather than on text that could not appear either way.
+    const territories = wrapper.findAll('.cluster-territory')
+    expect(territories).toHaveLength(1)
+    expect(territories[0].attributes('data-cluster-domain')).toBe('Addition')
+    expect(territories[0].findAll('.topic-node')).toHaveLength(2)
+  })
+
+  it('routes a null-domain topic to __other__ when the subject has no clusters', async () => {
+    // Distinct from the empty-cluster case: a same-subject cluster exists, but
+    // the topic carries no domain, so there is nothing to match it against.
+    mockGetClusters.mockResolvedValue([
+      makeCluster({ id: 'cl1', domain: 'Addition', topic_count: 1 }),
+    ])
+    const wrapper = mountMap(
+      [
+        makeItem({
+          id: 'p1',
+          topic: makeTopic({ id: 't1', subject: 'art', domain: null }),
+        }),
+      ],
+      'art',
+    )
+    await flushPromises()
+
+    const territories = wrapper.findAll('.cluster-territory')
+    expect(territories).toHaveLength(1)
+    expect(territories[0].attributes('data-cluster-domain')).toBe('__other__')
   })
 
   it('does not flash a transient "其他" section during a subject switch', async () => {
@@ -561,7 +636,10 @@ describe('ClusterMap', () => {
     return wrapper.find(`.domain-section[data-domain="${domain}"] .domain-section__header`)
   }
 
-  it('groups clusters sharing a domain into one section and sums their progress', async () => {
+  it('renders one section per domain and reports its own mastery progress', async () => {
+    // #142 made the territory list one-card-per-domain already, so the
+    // section is now a 1:1 wrapper around a card — the two age_group rows of
+    // "Addition" collapse into a single card holding both topics.
     mockGetClusters.mockResolvedValue([
       makeCluster({ id: 'cl1', domain: 'Addition', age_group: 'low' }),
       makeCluster({ id: 'cl2', domain: 'Addition', age_group: 'mid' }),
@@ -578,8 +656,8 @@ describe('ClusterMap', () => {
     expect(sections).toHaveLength(2)
 
     const addition = wrapper.find('.domain-section[data-domain="Addition"]')
-    expect(addition.findAll('.cluster-territory')).toHaveLength(2)
-    // progress aggregates across both age_group clusters: 1 of 2 mastered
+    expect(addition.findAll('.cluster-territory')).toHaveLength(1)
+    expect(addition.findAll('.topic-node')).toHaveLength(2)
     expect(addition.find('.domain-section__progress').text()).toBe('1/2 已掌握')
   })
 

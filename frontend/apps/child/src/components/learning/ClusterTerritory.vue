@@ -4,8 +4,11 @@
     :data-cluster-domain="cluster.domain"
     :class="{ 'cluster-territory--frontier': isFrontierCluster }"
   >
-    <div class="cluster-territory__header">
-      <h3 class="cluster-territory__title">
+    <!-- The title duplicates the enclosing DomainSection header, so callers
+         that already show the domain can suppress it. The frontier badge is
+         the card's own signal and always survives. -->
+    <div v-if="!hideTitle || isFrontierCluster" class="cluster-territory__header">
+      <h3 v-if="!hideTitle" class="cluster-territory__title">
         {{ translateDomain(t, cluster.domain) }}
         <span class="cluster-territory__count">({{ items.length }})</span>
       </h3>
@@ -57,6 +60,8 @@ const props = defineProps<{
   bridges: BridgeResponse[]
   isFrontierCluster?: boolean
   frontierTopicId?: string | null
+  /** Suppress the domain title when an enclosing section already shows it. */
+  hideTitle?: boolean
 }>()
 
 defineEmits<{
@@ -79,8 +84,6 @@ function subjectLabel(subject: string): string {
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-lg);
   padding: 16px;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 200px;
 }
 
 .cluster-territory--frontier {

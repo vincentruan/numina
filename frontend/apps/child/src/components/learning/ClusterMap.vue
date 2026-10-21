@@ -26,33 +26,33 @@
 
     <!-- Empty state -->
     <EmptyState
-      v-if="domainGroups.length === 0 && !loading"
+      v-if="territories.length === 0 && !loading"
       :illustration="noRecordsSvg"
       :text="t('learning.cluster.empty')"
     />
 
-    <!-- Domain-grouped territory list -->
+    <!-- Collapsible domain sections (#133). One section per territory: the
+         territory list is already deduplicated per domain (#142). -->
     <div v-else class="cluster-map__domains">
       <DomainSection
-        v-for="group in domainGroups"
-        :key="group.domainKey"
-        :domain="extractDomain(group.domainKey)"
-        :domain-label="translateDomain(t, extractDomain(group.domainKey))"
-        :mastered-count="group.masteredCount"
-        :total-count="group.totalCount"
-        :expanded="isExpanded(group)"
-        :instant="instantExpandKeys.has(group.domainKey)"
-        @toggle="toggleDomain(group.domainKey)"
+        v-for="territory in territories"
+        :key="domainKey(territory)"
+        :domain="territory.cluster.domain"
+        :domain-label="translateDomain(t, territory.cluster.domain)"
+        :mastered-count="masteredIn(territory)"
+        :total-count="territory.items.length"
+        :expanded="isExpanded(territory)"
+        :instant="isInstant(territory)"
+        @toggle="toggleDomain(territory)"
       >
         <div class="cluster-map__territories">
           <ClusterTerritory
-            v-for="territory in group.territories"
-            :key="territory.cluster.id"
             :cluster="territory.cluster"
             :items="territory.items"
             :bridges="territory.bridges"
             :is-frontier-cluster="frontierClusterDomain === territory.cluster.domain"
             :frontier-topic-id="frontierTopic?.topic.id ?? null"
+            hide-title
             @topic-tap="onTopicTap"
             @bridge-tap="onBridgeTap"
           />
@@ -122,7 +122,7 @@ const userExpanded = reactive(new Map<string, boolean>())
 async function load() {
   loading.value = true
   // Clear stale clusters from the previous subject before the new data lands.
-  // Without this, `domainGroups` briefly mixes new items against old clusters
+  // Without this, `territories` briefly mixes new items against old clusters
   // during the subject switch, and everything unmatched lands in the "其他"
   // bucket — a visible flash the child sees for a split second.
   clusters.value = []
@@ -158,24 +158,19 @@ interface Territory {
   bridges: BridgeResponse[]
 }
 
-interface DomainGroup {
-  domainKey: string
-  territories: Territory[]
-  totalCount: number
-  masteredCount: number
-}
+// Cards span every age_group of a domain, so their nodes are ordered by
+// difficulty rather than by the order the API happened to return rows in.
+const AGE_GROUP_ORDER = ['low', 'mid', 'high']
 
-/** Extract raw domain name from composite key "subject:domain". */
-function extractDomain(domainKey: string): string {
-  return domainKey.split(':').slice(1).join(':')
-}
-
-function buildTerritories(): Territory[] {
+const territories = computed<Territory[]>(() => {
   const subjectItems = props.items.filter(
     (item) => item.topic.subject === props.selectedSubject,
   )
 
-  const clusterMap = new Map<string, ProgressWithTopic[]>()
+  // One card per domain, not per cluster row. ``clusters.json`` stores several
+  // rows per domain (one per age_group), so keying the map on ``cluster.id``
+  // rendered the same domain as several separate cards.
+  const domainMap = new Map<string, ProgressWithTopic[]>()
   const unmatched: ProgressWithTopic[] = []
 
   // Prefer the exact 3-key match; the API now returns one row per key, but
@@ -183,36 +178,58 @@ function buildTerritories(): Territory[] {
   // clusters.json) should still land in its domain territory rather than be
   // dropped into "其他".
   for (const item of subjectItems) {
-    const domain = item.topic.domain ?? ''
-    const matchingCluster =
-      clusters.value.find(
-        (c) =>
-          c.subject === item.topic.subject &&
-          c.domain === domain &&
-          c.age_group === item.topic.age_group,
-      ) ??
-      clusters.value.find(
-        (c) => c.subject === item.topic.subject && c.domain === domain,
-      )
-    if (matchingCluster) {
-      if (!clusterMap.has(matchingCluster.id)) clusterMap.set(matchingCluster.id, [])
-      clusterMap.get(matchingCluster.id)!.push(item)
-    } else {
+    // Only the domain decides which territory a topic belongs to. A domain the
+    // taxonomy has no cluster for must not be attributed to an unrelated
+    // domain of the same subject — it goes to "其他" instead.
+    //
+    // A null domain carries no signal at all, so it falls back to the first
+    // cluster of the same subject: arbitrary, but better than hiding the node
+    // in "其他" where the child would never see it.
+    const domain = item.topic.domain
+    const target =
+      domain !== null && clusters.value.some((c) => c.domain === domain)
+        ? domain
+        : domain === null
+          ? clusters.value.find((c) => c.subject === item.topic.subject)?.domain
+          : undefined
+    if (target === undefined) {
       unmatched.push(item)
+      continue
     }
+    if (!domainMap.has(target)) domainMap.set(target, [])
+    domainMap.get(target)!.push(item)
   }
 
   // Only render territories that actually hold nodes. ``topic_count`` is the
   // taxonomy's count for the (subject, domain, age_group) key, not this
   // child's — trusting it would render empty cards wherever the API's row set
   // and the progress rows disagree.
-  const result: Territory[] = clusters.value
-    .filter((c) => clusterMap.has(c.id))
-    .map((c) => ({
-      cluster: c,
-      items: clusterMap.get(c.id)!,
-      bridges: bridges.value.filter((b) => b.from_cluster_domain === c.domain),
-    }))
+  //
+  // One representative row per domain supplies the card's summary/age range;
+  // the cards themselves come from the child's own progress, never from the
+  // taxonomy's row set.
+  const representatives = new Map<string, ClusterResponse>()
+  for (const c of clusters.value) {
+    if (!domainMap.has(c.domain)) continue
+    const kept = representatives.get(c.domain)
+    if (!kept || (c.age_range_start !== null && (kept.age_range_start === null || c.age_range_start < kept.age_range_start))) {
+      representatives.set(c.domain, c)
+    }
+  }
+
+  // A domain reaches this map only if a cluster carries it, so every entry is
+  // backed by a representative row.
+  const result: Territory[] = [...domainMap.entries()].flatMap(([domain, items]) => {
+    const cluster = representatives.get(domain)
+    if (!cluster) return []
+    return [{
+      cluster,
+      items: [...items].sort(
+        (a, b) => AGE_GROUP_ORDER.indexOf(a.topic.age_group) - AGE_GROUP_ORDER.indexOf(b.topic.age_group),
+      ),
+      bridges: bridges.value.filter((b) => b.from_cluster_domain === domain),
+    }]
+  })
 
   // Append "Other" territory for unmatched items. Skip this when clusters
   // are still loading — during a subject switch the old clusters were just
@@ -222,6 +239,17 @@ function buildTerritories(): Territory[] {
   // false, and the bucket still applies — it's the legitimate fallback for
   // items whose domain has no cluster row at all.
   if (!loading.value && unmatched.length > 0) {
+    if (import.meta.env.DEV) {
+      console.warn(
+        `[ClusterMap] ${unmatched.length} topic(s) unmatched — no cluster found:`,
+        unmatched.map((i) => ({
+          topic_id: i.topic.id,
+          subject: i.topic.subject,
+          domain: i.topic.domain,
+          age_group: i.topic.age_group,
+        })),
+      )
+    }
     result.push({
       cluster: {
         id: '__other__',
@@ -238,35 +266,17 @@ function buildTerritories(): Territory[] {
   }
 
   return result
+})
+
+/** Composite key `{subject}:{domain}` (KTD6) — survives subject switches
+ *  without colliding on domain names shared between subjects. */
+function domainKey(territory: Territory): string {
+  return `${props.selectedSubject}:${territory.cluster.domain}`
 }
 
-const domainGroups = computed<DomainGroup[]>(() => {
-  const territories = buildTerritories()
-  const groups = new Map<string, DomainGroup>()
-
-  for (const territory of territories) {
-    const domain = territory.cluster.domain
-    const key = `${props.selectedSubject}:${domain}`
-
-    if (!groups.has(key)) {
-      groups.set(key, {
-        domainKey: key,
-        territories: [],
-        totalCount: 0,
-        masteredCount: 0,
-      })
-    }
-
-    const group = groups.get(key)!
-    group.territories.push(territory)
-    group.totalCount += territory.items.length
-    group.masteredCount += territory.items.filter(
-      (i) => i.mastery_level === 'mastered',
-    ).length
-  }
-
-  return [...groups.values()]
-})
+function masteredIn(territory: Territory): number {
+  return territory.items.filter((i) => i.mastery_level === 'mastered').length
+}
 
 // ── Progress (U5) ──
 
@@ -279,29 +289,31 @@ const subjectItems = computed(() =>
 /** A domain opens by default when it holds active learning — anything the
  *  child is working on now, or has mastered but is due to review. Locked and
  *  not-yet-due mastered topics stay hidden. */
-function defaultExpanded(group: DomainGroup): boolean {
-  return group.territories.some((territory) =>
-    territory.items.some((i) => {
-      const level = i.mastery_level
-      if (level === 'learning' || level === 'assessing' || level === 'available') return true
-      if (level === 'mastered' && i.next_review_at && new Date(i.next_review_at) <= new Date()) return true
-      return false
-    }),
-  )
+function defaultExpanded(territory: Territory): boolean {
+  return territory.items.some((i) => {
+    const level = i.mastery_level
+    if (level === 'learning' || level === 'assessing' || level === 'available') return true
+    if (level === 'mastered' && i.next_review_at && new Date(i.next_review_at) <= new Date()) return true
+    return false
+  })
 }
 
 /** Derived, not seeded: a user toggle always wins, otherwise the default is
  *  recomputed from current data. Deriving it means the first paint already has
  *  the final expanded state (no collapse-then-animate-open flash) and no
  *  watcher can reset a manual choice. */
-function isExpanded(group: DomainGroup): boolean {
-  return userExpanded.get(group.domainKey) ?? defaultExpanded(group)
+function isExpanded(territory: Territory): boolean {
+  return userExpanded.get(domainKey(territory)) ?? defaultExpanded(territory)
 }
 
-function toggleDomain(domainKey: string) {
-  const group = domainGroups.value.find((g) => g.domainKey === domainKey)
-  const current = group ? isExpanded(group) : (userExpanded.get(domainKey) ?? false)
-  userExpanded.set(domainKey, !current)
+function toggleDomain(territory: Territory) {
+  userExpanded.set(domainKey(territory), !isExpanded(territory))
+}
+
+/** True while a programmatic expand (frontier/bridge) has the section open
+ *  without its height transition — see the scroll watcher below. */
+function isInstant(territory: Territory): boolean {
+  return instantExpandKeys.has(domainKey(territory))
 }
 
 // ── Progress (derived from subjectItems) ──
@@ -338,8 +350,10 @@ const frontierTopic = computed<ProgressWithTopic | null>(() => {
 const frontierClusterDomain = computed(() => {
   if (!frontierTopic.value) return null
   const ft = frontierTopic.value.topic
+  // Cards are keyed by domain, so the frontier only matters when a card for
+  // this domain actually renders.
   const match = clusters.value.find(
-    (c) => c.subject === ft.subject && c.domain === (ft.domain ?? '') && c.age_group === ft.age_group,
+    (c) => c.subject === ft.subject && c.domain === ft.domain,
   )
   return match?.domain ?? null
 })
@@ -380,7 +394,7 @@ function scrollToDomain(targetDomain: string): boolean {
 
 // flush: 'post' — the section this scrolls to only exists once the component
 // has re-rendered with the new subject's clusters/topics.
-watch(domainGroups, async () => {
+watch(territories, async () => {
   const bridgeTarget = scrollTargetDomain.value
   const targetDomain =
     bridgeTarget || (frontierScrolled ? null : frontierClusterDomain.value)
@@ -388,12 +402,12 @@ watch(domainGroups, async () => {
 
   const seq = ++scrollSeq
   const targetKey = `${props.selectedSubject}:${targetDomain}`
-  const group = domainGroups.value.find((g) => g.domainKey === targetKey)
+  const target = territories.value.find((t) => t.cluster.domain === targetDomain)
 
   // Auto-expand a collapsed target before scrolling (R6). The `instant` flag
   // suppresses the height transition, so one nextTick is enough for the
   // section to reach final geometry — no animating row to measure against.
-  if (group && !isExpanded(group)) {
+  if (target && !isExpanded(target)) {
     userExpanded.set(targetKey, true)
     instantExpandKeys.add(targetKey)
     await nextTick()
