@@ -127,56 +127,74 @@ interface Territory {
   bridges: BridgeResponse[]
 }
 
+// Cards span every age_group of a domain, so their nodes are ordered by
+// difficulty rather than by the order the API happened to return rows in.
+const AGE_GROUP_ORDER = ['low', 'mid', 'high']
+
 const territories = computed<Territory[]>(() => {
   const subjectItems = props.items.filter(
     (item) => item.topic.subject === props.selectedSubject,
   )
 
-  // Match items to clusters by subject + domain + age_group
-  const clusterMap = new Map<string, ProgressWithTopic[]>()
+  // One card per domain, not per cluster row. ``clusters.json`` stores several
+  // rows per domain (one per age_group), so keying the map on ``cluster.id``
+  // rendered the same domain as several separate cards.
+  const domainMap = new Map<string, ProgressWithTopic[]>()
   const unmatched: ProgressWithTopic[] = []
 
   for (const item of subjectItems) {
-    // Prefer the exact 3-key match; the API now returns one row per key, but
-    // a key it never had (e.g. a topic whose age_group is missing from
-    // clusters.json) should still land in its domain territory rather than be
-    // dropped into "其他".
-    const domain = item.topic.domain ?? ''
-    const matchingCluster =
-      clusters.value.find(
-        (c) =>
-          c.subject === item.topic.subject &&
-          c.domain === domain &&
-          c.age_group === item.topic.age_group,
-      ) ??
-      clusters.value.find(
-        (c) => c.subject === item.topic.subject && c.domain === domain,
-      ) ??
-      // Tier 3: subject-only — catches topics with null domain or a domain
-      // that has no cluster at all. Better to group them under a same-subject
-      // cluster than to dump them into "其他".
-      clusters.value.find(
-        (c) => c.subject === item.topic.subject,
-      )
-    if (matchingCluster) {
-      if (!clusterMap.has(matchingCluster.id)) clusterMap.set(matchingCluster.id, [])
-      clusterMap.get(matchingCluster.id)!.push(item)
-    } else {
+    // Only the domain decides which territory a topic belongs to. A domain the
+    // taxonomy has no cluster for must not be attributed to an unrelated
+    // domain of the same subject — it goes to "其他" instead.
+    //
+    // A null domain carries no signal at all, so it falls back to the first
+    // cluster of the same subject: arbitrary, but better than hiding the node
+    // in "其他" where the child would never see it.
+    const domain = item.topic.domain
+    const target =
+      domain !== null && clusters.value.some((c) => c.domain === domain)
+        ? domain
+        : domain === null
+          ? clusters.value.find((c) => c.subject === item.topic.subject)?.domain
+          : undefined
+    if (target === undefined) {
       unmatched.push(item)
+      continue
     }
+    if (!domainMap.has(target)) domainMap.set(target, [])
+    domainMap.get(target)!.push(item)
   }
 
   // Only render territories that actually hold nodes. ``topic_count`` is the
   // taxonomy's count for the (subject, domain, age_group) key, not this
   // child's — trusting it would render empty cards wherever the API's row set
   // and the progress rows disagree.
-  const result: Territory[] = clusters.value
-    .filter((c) => clusterMap.has(c.id))
-    .map((c) => ({
-      cluster: c,
-      items: clusterMap.get(c.id)!,
-      bridges: bridges.value.filter((b) => b.from_cluster_domain === c.domain),
-    }))
+  //
+  // One representative row per domain supplies the card's summary/age range;
+  // the cards themselves come from the child's own progress, never from the
+  // taxonomy's row set.
+  const representatives = new Map<string, ClusterResponse>()
+  for (const c of clusters.value) {
+    if (!domainMap.has(c.domain)) continue
+    const kept = representatives.get(c.domain)
+    if (!kept || (c.age_range_start !== null && (kept.age_range_start === null || c.age_range_start < kept.age_range_start))) {
+      representatives.set(c.domain, c)
+    }
+  }
+
+  // A domain reaches this map only if a cluster carries it, so every entry is
+  // backed by a representative row.
+  const result: Territory[] = [...domainMap.entries()].flatMap(([domain, items]) => {
+    const cluster = representatives.get(domain)
+    if (!cluster) return []
+    return [{
+      cluster,
+      items: [...items].sort(
+        (a, b) => AGE_GROUP_ORDER.indexOf(a.topic.age_group) - AGE_GROUP_ORDER.indexOf(b.topic.age_group),
+      ),
+      bridges: bridges.value.filter((b) => b.from_cluster_domain === domain),
+    }]
+  })
 
   // Append "Other" territory for unmatched items
   if (unmatched.length > 0) {
@@ -247,8 +265,10 @@ const frontierTopic = computed<ProgressWithTopic | null>(() => {
 const frontierClusterDomain = computed(() => {
   if (!frontierTopic.value) return null
   const ft = frontierTopic.value.topic
+  // Cards are keyed by domain, so the frontier only matters when a card for
+  // this domain actually renders.
   const match = clusters.value.find(
-    (c) => c.subject === ft.subject && c.domain === (ft.domain ?? '') && c.age_group === ft.age_group,
+    (c) => c.subject === ft.subject && c.domain === ft.domain,
   )
   return match?.domain ?? null
 })

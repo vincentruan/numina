@@ -34,11 +34,21 @@ Both bugs degrade the learning experience on the child app. The TabBar overlap m
 
 ### KTD1. Per-page `padding-bottom` over layout-only approach
 
-The `.child-layout` already has `padding-bottom: calc(50px + env(safe-area-inset-bottom))`, but this doesn't reliably prevent individual page content from scrolling behind the fixed TabBar. Each page that has scrollable content needs its own `padding-bottom` to guarantee clearance. This is consistent with how Vant's fixed-tabbar pattern works — the layout reserves space, but scroll containers inside the layout must also account for the fixed element.
+The `.child-layout` already has `padding-bottom: calc(var(--van-tabbar-height) + env(safe-area-inset-bottom))`, but this doesn't reliably prevent individual page content from scrolling behind the fixed TabBar. Each page that has scrollable content needs its own `padding-bottom` to guarantee clearance. This is consistent with how Vant's fixed-tabbar pattern works — the layout reserves space, but scroll containers inside the layout must also account for the fixed element.
 
-### KTD2. Three-tier matching fallback in ClusterMap
+**Known tension with `frontend/CLAUDE.md`.** §Mobile H5 Patterns states "**Safe area**: Bottom handled globally in layout; pages don't add own padding". Every learning page already sets `min-height: 100vh` inside `.child-layout`, which is itself `min-height: 100vh` + bottom padding — so the route content is already one tabbar taller than the viewport, and the page-level padding adds a second tabbar of dead space. The original #140 report of obstruction is nonetheless real; the most likely mechanism is mobile viewport overshoot (a `100vh` element is taller than the visual viewport while browser chrome is showing), which page-level padding does not address either. **This remains unverified** — it needs a real device. The rule in `frontend/CLAUDE.md` was not amended by this fix; see §Follow-up.
 
-Current matching: (1) exact 3-key `(subject, domain, age_group)` → (2) `(subject, domain)`. The fix adds: (3) `(subject)` only — matches the first cluster with the same subject when no domain match exists. This catches topics with null domains and ensures they don't all fall into `__other__`.
+### KTD2. Territory = one card per domain; matching by domain only
+
+As originally written this decision proposed a three-tier fallback ending in a *subject-only* match, so that topics with a null or unknown domain would never land in `__other__`. Implementation and review showed that tier is harmful: cluster rows come back ordered by `(subject, domain)` (`topic_service.py:153`), so the "first cluster with the same subject" is the subject's alphabetically-first domain. History's 61 Ancient Greece / Medieval Times / Historical Thinking topics were rendered inside the *Ancient Egypt* card, and 15 Probability topics inside *Addition & Subtraction*.
+
+The matching that shipped instead:
+
+- **Territory key is the domain.** `clusters.json` stores one row per `(domain, age_group)`; keying cards on the cluster row produced several cards per domain. Cards are now built from the child's own progress and grouped by domain, with nodes ordered by `AGE_GROUP_ORDER` (`low → mid → high`). This is what R3 and issue #140's "每个 domain 一个卡片" ask for.
+- **A known domain matches exactly.** No age-group or subject fallback is needed — the domain alone determines the card.
+- **A null domain falls back to the subject's first cluster.** A null domain carries no signal at all, so this is arbitrary; it is retained deliberately so the node stays visible rather than disappearing into `__other__`.
+- **An unknown domain goes to `__other__`.** Guessing a sibling domain would mis-attribute the topic.
+
 
 ### KTD3. Remove `content-visibility: auto` from ClusterTerritory
 
@@ -60,9 +70,9 @@ The `content-visibility: auto` + `contain-intrinsic-size: auto 200px` optimizati
 - `frontend/apps/child/src/pages/learning/LearningPathPage.vue`
 
 **Approach:**
-1. Change `.learning-path-page` `padding-bottom` from `env(safe-area-inset-bottom)` to `calc(50px + env(safe-area-inset-bottom))` to match the TabBar height used in `ChildLayout`.
+1. Change `.learning-path-page` `padding-bottom` from `env(safe-area-inset-bottom)` to `calc(var(--van-tabbar-height) + env(safe-area-inset-bottom))` to match the TabBar height used in `ChildLayout`.
 
-**Patterns to follow:** The `calc(50px + env(safe-area-inset-bottom))` formula is already used in `ChildLayout.vue:51` and `.install-prompt` at `ChildLayout.vue:69`.
+**Patterns to follow:** The `calc(var(--van-tabbar-height) + env(safe-area-inset-bottom))` formula is already used in `ChildLayout.vue:51` and `.install-prompt` at `ChildLayout.vue:69`.
 
 **Test scenarios:**
 - Test expectation: none — CSS-only change, verify visually in browser that the last path item and any action buttons are fully visible above the TabBar.
@@ -88,11 +98,11 @@ The `content-visibility: auto` + `contain-intrinsic-size: auto 200px` optimizati
 - `frontend/apps/child/src/pages/learning/LearningOnboardingPage.vue`
 
 **Approach:**
-1. For each page, add a root-element `padding-bottom: calc(50px + env(safe-area-inset-bottom))` rule to the page's scoped CSS.
-2. If the page already has some `padding-bottom`, replace it with the correct formula (e.g., `PracticeSessionPage.vue` has `padding-bottom: 24px` — change to `calc(50px + env(safe-area-inset-bottom))`).
-3. Pages that are inherently non-scrollable (e.g., single-screen interaction pages) may skip this — but add the padding defensively anyway; it's harmless whitespace when there's no scroll.
+1. For each page, add a root-element `padding-bottom: calc(var(--van-tabbar-height) + env(safe-area-inset-bottom))` rule to the page's scoped CSS.
+2. If the page already has some `padding-bottom`, replace it with the correct formula (e.g., `PracticeSessionPage.vue` has `padding-bottom: 24px` — change to `calc(var(--van-tabbar-height) + env(safe-area-inset-bottom))`).
+3. Pages that are inherently non-scrollable (e.g., single-screen interaction pages) may skip this. The padding is **not** harmless whitespace: it stacks on `.child-layout`'s existing bottom padding, so every page that receives it ends up one tabbar's height short of the viewport. See KTD1's note on the `frontend/CLAUDE.md` conflict.
 
-**Patterns to follow:** Same `calc(50px + env(safe-area-inset-bottom))` formula from `ChildLayout.vue:51`.
+**Patterns to follow:** Same `calc(var(--van-tabbar-height) + env(safe-area-inset-bottom))` formula from `ChildLayout.vue:51`.
 
 **Test scenarios:**
 - Test expectation: none — CSS-only changes across multiple pages. Verify each page visually in the browser.
@@ -112,32 +122,36 @@ The `content-visibility: auto` + `contain-intrinsic-size: auto 200px` optimizati
 **Files:**
 - `frontend/apps/child/src/components/learning/ClusterMap.vue` — matching logic in `territories` computed
 - `frontend/apps/child/src/components/learning/ClusterTerritory.vue` — remove `content-visibility: auto`
-- `frontend/apps/child/src/components/learning/ClusterMap.test.ts` — add test for subject-only fallback
+- `frontend/apps/child/src/components/learning/ClusterMap.test.ts` — cover per-domain merging and the `__other__` paths
 
 **Approach:**
 
 1. **Remove `content-visibility: auto`** from `.cluster-territory` in `ClusterTerritory.vue`. Remove the `contain-intrinsic-size: auto 200px` rule alongside it. These rules are lines 90-91. The cards are always visible when the parent is rendered, so `content-visibility` provides negligible benefit and risks rendering issues.
 
-2. **Strengthen matching fallback** in `ClusterMap.vue` `territories` computed. After the existing two-tier fallback (exact 3-key → subject+domain), add a third tier:
-   - Tier 3: match by `subject` only — find any cluster with `c.subject === item.topic.subject`.
-   - For topics with `domain === null`, the fallback chain becomes: exact → domain-empty-match → subject-only → `__other__`.
-   
-   Implementation direction: extend the `??` chain in the matchingCluster resolution, or add an explicit loop for the third tier after the existing `find` calls fail.
+2. **Group cards by domain** in `ClusterMap.vue`'s `territories` computed. The previous code keyed the territory map on `cluster.id`, and the API returns one row per `(subject, domain, age_group)` — several cards per domain. Build the map keyed by domain instead, pick one representative cluster row per domain for the card's summary/age range (lowest `age_range_start`), and sort each card's nodes by `AGE_GROUP_ORDER`.
 
-3. **Add dev-mode diagnostic logging.** When items fall into `__other__`, log a `console.warn` in development mode listing the unmatched topic IDs and their domain/age_group values. This helps diagnose data-level issues without affecting production behavior. Guard with `import.meta.env.DEV`.
+3. **Match by domain only.** Drop the age-group and subject-only fallback tiers:
+   - Known domain → that domain's card. Exact by construction, since cards are keyed by domain.
+   - `domain === null` → fall back to the subject's first cluster. A null domain carries no signal; the fallback keeps the node visible rather than hiding it in `__other__`.
+   - Unknown domain → `__other__`. Do not attribute it to a sibling domain.
 
-4. **Update tests** in `ClusterMap.test.ts`:
-   - Add test: "falls back to subject-only match when no domain cluster exists" — create items with null domain, verify they match a same-subject cluster instead of going to `__other__`.
+4. **Add dev-mode diagnostic logging.** When items fall into `__other__`, log a `console.warn` in development mode listing the unmatched topic IDs and their domain/age_group values. Guard with `import.meta.env.DEV`. Note the log now fires only for unknown domains, not for every unresolved age-group key — which is the case it was meant to diagnose.
+
+5. **Update tests** in `ClusterMap.test.ts`:
+   - Add: "keeps topics in their own domain and sends unknown domains to other".
+   - Add: "merges the age groups of one domain into a single territory".
+   - Rename/repurpose the null-domain test so it asserts the node actually lands in the card (node count), not on text that cannot appear either way.
+   - The `__other__` test must exercise a real path: a same-subject cluster exists but the topic's domain is null and the subject has no cluster — otherwise a `mockResolvedValue([])` makes the assertion vacuous.
    - Existing test "falls back to the domain when no cluster matches the age_group" continues to pass.
-   - Existing test "collects unmatched topics into an 'other' territory" — update if needed to reflect the new fallback tier (a topic with a truly non-existent subject should still go to `__other__`).
 
-**Patterns to follow:** The existing two-tier fallback pattern in `ClusterMap.vue:145-154`. The test structure in `ClusterMap.test.ts` (mocks, fixtures, mountMap helper).
+**Patterns to follow:** The test structure in `ClusterMap.test.ts` (mocks, fixtures, mountMap helper).
 
 **Test scenarios:**
-- Topics with null `domain` and a cluster existing for the same `subject` → matched to that cluster (not `__other__`).
-- Topics with `domain` that matches a cluster's domain but different `age_group` → matched via tier 2 (subject+domain) — existing behavior, must not regress.
-- Topics whose `subject` has no clusters at all → still go to `__other__`.
-- Mixed: some topics match exactly, some via tier 2, some via tier 3, some to `__other__` — all placed correctly.
+- Two domains, each with its own cluster → two cards, one per domain.
+- One domain with clusters at two age groups → a single card holding both nodes, ordered low → mid.
+- Topic with a domain that has no cluster → `__other__`.
+- Topic with null `domain` and a same-subject cluster → lands in that cluster's card, not `__other__`.
+- Topic with null `domain` and no same-subject cluster → `__other__`.
 
 **Verification:** Run `pnpm --filter @numina/child test:run` — all existing tests pass, new test passes. Open `/baby/learning/map` in the child app and verify territory cards render per-domain with nodes grouped inside each card, not as a scattered single group.
 
@@ -147,7 +161,7 @@ The `content-visibility: auto` + `contain-intrinsic-size: auto 200px` optimizati
 
 | Gate | What it proves |
 |------|---------------|
-| `pnpm --filter @numina/child test:run` | ClusterMap matching logic works across all fallback tiers |
+| `pnpm --filter @numina/child test:run` | ClusterMap groups by domain and routes null/unknown domains correctly |
 | `pnpm --filter @numina/child typecheck` | No type errors introduced |
 | Visual: `/baby/learning/recommendations` | Last path item visible above TabBar |
 | Visual: `/baby/learning/map` | Territory cards render per-domain |
@@ -155,15 +169,16 @@ The `content-visibility: auto` + `contain-intrinsic-size: auto 200px` optimizati
 
 ## Definition of Done
 
-- [ ] LearningPathPage bottom padding uses `calc(50px + env(safe-area-inset-bottom))`
-- [ ] All other learning subpages have matching bottom padding
-- [ ] ClusterTerritory no longer uses `content-visibility: auto`
-- [ ] ClusterMap matching has 3-tier fallback (3-key → subject+domain → subject-only)
-- [ ] Dev-mode diagnostic logging for unmatched items
-- [ ] New test for subject-only fallback passes
-- [ ] All existing ClusterMap tests still pass
-- [ ] typecheck passes for child app
-- [ ] Visual verification on all affected pages
+- [x] LearningPathPage bottom padding uses `calc(var(--van-tabbar-height) + env(safe-area-inset-bottom))`
+- [x] All other learning subpages have matching bottom padding
+- [x] ClusterTerritory no longer uses `content-visibility: auto`
+- [x] ClusterMap renders one territory per domain, with nodes ordered by age group
+- [x] Unknown domains go to `__other__`; null domains fall back to the subject's first cluster
+- [x] Dev-mode diagnostic logging for unmatched items
+- [x] Tests cover per-domain merging, unknown-domain and null-domain routing
+- [x] All existing ClusterMap tests still pass (216 tests, 31 files)
+- [x] typecheck passes for child app
+- [ ] Visual verification on all affected pages — **not done; needs a real device**
 
 ## Scope Boundaries
 
@@ -171,9 +186,10 @@ The `content-visibility: auto` + `contain-intrinsic-size: auto 200px` optimizati
 
 - Backend cluster API or seed data changes
 - Non-learning pages TabBar audit (out of issue scope)
-- Introducing a shared CSS variable for the TabBar height (the formula is repeated in 2-3 places; a variable is a nice-to-have but not required by this fix)
 
 ### Deferred to follow-up
 
-- If the subject-only fallback still leaves many items in `__other__`, a data-level investigation of the os-taxonomy seed data may be warranted (separate issue)
-- Consider a shared `--child-tabbar-height` CSS variable to DRY the repeated `calc(50px + env(safe-area-inset-bottom))` formula across the child app
+- **Resolve the page-vs-layout padding contradiction.** `frontend/CLAUDE.md` says pages must not add bottom padding; every learning page now does, because #140 reported obstruction anyway. Establish the real mechanism (device test of `100vh` overshoot is the leading hypothesis) and either amend the rule or move the clearance back into the layout.
+- `--van-tabbar-height` is now used instead of a literal `50px`, so the duplicated *formula* is the remaining DRY candidate, not the magic number.
+- If many items still land in `__other__`, investigate the os-taxonomy seed data (separate issue).
+

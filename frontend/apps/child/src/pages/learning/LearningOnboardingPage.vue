@@ -159,7 +159,7 @@ onMounted(async () => {
 <style scoped>
 .onboarding-page {
   padding: var(--space-md);
-  padding-bottom: calc(50px + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--van-tabbar-height) + env(safe-area-inset-bottom));
   background: var(--color-canvas);
   min-height: 100vh;
   display: flex;

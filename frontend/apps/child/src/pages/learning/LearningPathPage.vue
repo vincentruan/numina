@@ -139,7 +139,7 @@ onMounted(load)
 
 <style scoped>
 .learning-path-page {
-  padding-bottom: calc(50px + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--van-tabbar-height) + env(safe-area-inset-bottom));
 }
 .path-header {
   padding: 16px;
