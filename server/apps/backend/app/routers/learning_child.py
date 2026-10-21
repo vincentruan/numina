@@ -95,6 +95,7 @@ def my_knowledge_map(
         .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
         .filter(
             LearningProgress.child_id == child.id,
+            # taxonomy filter here is intentional — drops orphan progress rows; matches /map behavior.
             LearningTopic.source_taxonomy == taxonomy,
         )
         .all()
@@ -136,6 +137,7 @@ def my_knowledge_map_index(
         .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
         .filter(
             LearningProgress.child_id == child.id,
+            # taxonomy filter here is intentional — drops orphan progress rows; matches /map behavior.
             LearningTopic.source_taxonomy == taxonomy,
         )
         .all()

@@ -148,6 +148,8 @@ function loadSubjectTopics(subject: string): Promise<void> {
   if (!subject || loadedSubjects.value.has(subject)) return Promise.resolve()
   const inflight = inflightSubjects.get(subject)
   if (inflight) return inflight
+  // Snapshot IDs from the current progressList — safe because load() awaits
+  // the index before calling us, and the watcher fires only after it is set.
   const ids = progressList.value
     .filter((p) => p.subject === subject)
     .map((p) => p.topic_id)
@@ -223,6 +225,13 @@ async function load() {
 }
 
 async function onRefresh() {
+  // Drop per-subject caches so pull-to-refresh re-fetches topic detail
+  // (name/description/evidence) alongside the slim mastery index.
+  // in-flight promises continue to their natural conclusion; subsequent
+  // loads will start fresh batches.
+  loadedSubjects.value = new Set()
+  inflightSubjects.clear()
+  topicMap.value = new Map()
   await load()
   refreshing.value = false
 }
