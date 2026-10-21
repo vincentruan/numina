@@ -44,6 +44,7 @@ const { t, locale } = useI18n()
 
 const props = defineProps<{
   topic: ProgressWithTopic
+  allItems: ProgressWithTopic[]
 }>()
 
 defineEmits<{
@@ -82,8 +83,9 @@ const unmetPrereqs = computed<PrereqWithMastery[]>(() => {
 
 const prereqMasteryMap = computed(() => {
   const map = new Map<string, string>()
-  // Use progress items from parent to determine prereq mastery
-  // For simplicity, mark all prereqs as unmet (locked) unless we have data
+  for (const item of props.allItems) {
+    map.set(item.topic.id, item.mastery_level)
+  }
   return map
 })
 

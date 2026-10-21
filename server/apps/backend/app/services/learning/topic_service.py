@@ -170,12 +170,17 @@ def get_cross_subject_bridges(
     TopicAlias = aliased(LearningTopic)
     PrereqAlias = aliased(LearningTopic)
 
+    from_domain = TopicAlias.domain.label("from_cluster_domain")
+    from_subject = TopicAlias.subject.label("from_subject")
+    to_domain = PrereqAlias.domain.label("to_cluster_domain")
+    to_subject = PrereqAlias.subject.label("to_subject")
+
     query = (
         db.query(
-            TopicAlias.domain.label("from_cluster_domain"),
-            TopicAlias.subject.label("from_subject"),
-            PrereqAlias.domain.label("to_cluster_domain"),
-            PrereqAlias.subject.label("to_subject"),
+            from_domain,
+            from_subject,
+            to_domain,
+            to_subject,
             sa_func.count().label("edge_count"),
         )
         .join(
@@ -189,7 +194,7 @@ def get_cross_subject_bridges(
         .filter(TopicAlias.subject != PrereqAlias.subject)
         .filter(TopicAlias.source_taxonomy == source_taxonomy)
         .filter(PrereqAlias.source_taxonomy == source_taxonomy)
-        .group_by("from_cluster_domain", "from_subject", "to_cluster_domain", "to_subject")
+        .group_by(from_domain, from_subject, to_domain, to_subject)
     )
     if subject:
         query = query.filter(TopicAlias.subject == subject)

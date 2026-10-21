@@ -50,6 +50,7 @@
     <PrerequisiteGuidance
       v-if="prereqTopic"
       :topic="prereqTopic"
+      :all-items="props.items"
       @close="prereqTopic = null"
       @go-to="onPrereqGoTo"
     />
@@ -89,6 +90,7 @@ const loading = ref(false)
 const clusters = ref<ClusterResponse[]>([])
 const bridges = ref<BridgeResponse[]>([])
 const prereqTopic = ref<ProgressWithTopic | null>(null)
+const scrollTargetDomain = ref<string | null>(null)
 
 // ── Data loading ──
 
@@ -218,19 +220,21 @@ const frontierClusterDomain = computed(() => {
   return match?.domain ?? null
 })
 
-// ── Auto-scroll to frontier on load ──
+// ── Auto-scroll to frontier on load, or to bridge target ──
 
-watch(territories, async (val) => {
-  if (val.length > 0 && frontierClusterDomain.value) {
+watch(territories, async () => {
+  const targetDomain = scrollTargetDomain.value || frontierClusterDomain.value
+  if (targetDomain) {
     await nextTick()
     const el = document.querySelector(
-      `[data-cluster-domain="${CSS.escape(frontierClusterDomain.value)}"]`,
+      `[data-cluster-domain="${CSS.escape(targetDomain)}"]`,
     )
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
+    scrollTargetDomain.value = null
   }
-}, { once: true })
+}, { once: !frontierClusterDomain.value })
 
 // ── Tap handlers (U3) ──
 
@@ -267,19 +271,9 @@ function onTopicTap(item: ProgressWithTopic) {
 // ── Bridge navigation (U4) ──
 
 function onBridgeTap(bridge: BridgeResponse) {
+  scrollTargetDomain.value = bridge.to_cluster_domain
   // Switch to target subject tab
   emit('switchSubject', bridge.to_subject)
-  // Scroll to target cluster after tab switch
-  nextTick(() => {
-    setTimeout(() => {
-      const el = document.querySelector(
-        `[data-cluster-domain="${CSS.escape(bridge.to_cluster_domain)}"]`,
-      )
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
-    }, 300) // Wait for data reload
-  })
 }
 
 // ── Prerequisite navigation ──

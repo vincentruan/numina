@@ -158,6 +158,13 @@
   --color-brand-mint:    #8abcad;
   --color-brand-pink:    #a82960;
 
+  /* Brand -rgb variants for rgba() usage in dark mode */
+  --color-brand-ochre-rgb:    212, 168, 58;
+  --color-brand-peach-rgb:    224, 152, 112;
+  --color-brand-lavender-rgb: 154, 140, 208;
+  --color-brand-mint-rgb:     138, 188, 173;
+  --color-brand-coral-rgb:    255, 107, 90;
+
   /* Coin colors — Metallic palette adjusted for dark backgrounds */
   --color-coin-gold-glow:  #FFF8D0;  /* brighter glow for contrast */
   --color-coin-gold-hi:    #FFF8D0;
