@@ -465,6 +465,10 @@ export default {
       prereqAllMet: '✅ All prerequisites met!',
       otherDomain: 'Other',
     },
+    domainSection: {
+      expandSection: 'Expand',
+      collapseSection: 'Collapse',
+    },
     subject: {
       mathematics: 'Math',
       science: 'Science',

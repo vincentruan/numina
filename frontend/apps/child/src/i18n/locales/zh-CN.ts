@@ -467,6 +467,10 @@ export default {
       prereqAllMet: '✅ 所有前置条件已满足！',
       otherDomain: '其他',
     },
+    domainSection: {
+      expandSection: '展开',
+      collapseSection: '收起',
+    },
     subject: {
       mathematics: '数学',
       science: '科学',

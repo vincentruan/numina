@@ -82,7 +82,11 @@ function mountTerritory(
   cluster: ClusterResponse,
   items: ProgressWithTopic[] = [],
   bridges: BridgeResponse[] = [],
-  extra: { isFrontierCluster?: boolean; frontierTopicId?: string | null } = {},
+  extra: {
+    isFrontierCluster?: boolean
+    frontierTopicId?: string | null
+    hideTitle?: boolean
+  } = {},
 ) {
   const i18n = createI18n({
     legacy: false,
@@ -96,6 +100,7 @@ function mountTerritory(
       bridges,
       isFrontierCluster: extra.isFrontierCluster ?? false,
       frontierTopicId: extra.frontierTopicId ?? null,
+      hideTitle: extra.hideTitle ?? false,
     },
     global: { plugins: [i18n] },
   })
@@ -110,6 +115,28 @@ describe('ClusterTerritory', () => {
 
     expect(wrapper.find('.cluster-territory__title').text()).toContain('Addition')
     expect(wrapper.find('.cluster-territory__count').text()).toBe('(2)')
+  })
+
+  it('suppresses the domain title when an enclosing section shows it', () => {
+    // ClusterMap wraps every card in a DomainSection header carrying the same
+    // domain name, so the card must not repeat it.
+    const wrapper = mountTerritory(makeCluster({ domain: 'Addition' }), [makeItem()], [], {
+      hideTitle: true,
+    })
+
+    expect(wrapper.find('.cluster-territory__title').exists()).toBe(false)
+  })
+
+  it('keeps the frontier badge when the title is hidden', () => {
+    // The badge is the card's own signal — suppressing the title must not
+    // strip it along with the header row.
+    const wrapper = mountTerritory(makeCluster(), [], [], {
+      hideTitle: true,
+      isFrontierCluster: true,
+    })
+
+    expect(wrapper.find('.cluster-territory__title').exists()).toBe(false)
+    expect(wrapper.find('.cluster-territory__frontier-badge').exists()).toBe(true)
   })
 
   it('renders one TopicNode per item', () => {

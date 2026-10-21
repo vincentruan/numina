@@ -31,19 +31,33 @@
       :text="t('learning.cluster.empty')"
     />
 
-    <!-- Territory list -->
-    <div v-else class="cluster-map__territories">
-      <ClusterTerritory
+    <!-- Collapsible domain sections (#133). One section per territory: the
+         territory list is already deduplicated per domain (#142). -->
+    <div v-else class="cluster-map__domains">
+      <DomainSection
         v-for="territory in territories"
-        :key="territory.cluster.id"
-        :cluster="territory.cluster"
-        :items="territory.items"
-        :bridges="territory.bridges"
-        :is-frontier-cluster="frontierClusterDomain === territory.cluster.domain"
-        :frontier-topic-id="frontierTopic?.topic.id ?? null"
-        @topic-tap="onTopicTap"
-        @bridge-tap="onBridgeTap"
-      />
+        :key="domainKey(territory)"
+        :domain="territory.cluster.domain"
+        :domain-label="translateDomain(t, territory.cluster.domain)"
+        :mastered-count="masteredIn(territory)"
+        :total-count="territory.items.length"
+        :expanded="isExpanded(territory)"
+        :instant="isInstant(territory)"
+        @toggle="toggleDomain(territory)"
+      >
+        <div class="cluster-map__territories">
+          <ClusterTerritory
+            :cluster="territory.cluster"
+            :items="territory.items"
+            :bridges="territory.bridges"
+            :is-frontier-cluster="frontierClusterDomain === territory.cluster.domain"
+            :frontier-topic-id="frontierTopic?.topic.id ?? null"
+            hide-title
+            @topic-tap="onTopicTap"
+            @bridge-tap="onBridgeTap"
+          />
+        </div>
+      </DomainSection>
     </div>
 
     <!-- Prerequisite guidance bottom sheet (U3) -->
@@ -60,7 +74,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'ClusterMap' })
 
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type {
@@ -70,7 +84,9 @@ import type {
 } from '@/api/learning'
 import { getClusters, getBridges } from '@/api/learning'
 import ClusterTerritory from './ClusterTerritory.vue'
+import DomainSection from './DomainSection.vue'
 import PrerequisiteGuidance from './PrerequisiteGuidance.vue'
+import { domainLabel as translateDomain } from '@/utils/domainLabel'
 import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
 
@@ -92,10 +108,25 @@ const bridges = ref<BridgeResponse[]>([])
 const prereqTopic = ref<ProgressWithTopic | null>(null)
 const scrollTargetDomain = ref<string | null>(null)
 
+// ── Collapse state (KTD6) ──
+
+/** Explicit user toggles, keyed by `{subject}:{domain}`. Written *only* by
+ *  `toggleDomain`, so a manual collapse can never be overwritten by the
+ *  auto-expand defaults (R5). Domains absent from this map fall back to the
+ *  computed default, which keeps the first render correct instead of
+ *  collapsing everything and animating it open on the next flush. */
+const userExpanded = reactive(new Map<string, boolean>())
+
 // ── Data loading ──
 
 async function load() {
   loading.value = true
+  // Clear stale clusters from the previous subject before the new data lands.
+  // Without this, `territories` briefly mixes new items against old clusters
+  // during the subject switch, and everything unmatched lands in the "其他"
+  // bucket — a visible flash the child sees for a split second.
+  clusters.value = []
+  bridges.value = []
   try {
     const [clusterData, bridgeData] = await Promise.all([
       getClusters(props.selectedSubject),
@@ -196,8 +227,14 @@ const territories = computed<Territory[]>(() => {
     }]
   })
 
-  // Append "Other" territory for unmatched items
-  if (unmatched.length > 0) {
+  // Append "Other" territory for unmatched items. Skip this when clusters
+  // are still loading — during a subject switch the old clusters were just
+  // cleared, so every item is temporarily unmatched and would flash into a
+  // transient "其他" section. Once the new clusters land, the unmatched set
+  // settles correctly. After a failed load, clusters is empty and loading is
+  // false, and the bucket still applies — it's the legitimate fallback for
+  // items whose domain has no cluster row at all.
+  if (!loading.value && unmatched.length > 0) {
     if (import.meta.env.DEV) {
       console.warn(
         `[ClusterMap] ${unmatched.length} topic(s) unmatched — no cluster found:`,
@@ -227,11 +264,55 @@ const territories = computed<Territory[]>(() => {
   return result
 })
 
+/** Composite key `{subject}:{domain}` (KTD6) — survives subject switches
+ *  without colliding on domain names shared between subjects. */
+function domainKey(territory: Territory): string {
+  return `${props.selectedSubject}:${territory.cluster.domain}`
+}
+
+function masteredIn(territory: Territory): number {
+  return territory.items.filter((i) => i.mastery_level === 'mastered').length
+}
+
 // ── Progress (U5) ──
 
 const subjectItems = computed(() =>
   props.items.filter((item) => item.topic.subject === props.selectedSubject),
 )
+
+// ── Collapse defaults (KTD3) ──
+
+/** A domain opens by default when it holds active learning — anything the
+ *  child is working on now, or has mastered but is due to review. Locked and
+ *  not-yet-due mastered topics stay hidden. */
+function defaultExpanded(territory: Territory): boolean {
+  return territory.items.some((i) => {
+    const level = i.mastery_level
+    if (level === 'learning' || level === 'assessing' || level === 'available') return true
+    if (level === 'mastered' && i.next_review_at && new Date(i.next_review_at) <= new Date()) return true
+    return false
+  })
+}
+
+/** Derived, not seeded: a user toggle always wins, otherwise the default is
+ *  recomputed from current data. Deriving it means the first paint already has
+ *  the final expanded state (no collapse-then-animate-open flash) and no
+ *  watcher can reset a manual choice. */
+function isExpanded(territory: Territory): boolean {
+  return userExpanded.get(domainKey(territory)) ?? defaultExpanded(territory)
+}
+
+function toggleDomain(territory: Territory) {
+  userExpanded.set(domainKey(territory), !isExpanded(territory))
+}
+
+/** True while a programmatic expand (frontier/bridge) has the section open
+ *  without its height transition — see the scroll watcher below. */
+function isInstant(territory: Territory): boolean {
+  return instantExpandKeys.has(domainKey(territory))
+}
+
+// ── Progress (derived from subjectItems) ──
 
 const totalCount = computed(() => subjectItems.value.length)
 
@@ -283,25 +364,57 @@ const frontierClusterDomain = computed(() => {
 // whenever the child had a frontier.
 let frontierScrolled = false
 
-// flush: 'post' — the territory this scrolls to only exists once the
-// component has re-rendered with the new subject's clusters/topics.
+/** Domains that were expanded programmatically rather than by the child.
+ *  Their height transition is suppressed for the scroll so `scrollIntoView`
+ *  resolves its target against final geometry, not a 44px collapsing row. */
+const instantExpandKeys = reactive(new Set<string>())
+
+/** Bumped per scroll attempt so an in-flight one can tell it was superseded. */
+let scrollSeq = 0
+
+/** Scroll to the section for `targetDomain`, preferring the territory card
+ *  the child actually navigated to over the section header. Returns false
+ *  when the node is not mounted yet. */
+function scrollToDomain(targetDomain: string): boolean {
+  const section = document.querySelector(
+    `.domain-section[data-domain="${CSS.escape(targetDomain)}"]`,
+  )
+  if (!section) return false
+
+  const anchor =
+    section.querySelector(`[data-cluster-domain="${CSS.escape(targetDomain)}"]`) ??
+    section
+  anchor.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  return true
+}
+
+// flush: 'post' — the section this scrolls to only exists once the component
+// has re-rendered with the new subject's clusters/topics.
 watch(territories, async () => {
   const bridgeTarget = scrollTargetDomain.value
   const targetDomain =
     bridgeTarget || (frontierScrolled ? null : frontierClusterDomain.value)
   if (!targetDomain) return
 
-  const el = document.querySelector(
-    `[data-cluster-domain="${CSS.escape(targetDomain)}"]`,
-  )
-  // The target territory may still be pending: a subject switch re-renders
-  // territories from the props change first, and only later from the
-  // clusters/topics fetch. Keep the target armed until the node is really
-  // there, so the scroll fires on a later recomputation instead of being
-  // silently dropped.
-  if (!el) return
+  const seq = ++scrollSeq
+  const target = territories.value.find((t) => t.cluster.domain === targetDomain)
+  const targetKey = target ? domainKey(target) : null
 
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  // Auto-expand a collapsed target before scrolling (R6). The `instant` flag
+  // suppresses the height transition, so one nextTick is enough for the
+  // section to reach final geometry — no animating row to measure against.
+  if (target && targetKey && !isExpanded(target)) {
+    userExpanded.set(targetKey, true)
+    instantExpandKeys.add(targetKey)
+    await nextTick()
+    if (seq !== scrollSeq) return
+  }
+
+  // Keep the target armed when the node is not mounted yet: a subject switch
+  // re-renders from the props change first and only later from the fetch.
+  if (!scrollToDomain(targetDomain)) return
+
+  if (targetKey) instantExpandKeys.delete(targetKey)
   if (bridgeTarget) {
     scrollTargetDomain.value = null
   } else {
@@ -423,7 +536,13 @@ function onPrereqGoTo(topicId: string) {
   color: var(--color-body);
 }
 
-/* ── Territory list ── */
+/* ── Domain groups ── */
+
+.cluster-map__domains {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 
 .cluster-map__territories {
   display: flex;
