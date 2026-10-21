@@ -339,9 +339,9 @@ describe('ClusterMap', () => {
 
     // mock.contexts is the `this` of each call — the element scrollIntoView
     // was invoked on. (mock.instances only records `new`-style construction.)
-    const scrolledDomains = scrollSpy.mock.contexts.map((c) =>
-      (c as Element).getAttribute('data-cluster-domain'),
-    )
+    const scrolledDomains = scrollSpy.mock.contexts
+      .map((c) => (c as Element).getAttribute('data-domain'))
+      .filter(Boolean)
     expect(scrolledDomains).toContain('Units')
     scrollSpy.mockRestore()
   })

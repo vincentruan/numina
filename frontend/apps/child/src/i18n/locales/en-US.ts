@@ -465,6 +465,11 @@ export default {
       prereqAllMet: '✅ All prerequisites met!',
       otherDomain: 'Other',
     },
+    domainSection: {
+      progress: '{mastered}/{total} mastered',
+      expandSection: 'Expand',
+      collapseSection: 'Collapse',
+    },
     subject: {
       mathematics: 'Math',
       science: 'Science',

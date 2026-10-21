@@ -26,24 +26,37 @@
 
     <!-- Empty state -->
     <EmptyState
-      v-if="territories.length === 0 && !loading"
+      v-if="domainGroups.length === 0 && !loading"
       :illustration="noRecordsSvg"
       :text="t('learning.cluster.empty')"
     />
 
-    <!-- Territory list -->
-    <div v-else class="cluster-map__territories">
-      <ClusterTerritory
-        v-for="territory in territories"
-        :key="territory.cluster.id"
-        :cluster="territory.cluster"
-        :items="territory.items"
-        :bridges="territory.bridges"
-        :is-frontier-cluster="frontierClusterDomain === territory.cluster.domain"
-        :frontier-topic-id="frontierTopic?.topic.id ?? null"
-        @topic-tap="onTopicTap"
-        @bridge-tap="onBridgeTap"
-      />
+    <!-- Domain-grouped territory list -->
+    <div v-else class="cluster-map__domains">
+      <DomainSection
+        v-for="group in domainGroups"
+        :key="group.domainKey"
+        :domain="extractDomain(group.domainKey)"
+        :domain-label="domainLabel(group.domainKey)"
+        :mastered-count="group.masteredCount"
+        :total-count="group.totalCount"
+        :expanded="expandedDomains.has(group.domainKey)"
+        @toggle="toggleDomain(group.domainKey)"
+      >
+        <div class="cluster-map__territories">
+          <ClusterTerritory
+            v-for="territory in group.territories"
+            :key="territory.cluster.id"
+            :cluster="territory.cluster"
+            :items="territory.items"
+            :bridges="territory.bridges"
+            :is-frontier-cluster="frontierClusterDomain === territory.cluster.domain"
+            :frontier-topic-id="frontierTopic?.topic.id ?? null"
+            @topic-tap="onTopicTap"
+            @bridge-tap="onBridgeTap"
+          />
+        </div>
+      </DomainSection>
     </div>
 
     <!-- Prerequisite guidance bottom sheet (U3) -->
@@ -60,7 +73,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'ClusterMap' })
 
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type {
@@ -70,6 +83,7 @@ import type {
 } from '@/api/learning'
 import { getClusters, getBridges } from '@/api/learning'
 import ClusterTerritory from './ClusterTerritory.vue'
+import DomainSection from './DomainSection.vue'
 import PrerequisiteGuidance from './PrerequisiteGuidance.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
@@ -91,6 +105,11 @@ const clusters = ref<ClusterResponse[]>([])
 const bridges = ref<BridgeResponse[]>([])
 const prereqTopic = ref<ProgressWithTopic | null>(null)
 const scrollTargetDomain = ref<string | null>(null)
+
+// ── Collapse state (KTD6) ──
+
+const expandedDomains = reactive(new Set<string>())
+const domainDefaultsInitialized = new Set<string>()
 
 // ── Data loading ──
 
@@ -127,20 +146,27 @@ interface Territory {
   bridges: BridgeResponse[]
 }
 
-const territories = computed<Territory[]>(() => {
+interface DomainGroup {
+  domainKey: string
+  territories: Territory[]
+  totalCount: number
+  masteredCount: number
+}
+
+/** Extract raw domain name from composite key "subject:domain". */
+function extractDomain(domainKey: string): string {
+  return domainKey.split(':').slice(1).join(':')
+}
+
+function buildTerritories(): Territory[] {
   const subjectItems = props.items.filter(
     (item) => item.topic.subject === props.selectedSubject,
   )
 
-  // Match items to clusters by subject + domain + age_group
   const clusterMap = new Map<string, ProgressWithTopic[]>()
   const unmatched: ProgressWithTopic[] = []
 
   for (const item of subjectItems) {
-    // Prefer the exact 3-key match; the API now returns one row per key, but
-    // a key it never had (e.g. a topic whose age_group is missing from
-    // clusters.json) should still land in its domain territory rather than be
-    // dropped into "其他".
     const domain = item.topic.domain ?? ''
     const matchingCluster =
       clusters.value.find(
@@ -160,10 +186,6 @@ const territories = computed<Territory[]>(() => {
     }
   }
 
-  // Only render territories that actually hold nodes. ``topic_count`` is the
-  // taxonomy's count for the (subject, domain, age_group) key, not this
-  // child's — trusting it would render empty cards wherever the API's row set
-  // and the progress rows disagree.
   const result: Territory[] = clusters.value
     .filter((c) => clusterMap.has(c.id))
     .map((c) => ({
@@ -172,7 +194,6 @@ const territories = computed<Territory[]>(() => {
       bridges: bridges.value.filter((b) => b.from_cluster_domain === c.domain),
     }))
 
-  // Append "Other" territory for unmatched items
   if (unmatched.length > 0) {
     result.push({
       cluster: {
@@ -190,6 +211,34 @@ const territories = computed<Territory[]>(() => {
   }
 
   return result
+}
+
+const domainGroups = computed<DomainGroup[]>(() => {
+  const territories = buildTerritories()
+  const groups = new Map<string, DomainGroup>()
+
+  for (const territory of territories) {
+    const domain = territory.cluster.domain
+    const key = `${props.selectedSubject}:${domain}`
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        domainKey: key,
+        territories: [],
+        totalCount: 0,
+        masteredCount: 0,
+      })
+    }
+
+    const group = groups.get(key)!
+    group.territories.push(territory)
+    group.totalCount += territory.items.length
+    group.masteredCount += territory.items.filter(
+      (i) => i.mastery_level === 'mastered',
+    ).length
+  }
+
+  return [...groups.values()]
 })
 
 // ── Progress (U5) ──
@@ -197,6 +246,56 @@ const territories = computed<Territory[]>(() => {
 const subjectItems = computed(() =>
   props.items.filter((item) => item.topic.subject === props.selectedSubject),
 )
+
+// ── Collapse defaults (KTD3) ──
+
+/** Reset default-initialization tracking when data changes so new items can
+ *  flip a domain from collapsed to expanded. */
+watch(
+  () => [domainGroups.value, subjectItems.value.length],
+  () => {
+    domainDefaultsInitialized.clear()
+  },
+)
+
+/** Reset when switching subjects so the new subject's domains get defaults,
+ *  but do NOT clear expandedDomains — R5 requires global persistence. */
+watch(() => props.selectedSubject, () => {
+  domainDefaultsInitialized.clear()
+})
+
+function initializeDomainDefaults() {
+  if (subjectItems.value.length === 0) return
+
+  for (const group of domainGroups.value) {
+    if (domainDefaultsInitialized.has(group.domainKey)) continue
+
+    const hasActive = group.territories.some((territory) =>
+      territory.items.some((i) => {
+        const level = i.mastery_level
+        if (level === 'learning' || level === 'assessing' || level === 'available') return true
+        if (level === 'mastered' && i.next_review_at && new Date(i.next_review_at) <= new Date()) return true
+        return false
+      }),
+    )
+
+    if (hasActive) {
+      expandedDomains.add(group.domainKey)
+    }
+
+    domainDefaultsInitialized.add(group.domainKey)
+  }
+}
+
+function toggleDomain(domainKey: string) {
+  if (expandedDomains.has(domainKey)) {
+    expandedDomains.delete(domainKey)
+  } else {
+    expandedDomains.add(domainKey)
+  }
+}
+
+// ── Progress (derived from subjectItems) ──
 
 const totalCount = computed(() => subjectItems.value.length)
 
@@ -215,7 +314,6 @@ const progressText = computed(() =>
 // ── Frontier detection (U5) ──
 
 const frontierTopic = computed<ProgressWithTopic | null>(() => {
-  // Priority: learning > available > review
   const learning = subjectItems.value.find((i) => i.mastery_level === 'learning' || i.mastery_level === 'assessing')
   if (learning) return learning
   const available = subjectItems.value.find((i) => i.mastery_level === 'available')
@@ -238,30 +336,42 @@ const frontierClusterDomain = computed(() => {
 
 // ── Auto-scroll to frontier on load, or to bridge target ──
 
-// The frontier scroll is one-shot (it brings the child to their place on
-// first view); a bridge tap must work on *every* subject switch, because
-// the target territory only exists in the DOM after the new clusters and
-// topics resolve. Tracking the two modes separately is what the previous
-// `{ once: … }` could not express — it disabled the bridge scroll too
-// whenever the child had a frontier.
 let frontierScrolled = false
 
-// flush: 'post' — the territory this scrolls to only exists once the
-// component has re-rendered with the new subject's clusters/topics.
-watch(territories, async () => {
+watch(domainGroups, () => {
+  initializeDomainDefaults()
+
   const bridgeTarget = scrollTargetDomain.value
   const targetDomain =
     bridgeTarget || (frontierScrolled ? null : frontierClusterDomain.value)
   if (!targetDomain) return
 
+  const targetKey = `${props.selectedSubject}:${targetDomain}`
+
+  // Auto-expand collapsed domain before scrolling (R6)
+  if (!expandedDomains.has(targetKey)) {
+    expandedDomains.add(targetKey)
+    // Wait for DOM to render expanded content — nextTick resolves after
+    // the reactive change has been flushed.
+    nextTick(() => {
+      const el = document.querySelector(
+        `.domain-section[data-domain="${CSS.escape(targetDomain)}"]`,
+      )
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        if (bridgeTarget) {
+          scrollTargetDomain.value = null
+        } else {
+          frontierScrolled = true
+        }
+      }
+    })
+    return
+  }
+
   const el = document.querySelector(
-    `[data-cluster-domain="${CSS.escape(targetDomain)}"]`,
+    `.domain-section[data-domain="${CSS.escape(targetDomain)}"]`,
   )
-  // The target territory may still be pending: a subject switch re-renders
-  // territories from the props change first, and only later from the
-  // clusters/topics fetch. Keep the target armed until the node is really
-  // there, so the scroll fires on a later recomputation instead of being
-  // silently dropped.
   if (!el) return
 
   el.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -308,7 +418,6 @@ function onTopicTap(item: ProgressWithTopic) {
 
 function onBridgeTap(bridge: BridgeResponse) {
   scrollTargetDomain.value = bridge.to_cluster_domain
-  // Switch to target subject tab
   emit('switchSubject', bridge.to_subject)
 }
 
@@ -317,6 +426,16 @@ function onBridgeTap(bridge: BridgeResponse) {
 function onPrereqGoTo(topicId: string) {
   prereqTopic.value = null
   router.push(`/learning/topic/${topicId}`)
+}
+
+// ── Domain label helper ──
+
+function domainLabel(domainKey: string): string {
+  const domain = extractDomain(domainKey)
+  if (domain === '__other__') return t('learning.cluster.otherDomain')
+  const key = `learning.domains.${domain}`
+  const translated = t(key)
+  return translated === key ? domain : translated
 }
 </script>
 
@@ -386,7 +505,13 @@ function onPrereqGoTo(topicId: string) {
   color: var(--color-body);
 }
 
-/* ── Territory list ── */
+/* ── Domain groups ── */
+
+.cluster-map__domains {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 
 .cluster-map__territories {
   display: flex;
