@@ -6,7 +6,7 @@
       <!-- Breadcrumb -->
       <div class="breadcrumb">
         <button class="breadcrumb__back" @click="goBack" :aria-label="t('learning.backToMap')">
-          ← {{ t('learning.backToMap') }}
+          {{ t('learning.backToMap') }}
         </button>
       </div>
 
@@ -175,12 +175,12 @@
       @confirm="proceedToSession"
       @cancel="goToSuggestedTopic"
     >
-      <div style="padding: 16px; text-align: center">
-        <div style="font-size: 32px; margin-bottom: 8px">⚠️</div>
-        <p>{{ difficultyMessage }}</p>
+      <div class="difficulty-dialog__content">
+        <div class="difficulty-dialog__icon">️</div>
+        <p class="difficulty-dialog__message">{{ difficultyMessage }}</p>
         <p
           v-if="suggestedTopicName"
-          style="color: var(--van-primary-color); cursor: pointer"
+          class="difficulty-dialog__suggestion"
           @click="goToSuggestedTopic"
         >
           {{ t('learning.difficultyWarning.suggestion', { name: suggestedTopicName }) }}
@@ -739,6 +739,33 @@ onMounted(async () => {
 .btn-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Difficulty dialog */
+.difficulty-dialog__content {
+  padding: 16px;
+  text-align: center;
+}
+
+.difficulty-dialog__icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.difficulty-dialog__message {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  color: var(--van-dialog-message-text-color);
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.difficulty-dialog__suggestion {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  color: var(--van-primary-color);
+  cursor: pointer;
+  margin: 0;
 }
 
 /* Error state */
