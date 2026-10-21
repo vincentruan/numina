@@ -181,8 +181,8 @@ server/apps/backend/data/
 # ===========================
 .prompt-*.md
 
-# Root package files (for screenshot tools only)
-/package.json
+# Root npm artifacts (the root package.json IS tracked: it carries
+# pnpm.patchedDependencies, which is the only place pnpm 9 reads them from)
 /package-lock.json
 .env.production
 
