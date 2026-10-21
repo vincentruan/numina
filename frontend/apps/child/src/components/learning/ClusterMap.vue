@@ -173,10 +173,6 @@ const territories = computed<Territory[]>(() => {
   const domainMap = new Map<string, ProgressWithTopic[]>()
   const unmatched: ProgressWithTopic[] = []
 
-  // Prefer the exact 3-key match; the API now returns one row per key, but
-  // a key it never had (e.g. a topic whose age_group is missing from
-  // clusters.json) should still land in its domain territory rather than be
-  // dropped into "其他".
   for (const item of subjectItems) {
     // Only the domain decides which territory a topic belongs to. A domain the
     // taxonomy has no cluster for must not be attributed to an unrelated
@@ -401,13 +397,13 @@ watch(territories, async () => {
   if (!targetDomain) return
 
   const seq = ++scrollSeq
-  const targetKey = `${props.selectedSubject}:${targetDomain}`
   const target = territories.value.find((t) => t.cluster.domain === targetDomain)
+  const targetKey = target ? domainKey(target) : null
 
   // Auto-expand a collapsed target before scrolling (R6). The `instant` flag
   // suppresses the height transition, so one nextTick is enough for the
   // section to reach final geometry — no animating row to measure against.
-  if (target && !isExpanded(target)) {
+  if (target && targetKey && !isExpanded(target)) {
     userExpanded.set(targetKey, true)
     instantExpandKeys.add(targetKey)
     await nextTick()
@@ -418,7 +414,7 @@ watch(territories, async () => {
   // re-renders from the props change first and only later from the fetch.
   if (!scrollToDomain(targetDomain)) return
 
-  instantExpandKeys.delete(targetKey)
+  if (targetKey) instantExpandKeys.delete(targetKey)
   if (bridgeTarget) {
     scrollTargetDomain.value = null
   } else {
