@@ -160,7 +160,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { usePageLoading } from '@/composables/usePageLoading'
-import { getMyLearningMap, getMyProgress, getMyLearningStats, getTopicDetail, type ProgressResponse, type TopicResponse, type ChildProgressOverview, type LearningStatsResponse } from '@/api/learning'
+import { getMyLearningMap, getMyProgress, getMyLearningStats, getTopicsBatch, type ProgressResponse, type TopicResponse, type ChildProgressOverview, type LearningStatsResponse } from '@/api/learning'
 import { getWeakTopics, listPracticeSessions, type WeakTopicResponse, type SessionListItem } from '@/api/practice'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 import XPProgressBar from '@/components/learning/XPProgressBar.vue'
@@ -266,14 +266,21 @@ async function load() {
     weakTopics.value = weak
     recentSessions.value = sessions
 
-    // Fetch topic details for display names
+    // Fetch topic details for display names — batch in chunks to avoid
+    // URL length limits and single-point failures from Promise.all.
     const uniqueTopicIds = [...new Set(progress.map((p) => p.topic_id))]
-    const topicDetails = await Promise.all(
-      uniqueTopicIds.map((id) => getTopicDetail(id)),
-    )
+    const CHUNK = 50
     const newMap = new Map<string, TopicResponse>()
-    for (const topic of topicDetails) {
-      newMap.set(topic.id, topic)
+    for (let i = 0; i < uniqueTopicIds.length; i += CHUNK) {
+      const chunk = uniqueTopicIds.slice(i, i + CHUNK)
+      try {
+        const topics = await getTopicsBatch(chunk)
+        for (const topic of topics) {
+          newMap.set(topic.id, topic)
+        }
+      } catch {
+        // Individual chunk failure should not break the entire map.
+      }
     }
     topicMap.value = newMap
   } catch {
@@ -301,7 +308,6 @@ onMounted(async () => {
 <style scoped>
 .learning-progress-page {
   padding: var(--space-md);
-  padding-bottom: calc(var(--van-tabbar-height) + env(safe-area-inset-bottom));
   background: var(--color-canvas);
   min-height: 100vh;
 }

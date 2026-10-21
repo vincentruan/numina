@@ -458,13 +458,27 @@ describe('ClusterMap', () => {
     expect(wrapper.text()).not.toContain('__other__')
   })
 
-  it('labels the synthetic bucket with a translated name, not its raw id', async () => {
+  it('groups items by domain directly when no clusters exist for the subject', async () => {
     mockGetClusters.mockResolvedValue([])
     const wrapper = mountMap([
       makeItem({ topic: makeTopic({ id: 't1', domain: 'Unclustered Domain' }) }),
     ])
     await flushPromises()
 
+    // Without clusters for the subject, items group by their own domain
+    // instead of collapsing into "其他".
+    expect(wrapper.text()).toContain('Unclustered Domain')
+    expect(wrapper.text()).not.toContain('__other__')
+  })
+
+  it('falls back to __other__ for null-domain items when no clusters exist', async () => {
+    mockGetClusters.mockResolvedValue([])
+    const wrapper = mountMap([
+      makeItem({ topic: makeTopic({ id: 't1', domain: null }) }),
+    ])
+    await flushPromises()
+
+    // Null-domain items with no clusters still go to the translated "其他" bucket.
     expect(wrapper.text()).toContain('其他')
     expect(wrapper.text()).not.toContain('__other__')
   })

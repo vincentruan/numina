@@ -167,6 +167,14 @@ const territories = computed<Territory[]>(() => {
     (item) => item.topic.subject === props.selectedSubject,
   )
 
+  // When no clusters exist for the selected subject (e.g. Beijing-only
+  // subjects like art/biology whose clusters were seeded under os-taxonomy
+  // keys), fall back to grouping items directly by domain so they still
+  // render as meaningful cards instead of all collapsing into "其他".
+  const hasClustersForSubject = clusters.value.some(
+    (c) => c.subject === props.selectedSubject,
+  )
+
   // One card per domain, not per cluster row. ``clusters.json`` stores several
   // rows per domain (one per age_group), so keying the map on ``cluster.id``
   // rendered the same domain as several separate cards.
@@ -182,6 +190,17 @@ const territories = computed<Territory[]>(() => {
     // cluster of the same subject: arbitrary, but better than hiding the node
     // in "其他" where the child would never see it.
     const domain = item.topic.domain
+
+    if (!hasClustersForSubject && !loading.value) {
+      // No clusters for this subject and not mid-load — group by domain
+      // directly so Beijing-only subjects still render meaningful cards
+      // instead of collapsing everything into "其他".
+      const target = domain || '__other__'
+      if (!domainMap.has(target)) domainMap.set(target, [])
+      domainMap.get(target)!.push(item)
+      continue
+    }
+
     const target =
       domain !== null && clusters.value.some((c) => c.domain === domain)
         ? domain
@@ -214,9 +233,22 @@ const territories = computed<Territory[]>(() => {
   }
 
   // A domain reaches this map only if a cluster carries it, so every entry is
-  // backed by a representative row.
+  // backed by a representative row. When no clusters exist for the subject
+  // (Beijing-only subjects with os-taxonomy seed clusters), synthesize a
+  // minimal representative so the domain card still renders.
   const result: Territory[] = [...domainMap.entries()].flatMap(([domain, items]) => {
-    const cluster = representatives.get(domain)
+    let cluster = representatives.get(domain)
+    if (!cluster && !hasClustersForSubject && !loading.value) {
+      cluster = {
+        id: `synthetic:${props.selectedSubject}:${domain}`,
+        subject: props.selectedSubject,
+        domain,
+        age_range_start: null,
+        age_group: '',
+        summary: '',
+        topic_count: items.length,
+      } as ClusterResponse
+    }
     if (!cluster) return []
     return [{
       cluster,

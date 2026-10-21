@@ -245,7 +245,21 @@ def list_clusters_with_topic_counts(
     subject: str | None = None,
     source_taxonomy: str | None = None,
 ) -> list[dict]:
-    """List clusters enriched with topic counts via GROUP BY."""
+    """List clusters enriched with topic counts via GROUP BY.
+
+    Falls back to os-taxonomy clusters when the requested taxonomy has no
+    cluster rows (e.g. zh-CN user with Beijing topics but os-taxonomy seed
+    clusters).
+    """
+    effective_taxonomy = source_taxonomy
+    if source_taxonomy and source_taxonomy != SOURCE_TAXONOMY_OS:
+        # Probe whether any clusters exist for the requested taxonomy.
+        has_clusters = db.query(
+            exists().where(LearningCluster.source_taxonomy == source_taxonomy)
+        ).scalar()
+        if not has_clusters:
+            effective_taxonomy = SOURCE_TAXONOMY_OS
+
     topic_count_q = (
         db.query(
             LearningTopic.subject,
@@ -255,9 +269,9 @@ def list_clusters_with_topic_counts(
         )
         .filter(LearningTopic.deprecated.is_(False))
     )
-    if source_taxonomy:
+    if effective_taxonomy:
         topic_count_q = topic_count_q.filter(
-            LearningTopic.source_taxonomy == source_taxonomy
+            LearningTopic.source_taxonomy == effective_taxonomy
         )
     topic_count_q = topic_count_q.group_by(
         LearningTopic.subject, LearningTopic.domain, LearningTopic.age_group
@@ -266,7 +280,7 @@ def list_clusters_with_topic_counts(
         (r.subject, r.domain, r.age_group): r.topic_count for r in topic_count_q.all()
     }
 
-    clusters = list_clusters(db, subject=subject, source_taxonomy=source_taxonomy)
+    clusters = list_clusters(db, subject=subject, source_taxonomy=effective_taxonomy)
 
     # ``learning_clusters`` is unique on (subject, domain, age_range_start), so
     # one territory can be stored several times — clusters.json has 183 rows
