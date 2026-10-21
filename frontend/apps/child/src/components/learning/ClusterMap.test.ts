@@ -97,7 +97,12 @@ function mountMap(items: ProgressWithTopic[], subject = 'mathematics') {
     locale: 'zh-CN',
     messages: { 'zh-CN': zhCN, 'en-US': enUS },
   })
+  // attachTo: the bridge/frontier scroll resolves its target with
+  // document.querySelector, which needs the tree in the document.
+  const host = document.createElement('div')
+  document.body.appendChild(host)
   return mount(ClusterMap, {
+    attachTo: host,
     props: { items, selectedSubject: subject },
     global: { plugins: [i18n] },
   })
@@ -273,6 +278,55 @@ describe('ClusterMap', () => {
     const emitted = wrapper.emitted('switchSubject')
     expect(emitted).toBeTruthy()
     expect(emitted![0]).toEqual(['science'])
+  })
+
+  it('scrolls to the bridge target after the new subject data lands', async () => {
+    // Regression: the territories watcher was registered with `once: true`,
+    // so it de-registered after the initial frontier scroll and the bridge
+    // scroll never ran — the target territory only exists after the
+    // subject-switch refetch resolves.
+    const bridge: BridgeResponse = {
+      from_cluster_domain: 'Addition',
+      from_subject: 'mathematics',
+      to_cluster_domain: 'Units',
+      to_subject: 'science',
+      edge_count: 1,
+    }
+    mockGetBridges.mockResolvedValue([bridge])
+    const wrapper = mountMap([makeItem()])
+    await flushPromises()
+
+    // Drop anything the initial frontier scroll recorded.
+    const scrollSpy = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => {})
+    scrollSpy.mockClear()
+
+    await wrapper.find('.bridge-badge').trigger('click')
+    await flushPromises()
+
+    // Parent reacts to switchSubject by moving to the science tab; its data
+    // resolves only now — the scroll has to wait for that territories update.
+    mockGetClusters.mockResolvedValue([
+      makeCluster({ id: 'cl2', subject: 'science', domain: 'Units', topic_count: 1 }),
+    ])
+    await wrapper.setProps({
+      selectedSubject: 'science',
+      items: [
+        makeItem({
+          id: 'p2',
+          topic: makeTopic({ id: 't2', subject: 'science', domain: 'Units' }),
+        }),
+      ],
+    })
+    await flushPromises()
+
+    const scrolled = scrollSpy.mock.instances as unknown as Element[]
+    const target = scrolled.find(
+      (el) => el?.getAttribute?.('data-cluster-domain') === 'Units',
+    )
+    expect(target).toBeTruthy()
+    scrollSpy.mockRestore()
   })
 
   it('only matches topics of the selected subject', async () => {
