@@ -456,6 +456,18 @@ export default {
     attempts: '{count} 次尝试',
     evidence: '学习目标',
     general: '综合',
+    cluster: {
+      empty: '这个学科暂时没有学习内容，试试其他学科吧！',
+      frontierBanner: '📍 从这里开始你的学习之旅',
+      allMastered: '🎉 太棒了！这个学科的全部内容都已掌握，试试其他学科吧！',
+      bridgeLabel: '连接到：{subjects}',
+      hereMarker: '📍 当前学习',
+      progress: '{mastered}/{total} 已掌握',
+      prereqTitle: '解锁 "{topic}" 需要先掌握：',
+      prereqGoTo: '前往学习',
+      prereqAllMet: '✅ 所有前置条件已满足！',
+      otherDomain: '其他',
+    },
     subject: {
       mathematics: '数学',
       science: '科学',

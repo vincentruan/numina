@@ -29,11 +29,12 @@
             :tabs="subjectTabs"
           />
 
-          <!-- Topic grid for selected subject -->
+          <!-- Cluster map for selected subject -->
           <div class="map-content">
-            <TopicGrid
-              :items="filteredItems"
-              @topic-click="onTopicClick"
+            <ClusterMap
+              :items="mapItems"
+              :selected-subject="selectedSubject"
+              @switch-subject="onSwitchSubject"
             />
 
             <!-- Today recommendation -->
@@ -67,12 +68,12 @@ import { getMyLearningMap, getTopicsBatch, type ProgressResponse, type TopicResp
 import type { ProgressWithTopic } from '@/api/learning'
 import SubjectTabs from '@/components/learning/SubjectTabs.vue'
 import type { SubjectTab } from '@/components/learning/SubjectTabs.vue'
-import TopicGrid from '@/components/learning/TopicGrid.vue'
+import ClusterMap from '@/components/learning/ClusterMap.vue'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const { topicDisplayName, topicDescription } = useLocalizedTopic()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
@@ -114,9 +115,10 @@ watch(subjectTabs, (tabs) => {
   }
 })
 
-const filteredItems = computed(() =>
-  mapItems.value.filter((item) => item.topic.subject === selectedSubject.value),
-)
+// Bridge navigation: switch subject tab
+function onSwitchSubject(subject: string) {
+  selectedSubject.value = subject
+}
 
 // Today recommendation: pick first non-mastered topic
 const recommended = computed(() => {

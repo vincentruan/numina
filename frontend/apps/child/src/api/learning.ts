@@ -287,4 +287,38 @@ export async function getMyPath(pathId: string): Promise<PathResponse> {
   return res.data
 }
 
+// --- Cluster Map types (U2) ---
+
+export interface ClusterResponse {
+  id: string
+  subject: string
+  domain: string
+  age_range_start: number | null
+  age_group: string
+  summary: string
+  topic_count: number
+}
+
+export interface BridgeResponse {
+  from_cluster_domain: string
+  from_subject: string
+  to_cluster_domain: string
+  to_subject: string
+  edge_count: number
+}
+
+export async function getClusters(subject?: string): Promise<ClusterResponse[]> {
+  const res = await http.get('/child/learning/clusters', {
+    params: subject ? { subject } : {},
+  })
+  return res.data
+}
+
+export async function getBridges(subject?: string): Promise<BridgeResponse[]> {
+  const res = await http.get('/child/learning/bridges', {
+    params: subject ? { subject } : {},
+  })
+  return res.data
+}
+
 

@@ -454,6 +454,18 @@ export default {
     attempts: '{count} attempts',
     evidence: 'Learning Goals',
     general: 'General',
+    cluster: {
+      empty: 'No learning content for this subject yet. Try another one!',
+      frontierBanner: '📍 Start your learning journey here',
+      allMastered: '🎉 Amazing! You\'ve mastered everything in this subject. Try another one!',
+      bridgeLabel: 'Connects to: {subjects}',
+      hereMarker: '📍 Learning now',
+      progress: '{mastered}/{total} mastered',
+      prereqTitle: 'To unlock "{topic}", master these first:',
+      prereqGoTo: 'Go learn',
+      prereqAllMet: '✅ All prerequisites met!',
+      otherDomain: 'Other',
+    },
     subject: {
       mathematics: 'Math',
       science: 'Science',
