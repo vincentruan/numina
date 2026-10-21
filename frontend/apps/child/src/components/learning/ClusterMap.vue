@@ -121,6 +121,12 @@ const userExpanded = reactive(new Map<string, boolean>())
 
 async function load() {
   loading.value = true
+  // Clear stale clusters from the previous subject before the new data lands.
+  // Without this, `domainGroups` briefly mixes new items against old clusters
+  // during the subject switch, and everything unmatched lands in the "其他"
+  // bucket — a visible flash the child sees for a split second.
+  clusters.value = []
+  bridges.value = []
   try {
     const [clusterData, bridgeData] = await Promise.all([
       getClusters(props.selectedSubject),
@@ -208,8 +214,14 @@ function buildTerritories(): Territory[] {
       bridges: bridges.value.filter((b) => b.from_cluster_domain === c.domain),
     }))
 
-  // Append "Other" territory for unmatched items
-  if (unmatched.length > 0) {
+  // Append "Other" territory for unmatched items. Skip this when clusters
+  // are still loading — during a subject switch the old clusters were just
+  // cleared, so every item is temporarily unmatched and would flash into a
+  // transient "其他" section. Once the new clusters land, the unmatched set
+  // settles correctly. After a failed load, clusters is empty and loading is
+  // false, and the bucket still applies — it's the legitimate fallback for
+  // items whose domain has no cluster row at all.
+  if (!loading.value && unmatched.length > 0) {
     result.push({
       cluster: {
         id: '__other__',

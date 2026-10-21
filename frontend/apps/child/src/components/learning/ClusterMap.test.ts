@@ -505,6 +505,56 @@ describe('ClusterMap', () => {
     expect(domains).toEqual(['Addition', '__other__'])
   })
 
+  it('does not flash a transient "其他" section during a subject switch', async () => {
+    // Use a deferred mock so we can inspect the tree mid-load, before clusters
+    // for the new subject have landed.
+    let resolveClusters!: (c: ClusterResponse[]) =>
+      void
+    let resolveBridges!: (b: BridgeResponse[]) => void
+    mockGetClusters.mockReturnValue(
+      new Promise<ClusterResponse[]>((r) => { resolveClusters = r }),
+    )
+    mockGetBridges.mockReturnValue(
+      new Promise<BridgeResponse[]>((r) => { resolveBridges = r }),
+    )
+    const wrapper = mountMap([
+      makeItem({ id: 'p1', topic: makeTopic({ id: 't1', domain: 'Addition' }) }),
+    ])
+    await flushPromises()
+
+    // Now switch to science with its own item. Clusters for science are not
+    // yet resolved — the "其他" bucket must NOT render in this window.
+    await wrapper.setProps({
+      selectedSubject: 'science',
+      items: [
+        makeItem({
+          id: 'p2',
+          topic: makeTopic({ id: 't2', subject: 'science', domain: 'Units' }),
+        }),
+      ],
+    })
+    await nextTick()
+
+    const domains = wrapper
+      .findAll('.cluster-territory')
+      .map((t) => t.attributes('data-cluster-domain'))
+    expect(domains).not.toContain('__other__')
+    // And no sections at all until the new clusters land.
+    expect(wrapper.find('.domain-section[data-domain="Units"]').exists()).toBe(false)
+
+    // Land the science data; the real sections appear, no stale "其他".
+    resolveClusters([makeCluster({ id: 'cl2', subject: 'science', domain: 'Units' })])
+    resolveBridges([])
+    await flushPromises()
+    await nextTick()
+
+    const after = wrapper
+      .findAll('.cluster-territory')
+      .map((t) => t.attributes('data-cluster-domain'))
+    expect(after).toEqual(['Units'])
+    expect(wrapper.find('.domain-section[data-domain="__other__"]').exists()).toBe(false)
+  })
+
   // --- Domain grouping and collapse behaviour (U1-U4 / R1-R8) ---
 
   function headerFor(wrapper: ReturnType<typeof mountMap>, domain: string) {
