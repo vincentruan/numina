@@ -184,7 +184,7 @@ const viewBox = '0 0 800 800'
 const nodeRadius = 12
 
 const { nodes, edges, selectedNode, getMasteryStyle, getSubjectColor } = useLearningDnaGraph(
-  props.items,
+  () => props.items,
 )
 
 // Available subjects from items

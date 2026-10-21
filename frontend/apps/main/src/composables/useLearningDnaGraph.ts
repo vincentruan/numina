@@ -182,9 +182,9 @@ function extractEdges(items: ProgressWithTopic[]): GraphEdge[] {
   return edges
 }
 
-export function useLearningDnaGraph(items: ProgressWithTopic[]) {
-  const nodes = computed<GraphNode[]>(() => layoutSpiral(items))
-  const edges = computed<GraphEdge[]>(() => extractEdges(items))
+export function useLearningDnaGraph(getItems: () => ProgressWithTopic[]) {
+  const nodes = computed<GraphNode[]>(() => layoutSpiral(getItems()))
+  const edges = computed<GraphEdge[]>(() => extractEdges(getItems()))
   const selectedNode = ref<GraphNode | null>(null)
 
   function getMasteryStyle(level: string): MasteryStyle {
