@@ -207,13 +207,19 @@ router.beforeEach(async (to, _from, next) => {
   NProgress.start()
   markRouterNprogressActive()
 
-  // Learning onboarding guard: redirect first-time children to onboarding.
-  // Cached in sessionStorage to avoid an API call on every navigation.
+  // Learning onboarding guard. Two layers, both cheap:
+  // 1. sessionStorage flag — set once the child has ever completed
+  //    onboarding; avoids any API call on repeat visits.
+  // 2. Otherwise, check the /map/index payload the map page is about to
+  //    fetch anyway — if the child has no progress rows, they are brand
+  //    new and belong on the onboarding flow. Reusing the index payload
+  //    removes the serial /stats round trip that used to add ~600 ms on
+  //    a throttled 3G link.
   if (to.name === 'LearningMap' && !sessionStorage.getItem('learning_onboarding_done')) {
     try {
-      const { getMyLearningStats } = await import('@/api/learning')
-      const stats = await getMyLearningStats()
-      if (!stats.onboarding_completed) {
+      const { getMyLearningMapIndex } = await import('@/api/learning')
+      const index = await getMyLearningMapIndex()
+      if (index.length === 0) {
         next({ name: 'LearningOnboarding' })
         return
       }
