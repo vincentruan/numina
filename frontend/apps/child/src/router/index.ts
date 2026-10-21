@@ -203,23 +203,35 @@ async function verifyChildSession(): Promise<boolean> {
   }
 }
 
+/**
+ * Whether this child has been past learning onboarding.
+ *
+ * Progress is the cheap signal — any row means the child has practised, and
+ * the map page fetches that index anyway, so the common path costs no extra
+ * round trip. It is not equivalent to the onboarding flag, though:
+ * `POST /onboarding/complete` sets the flag without creating progress rows, so
+ * a child who finished onboarding and left before practising has the flag and
+ * no rows. Treat that case as onboarded too — diverting it would bounce off
+ * the onboarding page (which reads the flag and redirects home) with no route
+ * into the map.
+ */
+export async function isLearningOnboarded(): Promise<boolean> {
+  const { getMyLearningMapIndex, getMyLearningStats } = await import('@/api/learning')
+  const index = await getMyLearningMapIndex()
+  if (index.length > 0) return true
+  return (await getMyLearningStats()).onboarding_completed
+}
+
 router.beforeEach(async (to, _from, next) => {
   NProgress.start()
   markRouterNprogressActive()
 
-  // Learning onboarding guard. Two layers, both cheap:
-  // 1. sessionStorage flag — set once the child has ever completed
-  //    onboarding; avoids any API call on repeat visits.
-  // 2. Otherwise, check the /map/index payload the map page is about to
-  //    fetch anyway — if the child has no progress rows, they are brand
-  //    new and belong on the onboarding flow. Reusing the index payload
-  //    removes the serial /stats round trip that used to add ~600 ms on
-  //    a throttled 3G link.
+  // Learning onboarding guard. The sessionStorage flag short-circuits repeat
+  // visits; otherwise isLearningOnboarded() decides (see its docstring for
+  // why an empty progress index alone is not proof of a new child).
   if (to.name === 'LearningMap' && !sessionStorage.getItem('learning_onboarding_done')) {
     try {
-      const { getMyLearningMapIndex } = await import('@/api/learning')
-      const index = await getMyLearningMapIndex()
-      if (index.length === 0) {
+      if (!(await isLearningOnboarded())) {
         next({ name: 'LearningOnboarding' })
         return
       }
