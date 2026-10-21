@@ -12,7 +12,7 @@ focus: "Replace child app's flat TopicGrid with a scrollable cluster-based knowl
 
 ## Goal Capsule
 
-**Objective:** Replace the child app's flat TopicGrid with a scrollable, cluster-based knowledge map that visualizes the 1,590-topic os-taxonomy as named learning territories. Children explore subject tabs → cluster areas → individual topic nodes, each colored by 7-state mastery. Context-dependent taps route to practice, topic detail, or prerequisite guidance. Cross-subject bridge edges connect related clusters across disciplines.
+**Objective:** Replace the child app's flat TopicGrid with a scrollable, cluster-based knowledge map that visualizes the 1,590-topic os-taxonomy as named learning territories. Children explore subject tabs → cluster areas → individual topic nodes, each colored by 5-state mastery. Context-dependent taps route to practice, topic detail, or prerequisite guidance. Cross-subject bridge edges connect related clusters across disciplines.
 
 **Product authority:** Child app learning map page (`frontend/apps/child/src/pages/learning/LearningMapPage.vue`). Parent-side views (DnaGraph2D.vue) are out of scope.
 
@@ -71,11 +71,11 @@ Children currently see a flat list of topics grouped by domain within each subje
 - Responsive mobile layout (375px+)
 
 **Deferred for later:**
-- Parent-side view changes (DnaGraph2D.vue stays as-is)
-- Graph library upgrade (AntV G6 / Cytoscape.js) — viable as v2 if free-form exploration is needed
-- Animated path-finding or "recommended route" highlighting
-- Domain-level grouping within subject tabs (call-out: may be needed if cluster density is too high)
-- Bridge edge curation or LLM inference (v1 uses only existing dependency data)
+- Parent-side view changes (DnaGraph2D.vue stays as-is) → [#137](https://github.com/vincentruan/numina/issues/137)
+- Graph library upgrade (AntV G6 / Cytoscape.js) — viable as v2 if free-form exploration is needed → [#135](https://github.com/vincentruan/numina/issues/135)
+- Animated path-finding or "recommended route" highlighting → [#134](https://github.com/vincentruan/numina/issues/134)
+- Domain-level grouping within subject tabs (call-out: may be needed if cluster density is too high) → [#133](https://github.com/vincentruan/numina/issues/133)
+- Bridge edge curation or LLM inference (v1 uses only existing dependency data) → [#136](https://github.com/vincentruan/numina/issues/136)
 
 **Outside this product's identity:**
 - Free-form graph exploration (pinch-to-zoom, drag, force-directed layout)
@@ -84,9 +84,9 @@ Children currently see a flat list of topics grouped by domain within each subje
 
 ### Outstanding Questions
 
-- OQ1. **Cluster density threshold:** Math has ~503 topics across potentially 50+ clusters. If a subject has more than ~30 clusters, should we add domain-level grouping (collapsible domain sections within the subject tab)? This depends on the actual cluster distribution after data analysis.
-- OQ2. **Cross-subject edge distribution:** Verification confirmed 161 cross-subject edges exist (see Risk 2), but they may cluster in a few domains. If a subject has only 1-2 bridges, the feature is underwhelming. Should bridge visualization be supplemented with curriculum-standards-based inference?
-- OQ3. **Auto-scroll behavior refinement:** U5 implements one-time auto-scroll on initial load. Should the map also re-scroll when the child returns from a practice session and the frontier topic changes?
+- OQ1. **Cluster density threshold:** Math has ~503 topics across potentially 50+ clusters. If a subject has more than ~30 clusters, should we add domain-level grouping (collapsible domain sections within the subject tab)? This depends on the actual cluster distribution after data analysis. → [#133](https://github.com/vincentruan/numina/issues/133)
+- OQ2. **Cross-subject edge distribution:** Verification confirmed 161 cross-subject edges exist (see Risk 2), but they may cluster in a few domains. If a subject has only 1-2 bridges, the feature is underwhelming. Should bridge visualization be supplemented with curriculum-standards-based inference? → [#136](https://github.com/vincentruan/numina/issues/136)
+- OQ3. **Auto-scroll behavior refinement:** U5 implements one-time auto-scroll on initial load. Should the map also re-scroll when the child returns from a practice session and the frontier topic changes? → [#139](https://github.com/vincentruan/numina/issues/139)
 
 ---
 
@@ -122,7 +122,8 @@ The data flow follows a three-layer architecture: backend cluster API → fronte
 │ Frontend: ClusterMap.vue                                 │
 │                                                          │
 │  1. Load clusters + topics + progress + bridges          │
-│  2. Match topics → clusters (by subject + domain)        │
+│  2. Match topics → clusters (by subject + domain + age_group,        │
+│     fallback to subject + domain if no 3-key match)                  │
 │  3. Compute mastery state per topic (from progress)      │
 │  4. Render: SubjectTabs → ClusterTerritory[] → Nodes     │
 │  5. Context-dependent tap handlers per mastery state     │
@@ -131,9 +132,18 @@ The data flow follows a three-layer architecture: backend cluster API → fronte
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Topic-to-cluster matching:** Topics don't have a direct `cluster_id` foreign key. Clusters group topics by `subject + domain + age_group`. Both `LearningTopic` and `LearningCluster` models have an `age_group` string field (values: 'low', 'mid', 'high'). The frontend joins topics to clusters where `topic.subject === cluster.subject && topic.domain === cluster.domain && topic.age_group === cluster.age_group`. Topics with NULL domain or no matching cluster are collected into a synthetic "其他" (Other) territory at the bottom of the subject.
+**Topic-to-cluster matching:** Topics don't have a direct `cluster_id` foreign key. Clusters group topics by `subject + domain + age_group`. Both `LearningTopic` and `LearningCluster` models have an `age_group` string field (values: 'low', 'mid', 'high'). The frontend joins topics to clusters where `topic.subject === cluster.subject && topic.domain === cluster.domain && topic.age_group === cluster.age_group`. If no exact 3-key match exists, fall back to `subject + domain` (ignoring age_group). Topics with NULL domain or no matching cluster at either key level are collected into a synthetic "其他" (Other) territory at the bottom of the subject. If "其他" accumulates more than 12 topics, show the first 12 with a "展开查看更多 (N)" expand button.
 
 **Cross-subject bridge computation:** For each `learning_dependencies` edge, look up the subject of both `topic_id` and `prerequisite_id`. When subjects differ, that edge is a cross-subject bridge. Map each bridge endpoint to its cluster via subject+domain matching. Return unique `(from_cluster_domain, from_subject, to_cluster_domain, to_subject)` tuples.
+
+**Loading & error states:** R10 mandates progressive loading, so each async data fetch needs a visual treatment:
+- **Initial page load:** `van-skeleton` rows (3-5 placeholder lines) fill the cluster area while clusters + topics load. Subject tabs remain interactive.
+- **Subject tab switching:** Existing clusters fade out (opacity 0.5); skeleton rows replace the cluster list until new subject data arrives.
+- **Bridge badges:** Fade in when `getBridges()` resolves; no loading indicator (non-critical, graceful absence is acceptable).
+- **Prerequisite guidance sheet (U3):** `van-loading` spinner centered in the popup while `getTopicGraph()` resolves.
+- **Error fallback:** If cluster/topic load fails, show `EmptyState` component (from `@numina/assets/empty-states`) with `t('learning.cluster.loadError')` description and a retry button. If progress data (`/child/learning/map`) fails, render clusters with all nodes shown as `available` (purple, default unlocked state) instead of mastery-colored — mastery coloring requires progress data. If `getBridges()` fails, silently skip badges. If `getTopicGraph()` fails, show error message in the popup with a close button.
+- **Pull-to-refresh:** ClusterMap remains inside the existing `van-pull-refresh` wrapper in LearningMapPage.vue. `onRefresh` reloads clusters + topics + bridges for the current subject.
+- **Child profile switch:** When the active child changes (watch on babyStore.selectedChildId or page re-mount), reload all data: clusters + topics + progress + bridges. Mastery colors, progress bar, frontier marker, and bridge badges all depend on the child's data.
 
 ### Implementation Units
 
@@ -157,6 +167,29 @@ The data flow follows a three-layer architecture: backend cluster API → fronte
 3. Add `GET /clusters` endpoint in `learning_child.py` — delegates to `topic_service.list_clusters()` (already exists at line 142), enriched with topic counts via GROUP BY query on `learning_topics`.
 4. Add `GET /bridges` endpoint — calls new `get_cross_subject_bridges(db, subject)` function that joins `learning_dependencies` with `learning_topics` (twice: for topic and prerequisite), filtering where subjects differ AND both topics match the current `source_taxonomy`. The `?subject=` param filters on `from_subject` (outgoing bridges from this subject). Group by cluster pairs (subject+domain on each side).
 5. Both endpoints use locale-based source_taxonomy filtering (same pattern as `/map` endpoint).
+6. **Bridge query sketch:**
+   ```python
+   TopicAlias = aliased(LearningTopic)
+   PrereqAlias = aliased(LearningTopic)
+   query = (
+       db.query(
+           TopicAlias.subject.label("from_subject"),
+           TopicAlias.domain.label("from_domain"),
+           PrereqAlias.subject.label("to_subject"),
+           PrereqAlias.domain.label("to_domain"),
+           func.count().label("edge_count"),
+       )
+       .join(LearningDependency, LearningDependency.topic_id == TopicAlias.id)
+       .join(PrereqAlias, LearningDependency.prerequisite_id == PrereqAlias.id)
+       .filter(TopicAlias.subject != PrereqAlias.subject)
+       .filter(TopicAlias.source_taxonomy == source_taxonomy)
+       .filter(PrereqAlias.source_taxonomy == source_taxonomy)
+       .group_by("from_subject", "from_domain", "to_subject", "to_domain")
+   )
+   if subject:
+       query = query.filter(TopicAlias.subject == subject)
+   ```
+7. **Indexes:** Ensure composite indexes exist for the bridge query: `CREATE INDEX idx_topics_subject_taxonomy ON learning_topics(subject, source_taxonomy)` and `CREATE INDEX idx_deps_topic_prereq ON learning_dependencies(topic_id, prerequisite_id)`. Add to an Alembic migration if not already present.
 
 **Patterns to follow:**
 - Existing `/map` endpoint pattern in `learning_child.py:67-87` (locale filter, child auth)
@@ -192,18 +225,19 @@ The data flow follows a three-layer architecture: backend cluster API → fronte
 
 **Approach:**
 1. Add API types and `getClusters(subject?, source_taxonomy?)` function in `learning.ts`. Follow existing `getTopicsBatch()` pattern.
-2. `ClusterMap.vue` receives `items: ProgressWithTopic[]`, `clusters: ClusterResponse[]`, `bridges: BridgeResponse[]`, `selectedSubject: string`. Internally matches topics to clusters by `subject + domain`.
-3. Renders as vertical scroll container. Each cluster becomes a `ClusterTerritory` card.
+2. `ClusterMap.vue` receives `items: ProgressWithTopic[]`, `clusters: ClusterResponse[]`, `selectedSubject: string`. Fetches bridges internally via `getBridges(selectedSubject)` in its own `load()` hook (see U4). Internally matches topics to clusters by `subject + domain + age_group`.
+3. Renders as vertical scroll container. Each cluster becomes a `ClusterTerritory` card. Use `content-visibility: auto` on territory cards for lazy rendering (only render cards within ~2 viewport heights), reducing DOM nodes for subjects with 50+ clusters.
 4. `ClusterTerritory.vue` renders a rounded card with: cluster domain name as label, summary text (truncated), and a flex-wrap grid of `TopicNode` circles inside.
-5. `TopicNode.vue` renders a 40px circle colored by mastery state. CSS classes for each state: `.mastered` (gold + box-shadow glow), `.learning` (blue + CSS pulse animation), `.available` (purple), `.locked` (gray + opacity 0.5), `.review` (orange). Emits `@tap` with topic data.
+5. `TopicNode.vue` renders a 40px circle colored by mastery state, with a minimum 44×44px tappable hit area (via padding on the wrapper element to meet the child app's 44px touch target standard). CSS classes for each state: `.mastered` (gold + box-shadow glow), `.learning` (blue + CSS pulse animation), `.available` (purple), `.locked` (gray + opacity 0.5), `.review` (orange). All animations respect `@media (prefers-reduced-motion: reduce)` (disable pulse/border animations; use `behavior: 'auto'` for scrollIntoView). Emits `@tap` with topic data.
 6. `LearningMapPage.vue` replaces `<TopicGrid>` with `<ClusterMap>`, adds `getClusters()` call in `load()`.
 7. Progress bar at top of ClusterMap: computed from items filtered by selectedSubject (mastered count / total count).
+8. **Empty states:** (a) Subject with no clusters: `EmptyState` component with illustration + `t('learning.cluster.empty')` and suggestion to try another subject. (b) Zero progress (all nodes locked/available): show `t('learning.cluster.frontier.banner')` banner above the first cluster with a subtle highlight on the first recommended territory. (c) All topics mastered: progress bar fills with celebration color + `t('learning.cluster.allMastered')` message, suggest exploring other subjects. All user-facing strings use `t()` keys (per child app i18n convention — no hardcoded Chinese).
 
 **Patterns to follow:**
 - Existing TopicGrid.vue domain grouping pattern (line 116-124) — replace with cluster matching
 - SubjectTabs.vue horizontal scroll pattern
 - Vant `van-` components for cards and typography
-- CSS custom properties for mastery colors (consistent with DnaGraph2D.vue mastery classes)
+- CSS custom properties for mastery colors (consistent with DnaGraph2D.vue mastery classes). New tokens must be defined in both `:root` and `[data-theme="dark"]` blocks (child app dark mode iron rule).
 
 **Test scenarios:**
 - ClusterMap renders one ClusterTerritory per cluster that has matching topics
@@ -274,7 +308,7 @@ The data flow follows a three-layer architecture: backend cluster API → fronte
 **Approach:**
 1. In `ClusterMap.vue` `load()`, call `getBridges(selectedSubject)` to fetch cross-subject bridges for the current subject.
 2. Match bridges to ClusterTerritory components: a bridge with `from_cluster_domain === cluster.domain` belongs to that cluster.
-3. `ClusterTerritory.vue` accepts optional `bridges: BridgeResponse[]` prop. When bridges exist, render a badge below the cluster label: "🔗 连接到: 科学, 生活技能" (truncated to 2 subjects with "+N" overflow).
+3. `ClusterTerritory.vue` accepts optional `bridges: BridgeResponse[]` prop. When bridges exist, render a badge below the cluster label using `t('learning.cluster.bridgeLabel', { subjects })` (truncated to 2 subjects with "+N" overflow).
 4. Tapping a bridge badge: switch `selectedSubject` to the target subject (emit event to parent LearningMapPage), then scroll to the target cluster using `scrollIntoView()` with the cluster's DOM id (`data-cluster-domain="..."`).
 5. Bridge badge styling: small pill with link icon, muted color to not compete with topic nodes.
 
@@ -362,11 +396,13 @@ The data flow follows a three-layer architecture: backend cluster API → fronte
 
 ### Risks and Mitigations
 
-**Risk 1: Cluster density on mobile.** Math (503 topics) may produce 50+ clusters. Vertical scroll through 50 territory cards is long but manageable (similar to a long feed). Mitigation: add domain-level collapsible grouping if user testing shows navigation difficulty (OQ1). This is a follow-up, not v1 scope.
+**Risk 1: Cluster density on mobile.** Math (503 topics) may produce 50+ clusters. Vertical scroll through 50 territory cards is long but manageable (similar to a long feed). Mitigation: add domain-level collapsible grouping if user testing shows navigation difficulty (OQ1). This is a follow-up, not v1 scope. → [#133](https://github.com/vincentruan/numina/issues/133)
 
-**Risk 2: Cross-subject bridge count is low.** Verification confirmed 161 cross-subject edges exist, but they may cluster in a few domains. If a subject has only 1-2 bridges, the feature is underwhelming. Mitigation: bridge badges degrade gracefully — clusters with no bridges simply show no badge.
+**Risk 2: Cross-subject bridge count is low.** Verification confirmed 161 cross-subject edges exist, but they may cluster in a few domains. If a subject has only 1-2 bridges, the feature is underwhelming. Mitigation: bridge badges degrade gracefully — clusters with no bridges simply show no badge. → [#136](https://github.com/vincentruan/numina/issues/136)
 
 **Risk 3: Topic-to-cluster matching ambiguity.** Topics with NULL domain won't match any cluster. The matching algorithm uses `subject + domain + age_group` (all string fields on both models). Topics with NULL domain or no matching cluster are collected into a synthetic "其他" (Other) territory at the bottom of the subject view, following the existing TopicGrid pattern (`item.topic.domain || t('learning.general')`).
+
+**Risk 4: Source taxonomy cluster seeding (BLOCKER).** `locale_to_source_taxonomy()` maps zh-CN to 'beijing', but `seed_learning_topics.py` imports clusters.json with `source_taxonomy='os-taxonomy'` only. The `upsert_cluster()` function can handle beijing clusters but is not called in the standard seed path. **Must resolve before U1 implementation:** either (a) add beijing cluster seeding to the seed script's `seed_clusters()` function, or (b) configure the cluster endpoints to fall back to os-taxonomy when beijing clusters are absent. Without this, zh-CN children will see an empty map. → [#138](https://github.com/vincentruan/numina/issues/138)
 
 ---
 
