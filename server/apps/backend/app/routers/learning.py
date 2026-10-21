@@ -10,7 +10,6 @@ endpoints and any endpoint that touches family-scoped progress live behind
 """
 
 import json
-from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Query
@@ -29,13 +28,11 @@ from apps.backend.app.schemas.learning import (
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.learning import topic_service
 from apps.backend.app.services.learning.topic_service import (
-    locale_to_source_taxonomy,
+    SourceTaxonomy,
+    get_effective_source_taxonomy,
 )
 from packages.core.logging import get_logger
 from packages.db.models.learning.topic import LearningTopic
-
-#: Valid values for the ``source_taxonomy`` query parameter.
-SourceTaxonomy = Literal["beijing", "os-taxonomy"]
 
 logger = get_logger(__name__)
 
@@ -86,7 +83,7 @@ def get_topics_batch(
     if not topic_ids:
         return []
     if source_taxonomy is None:
-        source_taxonomy = locale_to_source_taxonomy(user.language)
+        source_taxonomy = get_effective_source_taxonomy(db, user.language)
     topics = topic_service.list_topics_by_ids(
         db, topic_ids, source_taxonomy=source_taxonomy
     )
@@ -105,7 +102,7 @@ def get_topic_index(
     Much smaller payload than the full topic list (~100KB vs ~800KB for 1600 topics).
     """
     if source_taxonomy is None:
-        source_taxonomy = locale_to_source_taxonomy(user.language)
+        source_taxonomy = get_effective_source_taxonomy(db, user.language)
     q = db.query(
         LearningTopic.id,
         LearningTopic.subject,
@@ -143,10 +140,10 @@ def list_topics(
 ):
     """List topics. ``source_taxonomy`` filters by taxonomy source; when
     omitted the requesting user's language selects it
-    (zh-CN -> beijing, otherwise -> os-taxonomy).
+    (zh-CN -> beijing when seeded, otherwise -> os-taxonomy).
     """
     if source_taxonomy is None:
-        source_taxonomy = locale_to_source_taxonomy(user.language)
+        source_taxonomy = get_effective_source_taxonomy(db, user.language)
     topics = topic_service.list_topics(
         db, subject=subject, domain=domain, age_group=age_group,
         search=search, limit=limit, source_taxonomy=source_taxonomy,
@@ -165,7 +162,7 @@ def get_topic(
     if not topic:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
     if source_taxonomy is None:
-        source_taxonomy = locale_to_source_taxonomy(user.language)
+        source_taxonomy = get_effective_source_taxonomy(db, user.language)
     if source_taxonomy and topic.source_taxonomy != source_taxonomy:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
     return _topic_to_response(topic)
@@ -179,7 +176,7 @@ def get_topic_graph(
     user: User = Depends(get_current_user_or_child),
 ):
     if source_taxonomy is None:
-        source_taxonomy = locale_to_source_taxonomy(user.language)
+        source_taxonomy = get_effective_source_taxonomy(db, user.language)
     graph = topic_service.get_topic_graph(db, topic_id, source_taxonomy=source_taxonomy)
     if not graph:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
@@ -194,7 +191,7 @@ def list_clusters(
     user: User = Depends(get_current_user_or_child),
 ):
     if source_taxonomy is None:
-        source_taxonomy = locale_to_source_taxonomy(user.language)
+        source_taxonomy = get_effective_source_taxonomy(db, user.language)
     return topic_service.list_clusters(
         db, subject=subject, source_taxonomy=source_taxonomy
     )
@@ -207,7 +204,7 @@ def list_subjects(
     user: User = Depends(get_current_user_or_child),
 ):
     if source_taxonomy is None:
-        source_taxonomy = locale_to_source_taxonomy(user.language)
+        source_taxonomy = get_effective_source_taxonomy(db, user.language)
     return topic_service.list_subjects(db, source_taxonomy=source_taxonomy)
 
 

@@ -513,6 +513,7 @@ export default {
       send: 'Send message failed: {status}',
       gap_reconnect: 'Gap recovery failed: {status}',
       sessionCreateFailed: 'Failed to create learning session, please try again',
+      topicUnavailable: 'This topic is no longer available — head back to the map to see what is new',
       topicLocked: 'Please complete prerequisite topics first',
       prerequisiteNotMet: 'You need to finish the prerequisites first',
       noThread: 'AI tutor connection failed, please go back and retry',

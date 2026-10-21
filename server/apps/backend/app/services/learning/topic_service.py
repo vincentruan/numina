@@ -1,5 +1,8 @@
 """Knowledge graph query functions for learning topics."""
 
+from typing import Literal
+
+from sqlalchemy import exists, or_
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
@@ -12,14 +15,40 @@ from packages.db.models.learning.topic import (
 #: Valid values for ``LearningTopic.source_taxonomy``.
 SOURCE_TAXONOMY_BEIJING = "beijing"
 SOURCE_TAXONOMY_OS = "os-taxonomy"
+SourceTaxonomy = Literal["beijing", "os-taxonomy"]
 
 
-def locale_to_source_taxonomy(language: str | None) -> str:
+def _locale_to_source_taxonomy(language: str | None) -> SourceTaxonomy:
     """Map user language to taxonomy source.
 
     zh-CN -> "beijing"; en-US or any other / None -> "os-taxonomy".
     """
     return SOURCE_TAXONOMY_BEIJING if language == "zh-CN" else SOURCE_TAXONOMY_OS
+
+
+#: Public alias — retained for backward compatibility with tests.
+locale_to_source_taxonomy = _locale_to_source_taxonomy
+
+
+def get_effective_source_taxonomy(db: Session, language: str | None) -> SourceTaxonomy:
+    """Return the taxonomy to actually use, falling back to os-taxonomy when
+    the locale-mapped taxonomy has no seeded data.
+
+    Calls :func:`_locale_to_source_taxonomy` first, then issues a single
+    existence probe (``EXISTS … OR EXISTS …``) against topics and clusters.
+    If neither table has rows for the mapped taxonomy and it is not already
+    ``os-taxonomy``, returns ``SOURCE_TAXONOMY_OS`` as fallback.
+    """
+    mapped = _locale_to_source_taxonomy(language)
+    if mapped == SOURCE_TAXONOMY_OS:
+        return mapped
+    has_data = db.query(
+        or_(
+            exists().where(LearningTopic.source_taxonomy == mapped),
+            exists().where(LearningCluster.source_taxonomy == mapped),
+        )
+    ).scalar()
+    return mapped if has_data else SOURCE_TAXONOMY_OS
 
 
 def list_topics(

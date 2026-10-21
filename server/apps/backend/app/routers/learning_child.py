@@ -39,8 +39,8 @@ from apps.backend.app.services.learning import (
 )
 from apps.backend.app.services.learning.topic_service import (
     get_cross_subject_bridges,
+    get_effective_source_taxonomy,
     list_clusters_with_topic_counts,
-    locale_to_source_taxonomy,
 )
 from apps.backend.app.services.notification.dispatcher import (
     notify_learning_submitted_for_review,
@@ -84,7 +84,7 @@ def my_knowledge_map(
     subject tabs and mastery-coloured nodes without a second round-trip that
     fetches every topic's full detail.
     """
-    taxonomy = locale_to_source_taxonomy(child.language)
+    taxonomy = get_effective_source_taxonomy(db, child.language)
     rows = (
         db.query(
             LearningProgress,
@@ -124,7 +124,7 @@ def my_knowledge_map_index(
     assessment_prompt, ability_dimensions_score, …) that drive the
     original ``/map`` payload well above 3G budgets.
     """
-    taxonomy = locale_to_source_taxonomy(child.language)
+    taxonomy = get_effective_source_taxonomy(db, child.language)
     rows = (
         db.query(
             LearningTopic.id,
@@ -162,7 +162,7 @@ def list_my_clusters(
     child: User = Depends(get_current_child_user),
 ):
     """List clusters enriched with topic counts for the child's taxonomy."""
-    taxonomy = locale_to_source_taxonomy(child.language)
+    taxonomy = get_effective_source_taxonomy(db, child.language)
     return list_clusters_with_topic_counts(
         db, subject=subject, source_taxonomy=taxonomy
     )
@@ -175,7 +175,7 @@ def list_my_bridges(
     child: User = Depends(get_current_child_user),
 ):
     """List cross-subject bridge edges between cluster domains."""
-    taxonomy = locale_to_source_taxonomy(child.language)
+    taxonomy = get_effective_source_taxonomy(db, child.language)
     return get_cross_subject_bridges(db, source_taxonomy=taxonomy, subject=subject)
 
 
@@ -197,10 +197,10 @@ def today_learning(
     """Today's learning summary — drives the TodayLearningCard on ChildHomePage.
 
     Locale filter applied: current topic, pending assignment topic, and
-    recommended topic are scoped to the child's source taxonomy
-    (zh-CN -> beijing, otherwise -> os-taxonomy).
+    recommended topic are scoped to the child's effective taxonomy
+    (locale-mapped, falling back to os-taxonomy when unseeded).
     """
-    taxonomy = locale_to_source_taxonomy(child.language)
+    taxonomy = get_effective_source_taxonomy(db, child.language)
 
     # 0. review_due: mastered topics whose next_review_at has passed
     now_utc = datetime.now(UTC)
@@ -334,10 +334,10 @@ def get_topic_detail(
 ):
     """Get topic detail — public topic info (no per-child progress embedded).
 
-    Locale filter applied: topic must belong to the taxonomy matching the
-    child's language (zh-CN -> beijing, otherwise -> os-taxonomy).
+    Locale filter applied: topic must belong to the child's effective
+    taxonomy (locale-mapped, falling back to os-taxonomy when unseeded).
     """
-    taxonomy = locale_to_source_taxonomy(child.language)
+    taxonomy = get_effective_source_taxonomy(db, child.language)
     topic = (
         db.query(LearningTopic)
         .filter(
@@ -423,7 +423,7 @@ def submit_assignment(
     )
     if assignment:
         # Locale filter applied: topic lookup scoped to child's taxonomy.
-        taxonomy = locale_to_source_taxonomy(child.language)
+        taxonomy = get_effective_source_taxonomy(db, child.language)
         topic = (
             db.query(LearningTopic)
             .filter(
@@ -547,7 +547,7 @@ async def stream_assessment(
     # Locale filter applied: session topic must belong to the child's
     # source taxonomy; sessions referencing a deprecated/switched topic
     # are rejected.
-    taxonomy = locale_to_source_taxonomy(child.language)
+    taxonomy = get_effective_source_taxonomy(db, child.language)
     topic = (
         db.query(LearningTopic)
         .filter(

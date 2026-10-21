@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from apps.backend.app.services.learning.topic_service import (
+    get_effective_source_taxonomy,
     get_topic_by_id,
     get_topic_graph,
     list_clusters,
@@ -453,3 +454,50 @@ def test_graph_ordering_is_deterministic_by_dependency_id(db: Session):
     # Dependents: t_b edge created after t_c edge (t_c is prereq of t_a — different edge),
     # so dep edge ids are t_b's (later) and t_c's (earlier) → t_c first, t_b second.
     assert dep_keys == ["mt_ord_c", "mt_ord_b"]
+
+
+# ── get_effective_source_taxonomy ─────────────────────────────────────────────
+
+
+def test_effective_taxonomy_fallback_when_no_data(db: Session):
+    """zh-CN with no beijing topics or clusters → falls back to os-taxonomy."""
+    assert get_effective_source_taxonomy(db, "zh-CN") == "os-taxonomy"
+
+
+def test_effective_taxonomy_no_fallback_with_topic_data(db: Session):
+    """zh-CN with beijing topics → uses beijing (no fallback)."""
+    db.add(LearningTopic(
+        topic_key="fallback_t", topic_type="CONCEPTUAL", subject="mathematics",
+        domain="D", name="T", description="", age_group="mid",
+        source_taxonomy="beijing", evidence_json="[]", standards_json="[]",
+    ))
+    db.flush()
+    assert get_effective_source_taxonomy(db, "zh-CN") == "beijing"
+
+
+def test_effective_taxonomy_no_fallback_with_cluster_data(db: Session):
+    """zh-CN with beijing clusters (but no topics) → uses beijing (no fallback)."""
+    db.add(LearningCluster(
+        subject="mathematics", domain="D", age_group="mid",
+        summary="s", source_taxonomy="beijing",
+    ))
+    db.flush()
+    assert get_effective_source_taxonomy(db, "zh-CN") == "beijing"
+
+
+def test_effective_taxonomy_en_us_always_os(db: Session):
+    """en-US always returns os-taxonomy regardless of data."""
+    assert get_effective_source_taxonomy(db, "en-US") == "os-taxonomy"
+    # Even with beijing data present
+    db.add(LearningTopic(
+        topic_key="fallback_t2", topic_type="CONCEPTUAL", subject="mathematics",
+        domain="D", name="T2", description="", age_group="mid",
+        source_taxonomy="beijing", evidence_json="[]", standards_json="[]",
+    ))
+    db.flush()
+    assert get_effective_source_taxonomy(db, "en-US") == "os-taxonomy"
+
+
+def test_effective_taxonomy_none_language(db: Session):
+    """None language → os-taxonomy (direct mapping, no check)."""
+    assert get_effective_source_taxonomy(db, None) == "os-taxonomy"

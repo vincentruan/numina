@@ -733,6 +733,7 @@ export default {
       send: '发送消息失败: {status}',
       gap_reconnect: '断点恢复失败: {status}',
       sessionCreateFailed: '创建学习会话失败，请稍后再试',
+      topicUnavailable: '这个知识点暂时不能学习了，回知识地图看看新的吧',
       topicLocked: '请先完成前置知识的学习',
       prerequisiteNotMet: '前置知识还未完成哦',
       noThread: 'AI 导师连接失败，请返回重试',

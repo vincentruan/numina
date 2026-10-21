@@ -16,7 +16,13 @@ from packages.db.models.learning.session import LearningSession
 logger = get_logger(__name__)
 
 
-def _build_difficulty_warning(db: Session, child_id: int, topic) -> dict | None:
+def _build_difficulty_warning(
+    db: Session,
+    child_id: int,
+    topic,
+    *,
+    source_taxonomy: str | None = None,
+) -> dict | None:
     """Build difficulty warning dict based on age group and prerequisites."""
     from apps.backend.app.services.learning.progress_service import (
         AGE_GROUP_ORDER,
@@ -26,7 +32,7 @@ def _build_difficulty_warning(db: Session, child_id: int, topic) -> dict | None:
         get_unmet_prerequisites,
     )
     from apps.backend.app.services.learning.topic_service import (
-        locale_to_source_taxonomy,
+        get_effective_source_taxonomy,
     )
     from packages.db.models.user import User
 
@@ -36,7 +42,8 @@ def _build_difficulty_warning(db: Session, child_id: int, topic) -> dict | None:
 
     child_age = _compute_age(child.birthday)
     child_age_group = _age_to_group(child_age)
-    source_taxonomy = locale_to_source_taxonomy(child.language)
+    if source_taxonomy is None:
+        source_taxonomy = get_effective_source_taxonomy(db, child.language)
 
     # Age difficulty check
     age_warning = None
@@ -84,7 +91,7 @@ def create_session(
     age group exceeds the child's or prerequisites are unmet.
     """
     from apps.backend.app.services.learning.topic_service import (
-        locale_to_source_taxonomy,
+        get_effective_source_taxonomy,
     )
     from packages.db.models.learning.topic import LearningTopic
     from packages.db.models.user import User
@@ -95,7 +102,7 @@ def create_session(
 
     # Cross-source guard: ensure the topic belongs to the child's locale taxonomy
     child = db.query(User).filter(User.id == child_id).first()
-    expected_source = locale_to_source_taxonomy(child.language if child else None)
+    expected_source = get_effective_source_taxonomy(db, child.language if child else None)
     if topic.source_taxonomy != expected_source:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
 
@@ -114,8 +121,10 @@ def create_session(
     if progress.mastery_level == "available":
         progress_service.transition_to_learning(db, progress)
 
-    # Build difficulty warning
-    difficulty_warning = _build_difficulty_warning(db, child_id, topic)
+    # Build difficulty warning — reuse already-resolved child + taxonomy
+    difficulty_warning = _build_difficulty_warning(
+        db, child_id, topic, source_taxonomy=expected_source,
+    )
 
     # Resolve assignment: use provided, or find existing, or auto-create self_selected
     assignment_id = req.assignment_id

@@ -17,7 +17,7 @@ from apps.backend.app.services.learning.topic_service import (
     locale_to_source_taxonomy,
 )
 from packages.db.models.learning.progress import LearningProgress
-from packages.db.models.learning.topic import LearningTopic
+from packages.db.models.learning.topic import LearningCluster, LearningTopic
 from tests.backend.conftest import child_login_two_phase
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -603,6 +603,9 @@ def test_create_session_rejects_cross_source_topic(client, db, auth_headers):
     )
     child_headers = _child_login(client, child["username"])
 
+    # Seed beijing data so the fallback does not trigger — the child's
+    # effective taxonomy is "beijing", not "os-taxonomy".
+    _create_topic(db, "cross_bj_anchor", source_taxonomy="beijing")
     # Topic is os-taxonomy but child is zh-CN -> beijing
     os_topic = _create_topic(db, "cross_os", source_taxonomy="os-taxonomy")
 
@@ -612,6 +615,28 @@ def test_create_session_rejects_cross_source_topic(client, db, auth_headers):
         json={"topic_id": str(os_topic.id), "session_type": "tutorial"},
     )
     assert resp.status_code == 404
+
+
+def test_create_session_accepts_os_taxonomy_topic_under_fallback(
+    client, db, auth_headers
+):
+    """Covers AE1 for the write path.  A zh-CN child with no beijing data
+    resolves to os-taxonomy via fallback, so the cross-source guard must
+    accept an os-taxonomy topic rather than rejecting it."""
+    child = _create_child(
+        client, auth_headers, username="fallbacksession", language="zh-CN"
+    )
+    child_headers = _child_login(client, child["username"])
+
+    # No beijing rows anywhere — the helper falls back to os-taxonomy.
+    os_topic = _create_topic(db, "fb_session_os", source_taxonomy="os-taxonomy")
+
+    resp = client.post(
+        "/api/v1/child/learning/sessions",
+        headers=child_headers,
+        json={"topic_id": str(os_topic.id), "session_type": "tutorial"},
+    )
+    assert resp.status_code in (200, 201)
 
 
 def test_create_session_accepts_matching_source(client, db, auth_headers):
@@ -655,3 +680,46 @@ def test_create_path_rejects_mixed_source_topics(client, db, auth_headers):
         },
     )
     assert resp.status_code == 404
+
+
+# ── Taxonomy fallback: zh-CN with no beijing data → os-taxonomy ──────────────
+
+
+def test_zh_cn_fallback_to_os_taxonomy_when_no_beijing_data(
+    client, db, auth_headers
+):
+    """Covers AE1. zh-CN child, no beijing data → clusters endpoint returns
+    os-taxonomy data via the transparent fallback."""
+    child = _create_child(
+        client, auth_headers, username="fallbackchild", language="zh-CN"
+    )
+    child_headers = _child_login(client, child["username"])
+    child_id = int(child["id"])
+
+    # Only os-taxonomy topics/clusters exist — no beijing data at all
+    os_topic = _create_topic(db, "fb_os", source_taxonomy="os-taxonomy", name="OS Fallback")
+    db.add(LearningCluster(
+        subject="mathematics", domain="FallbackDomain", age_group="mid",
+        summary="Fallback cluster", source_taxonomy="os-taxonomy",
+    ))
+    db.add(LearningProgress(
+        child_id=child_id, topic_id=os_topic.id, mastery_level="learning"
+    ))
+    db.flush()
+
+    # Clusters endpoint returns os-taxonomy clusters (not empty)
+    resp = client.get(
+        "/api/v1/child/learning/clusters", headers=child_headers
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert len(data) > 0, "fallback should return os-taxonomy clusters, not empty"
+
+    # Knowledge map shows os-taxonomy progress
+    resp = client.get(
+        "/api/v1/child/learning/map", headers=child_headers
+    )
+    assert resp.status_code == 200
+    map_data = resp.json()["data"]
+    topic_ids = {int(p["topic_id"]) for p in map_data}
+    assert os_topic.id in topic_ids

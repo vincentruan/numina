@@ -162,7 +162,13 @@
     <!-- Error state -->
     <div v-else-if="error" class="error-state">
       <p>{{ error }}</p>
-      <button class="btn-secondary" @click="load">{{ t('common.retry') }}</button>
+      <!-- A missing topic cannot be fixed by retrying — the child's taxonomy
+           may have changed under them (e.g. locale-specific seed data landing
+           mid-session).  Send them back to the map, which reloads fresh. -->
+      <router-link v-if="errorIsNotFound" to="/learning" class="btn-secondary">
+        {{ t('learning.backToMap') }}
+      </router-link>
+      <button v-else class="btn-secondary" @click="load">{{ t('common.retry') }}</button>
     </div>
 
     <!-- Difficulty warning dialog -->
@@ -238,6 +244,7 @@ const starting = ref(false)
 const submitting = ref(false)
 const translating = ref(false)
 const error = ref('')
+const errorIsNotFound = ref(false)
 const topic = ref<TopicResponse | null>(null)
 const progress = ref<ProgressResponse | null>(null)
 const allProgress = ref<ProgressResponse[]>([])
@@ -359,6 +366,7 @@ function navigateToTopic(tid: string) {
 async function load() {
   loading.value = true
   error.value = ''
+  errorIsNotFound.value = false
   try {
     const [topicDetail, progressList, graph] = await Promise.all([
       getTopicDetail(topicId.value),
@@ -378,6 +386,7 @@ async function load() {
   } catch (e: unknown) {
     const err = e as { response?: { status?: number } }
     if (err?.response?.status === 404) {
+      errorIsNotFound.value = true
       error.value = t('learning.topicNotFound')
     } else {
       error.value = t('toast.loadFailed')
@@ -433,6 +442,14 @@ async function onStartLearning() {
       showFailToast(t('learning.error.topicLocked'))
     } else if (code === 'LEARNING_PREREQUISITE_NOT_MET') {
       showFailToast(t('learning.error.prerequisiteNotMet'))
+    } else if (code === 'LEARNING_TOPIC_NOT_FOUND') {
+      // The topic resolved for this page but no longer matches the child's
+      // effective taxonomy (e.g. locale seed data landed mid-session).
+      // A retry cannot help — offer the map, which reloads against the
+      // current taxonomy.
+      errorIsNotFound.value = true
+      error.value = t('learning.error.topicUnavailable')
+      topic.value = null
     } else {
       showFailToast(t('learning.error.sessionCreateFailed'))
     }

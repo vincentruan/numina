@@ -36,7 +36,7 @@ from apps.backend.app.services.learning.recommendation_service import (
     generate_recommendation_path,
 )
 from apps.backend.app.services.learning.topic_service import (
-    locale_to_source_taxonomy,
+    get_effective_source_taxonomy,
 )
 from apps.backend.app.services.notification.dispatcher import (
     notify_learning_approved,
@@ -153,7 +153,7 @@ def get_child_map(
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
-    taxonomy = locale_to_source_taxonomy(user.language)
+    taxonomy = get_effective_source_taxonomy(db, user.language)
     return (
         db.query(LearningProgress)
         .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
@@ -184,7 +184,7 @@ def get_child_progress(
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
-    taxonomy = locale_to_source_taxonomy(user.language)
+    taxonomy = get_effective_source_taxonomy(db, user.language)
     return (
         db.query(LearningProgress)
         .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
@@ -224,7 +224,7 @@ def get_child_sessions(
     # Batch-fetch topic names
     topic_ids = list({s.topic_id for s in sessions})
     # Locale filter applied: session log topics scoped to parent's taxonomy.
-    taxonomy = locale_to_source_taxonomy(user.language)
+    taxonomy = get_effective_source_taxonomy(db, user.language)
     topics = (
         db.query(LearningTopic)
         .filter(
@@ -306,7 +306,7 @@ def get_topic_detail(
 
     Locale filter applied: topic must belong to the parent's source taxonomy.
     """
-    taxonomy = locale_to_source_taxonomy(user.language)
+    taxonomy = get_effective_source_taxonomy(db, user.language)
     topic = (
         db.query(LearningTopic)
         .filter(
@@ -339,7 +339,7 @@ def create_assignment(
     # Fire notification — child name resolved from DB
     child = db.query(User).filter(User.id == req.child_id).first()
     # Locale filter applied: assignment topic scoped to parent's taxonomy.
-    taxonomy = locale_to_source_taxonomy(user.language)
+    taxonomy = get_effective_source_taxonomy(db, user.language)
     topic = (
         db.query(LearningTopic)
         .filter(
@@ -403,7 +403,7 @@ def review_queue(
 
     # Batch-fetch child names and topic info to avoid N+1 queries
     # Locale filter applied: review topics scoped to parent's taxonomy.
-    taxonomy = locale_to_source_taxonomy(user.language)
+    taxonomy = get_effective_source_taxonomy(db, user.language)
     child_ids = {p.child_id for p in progress_items}
     topic_ids = {p.topic_id for p in progress_items}
 
@@ -485,7 +485,7 @@ def approve_review(
     # Fire notification — child approved
     # Locale filter applied: notification topic scoped to parent's taxonomy.
     child_name = child.display_name or child.username or ""
-    taxonomy = locale_to_source_taxonomy(user.language)
+    taxonomy = get_effective_source_taxonomy(db, user.language)
     topic = (
         db.query(LearningTopic)
         .filter(
@@ -525,7 +525,7 @@ def reject_review(
     # Fire notification — child rejected, needs more work
     # Locale filter applied: notification topic scoped to parent's taxonomy.
     child_name = child.display_name or child.username or ""
-    taxonomy = locale_to_source_taxonomy(user.language)
+    taxonomy = get_effective_source_taxonomy(db, user.language)
     topic = (
         db.query(LearningTopic)
         .filter(
