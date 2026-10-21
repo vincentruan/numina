@@ -108,6 +108,10 @@ async function mountPage({ locale = 'en-US', topic = baseTopic() } = {}) {
           emits: ['click'],
         },
         VanIcon: { template: '<i class="van-icon" />', props: ['name', 'size', 'aria-label'] },
+        RouterLink: {
+          template: '<a class="router-link" :href="to"><slot /></a>',
+          props: ['to'],
+        },
       },
     },
   })
@@ -369,6 +373,94 @@ describe('LearningTopicPage — machine-edge chip styling', () => {
     expect(chips[1].find('.ai-badge').exists()).toBe(true)
     expect(chips[1].find('.ai-badge').text()).toBe('AI')
     expect(chips[1].attributes('aria-label')).toContain('AI suggested')
+    wrapper.unmount()
+  })
+})
+
+describe('taxonomy-shift recovery', () => {
+  it('offers a route back to the map when the topic 404s on load', async () => {
+    const axiosErr = { response: { status: 404 } }
+    mockGetTopicDetail.mockRejectedValue(axiosErr)
+
+    const { default: LearningTopicPage } = await import('./LearningTopicPage.vue')
+    const wrapper = mount(LearningTopicPage, {
+      global: {
+        plugins: [i18n('en-US')],
+        stubs: {
+          RoleShimmer: { template: '<div />' },
+          RouterLink: {
+            template: '<a class="router-link" :href="to"><slot /></a>',
+            props: ['to'],
+          },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.error-state').exists()).toBe(true)
+    // Retry is useless against a missing topic — the way out is the map.
+    const link = wrapper.find('.error-state .router-link')
+    expect(link.exists()).toBe(true)
+    expect(link.attributes('href')).toBe('/learning')
+    expect(link.text()).toBe('← Back to Map')
+    expect(wrapper.find('.error-state button').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('keeps retry for non-404 load failures', async () => {
+    mockGetTopicDetail.mockRejectedValue({ response: { status: 500 } })
+
+    const { default: LearningTopicPage } = await import('./LearningTopicPage.vue')
+    const wrapper = mount(LearningTopicPage, {
+      global: {
+        plugins: [i18n('en-US')],
+        stubs: {
+          RoleShimmer: { template: '<div />' },
+          RouterLink: { template: '<a class="router-link"><slot /></a>', props: ['to'] },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.error-state button').exists()).toBe(true)
+    expect(wrapper.find('.error-state .router-link').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('sends the child to the map when session creation reports the topic gone', async () => {
+    const topic = baseTopic()
+    mockGetTopicDetail.mockResolvedValue(topic)
+
+    const { createSession } = await import('@/api/learning')
+    vi.mocked(createSession).mockRejectedValue({
+      isAxiosError: true,
+      response: { data: { code: 'LEARNING_TOPIC_NOT_FOUND' } },
+    })
+
+    const { default: LearningTopicPage } = await import('./LearningTopicPage.vue')
+    const wrapper = mount(LearningTopicPage, {
+      global: {
+        plugins: [i18n('en-US')],
+        stubs: {
+          RoleShimmer: { template: '<div />' },
+          RouterLink: {
+            template: '<a class="router-link" :href="to"><slot /></a>',
+            props: ['to'],
+          },
+        },
+      },
+    })
+    await flushPromises()
+
+    const startBtn = wrapper.find('.btn-primary')
+    expect(startBtn.exists()).toBe(true)
+    await startBtn.trigger('click')
+    await flushPromises()
+
+    // Falls back to the map link rather than an unrecoverable toast.
+    const link = wrapper.find('.error-state .router-link')
+    expect(link.exists()).toBe(true)
+    expect(link.attributes('href')).toBe('/learning')
     wrapper.unmount()
   })
 })
