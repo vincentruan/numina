@@ -301,6 +301,7 @@ onMounted(async () => {
 <style scoped>
 .learning-progress-page {
   padding: var(--space-md);
+  padding-bottom: calc(50px + env(safe-area-inset-bottom));
   background: var(--color-canvas);
   min-height: 100vh;
 }
