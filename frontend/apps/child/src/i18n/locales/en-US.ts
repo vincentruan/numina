@@ -475,6 +475,11 @@ export default {
       hiddenTopics: '{count}',
       pathA11yLabel: 'Recommended learning path',
       noRecommendations: 'No recommendations',
+      whyRecommended: 'Why recommended',
+      startPracticeBtn: 'Start learning',
+      reasonBreakpoint: 'Knowledge breakpoint',
+      reasonCurriculumGap: 'Curriculum requirement',
+      reasonReviewDue: 'Review due',
     },
     subject: {
       mathematics: 'Math',

@@ -35,6 +35,7 @@
               :items="mapItems"
               :selected-subject="selectedSubject"
               :path-topic-ids="pathTopicIds"
+              :path-reasons="pathReasons"
               :next-topic="nextTopic"
               :is-loading="recLoading"
               @switch-subject="onSwitchSubject"
@@ -127,6 +128,15 @@ const mapItems = computed<ProgressWithTopic[]>(() =>
 
 // Recommendation path: all topic IDs (unfiltered — ClusterMap filters by subject)
 const pathTopicIds = computed(() => allPathTopics.value.map((t) => t.topic_id))
+
+// Map topic_id → reasons[] so ClusterMap can show "why recommended" on tap
+const pathReasons = computed<Record<string, string[]>>(() => {
+  const map: Record<string, string[]> = {}
+  for (const rec of allPathTopics.value) {
+    map[rec.topic_id] = [...rec.reasons]
+  }
+  return map
+})
 
 // Next topic: first recommended topic matching current subject
 const nextTopic = computed<ProgressWithTopic | null>(() => {
