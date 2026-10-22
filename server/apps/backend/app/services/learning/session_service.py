@@ -102,7 +102,9 @@ def create_session(
 
     # Cross-source guard: ensure the topic belongs to the child's locale taxonomy
     child = db.query(User).filter(User.id == child_id).first()
-    expected_source = get_effective_source_taxonomy(db, child.language if child else None)
+    if not child:
+        raise AppError(ErrorCode.CHILD_NOT_FOUND)
+    expected_source = get_effective_source_taxonomy(db, child.language)
     if topic.source_taxonomy != expected_source:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
 
@@ -142,9 +144,6 @@ def create_session(
             assignment_id = existing_assignment.id
         else:
             # Auto-create self_selected assignment
-            child = db.query(User).filter(User.id == child_id).first()
-            if not child:
-                raise AppError(ErrorCode.CHILD_NOT_FOUND)
             assignment = LearningAssignment(
                 family_id=child.family_id,
                 child_id=child_id,

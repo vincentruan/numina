@@ -128,6 +128,8 @@ def get_topic_graph(
     topic = get_topic_by_id(db, topic_id)
     if not topic:
         return None
+    if source_taxonomy and topic.source_taxonomy != source_taxonomy:
+        return None
 
     prereq_rows = (
         db.query(

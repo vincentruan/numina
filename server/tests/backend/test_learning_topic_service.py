@@ -294,11 +294,9 @@ def test_graph_source_taxonomy_filter_excludes_cross_source_edges(
     assert "mt_reviewed" in edge_keys
     assert "mt_machine" in edge_keys
 
-    # Filter to os-taxonomy only — should exclude beijing edges
+    # Filter to os-taxonomy — t_main is beijing, so cross-taxonomy → None (404)
     graph_os = get_topic_graph(db, t_main.id, source_taxonomy="os-taxonomy")
-    assert graph_os is not None
-    edge_keys_os = [e["topic"].topic_key for e in graph_os["prerequisites"]]
-    assert edge_keys_os == ["mt_os"]
+    assert graph_os is None
 
 
 def test_graph_ae3_mixed_review_statuses(db: Session, review_status_topics):
@@ -415,9 +413,9 @@ def test_graph_dependents_source_taxonomy_filter(db: Session, dependent_topics):
     assert "mt_dep_reviewed" in keys
     assert "mt_dep_machine" not in keys
 
+    # t_main is beijing — os-taxonomy query → None (404)
     graph_os = get_topic_graph(db, t_main.id, source_taxonomy="os-taxonomy")
-    keys_os = [e["topic"].topic_key for e in graph_os["dependents"]]
-    assert keys_os == ["mt_dep_machine"]
+    assert graph_os is None
 
 
 def test_graph_ordering_is_deterministic_by_dependency_id(db: Session):
