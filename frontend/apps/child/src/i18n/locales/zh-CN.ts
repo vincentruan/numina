@@ -483,6 +483,16 @@ export default {
       reasonCurriculumGap: '课标必会',
       reasonReviewDue: '需要复习',
     },
+    graphMap: {
+      viewList: '列表',
+      viewGraph: '图形',
+      layoutForce: '力导向',
+      layoutHierarchical: '层级',
+      loadError: '加载图形失败',
+    },
+    topicDetail: '查看详情',
+    startPractice: '开始练习',
+    startReview: '开始复习',
     subject: {
       mathematics: '数学',
       science: '科学',

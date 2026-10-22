@@ -170,6 +170,46 @@ def get_topic_graph(
     return {"topic": topic, "prerequisites": prerequisites, "dependents": dependents}
 
 
+def get_subject_dependency_edges(
+    db: Session,
+    subject: str,
+    source_taxonomy: str | None = None,
+) -> list[dict]:
+    """Get all dependency edges between topics of a given subject.
+
+    Returns lightweight edge dicts (topic_id, prerequisite_id, strength)
+    for the graph view, restricted to topics belonging to the subject and
+    optionally filtered by source_taxonomy.
+    """
+    # Use a subquery so the DB resolves topic membership in a single pass
+    topic_q = db.query(LearningTopic.id).filter(LearningTopic.subject == subject)
+    if source_taxonomy:
+        topic_q = topic_q.filter(LearningTopic.source_taxonomy == source_taxonomy)
+    topic_subq = topic_q.subquery()
+
+    edges = (
+        db.query(
+            LearningDependency.topic_id,
+            LearningDependency.prerequisite_id,
+            LearningDependency.strength,
+        )
+        .filter(
+            LearningDependency.topic_id.in_(topic_subq),
+            LearningDependency.prerequisite_id.in_(topic_subq),
+        )
+        .all()
+    )
+
+    return [
+        {
+            "topic_id": e.topic_id,
+            "prerequisite_id": e.prerequisite_id,
+            "strength": e.strength,
+        }
+        for e in edges
+    ]
+
+
 def list_clusters(
     db: Session,
     subject: str | None = None,

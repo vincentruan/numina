@@ -481,6 +481,16 @@ export default {
       reasonCurriculumGap: 'Curriculum requirement',
       reasonReviewDue: 'Review due',
     },
+    graphMap: {
+      viewList: 'List',
+      viewGraph: 'Graph',
+      layoutForce: 'Force',
+      layoutHierarchical: 'Hierarchical',
+      loadError: 'Failed to load graph',
+    },
+    topicDetail: 'View details',
+    startPractice: 'Start practice',
+    startReview: 'Start review',
     subject: {
       mathematics: 'Math',
       science: 'Science',

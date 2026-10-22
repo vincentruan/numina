@@ -253,6 +253,17 @@ export async function getTopicGraph(topicId: string): Promise<TopicGraphResponse
   return res.data
 }
 
+export interface DependencyEdge {
+  topic_id: string
+  prerequisite_id: string
+  strength: string | null
+}
+
+export async function getSubjectDependencies(subject: string): Promise<DependencyEdge[]> {
+  const res = await http.get(`/learning/dependencies`, { params: { subject } })
+  return res.data
+}
+
 /** Translate a topic's content to Chinese. Returns translated fields. */
 export async function translateTopic(topicId: string): Promise<{
   name_zh: string | null

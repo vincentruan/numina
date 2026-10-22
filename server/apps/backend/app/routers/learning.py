@@ -21,6 +21,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.learning import (
     ClusterResponse,
+    DependencyEdgeResponse,
     SubjectSummary,
     TopicGraphResponse,
     TopicResponse,
@@ -181,6 +182,25 @@ def get_topic_graph(
     if not graph:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
     return graph
+
+
+@router.get("/dependencies", response_model=list[DependencyEdgeResponse])
+def list_dependencies(
+    subject: str = Query(..., description="Filter edges to topics of this subject"),
+    source_taxonomy: SourceTaxonomy | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    """List all dependency edges between topics of a subject.
+
+    Lightweight endpoint for the graph view — returns only edge pairs
+    (topic_id, prerequisite_id, strength) without full topic payloads.
+    """
+    if source_taxonomy is None:
+        source_taxonomy = get_effective_source_taxonomy(db, user.language)
+    return topic_service.get_subject_dependency_edges(
+        db, subject=subject, source_taxonomy=source_taxonomy
+    )
 
 
 @router.get("/clusters", response_model=list[ClusterResponse])
