@@ -213,7 +213,10 @@
   --heat-3: rgba(34, 197, 94, 0.45);
   --heat-4: rgba(34, 197, 94, 0.70);
 
-  /* ── Path overlay colors (dark mode) ── */
+  /* ── Path overlay colors (dark mode) ──
+   * Brand tokens (--color-brand-ochre, etc.) are overridden above in dark
+   * mode, so these references resolve to dark-appropriate values automatically.
+   * No need for separate hex values here. */
   --color-path-trail-start: var(--color-brand-ochre);
   --color-path-trail-end:  var(--color-brand-peach);
   --color-path-dot:        var(--color-brand-ochre);

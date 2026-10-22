@@ -1,6 +1,6 @@
 <template>
   <button
-    v-if="topic"
+    v-if="topic && !loading"
     type="button"
     class="next-up-card"
     @click="onTap"

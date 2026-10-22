@@ -32,12 +32,10 @@
 <script setup lang="ts">
 defineOptions({ name: 'PathOverlay' })
 
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { ref, computed, watch, onMounted, onBeforeUnmount, getCurrentInstance, nextTick } from 'vue'
 import { useReducedMotion } from '@/composables/useReducedMotion'
 import type { ProgressWithTopic } from '@/api/learning'
 
-const { t } = useI18n()
 const isReducedMotion = useReducedMotion()
 
 const props = defineProps<{
@@ -65,6 +63,7 @@ interface PulseDot {
 
 const measuredPoints = ref<MeasuredPoint[]>([])
 const containerRect = ref<DOMRect | null>(null)
+let containerEl: Element | null = null
 let resizeObserver: ResizeObserver | null = null
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -91,12 +90,11 @@ const visibleSegments = computed(() => {
   return segments
 })
 
-// Measure topic node positions relative to the .cluster-map container
+// Measure topic node positions relative to the container element
 function measurePositions() {
-  const container = document.querySelector('.cluster-map')
-  if (!container) return
+  if (!containerEl) return
 
-  containerRect.value = container.getBoundingClientRect()
+  containerRect.value = containerEl.getBoundingClientRect()
   const points: MeasuredPoint[] = []
 
   for (const topicId of props.pathTopicIds) {
@@ -161,20 +159,25 @@ const pulseDots = computed<PulseDot[]>(() => {
   return dots
 })
 
-// Re-measure on data changes
+// Re-measure on data changes. Watch expandedDomains as array since Vue 3
+// Sets lack deep reactivity — the computed returns a new Set reference on
+// each toggle, so the outer watcher fires on reference change.
 watch(
-  () => [props.pathTopicIds, props.expandedDomains],
+  () => [props.pathTopicIds, Array.from(props.expandedDomains)],
   async () => {
     await nextTick()
-    measurePositions()
+    // Wait for CSS height transitions on DomainSection to complete (~300ms)
+    // before measuring; nextTick only covers Vue's DOM patch, not transitions.
+    setTimeout(() => measurePositions(), 350)
   },
-  { deep: true },
 )
 
 // ResizeObserver for responsive re-measurement
 onMounted(() => {
-  const container = document.querySelector('.cluster-map')
-  if (container) {
+  // Use parent element as positioning container (PathOverlay is rendered
+  // inside .cluster-map div), avoiding fragile global querySelector.
+  containerEl = (getCurrentInstance()?.proxy?.$el as Element)?.parentElement ?? null
+  if (containerEl) {
     resizeObserver = new ResizeObserver(() => {
       // Debounce to avoid visual jitter during rotation/resize
       if (resizeTimer) clearTimeout(resizeTimer)
@@ -182,7 +185,7 @@ onMounted(() => {
         measurePositions()
       }, 100)
     })
-    resizeObserver.observe(container)
+    resizeObserver.observe(containerEl)
   }
   // Initial measurement
   nextTick(() => measurePositions())
@@ -220,6 +223,9 @@ onBeforeUnmount(() => {
 
 .path-overlay__dot {
   fill: var(--color-path-dot);
+  will-change: transform, opacity;
+  transform-box: fill-box;
+  transform-origin: center;
   animation: dot-pulse 1.8s ease-in-out infinite;
 }
 
@@ -229,13 +235,16 @@ onBeforeUnmount(() => {
   }
 }
 
+/* Use transform: scale() instead of animating the SVG r attribute —
+ * scale + opacity are composite-only properties and avoid per-frame
+ * repaints. scale(1.67) on r=3 gives the same 3->5 visual range. */
 @keyframes dot-pulse {
   0%, 100% {
-    r: 3;
+    transform: scale(1);
     opacity: 0.4;
   }
   50% {
-    r: 5;
+    transform: scale(1.67);
     opacity: 0.9;
   }
 }

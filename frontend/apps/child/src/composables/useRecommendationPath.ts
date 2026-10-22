@@ -1,11 +1,11 @@
-import { ref, computed, type Ref, type ComputedRef } from 'vue'
+import { ref, readonly, type Ref, type DeepReadonly } from 'vue'
 import {
   fetchRecommendationPath,
   type RecommendedTopic,
 } from '@/api/learning'
 
 interface UseRecommendationPathReturn {
-  allPathTopics: ComputedRef<RecommendedTopic[]>
+  allPathTopics: DeepReadonly<Ref<RecommendedTopic[]>>
   isLoading: Ref<boolean>
   error: Ref<string>
   refresh: () => Promise<void>
@@ -15,23 +15,32 @@ export function useRecommendationPath(): UseRecommendationPathReturn {
   const allPathTopics = ref<RecommendedTopic[]>([])
   const isLoading = ref(false)
   const error = ref('')
+  let refreshInFlight: Promise<void> | null = null
 
   async function refresh() {
-    isLoading.value = true
-    error.value = ''
+    if (refreshInFlight) return refreshInFlight
+    refreshInFlight = (async () => {
+      isLoading.value = true
+      error.value = ''
+      try {
+        const response = await fetchRecommendationPath(5)
+        allPathTopics.value = response.path.topics
+      } catch {
+        allPathTopics.value = []
+        error.value = 'Failed to load recommendations'
+      } finally {
+        isLoading.value = false
+      }
+    })()
     try {
-      const response = await fetchRecommendationPath(5)
-      allPathTopics.value = response.path.topics
-    } catch {
-      allPathTopics.value = []
-      error.value = 'Failed to load recommendations'
+      await refreshInFlight
     } finally {
-      isLoading.value = false
+      refreshInFlight = null
     }
   }
 
   return {
-    allPathTopics: computed(() => allPathTopics.value),
+    allPathTopics: readonly(allPathTopics),
     isLoading,
     error,
     refresh,

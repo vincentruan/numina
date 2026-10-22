@@ -62,7 +62,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'LearningMap' })
 
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onActivated, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
@@ -262,6 +262,12 @@ onMounted(async () => {
   } finally {
     decrement()
   }
+})
+
+// R10/KTD4: re-fetch recommendation path when page re-activates from
+// KeepAlive cache (e.g. after returning from practice).
+onActivated(() => {
+  refreshRecommendations()
 })
 </script>
 
