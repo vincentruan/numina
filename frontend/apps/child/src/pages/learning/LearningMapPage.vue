@@ -34,6 +34,9 @@
             <ClusterMap
               :items="mapItems"
               :selected-subject="selectedSubject"
+              :path-topic-ids="pathTopicIds"
+              :next-topic="nextTopic"
+              :is-loading="recLoading"
               @switch-subject="onSwitchSubject"
             />
 
@@ -65,6 +68,7 @@ import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { useRecommendationPath } from '@/composables/useRecommendationPath'
 import { getMyLearningMapIndex, getTopicsBatch, type TopicResponse } from '@/api/learning'
 import type { ProgressWithTopic } from '@/api/learning'
 import SubjectTabs from '@/components/learning/SubjectTabs.vue'
@@ -78,6 +82,7 @@ const { t } = useI18n()
 const { topicDisplayName, topicDescription } = useLocalizedTopic()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
+const { allPathTopics, isLoading: recLoading, refresh: refreshRecommendations } = useRecommendationPath()
 
 const loading = ref(true)
 const refreshing = ref(false)
@@ -119,6 +124,20 @@ const mapItems = computed<ProgressWithTopic[]>(() =>
       topic: topicMap.value.get(p.topic_id)!,
     })),
 )
+
+// Recommendation path: all topic IDs (unfiltered — ClusterMap filters by subject)
+const pathTopicIds = computed(() => allPathTopics.value.map((t) => t.topic_id))
+
+// Next topic: first recommended topic matching current subject
+const nextTopic = computed<ProgressWithTopic | null>(() => {
+  for (const rec of allPathTopics.value) {
+    const match = mapItems.value.find(
+      (m) => m.topic.id === rec.topic_id && m.topic.subject === selectedSubject.value,
+    )
+    if (match) return match
+  }
+  return null
+})
 
 // Subject tabs derived from the progress index (subject is joined into
 // /child/learning/map/index), so tabs render before any topic detail is fetched.
@@ -232,14 +251,14 @@ async function onRefresh() {
   loadedSubjects.value = new Set()
   inflightSubjects.clear()
   topicMap.value = new Map()
-  await load()
+  await Promise.all([load(), refreshRecommendations()])
   refreshing.value = false
 }
 
 onMounted(async () => {
   increment()
   try {
-    await load()
+    await Promise.all([load(), refreshRecommendations()])
   } finally {
     decrement()
   }

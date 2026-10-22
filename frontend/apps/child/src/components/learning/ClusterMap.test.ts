@@ -115,7 +115,7 @@ function mountMap(items: ProgressWithTopic[], subject = 'mathematics') {
   hosts.push(host)
   return mount(ClusterMap, {
     attachTo: host,
-    props: { items, selectedSubject: subject },
+    props: { items, selectedSubject: subject, pathTopicIds: [], nextTopic: null, isLoading: false },
     global: { plugins: [i18n] },
   })
 }

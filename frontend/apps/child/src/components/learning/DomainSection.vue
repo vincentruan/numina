@@ -9,6 +9,10 @@
       @click="$emit('toggle')"
     >
       <span class="domain-section__label">{{ domainLabel }}</span>
+      <span
+        v-if="pathCount && pathCount > 0 && !expanded"
+        class="domain-section__path-badge"
+      >{{ t('learning.recommendPath.hiddenTopics', { count: pathCount }) }}</span>
       <span class="domain-section__progress">
         {{ t('learning.cluster.progress', { mastered: masteredCount, total: totalCount }) }}
       </span>
@@ -39,6 +43,8 @@ defineProps<{
   /** Programmatic expand (frontier/bridge): skip the height transition so
    *  `scrollIntoView` measures final geometry instead of an animating row. */
   instant?: boolean
+  /** Number of recommendation path topics hidden inside this collapsed section. */
+  pathCount?: number
 }>()
 
 defineEmits<{
@@ -85,6 +91,22 @@ defineEmits<{
   font-size: 15px;
   font-weight: 600;
   color: var(--color-ink);
+  flex-shrink: 0;
+}
+
+.domain-section__path-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-path-badge-bg, var(--color-brand-ochre));
+  color: var(--color-path-badge-text, var(--color-on-dark));
+  font-family: Inter, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
   flex-shrink: 0;
 }
 

@@ -19,10 +19,13 @@
       {{ t('learning.cluster.allMastered') }}
     </div>
 
-    <!-- Frontier banner (U5) -->
-    <div v-if="frontierTopic && masteredCount < totalCount" class="cluster-map__frontier-banner">
-      {{ t('learning.cluster.frontierBanner') }}
-    </div>
+    <!-- Next-up CTA card (replaces frontier banner) -->
+    <NextUpCard
+      v-if="masteredCount < totalCount"
+      :topic="nextTopic"
+      :topic-name="nextTopic ? topicDisplayName(nextTopic.topic) : ''"
+      :loading="isLoading"
+    />
 
     <!-- Empty state -->
     <EmptyState
@@ -43,6 +46,7 @@
         :total-count="territory.items.length"
         :expanded="isExpanded(territory)"
         :instant="isInstant(territory)"
+        :path-count="pathCountByDomain.get(territory.cluster.domain) ?? 0"
         @toggle="toggleDomain(territory)"
       >
         <div class="cluster-map__territories">
@@ -59,6 +63,13 @@
         </div>
       </DomainSection>
     </div>
+
+    <!-- SVG path overlay for recommendation path -->
+    <PathOverlay
+      :path-topic-ids="subjectPathTopicIds"
+      :all-items="props.items"
+      :expanded-domains="expandedDomainSet"
+    />
 
     <!-- Prerequisite guidance bottom sheet (U3) -->
     <PrerequisiteGuidance
@@ -86,16 +97,21 @@ import { getClusters, getBridges } from '@/api/learning'
 import ClusterTerritory from './ClusterTerritory.vue'
 import DomainSection from './DomainSection.vue'
 import PrerequisiteGuidance from './PrerequisiteGuidance.vue'
+import NextUpCard from './NextUpCard.vue'
+import PathOverlay from './PathOverlay.vue'
 import { domainLabel as translateDomain } from '@/utils/domainLabel'
 import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 
 const props = defineProps<{
   items: ProgressWithTopic[]
   selectedSubject: string
+  pathTopicIds: string[]
+  nextTopic: ProgressWithTopic | null
+  isLoading: boolean
 }>()
 
 const emit = defineEmits<{
@@ -344,6 +360,49 @@ function isInstant(territory: Territory): boolean {
   return instantExpandKeys.has(domainKey(territory))
 }
 
+// ── Recommendation path data ──
+
+/** Topic IDs from the recommendation path filtered to the current subject. */
+const subjectPathTopicIds = computed(() => {
+  const subjectItemIds = new Set(
+    props.items
+      .filter((i) => i.topic.subject === props.selectedSubject)
+      .map((i) => i.topic.id),
+  )
+  return props.pathTopicIds.filter((id) => subjectItemIds.has(id))
+})
+
+/** Set of currently expanded domain names (not composite keys) for PathOverlay. */
+const expandedDomainSet = computed(() => {
+  const expanded = new Set<string>()
+  for (const territory of territories.value) {
+    if (isExpanded(territory)) {
+      expanded.add(territory.cluster.domain)
+    }
+  }
+  return expanded
+})
+
+/** Count of path topics per collapsed domain — for DomainSection badges. */
+const pathCountByDomain = computed(() => {
+  const counts = new Map<string, number>()
+  const subjectPathIds = new Set(subjectPathTopicIds.value)
+  for (const territory of territories.value) {
+    if (isExpanded(territory)) continue
+    const count = territory.items.filter((i) => subjectPathIds.has(i.topic.id)).length
+    if (count > 0) {
+      counts.set(territory.cluster.domain, count)
+    }
+  }
+  return counts
+})
+
+/** Localized topic display name for NextUpCard. */
+function topicDisplayName(topic: ProgressWithTopic['topic']): string {
+  if (locale.value.startsWith('zh') && topic.name_zh) return topic.name_zh
+  return topic.name || topic.topic_key
+}
+
 // ── Progress (derived from subjectItems) ──
 
 const totalCount = computed(() => subjectItems.value.length)
@@ -504,6 +563,7 @@ function onPrereqGoTo(topicId: string) {
 
 <style scoped>
 .cluster-map {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -556,16 +616,6 @@ function onPrereqGoTo(topicId: string) {
   font-size: 14px;
   font-weight: 500;
   color: var(--color-ink);
-}
-
-.cluster-map__frontier-banner {
-  text-align: center;
-  padding: 10px 16px;
-  background: rgba(var(--color-brand-ochre-rgb), 0.12);
-  border-radius: var(--radius-md);
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  color: var(--color-body);
 }
 
 /* ── Domain groups ── */

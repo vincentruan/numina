@@ -471,6 +471,13 @@ export default {
       expandSection: '展开',
       collapseSection: '收起',
     },
+    recommendPath: {
+      nextStep: '下一步: {topic}',
+      startPractice: '→',
+      hiddenTopics: '{count}',
+      pathA11yLabel: '推荐学习路径',
+      noRecommendations: '暂无推荐',
+    },
     subject: {
       mathematics: '数学',
       science: '科学',

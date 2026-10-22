@@ -124,6 +124,13 @@
   --heat-2: #ffe0b2;
   --heat-3: #ffb74d;
   --heat-4: #f5a623;
+
+  /* ── Path overlay colors (light mode) ── */
+  --color-path-trail-start: var(--color-brand-ochre);
+  --color-path-trail-end:  var(--color-brand-peach);
+  --color-path-dot:        var(--color-brand-ochre);
+  --color-path-badge-bg:   var(--color-brand-ochre);
+  --color-path-badge-text: var(--color-on-dark);
 }
 
 /* ── Dark mode overrides ── */
@@ -205,6 +212,13 @@
   --heat-2: rgba(34, 197, 94, 0.25);
   --heat-3: rgba(34, 197, 94, 0.45);
   --heat-4: rgba(34, 197, 94, 0.70);
+
+  /* ── Path overlay colors (dark mode) ── */
+  --color-path-trail-start: var(--color-brand-ochre);
+  --color-path-trail-end:  var(--color-brand-peach);
+  --color-path-dot:        var(--color-brand-ochre);
+  --color-path-badge-bg:   var(--color-brand-ochre);
+  --color-path-badge-text: var(--color-on-dark);
 }
 
 /* ── Vant dark mode overrides ── */
