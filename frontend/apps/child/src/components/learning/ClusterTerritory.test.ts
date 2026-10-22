@@ -74,6 +74,8 @@ function makeBridge(overrides: Partial<BridgeResponse> = {}): BridgeResponse {
     to_cluster_domain: 'Units',
     to_subject: 'science',
     edge_count: 1,
+    source_type: 'explicit',
+    max_confidence: 1.0,
     ...overrides,
   }
 }

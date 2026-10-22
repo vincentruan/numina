@@ -109,6 +109,8 @@ class BridgeResponse(BaseModel):
     to_cluster_domain: str
     to_subject: str
     edge_count: int
+    source_type: str = "explicit"
+    max_confidence: float = 1.0
 
 
 class SubjectSummary(BaseModel):

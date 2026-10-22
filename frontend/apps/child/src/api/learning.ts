@@ -326,6 +326,8 @@ export interface BridgeResponse {
   to_cluster_domain: string
   to_subject: string
   edge_count: number
+  source_type: 'explicit' | 'inferred' | 'mixed'
+  max_confidence: number
 }
 
 export async function getClusters(subject?: string): Promise<ClusterResponse[]> {

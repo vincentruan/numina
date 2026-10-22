@@ -22,10 +22,10 @@
       <button
         v-for="bridge in displayBridges"
         :key="`${bridge.to_subject}-${bridge.to_cluster_domain}`"
-        class="bridge-badge"
+        :class="['bridge-badge', { 'bridge-badge--inferred': bridge.source_type === 'inferred' }]"
         @click="$emit('bridgeTap', bridge)"
       >
-        <span class="bridge-badge__icon">🔗</span>
+        <span class="bridge-badge__icon">{{ bridge.source_type === 'inferred' ? '🔍' : '🔗' }}</span>
         <span class="bridge-badge__label">{{ subjectLabel(bridge.to_subject) }} → {{ translateDomain(t, bridge.to_cluster_domain) }}</span>
       </button>
       <span v-if="bridges.length > 2" class="bridge-badge__overflow">+{{ bridges.length - 2 }}</span>
@@ -154,6 +154,15 @@ function subjectLabel(subject: string): string {
 }
 
 .bridge-badge:active {
+  background: var(--color-hairline);
+}
+
+.bridge-badge--inferred {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+.bridge-badge--inferred:active {
   background: var(--color-hairline);
 }
 
