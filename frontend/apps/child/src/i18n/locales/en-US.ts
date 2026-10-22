@@ -469,6 +469,18 @@ export default {
       expandSection: 'Expand',
       collapseSection: 'Collapse',
     },
+    recommendPath: {
+      nextStep: 'Next: {topic}',
+      startPractice: '→',
+      hiddenTopics: '{count}',
+      pathA11yLabel: 'Recommended learning path',
+      noRecommendations: 'No recommendations',
+      whyRecommended: 'Why recommended',
+      startPracticeBtn: 'Start learning',
+      reasonBreakpoint: 'Knowledge breakpoint',
+      reasonCurriculumGap: 'Curriculum requirement',
+      reasonReviewDue: 'Review due',
+    },
     subject: {
       mathematics: 'Math',
       science: 'Science',

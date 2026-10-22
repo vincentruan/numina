@@ -2,6 +2,7 @@
   <button
     class="topic-node-wrapper"
     :class="[`topic-node-wrapper--${masteryStatus}`]"
+    :data-topic-id="item.topic.id"
     @click="$emit('tap', item)"
   >
     <div

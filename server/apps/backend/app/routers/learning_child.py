@@ -24,6 +24,9 @@ from apps.backend.app.schemas.learning import (
     OnboardingCompleteResponse,
     PathResponse,
     ProgressResponse,
+    RecommendationPathDetail,
+    RecommendationPathResponse,
+    RecommendedTopicItem,
     SessionCreate,
     SessionResponse,
     TodayLearningResponse,
@@ -36,6 +39,9 @@ from apps.backend.app.services.learning import (
     session_service,
     stats_service,
     zone_service,
+)
+from apps.backend.app.services.learning.recommendation_service import (
+    generate_recommendation_path,
 )
 from apps.backend.app.services.learning.topic_service import (
     get_cross_subject_bridges,
@@ -500,6 +506,43 @@ def get_my_path(
         raise AppError(ErrorCode.LEARNING_PATH_NOT_FOUND)
     progress = path_service.get_path_progress(db, path.id, child.family_id)
     return path_service.build_path_response(path, progress)
+
+
+# ---------------------------------------------------------------------------
+# Recommendation path (child view)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/recommendations", response_model=RecommendationPathResponse)
+def my_recommendations(
+    limit: int = Query(5, ge=1, le=100, description="Max topics to return (default 5)"),
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Get my personalized learning recommendations.
+
+    Child-facing equivalent of the family endpoint. Returns up to ``limit``
+    topics ranked by priority (知识断点 > 课标必会 > 高基础度 > 需要复习).
+    """
+    path = generate_recommendation_path(db, child.id, limit=limit)
+    topics = [
+        RecommendedTopicItem(
+            topic_id=t.topic_id,
+            topic_name=t.topic_name,
+            reasons=t.reasons,
+            centrality=t.centrality,
+            prerequisites_met=t.prerequisites_met,
+            suggested_position=t.suggested_position,
+        )
+        for t in path.topics
+    ]
+    return RecommendationPathResponse(
+        path=RecommendationPathDetail(
+            name=path.name,
+            topics=topics,
+            total_count=path.total_count,
+        )
+    )
 
 
 @router.post("/sessions/{session_id}/assess/stream")

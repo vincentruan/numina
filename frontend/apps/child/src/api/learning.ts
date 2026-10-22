@@ -342,4 +342,34 @@ export async function getBridges(subject?: string): Promise<BridgeResponse[]> {
   return res.data
 }
 
+// --- Recommendation Path types ---
+
+export interface RecommendedTopic {
+  topic_id: string
+  topic_name: string
+  reasons: string[]
+  centrality: number
+  prerequisites_met: boolean
+  suggested_position: number
+}
+
+export interface RecommendationPathDetail {
+  name: string
+  topics: RecommendedTopic[]
+  total_count: number
+}
+
+export interface RecommendationPathResponse {
+  path: RecommendationPathDetail
+}
+
+export async function fetchRecommendationPath(
+  limit = 5,
+): Promise<RecommendationPathResponse> {
+  const res = await http.get('/child/learning/recommendations', {
+    params: { limit },
+  })
+  return res.data
+}
+
 

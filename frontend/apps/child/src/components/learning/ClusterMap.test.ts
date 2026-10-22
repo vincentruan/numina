@@ -115,7 +115,7 @@ function mountMap(items: ProgressWithTopic[], subject = 'mathematics') {
   hosts.push(host)
   return mount(ClusterMap, {
     attachTo: host,
-    props: { items, selectedSubject: subject },
+    props: { items, selectedSubject: subject, pathTopicIds: [], nextTopic: null, isLoading: false },
     global: { plugins: [i18n] },
   })
 }
@@ -760,5 +760,78 @@ describe('ClusterMap', () => {
 
     await headerFor(wrapper, 'Multiplication').trigger('click')
     expect(headerFor(wrapper, 'Multiplication').attributes('aria-expanded')).toBe('true')
+  })
+
+  // --- Recommendation reason popup (issue #134 acceptance #3) ---
+
+  it('shows a reason popup when tapping a path topic with reasons, instead of navigating', async () => {
+    const wrapper = mountMap([
+      makeItem({ id: 'p1', topic: makeTopic({ id: 't1', name_zh: '加法' }), mastery_level: 'available' }),
+    ])
+    await wrapper.setProps({
+      pathTopicIds: ['t1'],
+      pathReasons: { t1: ['知识断点', '课标必会'] },
+    })
+    await flushPromises()
+
+    await wrapper.find('.topic-node-wrapper').trigger('click')
+
+    // Should NOT navigate immediately — the popup intercepts
+    expect(mockRouterPush).not.toHaveBeenCalled()
+    // Popup should be visible with translated reasons
+    expect(wrapper.find('.path-reason-popup').exists()).toBe(true)
+    expect(wrapper.text()).toContain('知识断点')
+    expect(wrapper.text()).toContain('课标必会')
+  })
+
+  it('navigates to the topic page when the popup action button is clicked', async () => {
+    const wrapper = mountMap([
+      makeItem({ id: 'p1', topic: makeTopic({ id: 't1' }), mastery_level: 'available' }),
+    ])
+    await wrapper.setProps({
+      pathTopicIds: ['t1'],
+      pathReasons: { t1: ['知识断点'] },
+    })
+    await flushPromises()
+
+    await wrapper.find('.topic-node-wrapper').trigger('click')
+    expect(mockRouterPush).not.toHaveBeenCalled()
+
+    await wrapper.find('.path-reason-popup__action').trigger('click')
+    expect(mockRouterPush).toHaveBeenCalledWith('/learning/topic/t1?action=practice')
+  })
+
+  it('does not navigate when the popup close button is clicked', async () => {
+    const wrapper = mountMap([
+      makeItem({ id: 'p1', topic: makeTopic({ id: 't1' }), mastery_level: 'available' }),
+    ])
+    await wrapper.setProps({
+      pathTopicIds: ['t1'],
+      pathReasons: { t1: ['需要复习'] },
+    })
+    await flushPromises()
+
+    await wrapper.find('.topic-node-wrapper').trigger('click')
+    expect(wrapper.find('.path-reason-popup').exists()).toBe(true)
+
+    await wrapper.find('.path-reason-popup__close').trigger('click')
+    expect(mockRouterPush).not.toHaveBeenCalled()
+    expect(wrapper.find('.path-reason-popup').exists()).toBe(false)
+  })
+
+  it('navigates directly (no popup) for a path topic with no reasons', async () => {
+    const wrapper = mountMap([
+      makeItem({ id: 'p1', topic: makeTopic({ id: 't1' }), mastery_level: 'available' }),
+    ])
+    await wrapper.setProps({
+      pathTopicIds: ['t1'],
+      pathReasons: { t1: [] },
+    })
+    await flushPromises()
+
+    await wrapper.find('.topic-node-wrapper').trigger('click')
+
+    // No popup — direct navigation
+    expect(mockRouterPush).toHaveBeenCalledWith('/learning/topic/t1?action=practice')
   })
 })

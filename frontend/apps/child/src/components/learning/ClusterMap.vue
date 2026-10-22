@@ -19,10 +19,13 @@
       {{ t('learning.cluster.allMastered') }}
     </div>
 
-    <!-- Frontier banner (U5) -->
-    <div v-if="frontierTopic && masteredCount < totalCount" class="cluster-map__frontier-banner">
-      {{ t('learning.cluster.frontierBanner') }}
-    </div>
+    <!-- Next-up CTA card (replaces frontier banner) -->
+    <NextUpCard
+      v-if="masteredCount < totalCount"
+      :topic="nextTopic"
+      :topic-name="nextTopic ? topicDisplayName(nextTopic.topic) : ''"
+      :loading="isLoading"
+    />
 
     <!-- Empty state -->
     <EmptyState
@@ -43,6 +46,7 @@
         :total-count="territory.items.length"
         :expanded="isExpanded(territory)"
         :instant="isInstant(territory)"
+        :path-count="pathCountByDomain.get(territory.cluster.domain) ?? 0"
         @toggle="toggleDomain(territory)"
       >
         <div class="cluster-map__territories">
@@ -60,6 +64,13 @@
       </DomainSection>
     </div>
 
+    <!-- SVG path overlay for recommendation path -->
+    <PathOverlay
+      :path-topic-ids="subjectPathTopicIds"
+      :all-items="props.items"
+      :expanded-domains="expandedDomainSet"
+    />
+
     <!-- Prerequisite guidance bottom sheet (U3) -->
     <PrerequisiteGuidance
       v-if="prereqTopic"
@@ -68,6 +79,32 @@
       @close="prereqTopic = null"
       @go-to="onPrereqGoTo"
     />
+
+    <!-- Recommendation reason popup — shows why a path topic is recommended -->
+    <van-popup
+      v-model:show="showReasonPopup"
+      position="bottom"
+      round
+      :style="{ padding: '16px', maxWidth: '400px', margin: '0 auto' }"
+    >
+      <div v-if="reasonPopupTopic" class="path-reason-popup">
+        <div class="path-reason-popup__header">
+          <span class="path-reason-popup__title">{{ t('learning.recommendPath.whyRecommended') }}</span>
+          <button class="path-reason-popup__close" @click="closeReasonPopup">✕</button>
+        </div>
+        <p class="path-reason-popup__topic">{{ topicDisplayName(reasonPopupTopic.topic) }}</p>
+        <ul class="path-reason-popup__reasons">
+          <li
+            v-for="reason in reasonPopupReasons"
+            :key="reason"
+            class="path-reason-popup__reason"
+          >{{ reason }}</li>
+        </ul>
+        <button class="path-reason-popup__action" @click="onReasonPopupAction">
+          {{ t('learning.recommendPath.startPracticeBtn') }}
+        </button>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -86,16 +123,23 @@ import { getClusters, getBridges } from '@/api/learning'
 import ClusterTerritory from './ClusterTerritory.vue'
 import DomainSection from './DomainSection.vue'
 import PrerequisiteGuidance from './PrerequisiteGuidance.vue'
+import NextUpCard from './NextUpCard.vue'
+import PathOverlay from './PathOverlay.vue'
 import { domainLabel as translateDomain } from '@/utils/domainLabel'
 import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 
 const props = defineProps<{
   items: ProgressWithTopic[]
   selectedSubject: string
+  pathTopicIds: string[]
+  /** topic_id → reasons[] from the recommendation engine */
+  pathReasons?: Record<string, string[]>
+  nextTopic: ProgressWithTopic | null
+  isLoading: boolean
 }>()
 
 const emit = defineEmits<{
@@ -107,6 +151,24 @@ const clusters = ref<ClusterResponse[]>([])
 const bridges = ref<BridgeResponse[]>([])
 const prereqTopic = ref<ProgressWithTopic | null>(null)
 const scrollTargetDomain = ref<string | null>(null)
+
+// ── Recommendation reason popup ──
+const showReasonPopup = ref(false)
+const reasonPopupTopic = ref<ProgressWithTopic | null>(null)
+/** Pending navigation target — resolved after the user dismisses the popup */
+let pendingRouteAfterReason: string | null = null
+
+/** Translate backend reason strings ("知识断点" etc.) to i18n labels */
+const REASON_I18N_MAP: Record<string, string> = {
+  '知识断点': 'learning.recommendPath.reasonBreakpoint',
+  '课标必会': 'learning.recommendPath.reasonCurriculumGap',
+  '需要复习': 'learning.recommendPath.reasonReviewDue',
+}
+const reasonPopupReasons = computed(() => {
+  if (!reasonPopupTopic.value) return []
+  const reasons = props.pathReasons?.[reasonPopupTopic.value.topic.id] ?? []
+  return reasons.map((r) => t(REASON_I18N_MAP[r] ?? r))
+})
 
 // ── Collapse state (KTD6) ──
 
@@ -344,6 +406,49 @@ function isInstant(territory: Territory): boolean {
   return instantExpandKeys.has(domainKey(territory))
 }
 
+// ── Recommendation path data ──
+
+/** Topic IDs from the recommendation path filtered to the current subject. */
+const subjectPathTopicIds = computed(() => {
+  const subjectItemIds = new Set(
+    props.items
+      .filter((i) => i.topic.subject === props.selectedSubject)
+      .map((i) => i.topic.id),
+  )
+  return props.pathTopicIds.filter((id) => subjectItemIds.has(id))
+})
+
+/** Set of currently expanded domain names (not composite keys) for PathOverlay. */
+const expandedDomainSet = computed(() => {
+  const expanded = new Set<string>()
+  for (const territory of territories.value) {
+    if (isExpanded(territory)) {
+      expanded.add(territory.cluster.domain)
+    }
+  }
+  return expanded
+})
+
+/** Count of path topics per collapsed domain — for DomainSection badges. */
+const pathCountByDomain = computed(() => {
+  const counts = new Map<string, number>()
+  const subjectPathIds = new Set(subjectPathTopicIds.value)
+  for (const territory of territories.value) {
+    if (isExpanded(territory)) continue
+    const count = territory.items.filter((i) => subjectPathIds.has(i.topic.id)).length
+    if (count > 0) {
+      counts.set(territory.cluster.domain, count)
+    }
+  }
+  return counts
+})
+
+/** Localized topic display name for NextUpCard. */
+function topicDisplayName(topic: ProgressWithTopic['topic']): string {
+  if (locale.value.startsWith('zh') && topic.name_zh) return topic.name_zh
+  return topic.name || topic.topic_key
+}
+
 // ── Progress (derived from subjectItems) ──
 
 const totalCount = computed(() => subjectItems.value.length)
@@ -469,6 +574,35 @@ function masteryStatus(item: ProgressWithTopic): string {
 
 function onTopicTap(item: ProgressWithTopic) {
   const status = masteryStatus(item)
+  const isPathTopic = props.pathTopicIds.includes(item.topic.id)
+  const hasReasons = isPathTopic && props.pathReasons?.[item.topic.id]?.length
+
+  // Path topic with reasons → show "why recommended" popup first
+  if (hasReasons) {
+    reasonPopupTopic.value = item
+    showReasonPopup.value = true
+    // Stage the navigation target for when the user acts on the popup
+    switch (status) {
+      case 'mastered':
+        pendingRouteAfterReason = `/learning/topic/${item.topic.id}`
+        break
+      case 'learning':
+      case 'available':
+        pendingRouteAfterReason = `/learning/topic/${item.topic.id}?action=practice`
+        break
+      case 'review':
+        pendingRouteAfterReason = `/learning/topic/${item.topic.id}?action=review`
+        break
+      default:
+        pendingRouteAfterReason = null
+    }
+    return
+  }
+
+  navigateForStatus(item, status)
+}
+
+function navigateForStatus(item: ProgressWithTopic, status: string) {
   switch (status) {
     case 'mastered':
       router.push(`/learning/topic/${item.topic.id}`)
@@ -484,6 +618,18 @@ function onTopicTap(item: ProgressWithTopic) {
       prereqTopic.value = item
       break
   }
+}
+
+function closeReasonPopup() {
+  showReasonPopup.value = false
+  reasonPopupTopic.value = null
+  pendingRouteAfterReason = null
+}
+
+function onReasonPopupAction() {
+  const route = pendingRouteAfterReason
+  closeReasonPopup()
+  if (route) router.push(route)
 }
 
 // ── Bridge navigation (U4) ──
@@ -504,6 +650,7 @@ function onPrereqGoTo(topicId: string) {
 
 <style scoped>
 .cluster-map {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -545,7 +692,7 @@ function onPrereqGoTo(topicId: string) {
   white-space: nowrap;
 }
 
-/* ── Celebration / frontier banner ── */
+/* ── Celebration ── */
 
 .cluster-map__celebration {
   text-align: center;
@@ -556,16 +703,6 @@ function onPrereqGoTo(topicId: string) {
   font-size: 14px;
   font-weight: 500;
   color: var(--color-ink);
-}
-
-.cluster-map__frontier-banner {
-  text-align: center;
-  padding: 10px 16px;
-  background: rgba(var(--color-brand-ochre-rgb), 0.12);
-  border-radius: var(--radius-md);
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  color: var(--color-body);
 }
 
 /* ── Domain groups ── */
@@ -580,5 +717,71 @@ function onPrereqGoTo(topicId: string) {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* ── Recommendation reason popup ── */
+
+.path-reason-popup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.path-reason-popup__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-body);
+}
+
+.path-reason-popup__close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--color-body);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.path-reason-popup__topic {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 10px;
+}
+
+.path-reason-popup__reasons {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.path-reason-popup__reason {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--color-brand-primary-light, rgba(59, 130, 246, 0.12));
+  color: var(--color-brand-primary, #3b82f6);
+}
+
+.path-reason-popup__action {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--color-primary);
+  color: var(--color-canvas);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.path-reason-popup__action:active {
+  opacity: 0.85;
 }
 </style>

@@ -471,6 +471,18 @@ export default {
       expandSection: '展开',
       collapseSection: '收起',
     },
+    recommendPath: {
+      nextStep: '下一步: {topic}',
+      startPractice: '→',
+      hiddenTopics: '{count}',
+      pathA11yLabel: '推荐学习路径',
+      noRecommendations: '暂无推荐',
+      whyRecommended: '为什么推荐',
+      startPracticeBtn: '开始学习',
+      reasonBreakpoint: '知识断点',
+      reasonCurriculumGap: '课标必会',
+      reasonReviewDue: '需要复习',
+    },
     subject: {
       mathematics: '数学',
       science: '科学',
