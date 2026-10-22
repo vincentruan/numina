@@ -2,8 +2,6 @@
   <svg
     v-if="visibleSegments.length > 0"
     class="path-overlay"
-    role="img"
-    :aria-label="t('learning.recommendPath.pathA11yLabel')"
     aria-hidden="true"
   >
     <defs>
@@ -48,8 +46,8 @@ const props = defineProps<{
   expandedDomains: Set<string>
 }>()
 
-// Unique gradient ID to avoid SVG collisions when multiple instances exist
-const gradientId = 'path-gradient-' + Math.random().toString(36).slice(2, 8)
+// Fixed gradient ID — component is a singleton on the page
+const gradientId = 'path-overlay-gradient'
 
 interface MeasuredPoint {
   topicId: string
@@ -207,12 +205,11 @@ onBeforeUnmount(() => {
 
 .path-overlay__trail {
   fill: none;
-  stroke: url(#path-gradient);
+  stroke: url(#path-overlay-gradient);
   stroke-width: 4;
   stroke-linecap: round;
   stroke-dasharray: 80 120;
   animation: path-flow 2.5s linear infinite;
-  will-change: transform;
 }
 
 .path-overlay__trail--static {

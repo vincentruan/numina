@@ -605,7 +605,7 @@ function onPrereqGoTo(topicId: string) {
   white-space: nowrap;
 }
 
-/* ── Celebration / frontier banner ── */
+/* ── Celebration ── */
 
 .cluster-map__celebration {
   text-align: center;
