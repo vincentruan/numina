@@ -29,15 +29,42 @@
             :tabs="subjectTabs"
           />
 
+          <!-- View mode toggle -->
+          <div class="view-mode-toggle">
+            <button
+              class="view-mode-btn"
+              :class="{ 'view-mode-btn--active': viewMode === 'list' }"
+              @click="viewMode = 'list'"
+            >
+              {{ t('learning.graphMap.viewList') }}
+            </button>
+            <button
+              class="view-mode-btn"
+              :class="{ 'view-mode-btn--active': viewMode === 'graph' }"
+              @click="viewMode = 'graph'"
+            >
+              {{ t('learning.graphMap.viewGraph') }}
+            </button>
+          </div>
+
           <!-- Cluster map for selected subject -->
           <div class="map-content">
             <ClusterMap
+              v-if="viewMode === 'list'"
               :items="mapItems"
               :selected-subject="selectedSubject"
               :path-topic-ids="pathTopicIds"
               :path-reasons="pathReasons"
               :next-topic="nextTopic"
               :is-loading="recLoading"
+              @switch-subject="onSwitchSubject"
+            />
+
+            <!-- Graph view (Cytoscape.js) -->
+            <GraphMap
+              v-else
+              :items="mapItems"
+              :selected-subject="selectedSubject"
               @switch-subject="onSwitchSubject"
             />
 
@@ -75,6 +102,7 @@ import type { ProgressWithTopic } from '@/api/learning'
 import SubjectTabs from '@/components/learning/SubjectTabs.vue'
 import type { SubjectTab } from '@/components/learning/SubjectTabs.vue'
 import ClusterMap from '@/components/learning/ClusterMap.vue'
+import GraphMap from '@/components/learning/GraphMap.vue'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
@@ -89,6 +117,7 @@ const loading = ref(true)
 const refreshing = ref(false)
 const error = ref('')
 const selectedSubject = ref('')
+const viewMode = ref<'list' | 'graph'>('list')
 const progressList = ref<Array<{
   topic_id: string
   mastery_level: string
@@ -290,6 +319,38 @@ onActivated(() => {
 
 .map-content {
   padding-top: 12px;
+}
+
+/* ── View mode toggle ── */
+
+.view-mode-toggle {
+  display: flex;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 3px;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-md, 8px);
+  width: fit-content;
+}
+
+.view-mode-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--color-muted);
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 32px;
+}
+
+.view-mode-btn--active {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .error-msg {

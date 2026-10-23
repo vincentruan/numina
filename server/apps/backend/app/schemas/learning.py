@@ -91,6 +91,18 @@ class TopicGraphResponse(BaseModel):
     dependents: list[TopicEdge]
 
 
+class DependencyEdgeResponse(SnowflakeBase):
+    """A single dependency edge between two topics.
+
+    Used by the graph view to draw edges between nodes without
+    fetching the full subgraph for each topic.
+    """
+
+    topic_id: int
+    prerequisite_id: int
+    strength: str | None = None
+
+
 class ClusterResponse(SnowflakeBase):
     id: int
     subject: str
