@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from sqlalchemy import exists, or_
+from sqlalchemy import case, exists, or_
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
@@ -222,8 +222,18 @@ def get_cross_subject_bridges(
             sa_func.min(LearningDependency.source_type).label("min_source"),
             sa_func.max(LearningDependency.source_type).label("max_source"),
             # max_confidence: 1.0 when any explicit edge, else max inferred
-            sa_func.coalesce(
-                sa_func.max(LearningDependency.confidence), 1.0
+            case(
+                (
+                    sa_func.sum(
+                        case(
+                            (LearningDependency.source_type == "explicit", 1),
+                            else_=0,
+                        )
+                    )
+                    > 0,
+                    1.0,
+                ),
+                else_=sa_func.coalesce(sa_func.max(LearningDependency.confidence), 1.0),
             ).label("max_confidence"),
         )
         .join(
