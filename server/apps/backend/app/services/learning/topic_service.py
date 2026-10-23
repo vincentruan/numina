@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from sqlalchemy import exists, or_
+from sqlalchemy import case, exists, or_
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
@@ -235,6 +235,11 @@ def get_cross_subject_bridges(
     and prerequisite) and filters where the two topics belong to different
     subjects.  Results are grouped by ``(subject, domain)`` pairs so each row
     represents a bridge between two cluster areas.
+
+    ``source_type`` is ``"explicit"`` when every underlying edge is explicit,
+    ``"inferred"`` when every edge is inferred, or ``"mixed"`` when both kinds
+    contribute.  ``max_confidence`` is 1.0 when any explicit edge exists, else
+    the highest inferred confidence in the group.
     """
     from sqlalchemy.orm import aliased
 
@@ -253,6 +258,23 @@ def get_cross_subject_bridges(
             to_domain,
             to_subject,
             sa_func.count().label("edge_count"),
+            # source_type: "explicit" / "inferred" / "mixed"
+            sa_func.min(LearningDependency.source_type).label("min_source"),
+            sa_func.max(LearningDependency.source_type).label("max_source"),
+            # max_confidence: 1.0 when any explicit edge, else max inferred
+            case(
+                (
+                    sa_func.sum(
+                        case(
+                            (LearningDependency.source_type == "explicit", 1),
+                            else_=0,
+                        )
+                    )
+                    > 0,
+                    1.0,
+                ),
+                else_=sa_func.coalesce(sa_func.max(LearningDependency.confidence), 1.0),
+            ).label("max_confidence"),
         )
         .join(
             LearningDependency,
@@ -277,6 +299,14 @@ def get_cross_subject_bridges(
             "to_cluster_domain": r.to_cluster_domain,
             "to_subject": r.to_subject,
             "edge_count": r.edge_count,
+            "source_type": (
+                "explicit"
+                if r.min_source == r.max_source == "explicit"
+                else "inferred"
+                if r.min_source == r.max_source == "inferred"
+                else "mixed"
+            ),
+            "max_confidence": r.max_confidence,
         }
         for r in rows
     ]

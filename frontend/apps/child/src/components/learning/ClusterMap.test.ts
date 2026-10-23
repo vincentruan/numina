@@ -278,6 +278,8 @@ describe('ClusterMap', () => {
       to_cluster_domain: 'Units',
       to_subject: 'science',
       edge_count: 1,
+      source_type: 'explicit',
+      max_confidence: 1.0,
     }
     mockGetBridges.mockResolvedValue([bridge])
     const wrapper = mountMap([makeItem()])
@@ -303,6 +305,8 @@ describe('ClusterMap', () => {
       to_cluster_domain: 'Units',
       to_subject: 'science',
       edge_count: 1,
+      source_type: 'explicit',
+      max_confidence: 1.0,
     }
     mockGetBridges.mockResolvedValue([bridge])
     const wrapper = mountMap([makeItem()])
@@ -356,6 +360,8 @@ describe('ClusterMap', () => {
       to_cluster_domain: 'Units',
       to_subject: 'science',
       edge_count: 1,
+      source_type: 'explicit',
+      max_confidence: 1.0,
     }
     mockGetBridges.mockResolvedValue([bridge])
     const wrapper = mountMap([makeItem()])

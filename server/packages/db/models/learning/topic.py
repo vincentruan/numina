@@ -87,6 +87,10 @@ class LearningDependency(Base):
     strength: Mapped[str] = mapped_column(String(10), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_status: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    source_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="explicit", server_default="explicit"
+    )
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class LearningCluster(Base):

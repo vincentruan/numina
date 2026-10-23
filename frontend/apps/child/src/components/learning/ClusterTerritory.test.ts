@@ -74,6 +74,8 @@ function makeBridge(overrides: Partial<BridgeResponse> = {}): BridgeResponse {
     to_cluster_domain: 'Units',
     to_subject: 'science',
     edge_count: 1,
+    source_type: 'explicit',
+    max_confidence: 1.0,
     ...overrides,
   }
 }
@@ -231,6 +233,24 @@ describe('ClusterTerritory', () => {
     await wrapper.find('.topic-node-wrapper').trigger('click')
     expect(wrapper.emitted('topicTap')).toBeTruthy()
     expect(wrapper.emitted('topicTap')![0]).toEqual([item])
+  })
+
+  it('renders inferred bridge with dashed style and 🔍 icon', () => {
+    const bridge = makeBridge({ source_type: 'inferred', max_confidence: 0.65 })
+    const wrapper = mountTerritory(makeCluster(), [], [bridge])
+
+    const badge = wrapper.find('.bridge-badge')
+    expect(badge.classes()).toContain('bridge-badge--inferred')
+    expect(wrapper.find('.bridge-badge__icon').text()).toBe('🔍')
+  })
+
+  it('renders explicit bridge with default style and 🔗 icon', () => {
+    const bridge = makeBridge({ source_type: 'explicit' })
+    const wrapper = mountTerritory(makeCluster(), [], [bridge])
+
+    const badge = wrapper.find('.bridge-badge')
+    expect(badge.classes()).not.toContain('bridge-badge--inferred')
+    expect(wrapper.find('.bridge-badge__icon').text()).toBe('🔗')
   })
 
   it('labels __other__ domain with translated name', () => {

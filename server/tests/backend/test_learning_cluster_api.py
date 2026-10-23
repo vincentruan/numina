@@ -399,3 +399,127 @@ class TestListBridges:
         data = resp.json()["data"]
         for bridge in data:
             assert bridge["from_subject"] != bridge["to_subject"]
+
+    def test_response_includes_source_type(self, client, child_auth_headers, seed_data):
+        """Bridge response should include source_type and max_confidence fields."""
+        resp = client.get(
+            "/api/v1/child/learning/bridges", headers=child_auth_headers
+        )
+        data = resp.json()["data"]
+        assert len(data) >= 1
+        bridge = data[0]
+        assert "source_type" in bridge
+        assert "max_confidence" in bridge
+        assert bridge["source_type"] in ("explicit", "inferred", "mixed")
+        assert isinstance(bridge["max_confidence"], float)
+
+    def test_explicit_bridge_source_type(self, client, child_auth_headers, db):
+        """Explicit-only edges should report source_type='explicit'."""
+        t1 = _make_topic(
+            db, key="exp-a", subject="science", domain="Units",
+            source_taxonomy="beijing",
+        )
+        t2 = _make_topic(
+            db, key="exp-b", subject="mathematics", domain="Addition",
+            source_taxonomy="beijing",
+        )
+        db.flush()
+        db.add(
+            LearningDependency(
+                topic_id=t1.id, prerequisite_id=t2.id, strength="hard",
+                source_type="explicit",
+            )
+        )
+        db.commit()
+        resp = client.get(
+            "/api/v1/child/learning/bridges?subject=science",
+            headers=child_auth_headers,
+        )
+        data = resp.json()["data"]
+        matching = [
+            b for b in data
+            if b["from_subject"] == "science" and b["to_subject"] == "mathematics"
+        ]
+        assert len(matching) == 1
+        assert matching[0]["source_type"] == "explicit"
+        assert matching[0]["max_confidence"] == 1.0
+
+    def test_inferred_bridge_source_type(self, client, child_auth_headers, db):
+        """Inferred-only edges should report source_type='inferred' with confidence."""
+        t1 = _make_topic(
+            db, key="inf-a", subject="science", domain="Energy",
+            source_taxonomy="beijing",
+        )
+        t2 = _make_topic(
+            db, key="inf-b", subject="history", domain="Ancient Egypt",
+            source_taxonomy="beijing",
+        )
+        db.flush()
+        db.add(
+            LearningDependency(
+                topic_id=t1.id, prerequisite_id=t2.id, strength="soft",
+                source_type="inferred", confidence=0.72,
+            )
+        )
+        db.commit()
+        resp = client.get(
+            "/api/v1/child/learning/bridges?subject=science",
+            headers=child_auth_headers,
+        )
+        data = resp.json()["data"]
+        matching = [
+            b for b in data
+            if b["from_subject"] == "science" and b["to_subject"] == "history"
+        ]
+        assert len(matching) == 1
+        assert matching[0]["source_type"] == "inferred"
+        assert matching[0]["max_confidence"] == pytest.approx(0.72)
+
+    def test_mixed_bridge_source_type(self, client, child_auth_headers, db):
+        """Mixed explicit+inferred edges should report source_type='mixed' with max_confidence=1.0."""
+        s1 = _make_topic(
+            db, key="mix-s1", subject="science", domain="Measurement",
+            source_taxonomy="beijing",
+        )
+        s2 = _make_topic(
+            db, key="mix-s2", subject="science", domain="Measurement",
+            source_taxonomy="beijing",
+        )
+        m1 = _make_topic(
+            db, key="mix-m1", subject="mathematics", domain="Units",
+            source_taxonomy="beijing",
+        )
+        m2 = _make_topic(
+            db, key="mix-m2", subject="mathematics", domain="Units",
+            source_taxonomy="beijing",
+        )
+        db.flush()
+        # Explicit edge: s1 → m1
+        db.add(
+            LearningDependency(
+                topic_id=s1.id, prerequisite_id=m1.id, strength="hard",
+                source_type="explicit",
+            )
+        )
+        # Inferred edge: s2 → m2 (same domain pair: Measurement/science -> Units/mathematics)
+        db.add(
+            LearningDependency(
+                topic_id=s2.id, prerequisite_id=m2.id, strength="soft",
+                source_type="inferred", confidence=0.65,
+            )
+        )
+        db.commit()
+        resp = client.get(
+            "/api/v1/child/learning/bridges?subject=science",
+            headers=child_auth_headers,
+        )
+        data = resp.json()["data"]
+        matching = [
+            b for b in data
+            if b["from_subject"] == "science" and b["to_subject"] == "mathematics"
+            and b["from_cluster_domain"] == "Measurement"
+            and b["to_cluster_domain"] == "Units"
+        ]
+        assert len(matching) == 1
+        assert matching[0]["source_type"] == "mixed"
+        assert matching[0]["max_confidence"] == 1.0
