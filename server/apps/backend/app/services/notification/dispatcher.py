@@ -35,18 +35,25 @@ from packages.db.models.push_subscription import PushSubscription
 logger = get_logger(__name__)
 
 
-def ensure_reminder(db: Session, data: dict) -> Reminder | None:
-    """幂等创建 reminder：同 family_id + reminder_type + asset_id + status=active 已存在则跳过。"""
-    existing = (
-        db.query(Reminder)
-        .filter_by(
-            family_id=data["family_id"],
-            reminder_type=data["reminder_type"],
-            asset_id=data.get("asset_id"),
-            status="active",
-        )
-        .first()
+def ensure_reminder(
+    db: Session, data: dict, *, dedup_by_title: bool = False
+) -> Reminder | None:
+    """幂等创建 reminder：同 family_id + reminder_type + asset_id + status=active 已存在则跳过。
+
+    当 ``dedup_by_title=True`` 时，``title`` 也参与幂等判断，使**不同条件可以各自
+    拥有一条未处理的提醒**。安全告警需要该行为：不同异常类型 / 不同来源 IP 必须
+    分别可见，否则前一条未处理期间后续异常会被静默吞掉。调用方需保证 title 是
+    条件标识（稳定、可复现），不能包含每次扫描都会漂移的度量值。
+    """
+    query = db.query(Reminder).filter_by(
+        family_id=data["family_id"],
+        reminder_type=data["reminder_type"],
+        asset_id=data.get("asset_id"),
+        status="active",
     )
+    if dedup_by_title:
+        query = query.filter(Reminder.title == data["title"])
+    existing = query.first()
     if existing:
         return None
     reminder = Reminder(
@@ -90,11 +97,12 @@ def get_reminder_summary(db: Session, family_id: int) -> ReminderSummary:
         learning_approved=counts.get("learning_approved", 0),
         learning_rejected=counts.get("learning_rejected", 0),
         learning_streak_3_failures=counts.get("learning_streak_3_failures", 0),
+        mcp_anomaly_detected=counts.get("mcp_anomaly_detected", 0),
         total=sum(counts.values()),
     )
 
 
-def _check_reminder_dedup(
+def check_reminder_dedup(
     db: Session, family_id: int, reminder_type: str, title: str, hours: int = 1
 ) -> bool:
     """Check if a similar reminder was created recently (deduplication)."""
@@ -122,7 +130,7 @@ def notify_ai_task_complete(
     reminder_type = f"ai_{task_type}_complete"
     title = f"AI 任务完成：{task_title}"
 
-    if _check_reminder_dedup(db, family_id, reminder_type, title, hours=1):
+    if check_reminder_dedup(db, family_id, reminder_type, title, hours=1):
         return
 
     template_vars = {"task_title": task_title}

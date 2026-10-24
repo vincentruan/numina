@@ -49,11 +49,11 @@ frontend/src/
 - **`<script setup lang="ts">`** only — no Options API, no `defineComponent`
 - **No `as any`, `@ts-ignore`, or `@ts-expect-error`** — fix types properly
 - **Incremental formatting** — format only files you touch, not the entire `src/`
-- **Emoji convention** — all user-facing toast/dialog messages must use emoji-prefixed i18n keys (see `frontend/CLAUDE.md`)
+- **Emoji convention** — all user-facing toast/dialog messages must use emoji-prefixed i18n keys (see `frontend/apps/main/AGENTS.md`)
 
 ## Detailed Conventions
 
-See [`CLAUDE.md`](./CLAUDE.md) for:
+See [`AGENTS.md`](./AGENTS.md) for:
 - Full ESLint + Prettier + vue-tsc tooling config
 - Emoji convention for user-facing messages with implementation examples
 - i18n workflow for adding new messages

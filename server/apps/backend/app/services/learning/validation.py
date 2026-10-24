@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from apps.backend.app.services.literacy_badge import (
+    ALL_DIMENSIONS as LITERACY_DIMENSIONS,
+)
 from packages.core.logging import get_logger
 from packages.db.models.learning.topic import LearningTopic
 
@@ -13,18 +16,21 @@ logger = get_logger(__name__)
 def validate_badge_subjects(badge_subjects: set[str], db: Session) -> list[str]:
     """Verify all badge subjects exist as LearningTopic.subject values.
 
-    The badge model (LiteracyBadgeDefinition) uses a `dimension` field
-    storing subject slugs (e.g., "mathematics", "science") that must match
-    actual LearningTopic.subject values in the seed data.
+    The badge model (LiteracyBadgeDefinition) uses a `dimension` field that
+    holds either a subject slug (e.g., "mathematics", "science") that must
+    match an actual LearningTopic.subject value, or one of the four
+    financial-literacy dimensions, which are a separate axis with no
+    corresponding topic row.
 
-    The virtual subject "comprehensive" is allowed — it represents cross-subject
-    badges that don't correspond to any single topic subject.
+    Virtual dimensions that don't map to a topic subject are allowed:
+    "comprehensive" (cross-subject badges) and the literacy dimensions
+    (earning / choosing / waiting / caring).
 
     Returns:
         List of error messages (empty = all good).
     """
     # Virtual badge dimensions that don't map to a topic subject
-    VIRTUAL_SUBJECTS = {"comprehensive"}
+    VIRTUAL_SUBJECTS = {"comprehensive", *LITERACY_DIMENSIONS}
 
     existing_subjects = {
         row[0]

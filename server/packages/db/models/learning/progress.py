@@ -39,8 +39,12 @@ class LearningProgress(Base):
     last_practice_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     first_mastered_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     stability: Mapped[float | None] = mapped_column(Float, nullable=True, default=1.0)
+    ease_factor: Mapped[float | None] = mapped_column(Float, nullable=True, default=2.5)
     next_review_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     ability_dimensions_score_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    overridden_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    overridden_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), onupdate=func.now()

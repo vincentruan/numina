@@ -47,6 +47,7 @@ def _create_topic(db: Session, topic_key: str = "integ_topic") -> LearningTopic:
         age_group="mid",
         evidence_json="[]",
         standards_json="[]",
+        source_taxonomy="beijing",
     )
     db.add(topic)
     db.flush()

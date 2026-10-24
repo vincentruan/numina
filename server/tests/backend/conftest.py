@@ -18,6 +18,18 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_LIFESPAN_DIR}/lifespan.db"
 # Set AI_ENCRYPTION_KEY for tests that need encryption (web search providers, AI config)
 os.environ["AI_ENCRYPTION_KEY"] = "TWkvLCaoHF_ZlwIUzytBOveIw5wmZj4ggVjWMgJr9BM="
 
+# Force the cache backend to in-memory BEFORE settings is imported.
+# Root .env sets CACHE_BACKEND=redis, and the app lifespan calls
+# init_cache(settings.CACHE_BACKEND) on every TestClient startup — that
+# replaces the per-test MemoryCache the `db` fixture installs with a shared
+# Redis instance. Auth rate-limit counters (register per IP, login per
+# username, refresh/password-change per user, invite-code) then survive across
+# tests and across pytest runs, so once a counter crosses its limit every
+# later test calling that endpoint gets 429. Tests must not share rate-limit
+# state with each other or with a live Redis.
+# Note: We FORCE override even if root .env already sets CACHE_BACKEND.
+os.environ["CACHE_BACKEND"] = "memory"
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
@@ -101,6 +113,7 @@ def db(_session_engine):
     # Defensive: clear any leaked dependency overrides from tests that
     # manipulate app.dependency_overrides directly (e.g. internal API tests).
     from apps.backend.app.main import app
+
     app.dependency_overrides.clear()
 
     # Create a CONNECTION (not just session) for nested transaction support
@@ -140,21 +153,23 @@ def db(_session_engine):
 def _seed_test_invitation_codes(session):
     """Seed test invitation codes for auth fixtures and tests."""
     codes = [
-        FamilyInvitationCode(code="AUT01"),          # conftest.py - auth_headers fixture
-        FamilyInvitationCode(code="AUT02"),        # conftest.py - second_user_headers fixture
-        FamilyInvitationCode(code="AUT03"),         # test_admin_child_switch.py
-        FamilyInvitationCode(code="AUT04"),        # test_auth.py - test_register_success
-        FamilyInvitationCode(code="AUT05"),           # test_auth.py - test_register_duplicate_username
-        FamilyInvitationCode(code="AUT06"),        # test_auth_security.py
-        FamilyInvitationCode(code="AUT07"),        # test_auth_security.py
-        FamilyInvitationCode(code="AUT08"),         # test_children.py
-        FamilyInvitationCode(code="AUT09"),        # test_children.py
+        FamilyInvitationCode(code="AUT01"),  # conftest.py - auth_headers fixture
+        FamilyInvitationCode(code="AUT02"),  # conftest.py - second_user_headers fixture
+        FamilyInvitationCode(code="AUT03"),  # test_admin_child_switch.py
+        FamilyInvitationCode(code="AUT04"),  # test_auth.py - test_register_success
+        FamilyInvitationCode(
+            code="AUT05"
+        ),  # test_auth.py - test_register_duplicate_username
+        FamilyInvitationCode(code="AUT06"),  # test_auth_security.py
+        FamilyInvitationCode(code="AUT07"),  # test_auth_security.py
+        FamilyInvitationCode(code="AUT08"),  # test_children.py
+        FamilyInvitationCode(code="AUT09"),  # test_children.py
         FamilyInvitationCode(code="AUT10"),  # test_milestones.py
-        FamilyInvitationCode(code="AUT11"),          # test_file_sync.py
-        FamilyInvitationCode(code="AUT12"),         # test_chores_extended.py
-        FamilyInvitationCode(code="AUT13"),       # test_file_storage_models.py
-        FamilyInvitationCode(code="AUT14"),     # test_file_storage_models.py
-        FamilyInvitationCode(code="AUT15"),      # test_webauthn.py
+        FamilyInvitationCode(code="AUT11"),  # test_file_sync.py
+        FamilyInvitationCode(code="AUT12"),  # test_chores_extended.py
+        FamilyInvitationCode(code="AUT13"),  # test_file_storage_models.py
+        FamilyInvitationCode(code="AUT14"),  # test_file_storage_models.py
+        FamilyInvitationCode(code="AUT15"),  # test_webauthn.py
     ]
     for code in codes:
         session.add(code)
@@ -165,6 +180,7 @@ def _seed_test_invitation_codes(session):
 @pytest.fixture(scope="function")
 def client(db):
     """Create a test client with database override."""
+
     def override_get_db():
         try:
             yield db
@@ -177,6 +193,7 @@ def client(db):
     # Override SessionLocal for all new sessions (including generators)
     # This ensures components that create their own SessionLocal() use the test database
     from apps.backend.app import database as app_database_module
+
     # Create a sessionmaker that yields our nested-transaction session
     # Note: We can't replace SessionLocal directly since it's a sessionmaker,
     # but the dependency override handles most cases
@@ -199,13 +216,16 @@ def client(db):
 @pytest.fixture
 def auth_headers(client):
     """Register a user and return auth headers + tokens"""
-    response = client.post("/api/v1/auth/register", json={
-        "username": "testuser",
-        "display_name": "Test User",
-        "password": "TestPass123",
-        "family_name": "Test Family",
-        "family_invitation_code": "AUT01"
-    })
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "testuser",
+            "display_name": "Test User",
+            "password": "TestPass123",
+            "family_name": "Test Family",
+            "family_invitation_code": "AUT01",
+        },
+    )
     assert response.status_code == 200
     data = response.json().get("data", response.json())
     return {
@@ -217,13 +237,16 @@ def auth_headers(client):
 @pytest.fixture
 def second_user_headers(client):
     """Create a second user in a different family"""
-    response = client.post("/api/v1/auth/register", json={
-        "username": "testuser2",
-        "display_name": "Test User 2",
-        "password": "TestPass456",
-        "family_name": "Test Family 2",
-        "family_invitation_code": "AUT02"
-    })
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "testuser2",
+            "display_name": "Test User 2",
+            "password": "TestPass456",
+            "family_name": "Test Family 2",
+            "family_invitation_code": "AUT02",
+        },
+    )
     assert response.status_code == 200
     data = response.json().get("data", response.json())
     return {
@@ -232,20 +255,28 @@ def second_user_headers(client):
     }
 
 
-def child_login_two_phase(client, username: str, password: str, pin_sequence: list[str]) -> str:
+def child_login_two_phase(
+    client, username: str, password: str, pin_sequence: list[str]
+) -> str:
     """Two-phase child login helper. Returns child access token and sets child cookies."""
-    step1 = client.post("/api/v1/auth/login/step1", json={
-        "username": username,
-        "password": password,
-    })
+    step1 = client.post(
+        "/api/v1/auth/login/step1",
+        json={
+            "username": username,
+            "password": password,
+        },
+    )
     assert step1.status_code == 200, f"step1 failed: {step1.text}"
     data = step1.json()["data"]
     assert data["second_factor_required"] is True
-    step2 = client.post("/api/v1/auth/login/step2", json={
-        "temp_token": data["temp_token"],
-        "factor_type": "emoji_pin",
-        "payload": {"pin_sequence": pin_sequence},
-    })
+    step2 = client.post(
+        "/api/v1/auth/login/step2",
+        json={
+            "temp_token": data["temp_token"],
+            "factor_type": "emoji_pin",
+            "payload": {"pin_sequence": pin_sequence},
+        },
+    )
     assert step2.status_code == 200, f"step2 failed: {step2.text}"
     return str(step2.json()["data"]["access_token"])
 
@@ -262,7 +293,9 @@ def test_family(db):
     """Create a test family."""
     from apps.backend.app.utils.snowflake import next_id
 
-    family = Family(id=next_id(), name="Test Family for AI Results", created_by=next_id())
+    family = Family(
+        id=next_id(), name="Test Family for AI Results", created_by=next_id()
+    )
     db.add(family)
     db.commit()
     db.refresh(family)
@@ -295,6 +328,7 @@ def test_asset(db, test_family, test_user):
     # Get a valid category_id from seeded categories
     from apps.backend.app.models.category import Category
     from apps.backend.app.utils.snowflake import next_id
+
     category = db.query(Category).first()
 
     asset = Asset(

@@ -16,7 +16,7 @@
  *   - PDF：iframe 或 force download
  *   - 未知：下载提示
  */
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { Popup, NavBar, Button, Loading } from 'vant'
 import { useI18n } from 'vue-i18n'
 import IIcon from '@/components/IIcon.vue'
@@ -63,6 +63,40 @@ const error = ref<string | null>(null)
 // 内容缓存（5分钟 staleTime）- 使用 ref 确保每个组件实例独立
 const contentCache = ref(new Map<string, { content: string; timestamp: number }>())
 const STALE_TIME = 5 * 60 * 1000
+
+// HTML iframe 高度自适应
+const htmlFrameRef = ref<HTMLIFrameElement | null>(null)
+const htmlFrameHeight = ref(600)
+
+// 注入高度上报脚本到 HTML 内容，iframe 通过 postMessage 上报实际高度
+const htmlSrcdoc = computed(() => {
+  if (!contentRef.value) return ''
+  // 拆分 <\/script> 避免 SFC 解析器误识别为脚本块结束
+  const scriptClose = '<' + '/script>'
+  const resizeScript = `<script>(function(){function sendHeight(){window.parent.postMessage({type:'numina-artifact-height',height:Math.max(document.documentElement.scrollHeight,document.body.scrollHeight,window.innerHeight)},'*')}window.addEventListener('load',sendHeight);new ResizeObserver(sendHeight).observe(document.body);new ResizeObserver(sendHeight).observe(document.documentElement)})();${scriptClose}`
+  // 优先注入到 </head> 前，其次 </body> 前，最后直接前缀
+  if (contentRef.value.includes('</head>')) {
+    return contentRef.value.replace('</head>', resizeScript + '</head>')
+  }
+  if (contentRef.value.includes('<body>')) {
+    return contentRef.value.replace('<body>', '<body>' + resizeScript)
+  }
+  return resizeScript + contentRef.value
+})
+
+// 监听 iframe postMessage 高度更新
+function handleFrameMessage(event: MessageEvent) {
+  if (event.data?.type === 'numina-artifact-height' && typeof event.data.height === 'number') {
+    // 加上安全边距，确保不裁切
+    htmlFrameHeight.value = Math.min(event.data.height + 16, 2000)
+  }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', handleFrameMessage)
+}
+onUnmounted(() => {
+  window.removeEventListener('message', handleFrameMessage)
+})
 
 async function loadContent() {
   if (!filepath.value || !props.sessionId) return
@@ -111,8 +145,8 @@ watch(
   ([show, path]) => {
     if (show && path) {
       loadContent()
-      // 重置 viewMode
-      viewMode.value = isCodeFile(path) ? 'code' : 'preview'
+      // 默认预览模式
+      viewMode.value = 'preview'
     }
   },
   { immediate: true },
@@ -156,8 +190,20 @@ function handleDownload() {
   window.open(downloadUrl.value, '_blank', 'noopener,noreferrer')
 }
 
-function handleOpenNewWindow() {
-  window.open(openUrl.value, '_blank', 'noopener,noreferrer')
+async function handleOpenNewWindow() {
+  const content = contentRef.value
+
+  if (content) {
+    // Use blob URL to bypass browser CSP — avoids script-src blocking
+    // external CDN resources (e.g. Chart.js) and inline scripts in artifact HTML
+    const blob = new Blob([content], { type: 'text/html;charset=utf-8' })
+    const blobUrl = URL.createObjectURL(blob)
+    window.open(blobUrl, '_blank', 'noopener,noreferrer')
+    // Release blob after a delay (new tab loads synchronously via blob)
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000)
+  } else {
+    window.open(openUrl.value, '_blank', 'noopener,noreferrer')
+  }
 }
 </script>
 
@@ -200,21 +246,23 @@ function handleOpenNewWindow() {
       </NavBar>
 
       <!-- 预览模式切换（仅代码文件） -->
-      <div v-if="isCode" class="view-mode-toggle">
-        <Button
-          size="small"
-          :type="viewMode === 'code' ? 'primary' : 'default'"
-          @click="viewMode = 'code'"
-        >
-          {{ t('aiArtifact.viewModeCode') }}
-        </Button>
-        <Button
-          size="small"
-          :type="viewMode === 'preview' ? 'primary' : 'default'"
+      <div v-if="isCode" class="view-mode-tabs">
+        <div
+          class="view-mode-tab"
+          :class="{ active: viewMode === 'preview' }"
           @click="viewMode = 'preview'"
         >
+          <IIcon icon="lucide:eye" class="tab-icon" />
           {{ t('aiArtifact.viewModePreview') }}
-        </Button>
+        </div>
+        <div
+          class="view-mode-tab"
+          :class="{ active: viewMode === 'code' }"
+          @click="viewMode = 'code'"
+        >
+          <IIcon icon="lucide:code" class="tab-icon" />
+          {{ t('aiArtifact.viewModeCode') }}
+        </div>
       </div>
 
       <!-- 预览内容 -->
@@ -227,9 +275,20 @@ function handleOpenNewWindow() {
 
         <!-- Error -->
         <div v-if="error" class="error-state">
-          <IIcon icon="lucide:x-circle" />
+          <IIcon icon="lucide:circle-x" />
           <span>{{ error }}</span>
           <Button size="small" type="primary" @click="loadContent">{{ t('aiArtifact.retry') }}</Button>
+        </div>
+
+        <!-- HTML sandbox iframe（viewMode=preview 时展示；高度自适应内容，外层滚动） -->
+        <div v-if="!loading && !error && isHtml && contentRef && viewMode === 'preview'" class="html-preview">
+          <iframe
+            ref="htmlFrameRef"
+            :srcdoc="htmlSrcdoc"
+            sandbox="allow-scripts allow-forms"
+            class="html-iframe"
+            :style="{ height: htmlFrameHeight + 'px' }"
+          />
         </div>
 
         <!-- 代码模式 -->
@@ -248,11 +307,6 @@ function handleOpenNewWindow() {
           :is-loading="false"
           class="markdown-preview"
         />
-
-        <!-- HTML sandbox iframe -->
-        <div v-if="!loading && !error && isHtml && contentRef" class="html-preview">
-          <iframe :srcdoc="contentRef" sandbox="allow-scripts allow-forms" class="html-iframe" />
-        </div>
 
         <!-- 图片预览 -->
         <div v-if="isImage && openUrl" class="image-preview">
@@ -305,11 +359,36 @@ function handleOpenNewWindow() {
   gap: 8px;
 }
 
-.view-mode-toggle {
-  padding: 8px 16px;
-  background: var(--card-bg);
+.view-mode-tabs {
   display: flex;
-  gap: 8px;
+  padding: 0 16px;
+  background: var(--card-bg);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.view-mode-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.view-mode-tab.active {
+  color: var(--van-primary-color);
+  border-bottom-color: var(--van-primary-color);
+  font-weight: 500;
+}
+
+.tab-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .preview-content {
@@ -351,10 +430,11 @@ function handleOpenNewWindow() {
 .html-iframe,
 .pdf-iframe {
   width: 100%;
-  height: 60vh;
+  min-height: 60vh;
   border: none;
   border-radius: 12px;
   background: white;
+  transition: height 0.15s ease;
 }
 
 .image-preview {

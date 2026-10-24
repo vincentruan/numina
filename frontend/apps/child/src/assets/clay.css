@@ -124,6 +124,13 @@
   --heat-2: #ffe0b2;
   --heat-3: #ffb74d;
   --heat-4: #f5a623;
+
+  /* ── Path overlay colors (light mode) ── */
+  --color-path-trail-start: var(--color-brand-ochre);
+  --color-path-trail-end:  var(--color-brand-peach);
+  --color-path-dot:        var(--color-brand-ochre);
+  --color-path-badge-bg:   var(--color-brand-ochre);
+  --color-path-badge-text: var(--color-on-dark);
 }
 
 /* ── Dark mode overrides ── */
@@ -157,6 +164,13 @@
   --color-brand-lavender:#9a8cd0;
   --color-brand-mint:    #8abcad;
   --color-brand-pink:    #a82960;
+
+  /* Brand -rgb variants for rgba() usage in dark mode */
+  --color-brand-ochre-rgb:    212, 168, 58;
+  --color-brand-peach-rgb:    224, 152, 112;
+  --color-brand-lavender-rgb: 154, 140, 208;
+  --color-brand-mint-rgb:     138, 188, 173;
+  --color-brand-coral-rgb:    255, 107, 90;
 
   /* Coin colors — Metallic palette adjusted for dark backgrounds */
   --color-coin-gold-glow:  #FFF8D0;  /* brighter glow for contrast */
@@ -198,6 +212,16 @@
   --heat-2: rgba(34, 197, 94, 0.25);
   --heat-3: rgba(34, 197, 94, 0.45);
   --heat-4: rgba(34, 197, 94, 0.70);
+
+  /* ── Path overlay colors (dark mode) ──
+   * Brand tokens (--color-brand-ochre, etc.) are overridden above in dark
+   * mode, so these references resolve to dark-appropriate values automatically.
+   * No need for separate hex values here. */
+  --color-path-trail-start: var(--color-brand-ochre);
+  --color-path-trail-end:  var(--color-brand-peach);
+  --color-path-dot:        var(--color-brand-ochre);
+  --color-path-badge-bg:   var(--color-brand-ochre);
+  --color-path-badge-text: var(--color-on-dark);
 }
 
 /* ── Vant dark mode overrides ── */

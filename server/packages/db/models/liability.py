@@ -29,7 +29,7 @@ class Liability(Base):
     repayment_method: Mapped[str] = mapped_column(String(30), nullable=False, default="equal_payment", server_default="equal_payment")  # equal_payment/equal_principal/interest_only/bullet/minimum_payment
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     # Money fields are NUMERIC(18,2) — Decimal in Python, serialized as str on
-    # the wire (SnowflakeBase money-as-str convention, CLAUDE.md §bigint). Was
+    # the wire (SnowflakeBase money-as-str convention, AGENTS.md §Bigint Serialization). Was
     # Float pre-T8b (precision risk for currency); migrated to Numeric.
     original_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     remaining_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)

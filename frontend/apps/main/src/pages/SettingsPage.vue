@@ -214,6 +214,11 @@
       <van-cell :title="t('settings.tagManage')" icon="label-o" is-link to="/settings/tags" />
     </van-cell-group>
 
+    <!-- 关于 -->
+    <van-cell-group inset :title="t('settings.about')" class="section">
+      <van-cell :title="t('settings.aboutNumina')" icon="info-o" is-link to="/settings/about" />
+    </van-cell-group>
+
     <!-- 引导 -->
 
     <div class="actions">

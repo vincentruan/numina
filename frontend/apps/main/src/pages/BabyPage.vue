@@ -44,9 +44,12 @@
         <!-- Summary Card -->
         <van-cell-group inset class="summary-card">
           <van-cell :title="t('baby.balance')">
+            <template #icon>
+              <IIcon icon="mdi:star-circle" size="20" color="var(--color-cost, #f5a623)" class="cell-icon" />
+            </template>
             <template #value>
               <div class="balance-row">
-                <span>{{ currentBalance }} ⭐</span>
+                <span>{{ currentBalance }} </span>
                 <van-button
                   size="mini"
                   type="warning"
@@ -57,22 +60,49 @@
               </div>
             </template>
           </van-cell>
-          <van-cell :title="t('baby.weeklyChores')" :value="`${currentChoreStats.completed_this_week ?? 0}/${currentChoreStats.total_this_week ?? 0}`" />
-          <van-cell :title="t('baby.activeWishes')" :value="`${currentWishCount}`" />
+          <van-cell :title="t('baby.weeklyChores')" :value="`${currentChoreStats.completed_this_week ?? 0}/${currentChoreStats.total_this_week ?? 0}`">
+            <template #icon>
+              <IIcon icon="mdi:broom" size="20" color="var(--van-primary-color)" class="cell-icon" />
+            </template>
+          </van-cell>
+          <van-cell :title="t('baby.activeWishes')" :value="`${currentWishCount}`">
+            <template #icon>
+              <IIcon icon="mdi:gift-outline" size="20" color="var(--van-danger-color)" class="cell-icon" />
+            </template>
+          </van-cell>
           <van-cell
             v-if="selectedChildId"
+            class="learning-entry-cell"
             :title="t('baby.learningTab')"
-            :value="t('learning.studyMinutes', { minutes: currentStudyMinutes })"
+            :label="learningEntryLabel"
             is-link
             @click="$router.push('/baby/learning')"
-          />
-          <van-cell :title="t('baby.blindBoxGifts')" is-link @click="$router.push('/blind-box/gifts')" />
+          >
+            <template #icon>
+              <IIcon icon="mdi:school-outline" size="22" color="var(--van-primary-color)" class="cell-icon" />
+            </template>
+            <template #value>
+              <span class="learning-entry-value">{{ t('learning.studyMinutes', { minutes: currentStudyMinutes }) }}</span>
+            </template>
+          </van-cell>
+          <van-cell :title="t('baby.blindBoxGifts')" is-link @click="$router.push('/blind-box/gifts')">
+            <template #icon>
+              <IIcon icon="mdi:gift-open-outline" size="20" color="var(--van-warning-color)" class="cell-icon" />
+            </template>
+          </van-cell>
           <van-cell :title="t('baby.blindBoxDraws')" is-link @click="$router.push('/blind-box/draws')">
+            <template #icon>
+              <IIcon icon="mdi:ticket-confirmation-outline" size="20" color="var(--van-success-color)" class="cell-icon" />
+            </template>
             <template v-if="pendingDrawCount > 0" #value>
               <van-badge :content="pendingDrawCount" />
             </template>
           </van-cell>
-          <van-cell :title="t('baby.choreTemplates')" is-link @click="$router.push('/baby/chore-templates')" />
+          <van-cell :title="t('baby.choreTemplates')" is-link @click="$router.push('/baby/chore-templates')">
+            <template #icon>
+              <IIcon icon="mdi:format-list-bulleted" size="20" color="var(--van-info-color)" class="cell-icon" />
+            </template>
+          </van-cell>
           <template v-if="selectedChildId">
             <van-cell
               v-if="familyStore.aiEnabled"
@@ -80,7 +110,11 @@
               :value="reportStatusLabel(String(selectedChildId))"
               is-link
               @click="navigateToReport(String(selectedChildId))"
-            />
+            >
+              <template #icon>
+                <IIcon icon="mdi:file-document-outline" size="20" color="var(--van-primary-color)" class="cell-icon" />
+              </template>
+            </van-cell>
             <AiGatedInline v-else :is-owner="authStore.user?.role === 'owner'" />
           </template>
         </van-cell-group>
@@ -574,7 +608,7 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'Baby' })
-import { ref, computed, onMounted, onActivated } from 'vue'
+import { ref, computed, watch, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -582,6 +616,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useChoreStore } from '@/stores/chore'
 import { useBlindBoxStore } from '@/stores/blindBox'
+import { useBabyStore } from '@/stores/baby'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UserAvatar from '@/components/common/UserAvatar.vue'
 import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
@@ -607,6 +642,7 @@ const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const choreStore = useChoreStore()
 const blindBoxStore = useBlindBoxStore()
+const babyStore = useBabyStore()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
@@ -709,6 +745,17 @@ const currentStudyMinutes = computed(() => {
   if (!selectedChildId.value) return 0
   const overview = learningOverviews.value.find(o => o.child_id === selectedChildId.value)
   return overview?.total_study_minutes ?? 0
+})
+
+const learningEntryLabel = computed(() => {
+  const overview = learningOverviews.value.find(o => o.child_id === selectedChildId.value)
+  if (!overview) return ''
+  const parts = [
+    t('learning.mastered') + ' ' + overview.mastered_count,
+    t('learning.learning') + ' ' + overview.learning_count,
+  ]
+  if (overview.review_count > 0) parts.push(t('learning.pendingReview') + ' ' + overview.review_count)
+  return parts.join(' · ')
 })
 
 const filteredWishes = computed(() => {
@@ -1188,6 +1235,14 @@ async function onRefresh() {
   refreshing.value = false
 }
 
+// Sync selectedChildId to babyStore so BabyLearningPage can read it
+watch(selectedChildId, (id) => {
+  const name = id
+    ? childMembers.value.find(c => c.id === id)?.display_name ?? null
+    : null
+  babyStore.selectChild(id ? String(id) : null, name)
+})
+
 onMounted(async () => {
   increment()
   try {
@@ -1198,6 +1253,11 @@ onMounted(async () => {
     await loadData()
     await blindBoxStore.fetchDraws()
     void loadReportStatuses()
+    // Initialize babyStore with first child (if available)
+    if (childMembers.value.length > 0) {
+      const first = childMembers.value[0]
+      babyStore.selectChild(String(first.id), first.display_name)
+    }
   } finally {
     decrement()
   }
@@ -1307,6 +1367,34 @@ onActivated(async () => {
 
 .summary-card {
   margin-top: 12px;
+}
+
+.summary-card .cell-icon {
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  flex-shrink: 0;
+  align-self: center;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Learning entry — text color distinguishes it; no background diff */
+.learning-entry-cell :deep(.van-cell__title) {
+  font-weight: 600;
+  color: var(--van-primary-color);
+}
+
+.learning-entry-cell :deep(.van-cell__label) {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.learning-entry-value {
+  color: var(--van-primary-color);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .balance-row {

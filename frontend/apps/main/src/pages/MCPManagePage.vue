@@ -2,6 +2,8 @@
   <div class="mcp-manage-page">
     <PageHeader :title="t('mcp.title')" />
 
+    <BackendMCPCard v-if="isOwner" />
+
     <van-cell-group inset :title="t('mcp.servers')" class="section">
       <van-cell
         v-for="server in servers"

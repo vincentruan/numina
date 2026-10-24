@@ -271,6 +271,11 @@ const router = createRouter({
           component: () => import('@/pages/MCPManagePage.vue')
         },
         {
+          path: 'settings/ai/mcp/stats',
+          name: 'MCPStats',
+          component: () => import('@/pages/MCPStatsPage.vue')
+        },
+        {
           path: 'settings/ai/web-search',
           name: 'WebSearch',
           component: () => import('@/pages/WebSearchPage.vue'),
@@ -355,6 +360,31 @@ const router = createRouter({
           path: 'settings/second-factor',
           name: 'ChangeSecondFactor',
           component: () => import('@/pages/ChangeSecondFactorPage.vue'),
+        },
+        {
+          path: 'settings/about',
+          name: 'About',
+          component: () => import('@/pages/AboutPage.vue')
+        },
+        {
+          path: 'settings/about/changelog',
+          name: 'AboutChangelog',
+          component: () => import('@/pages/about/ChangelogPage.vue'),
+        },
+        {
+          path: 'settings/about/terms',
+          name: 'AboutTerms',
+          component: () => import('@/pages/about/TermsPage.vue'),
+        },
+        {
+          path: 'settings/about/privacy',
+          name: 'AboutPrivacy',
+          component: () => import('@/pages/about/PrivacyPage.vue'),
+        },
+        {
+          path: 'settings/about/licenses',
+          name: 'AboutLicenses',
+          component: () => import('@/pages/about/LicensesPage.vue'),
         },
         {
           // R16: old route redirects to new /finance/import (client-side redirect).
@@ -460,14 +490,19 @@ const router = createRouter({
           meta: { hasSkeleton: true }
         },
         {
-          path: 'baby/learning/assign',
-          name: 'LearningAssign',
-          component: () => import('@/pages/LearningAssignPage.vue')
+          path: 'baby/learning/preset-paths',
+          name: 'PresetPaths',
+          component: () => import('@/pages/baby/learning/PresetPathsPage.vue')
         },
         {
-          path: 'baby/learning/reviews',
-          name: 'LearningReviews',
-          component: () => import('@/pages/LearningReviewsPage.vue')
+          path: 'baby/learning/recommendations',
+          name: 'Recommendations',
+          component: () => import('@/pages/baby/learning/RecommendationsPage.vue')
+        },
+        {
+          path: 'baby/learning/paths/:pathId',
+          name: 'LearningPathDetail',
+          component: () => import('@/pages/LearningPathDetailPage.vue')
         },
         {
           path: 'baby/learning/:childId/map',

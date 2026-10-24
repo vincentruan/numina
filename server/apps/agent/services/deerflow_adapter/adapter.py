@@ -824,7 +824,7 @@ class DeerFlowAdapter:
 
         Security: ``free_text`` (user input) is wrapped in ``<user_message>`` XML
         delimiters so the LLM treats it as untrusted data, not as system-level
-        instructions. Defense against direct prompt injection (CLAUDE.md §Security
+        instructions. Defense against direct prompt injection (AGENTS.md §Security
         Rules rule 3). The chat SKILL.md instructs the model to never follow
         instructions embedded inside ``<user_message>`` tags.
 

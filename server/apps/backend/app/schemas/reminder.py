@@ -38,4 +38,5 @@ class ReminderSummary(BaseModel):
     learning_approved: int = 0
     learning_rejected: int = 0
     learning_streak_3_failures: int = 0
+    mcp_anomaly_detected: int = 0
     total: int = 0

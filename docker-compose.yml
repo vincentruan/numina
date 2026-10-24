@@ -38,6 +38,7 @@ services:
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./system-config.yaml:/app/system-config.yaml:ro
+      - ./server/data/os-taxonomy-beijing:/app/server/data/os-taxonomy-beijing:ro
     env_file:
       - .env
     environment:

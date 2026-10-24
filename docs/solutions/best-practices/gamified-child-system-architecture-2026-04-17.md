@@ -179,9 +179,9 @@ from app.schemas.coin import SiblingResponse, GiftRequest, GiftResponse  # ✅ �
 
 ### 4. Alembic 迁移部署文档
 
-**原则**：在 `backend/CLAUDE.md` 中明确记录部署顺序：迁移必须在应用启动前运行。
+**原则**：在 `backend/AGENTS.md` 中明确记录部署顺序：迁移必须在应用启动前运行。
 
-**应添加到 `backend/CLAUDE.md` 的内容**：
+**应添加到 `backend/AGENTS.md` 的内容**：
 ```markdown
 ## Alembic
 
@@ -319,7 +319,7 @@ COUNT=$(curl -s "$BASE_URL/assets" -H "Authorization: Bearer $TOKEN" | \
 - **批量端点**：仪表盘展示多个实体的聚合数据；父子关系数据加载；任何 N+1 场景
 - **LEFT JOIN 去重**：查询主实体并 JOIN 其关联事务/事件，只需唯一主实体
 - **Schema 组织**：FastAPI 项目中所有 Pydantic Schema，无例外
-- **迁移文档**：每次添加 Alembic 迁移后，确认 `backend/CLAUDE.md` 中有部署顺序说明
+- **迁移文档**：每次添加 Alembic 迁移后，确认 `backend/AGENTS.md` 中有部署顺序说明
 - **亲子仪表盘**：父母需要查看每个孩子的独立指标或对特定孩子执行操作
 - **路由清单**：每次向 `frontend/src/router/index.ts` 添加新路由时
 - **防御性 Shell 脚本**：所有调用 Numina API 的自动化脚本

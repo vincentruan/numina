@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.schema import Table
 
@@ -82,45 +83,42 @@ class StateStore:
         self._ensure_table()
         now = datetime.now(UTC)
 
-        row = (
+        values = {
+            "resource_name": resource_name,
+            "resource_type": resource_type,
+            "desired_version": desired_version,
+            "current_version": current_version,
+            "status": status,
+            "critical": 1 if critical else 0,
+            "last_checked_at": checked_at or now,
+            "last_applied_at": applied_at,
+            "last_verified_at": verified_at,
+            "error_message": error_message,
+            "remediation_hint": remediation_hint,
+            "metadata_json": json.dumps(metadata) if metadata else None,
+        }
+
+        # Use PostgreSQL INSERT … ON CONFLICT DO UPDATE for atomic upsert,
+        # avoiding the TOCTOU race where two concurrent workers both SELECT
+        # None and then both INSERT, causing UniqueViolation.
+        stmt = pg_insert(ReconcileState.__table__).values(**values)
+        update_cols = {
+            col: stmt.excluded[col]
+            for col in values
+            if col != "resource_name"
+        }
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["resource_name"],
+            set_=update_cols,
+        )
+        self._db.execute(stmt)
+        self._db.commit()
+
+        return (
             self._db.query(ReconcileState)
             .filter(ReconcileState.resource_name == resource_name)
-            .first()
+            .one()
         )
-
-        if row is None:
-            row = ReconcileState(
-                resource_name=resource_name,
-                resource_type=resource_type,
-                desired_version=desired_version,
-                current_version=current_version,
-                status=status,
-                critical=1 if critical else 0,
-                last_checked_at=checked_at or now,
-                error_message=error_message,
-                remediation_hint=remediation_hint,
-                metadata_json=json.dumps(metadata) if metadata else None,
-            )
-            self._db.add(row)
-        else:
-            row.resource_type = resource_type  # type: ignore[assignment]
-            row.desired_version = desired_version  # type: ignore[assignment]
-            row.current_version = current_version  # type: ignore[assignment]
-            row.status = status  # type: ignore[assignment]
-            row.critical = 1 if critical else 0  # type: ignore[assignment]
-            row.error_message = error_message  # type: ignore[assignment]
-            row.remediation_hint = remediation_hint  # type: ignore[assignment]
-            if checked_at:
-                row.last_checked_at = checked_at  # type: ignore[assignment]
-            if applied_at:
-                row.last_applied_at = applied_at  # type: ignore[assignment]
-            if verified_at:
-                row.last_verified_at = verified_at  # type: ignore[assignment]
-            if metadata:
-                row.metadata_json = json.dumps(metadata)  # type: ignore[assignment]
-
-        self._db.commit()
-        return row
 
     def all_states(self) -> list[ReconcileState]:
         self._ensure_table()

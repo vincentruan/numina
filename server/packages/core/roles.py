@@ -1,6 +1,6 @@
 """User role enum and helpers.
 
-Defines the three roles in the system: owner, member, child.
+Defines the roles in the system: owner, member, child, external_token.
 Uses str Enum for transparent comparison with DB string values.
 """
 
@@ -20,6 +20,7 @@ class UserRole(StrEnum):
     OWNER = "owner"
     MEMBER = "member"
     CHILD = "child"
+    EXTERNAL_TOKEN = "external_token"
 
 
 def is_child(role: str | UserRole) -> bool:

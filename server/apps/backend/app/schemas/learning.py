@@ -11,6 +11,21 @@ from apps.backend.app.schemas.base import SnowflakeBase
 
 # --- Knowledge Graph (Global) ---
 
+
+class CurriculumStandard(BaseModel):
+    """A resolved curriculum standard reference.
+
+    ``key`` is the raw identifier from the source data, ``name`` the curriculum
+    document title and ``code`` the code within that document. ``code`` is
+    nullable because rows written before resolution store bare identifier
+    strings (see ``TopicResponse.normalize_curriculum_standards``).
+    """
+
+    key: str
+    name: str
+    code: str | None = None
+
+
 class TopicResponse(SnowflakeBase):
     id: int
     topic_key: str
@@ -31,14 +46,61 @@ class TopicResponse(SnowflakeBase):
     assessment_prompt_zh: str | None
     standards: list[str] = []
     ability_dimensions: list[str] | None
+    curriculum_standards: list[CurriculumStandard] | None = None
+    source_taxonomy: str = "os-taxonomy"
     deprecated: bool
+
+    @field_validator("curriculum_standards", mode="before")
+    @classmethod
+    def normalize_curriculum_standards(cls, v: object) -> object:
+        """Accept the legacy bare-identifier shape as well as resolved entries.
+
+        Rows written before backend resolution store plain identifier strings
+        (``["moe-2022-chinese:S1.RW.01"]``). Normalizing here rather than in a
+        router mapper is deliberate: ``learning_child.py`` and
+        ``learning_family.py`` return raw ORM objects under
+        ``response_model=TopicResponse`` and never pass through
+        ``_topic_to_response``, so a mapper-level fix would 500 on the child
+        home and today cards.
+        """
+        if not isinstance(v, list):
+            return v
+        return [
+            {"key": item, "name": item, "code": None} if isinstance(item, str) else item
+            for item in v
+        ]
+
+
+class TopicEdge(BaseModel):
+    """A prerequisite or dependent edge with its review status.
+
+    ``review_status`` is ``"reviewed"`` for human-reviewed edges, ``"machine"``
+    for AI-generated edges, or ``None`` for os-taxonomy edges that carry no
+    review status.
+    """
+
+    topic: TopicResponse
+    review_status: str | None = None
 
 
 class TopicGraphResponse(BaseModel):
     """Local subgraph: prerequisites + dependents of a topic."""
+
     topic: TopicResponse
-    prerequisites: list[TopicResponse]
-    dependents: list[TopicResponse]
+    prerequisites: list[TopicEdge]
+    dependents: list[TopicEdge]
+
+
+class DependencyEdgeResponse(SnowflakeBase):
+    """A single dependency edge between two topics.
+
+    Used by the graph view to draw edges between nodes without
+    fetching the full subgraph for each topic.
+    """
+
+    topic_id: int
+    prerequisite_id: int
+    strength: str | None = None
 
 
 class ClusterResponse(SnowflakeBase):
@@ -48,6 +110,19 @@ class ClusterResponse(SnowflakeBase):
     age_range_start: int | None
     age_group: str
     summary: str
+    topic_count: int = 0
+
+
+class BridgeResponse(BaseModel):
+    """Cross-subject bridge between two cluster domains."""
+
+    from_cluster_domain: str
+    from_subject: str
+    to_cluster_domain: str
+    to_subject: str
+    edge_count: int
+    source_type: str = "explicit"
+    max_confidence: float = 1.0
 
 
 class SubjectSummary(BaseModel):
@@ -57,6 +132,7 @@ class SubjectSummary(BaseModel):
 
 
 # --- Progress (Per-Family) ---
+
 
 class ProgressResponse(SnowflakeBase):
     id: int
@@ -72,9 +148,34 @@ class ProgressResponse(SnowflakeBase):
     stability: float | None
     next_review_at: datetime | None
     ability_dimensions_score: dict | None
+    # Navigation index fields — let the cluster map build subject tabs and
+    # mastery-coloured nodes without fetching every topic's full detail
+    # (description/evidence/standards), which dominates a 3G payload.
+    subject: str | None = None
+    domain: str | None = None
+    age_group: str | None = None
+
+
+class MapIndexItem(SnowflakeBase):
+    """Slim per-row index for the cluster map — only what it needs to render
+    subject tabs and mastery-coloured nodes.  Omits the heavy fields
+    (evidence, standards, assessment_prompt, ability_dimensions_score, …)
+    that drive the original /map payload well above 3G budgets.
+
+    Extends ``SnowflakeBase`` so ``topic_id`` serializes as a string, matching
+    the frontend's string-typed IDs (and ``TopicResponse.id`` keys).
+    """
+
+    topic_id: int
+    mastery_level: str
+    next_review_at: datetime | None
+    subject: str | None = None
+    domain: str | None = None
+    age_group: str | None = None
 
 
 # --- Assignment ---
+
 
 class AssignmentCreate(BaseModel):
     child_id: int
@@ -113,6 +214,7 @@ class TodayLearningResponse(SnowflakeBase):
 
     current_topic: TopicResponse | None = None
     pending_assignment: AssignmentResponse | None = None
+    review_due_topic: TopicResponse | None = None
     recommended_topic: TopicResponse | None = None
     study_minutes_today: int = 0
     current_zone: str = "growth"
@@ -148,6 +250,7 @@ class AssessStreamRequest(BaseModel):
 
 # --- Session ---
 
+
 class SessionCreate(BaseModel):
     topic_id: int
     assignment_id: int | None = None
@@ -170,6 +273,7 @@ class SessionResponse(SnowflakeBase):
 
 # --- Assessment Attempt ---
 
+
 class AssessmentAttemptResponse(SnowflakeBase):
     id: int
     child_id: int
@@ -185,6 +289,7 @@ class AssessmentAttemptResponse(SnowflakeBase):
 
 # --- Composite / Dashboard ---
 
+
 class ChildLearningOverview(SnowflakeBase):
     child_id: int
     child_name: str
@@ -193,7 +298,7 @@ class ChildLearningOverview(SnowflakeBase):
     available_count: int
     locked_count: int
     review_count: int
-    total_study_minutes: int
+    total_study_minutes: int = 0
     cumulative_xp: int = 0
     level: int = 1
     level_name_zh: str = ""
@@ -203,6 +308,7 @@ class ChildLearningOverview(SnowflakeBase):
 
 class ChildSessionLogResponse(SnowflakeBase):
     """AI session log for parent review."""
+
     session_id: int
     topic_id: int
     topic_name: str
@@ -216,6 +322,7 @@ class ChildSessionLogResponse(SnowflakeBase):
 
 class ReviewItemResponse(SnowflakeBase):
     """For parent review queue."""
+
     progress_id: int
     child_id: int
     child_name: str
@@ -231,6 +338,7 @@ class ReviewItemResponse(SnowflakeBase):
 
 class ChildProgressOverview(BaseModel):
     """Aggregated progress overview for a child."""
+
     mastered_count: int
     learning_count: int
     available_count: int
@@ -243,6 +351,7 @@ class ChildProgressOverview(BaseModel):
 
 
 # --- Learning Path ---
+
 
 class PathCreate(BaseModel):
     child_id: int
@@ -276,7 +385,11 @@ class PathCreate(BaseModel):
                 raise ValueError("Each milestone must have 'threshold' and 'bonus'")
             threshold = entry["threshold"]
             bonus = entry["bonus"]
-            if not isinstance(threshold, int) or threshold < 1 or threshold > max_threshold:
+            if (
+                not isinstance(threshold, int)
+                or threshold < 1
+                or threshold > max_threshold
+            ):
                 raise ValueError(
                     f"threshold must be integer in [1, {max_threshold}], got {threshold}"
                 )
@@ -319,3 +432,69 @@ class PathResponse(SnowflakeBase):
     completed_count: int = 0
     total_count: int = 0
     next_milestone: dict | None = None
+
+
+# --- Recommendation ---
+
+
+class RecommendedTopicItem(SnowflakeBase):
+    """A single topic in a recommendation path."""
+
+    topic_id: int
+    topic_name: str
+    reasons: list[str]
+    centrality: float
+    prerequisites_met: bool
+    suggested_position: int
+
+
+class RecommendationPathDetail(SnowflakeBase):
+    """Recommendation path with ordered topics."""
+
+    name: str
+    topics: list[RecommendedTopicItem]
+    total_count: int
+
+
+class RecommendationPathResponse(SnowflakeBase):
+    """Wrapper for recommendation path response."""
+
+    path: RecommendationPathDetail
+
+
+# --- Preset Learning Paths ---
+
+
+class PresetPathResponse(SnowflakeBase):
+    id: int
+    grade: int
+    semester: str
+    subject: str
+    name: str
+    name_zh: str
+    description: str | None
+    description_zh: str | None
+    topic_count: int
+    topic_ids: list[str]
+    is_active: bool
+
+
+class AssignPresetRequest(BaseModel):
+    child_id: int
+
+
+# --- Review Dual-Track ---
+
+
+class ReviewOverrideRequest(BaseModel):
+    """Parent override of AI assessment decision."""
+
+    new_decision: str  # "mastered" | "learning"
+    reason: str | None = None
+
+
+class AIReviewStatusResponse(BaseModel):
+    """AI auto-pass status for a child."""
+
+    ai_auto_pass_paused: bool
+    consecutive_overrides: int

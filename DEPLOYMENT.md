@@ -39,7 +39,7 @@
 git clone https://github.com/YOUR_USERNAME/numina.git
 cd numina
 
-# 2. 交互式初始化（自动生成密钥、.env、数据目录）
+# 2. 交互式初始化（自动生成密钥、.env、数据目录、学习数据）
 make setup
 
 # 3. 启动服务（本地构建）
@@ -75,6 +75,7 @@ make setup
 1. **创建数据目录** — `.numina/data/{db,uploads}`
 2. **生成 .env 配置** — 自动填充所有安全密钥（如已存在则检查补全）
 3. **初始化数据库** — 默认 SQLite（可通过 `NUMINA_DB` 变量选择）
+4. **下载学习数据** — 克隆 os-taxonomy-beijing 中文知识图谱 + 初始化 os-taxonomy 子模块
 
 ### 分步初始化
 
@@ -98,6 +99,39 @@ NUMINA_DB=mysql make setup-db
 
 # 使用 PostgreSQL
 NUMINA_DB=postgres make setup-db
+
+# 下载学习数据（北京知识图谱 + os-taxonomy 子模块）
+make setup-learning-data
+
+# 仅下载北京知识图谱
+make setup-beijing-data
+
+# 仅初始化 os-taxonomy 子模块
+make setup-os-taxonomy-data
+```
+
+### 学习数据说明
+
+`make setup` 会自动下载以下学习数据：
+
+**北京知识图谱** (`server/data/os-taxonomy-beijing/`)
+- 从 https://github.com/luw2007/os-taxonomy-beijing.git 克隆
+- 包含中文知识点、依赖关系、聚类、课程标准等
+- 数据文件：`topics.zh.json`、`cn-topics.json`、`dependencies.zh.json` 等
+- 自动生成 `dedup_mapping.json`（mt_/mtc_ 重叠去重映射）
+
+**os-taxonomy 子模块** (`.claude/skills/learning-content-translate/references/os-taxonomy/`)
+- Git 子模块，包含上游英文知识图谱
+- 数据文件：`topics.json`、`dependencies.json`、`clusters.json`
+
+使用学习数据导入知识点：
+
+```bash
+# 导入北京知识点
+cd server && uv run python scripts/seed_learning_topics.py --source beijing
+
+# 导入英文知识点
+cd server && uv run python scripts/seed_learning_topics.py
 ```
 
 ### 安全密钥说明
@@ -197,6 +231,9 @@ make deploy
 
 # 4. 生成邀请码（用户注册需要）
 make setup-invitation-codes
+
+# 5. （可选）生成题目到题库
+make seed-questions
 ```
 
 ### 验证部署
@@ -316,6 +353,7 @@ make deploy
 | 查看状态 | `make ps` |
 | 查看日志 | `make logs` |
 | 生成邀请码 | `make setup-invitation-codes` |
+| 生成题目 | `make seed-questions` |
 | 重建单个服务 | `docker compose build backend && docker compose up -d backend` |
 | 进入容器 | `make shell` |
 | 数据库迁移 | `make migrate` |
@@ -371,5 +409,17 @@ NUMINA_DB=postgres make setup-db
 make deploy
 ```
 
+### Q: 学习数据下载失败
+
+```bash
+# 重新下载北京知识图谱
+rm -rf server/data/os-taxonomy-beijing
+make setup-beijing-data
+
+# 重新初始化 os-taxonomy 子模块
+git submodule update --init --force
+make setup-os-taxonomy-data
+```
+
 ---
-**最后更新**: 2026-08-02
+**最后更新**: 2026-10-14

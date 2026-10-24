@@ -1,5 +1,7 @@
 """Backend tests for travel module — split groups, settlement algorithm, co-organizers."""
 
+from datetime import date, timedelta
+
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -9,15 +11,21 @@ import pytest
 
 @pytest.fixture
 def trip(client, auth_headers):
-    """Create a trip for split group testing."""
+    """Create a trip for split group testing.
+
+    Dates are relative to today on purpose: the split group's invite code expires
+    7 days after the trip's return_date (`_compute_expires_at`), so hard-coded
+    dates turn every join-based test into a time bomb.
+    """
+    departure = date.today() + timedelta(days=30)
     response = client.post(
         "/api/v1/trips",
         headers=auth_headers,
         json={
             "name": "_SPLIT旅行",
             "destination": "杭州",
-            "departure_date": "2026-10-01",
-            "return_date": "2026-10-03",
+            "departure_date": departure.isoformat(),
+            "return_date": (departure + timedelta(days=2)).isoformat(),
             "planned_budget": 3000,
         },
     )
@@ -225,7 +233,9 @@ def test_add_co_organizer(client, auth_headers, trip):
     assert response.status_code in (201, 400, 404)
 
 
-def test_non_organizer_cannot_settle(client, auth_headers, second_user_headers, trip, split_group):
+def test_non_organizer_cannot_settle(
+    client, auth_headers, second_user_headers, trip, split_group
+):
     """Non-organizer cannot trigger settlement."""
     trip_id = trip["id"]
     # second_user is in a different family, so accessing this trip fails

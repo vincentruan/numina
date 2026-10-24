@@ -340,6 +340,26 @@ tests/data/
     └── demo.py           # demouser（完整仿真）
 ```
 
+## 重新播种注意事项
+
+`--force` 和 `--reset` 的行为差异：
+
+| 场景 | 命令 | 效果 |
+|------|------|------|
+| 首次播种 | `--force` | 创建所有账号和数据 |
+| 修改 seed 代码后重跑 | `--reset` | 删除 seed 账号 → 重建（**包含学习数据**） |
+| 仅修改非 seed 数据 | `--force` | 跳过已有用户，不更新 |
+
+**原因:** `demo.py` 的 `seed_demo_scenario()` 在检测到用户已存在时 early return（第 42-45 行）。
+修改了 learning progress、topic_key 等 seed 数据后，**必须用 `--reset`** 才能生效。
+
+```bash
+# 典型用法：修改 seed 数据后重跑
+cd server
+uv run python ../tests/data/seed_data.py --reset --force \
+  --db-url postgresql://numina:numinapass@localhost:5432/numina
+```
+
 ## 依赖
 
 ```

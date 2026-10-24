@@ -41,6 +41,7 @@ def create_assignment(
     progress_service.get_or_create_progress(db, req.child_id, req.topic_id)
 
     db.flush()
+    db.commit()
     return assignment
 
 
@@ -89,6 +90,7 @@ def submit_for_review(
     progress.mastery_level = "parent_review"
     assignment.status = "submitted"
     db.flush()
+    db.commit()
     return progress
 
 

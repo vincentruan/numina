@@ -106,5 +106,5 @@ When a package is consumed by multiple apps (backend, agent, worker), it should 
 
 ## Related
 
-- Previous adapter issues: `docs/solutions/integration-issues/deerflow-adapter-stream-type-mismatch-and-security-issues-2026-05-16.md`
+- Previous adapter issues: `docs/solutions/integration-issues/deerflow-integration-historical-lessons.md`
 - Checkpoint retry architecture: `docs/solutions/architecture-patterns/ai-chat-checkpoint-retry-architecture.md`

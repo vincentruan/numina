@@ -43,6 +43,12 @@ if (-not $MODE) {
     $MODE = "term"
 }
 
+# Normalize to lowercase (case-insensitive input)
+$MODE = $MODE.ToLower()
+$LOG  = $LOG.ToLower()
+$DB   = $DB.ToLower()
+$CACHE = $CACHE.ToLower()
+
 # Validate
 if ($MODE -notin @("term", "bg")) {
     Write-Host "x Unknown MODE: $MODE (options: term | bg)" -ForegroundColor Red

@@ -1,0 +1,68 @@
+# storage/AGENTS.md
+
+Module-specific guidance for the pluggable file storage backends package.
+See root [`AGENTS.md`](../../../AGENTS.md) for behavioral guidelines and cross-cutting conventions.
+
+## Key Invariants
+
+1. **Import direction** — `packages/storage` must never import from `apps/` (see [server/AGENTS.md](../../AGENTS.md) §Import Direction).
+2. **Always use the factory** — obtain backends via `get_backend_for_type()` or `get_local_backend()`. Never instantiate `LocalStorageBackend`, `GitHubStorageBackend`, `WebDAVStorageBackend`, or any other backend class directly. The factory manages singleton instances and configuration.
+3. **Catch `StorageError` at the app boundary** — `StorageError` and its subclasses (`StorageRateLimitError`, `StorageConflictError`) must be caught at the app layer (router or job) and converted to appropriate HTTP responses or logged. Never let storage exceptions propagate unwrapped to API responses.
+
+## Don't Do
+
+- **Don't instantiate backend classes directly** — use `get_backend_for_type()` or `get_local_backend()`.
+- **Don't let `StorageError` propagate to API responses** — catch at the app boundary and handle explicitly.
+
+## Modules
+
+| File | Purpose |
+|------|---------|
+| `base.py` | Abstract `StorageBackend` ABC + the `StorageError` exception hierarchy (`StorageRateLimitError`, `StorageConflictError`, `StorageConnectionError`, `StorageAuthError`) |
+| `factory.py` | `get_backend_for_type(type_str)` and `get_local_backend()` — singleton lookup. Always use these |
+| `local.py` | `LocalStorageBackend` — files on local disk |
+| `github.py` | `GitHubStorageBackend` — files as GitHub repo contents |
+| `webdav.py` | `WebDAVStorageBackend` — files on a WebDAV server |
+| `config_crypto.py` | `decrypt_config(text)` / `encrypt_config(dict)` — Fernet encryption for per-family backend config (key from `STORAGE_ENCRYPTION_KEY`, falls back to `SECRET_KEY` derivation with a warning) |
+
+Backend configuration is stored encrypted in the database (model: `packages/db/models/storage_backend.py`). The factory decrypts via `config_crypto.decrypt_config` before instantiating a backend.
+
+## Backends
+
+| Backend | Type string | Use case |
+|---------|-------------|---------|
+| `LocalStorageBackend` | `"local"` | Default; stores files on local disk |
+| `GitHubStorageBackend` | `"github"` | Stores files as GitHub repo contents |
+| `WebDAVStorageBackend` | `"webdav"` | Stores files on a WebDAV server |
+
+## Patterns
+
+### Obtaining a backend
+
+```python
+# ✅ Correct — use the factory
+from packages.storage.factory import get_backend_for_type, get_local_backend
+
+backend = get_backend_for_type("local")   # by type string
+backend = get_local_backend()             # convenience for local
+
+# ❌ Wrong — never instantiate directly
+from packages.storage.backends.local import LocalStorageBackend
+backend = LocalStorageBackend(...)  # bypasses factory singleton management
+```
+
+### Error handling at the app boundary
+
+```python
+from packages.storage.base import StorageError
+
+try:
+    await backend.upload(path, data)
+except StorageError as e:
+    raise HTTPException(status_code=502, detail=str(e))
+```
+
+## Links
+
+- Root [`AGENTS.md`](../../../AGENTS.md) — behavioral guidelines, cross-cutting conventions
+- Module [`README.md`](./README.md) — purpose statement, exports table

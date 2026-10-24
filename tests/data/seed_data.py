@@ -12,6 +12,10 @@
 环境变量:
     TEST_DATABASE_URL   测试数据库 URL
     DATABASE_URL        备选数据库 URL
+
+注意:
+    --force 不会更新已存在的用户数据（demo.py 中 early return）。
+    若修改了 learning 等 seed 数据，需使用 --reset 清空后重建。
 """
 
 import argparse

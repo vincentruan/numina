@@ -98,6 +98,13 @@ function openDownloadUrl(artifact: Artifact) {
           </Button>
           <Button
             size="small"
+            type="primary"
+            @click.stop="handleClick(artifact)"
+          >
+            {{ t('aiArtifact.preview') }}
+          </Button>
+          <Button
+            size="small"
             plain
             @click.stop="openDownloadUrl(artifact)"
           >

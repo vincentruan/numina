@@ -11,7 +11,7 @@ applies_when:
   - Adding linting/formatting to a monorepo with mixed language stacks
   - Setting up ESLint v9 flat config for Vue 3 + TypeScript
   - Adding ruff + mypy to Python FastAPI modules using uv
-  - Creating module-level CLAUDE.md delta docs in a multi-module repo
+  - Creating module-level AGENTS.md delta docs in a multi-module repo
 tags: [eslint, prettier, vue3, typescript, ruff, mypy, pydantic, fastapi, monorepo, claude-md, tooling]
 ---
 
@@ -19,13 +19,13 @@ tags: [eslint, prettier, vue3, typescript, ruff, mypy, pydantic, fastapi, monore
 
 ## Context
 
-Numina is a monorepo with two top-level modules: `frontend/` (Vue 3 + TypeScript + Vite) and `server/` (Python — `server/apps/backend/` FastAPI + SQLAlchemy, `server/apps/agent/` DeerFlow). The repo had no linting, formatting, or type-check tooling configured — root `CLAUDE.md` said "match existing style." This made code review noisy and style inconsistent across contributors.
+Numina is a monorepo with two top-level modules: `frontend/` (Vue 3 + TypeScript + Vite) and `server/` (Python — `server/apps/backend/` FastAPI + SQLAlchemy, `server/apps/agent/` DeerFlow). The repo had no linting, formatting, or type-check tooling configured — root `AGENTS.md` said "match existing style." This made code review noisy and style inconsistent across contributors.
 
 > **Note (2026-07-31):** Frontend config paths updated — `frontend/eslint.config.js` → `frontend/apps/main/eslint.config.js`, `frontend/.prettierrc` → `frontend/apps/main/.prettierrc`, `frontend/package.json` → `frontend/apps/main/package.json`. The frontend is now a multi-app workspace; tooling configs live in each app, not the workspace root.
 
 > **Note (2026-05-14):** Phase 2 consolidated `backend/` and `agent/` into `server/apps/backend/` and `server/apps/agent/`. Path references below have been updated accordingly.
 
-The solution: module-level tooling (each module owns its own dev-experience config) plus module-level `CLAUDE.md` delta docs that tell contributors exactly how to run quality checks inside that module.
+The solution: module-level tooling (each module owns its own dev-experience config) plus module-level `AGENTS.md` delta docs that tell contributors exactly how to run quality checks inside that module.
 
 ## Guidance
 
@@ -140,9 +140,9 @@ warn_required_dynamic_aliases = true
 
 Identical to backend. For mypy, exclude vendor: `uv run mypy apps/agent/ --exclude apps/agent/vendor`.
 
-### Module-level CLAUDE.md delta docs
+### Module-level AGENTS.md delta docs
 
-Each module gets a `CLAUDE.md` that answers: how do I run quality checks here, and what are the local conventions? It references root `CLAUDE.md` for shared rules and only adds module-specific content.
+Each module gets a `AGENTS.md` that answers: how do I run quality checks here, and what are the local conventions? It references root `AGENTS.md` for shared rules and only adds module-specific content.
 
 Minimum sections:
 - **Quality Commands** — exact commands to run lint/format/typecheck/test
@@ -150,7 +150,7 @@ Minimum sections:
 - **Key Conventions** — module-specific patterns (Pydantic v2 style, Vant auto-import, etc.)
 - **Incremental Formatting** — policy: format only touched files, not the whole module
 
-Update root `CLAUDE.md` to remove "no linter/formatter configured" and add a per-module tooling summary pointing to module docs.
+Update root `AGENTS.md` to remove "no linter/formatter configured" and add a per-module tooling summary pointing to module docs.
 
 ## Why This Matters
 
@@ -158,7 +158,7 @@ Update root `CLAUDE.md` to remove "no linter/formatter configured" and add a per
 - **Faster feedback:** Module-local commands let contributors validate without running the whole monorepo.
 - **Correctness:** ESLint + ruff B/SIM rules catch real issues early (undefined vars, unused imports, suspicious constructs).
 - **Type safety:** `vue-tsc` and `mypy` prevent "works at runtime but breaks later" regressions at API boundaries.
-- **Onboarding:** Module CLAUDE.md files give contributors the right context at the point of change.
+- **Onboarding:** Module AGENTS.md files give contributors the right context at the point of change.
 
 ## When to Apply
 
@@ -230,4 +230,4 @@ When introducing formatters to an existing codebase, do NOT run `ruff format .` 
 
 - Design spec: `docs/superpowers/specs/2026-04-11-module-tooling-design.md`
 - Implementation plan: `docs/superpowers/plans/2026-04-11-module-tooling.md`
-- Module docs: `frontend/apps/main/CLAUDE.md`, `server/apps/backend/CLAUDE.md`, `server/apps/agent/CLAUDE.md`
+- Module docs: `frontend/apps/main/AGENTS.md`, `server/apps/backend/AGENTS.md`, `server/apps/agent/AGENTS.md`

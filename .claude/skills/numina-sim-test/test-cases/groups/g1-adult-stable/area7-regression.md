@@ -40,6 +40,8 @@ Auth: adult session as `demouser` (owner). 本 Area 为只读验证，不修改�
 
 ## R1 — 双货币符号回归 (¥¥ double-currency)
 
+> **功能归属:** Area 2 (Finance) / Dashboard — 货币格式化
+
 **Critical case:** MUST pass | **Performance target:** All pages < 2s
 
 **历史缺陷:** `useCurrency().format()` 已前缀 `¥`，但模板/i18n 又加了字面 `¥`，
@@ -80,6 +82,8 @@ bsk evaluate --session <id> --expr "(async () => {
 
 ## R2 — 币种精度回归 (Snowflake ID / bigint precision)
 
+> **功能归属:** 全局 — API 序列化层 (SnowflakeBase)
+
 **历史缺陷:** JS 对 >2⁵³ 整数丢失精度。修复: 所有 bigint 字段序列化为 str，
 前端 type 为 string。
 
@@ -99,6 +103,8 @@ Assertions:
 ---
 
 ## R3 — en-US locale 缺失回退回归
+
+> **功能归属:** 全局 — i18n locale 文件
 
 **历史缺陷:** en-US locale 缺少 `liability.interest`/`liability.strategy` 等子块，
 导致切换英文时部分页面显示 key 而非翻译。
@@ -127,6 +133,8 @@ Assertions:
 
 ## R4 — NProgress 卡住回归
 
+> **功能归属:** 全局 — router afterEach / NProgress 集成
+
 **历史缺陷:** `Transition mode="out-in"` 延迟 mount 超过 afterEach 200ms timeout，
 导致 NProgress 重启并永远停不下来。修复: 500ms timeout + routerDone flag。
 
@@ -151,6 +159,8 @@ Assertions:
 
 ## R5 — KeepAlive 双重加载回归
 
+> **功能归属:** 全局 — Vue KeepAlive + onActivated 模式
+
 **历史缺陷:** Vue 3 KeepAlive 首次 mount 同时触发 onMounted + onActivated，
 导致页面数据加载两次。修复: hasActivated flag pattern。
 
@@ -172,6 +182,8 @@ Assertions:
 ---
 
 ## R6 — Auth session 过期重定向回归
+
+> **功能归属:** 全局 — auth guard / token 管理
 
 **历史缺陷:** session 过期时 showDialog 阻塞而非立即重定向到 /login。
 修复: 去掉 showDialog，直接 redirect。
@@ -197,6 +209,8 @@ Assertions:
 
 ## R7 — AI Chat 空响应/错误清理回归
 
+> **功能归属:** Area 3/6 (AI Chat) — SSE 流式响应 / 错误状态清理
+
 **历史缺陷:** AI chat 偶发空白响应、错误状态未清理、重复 greeting。
 修复涉及多处: blank-response fix, error-cleanup fix, retry-duplicate fix。
 
@@ -216,6 +230,8 @@ Assertions:
 ---
 
 ## R8 — 儿童端 coin 不显示货币符号回归
+
+> **功能归属:** Area 1/5 (Child) — coin 显示逻辑
 
 **历史缺陷:** 儿童端使用 coin (整数)，不应出现 `¥` 或 `useCurrency`。
 曾有混淆将成人 currency 逻辑带入儿童端。
@@ -237,6 +253,8 @@ Assertions:
 
 ## R9 — CSP unsafe-eval 回归 (ECharts / vue-i18n)
 
+> **功能归属:** 基础设施 — nginx CSP 配置 (仅 docker 模式)
+
 **历史缺陷:** nginx CSP 缺少 `unsafe-eval` 导致 ECharts/vue-i18n 在
 production build 下被阻止。修复: CSP script-src 添加 `unsafe-eval`。
 
@@ -256,14 +274,14 @@ Assertions:
 
 ## Quick Reference
 
-| Case | 回归目标 | 涉及组件 | Memory 来源 |
-|------|----------|----------|-------------|
-| R1 | ¥¥ 双符号 | useCurrency, 模板 | yy-double-currency-bug |
-| R2 | bigint 精度 | SnowflakeBase, API | sim-test-nav-coverage |
-| R3 | en-US 缺失 | i18n locale | sim-test-nav-coverage |
-| R4 | NProgress 卡住 | router afterEach | nprogress-out-in-transition-race |
-| R5 | KeepAlive 双加载 | onActivated flag | keepalive-onactivated-double-load |
-| R6 | Auth 过期重定向 | auth guard | 505d6b61 commit |
-| R7 | AI Chat 空响应 | AIChatBox | ai-chat-blank-response-fix |
-| R8 | 儿童端 coin 符号 | ChildHomePage | sim-test-nav-coverage |
-| R9 | CSP unsafe-eval | nginx config | 348b5f99 commit |
+| Case | 回归目标 | 功能归属 | 涉及组件 | Memory 来源 |
+|------|----------|----------|----------|-------------|
+| R1 | ¥¥ 双符号 | Area 2 (Finance) | useCurrency, 模板 | yy-double-currency-bug |
+| R2 | bigint 精度 | 全局 (API 序列化) | SnowflakeBase, API | sim-test-nav-coverage |
+| R3 | en-US 缺失 | 全局 (i18n) | locale 文件 | sim-test-nav-coverage |
+| R4 | NProgress 卡住 | 全局 (Router) | router afterEach | nprogress-out-in-transition-race |
+| R5 | KeepAlive 双加载 | 全局 (Vue) | onActivated flag | keepalive-onactivated-double-load |
+| R6 | Auth 过期重定向 | 全局 (Auth) | auth guard | 505d6b61 commit |
+| R7 | AI Chat 空响应 | Area 3/6 (AI Chat) | AIChatBox | ai-chat-blank-response-fix |
+| R8 | 儿童端 coin 符号 | Area 1/5 (Child) | ChildHomePage | sim-test-nav-coverage |
+| R9 | CSP unsafe-eval | 基础设施 (nginx) | CSP config | 348b5f99 commit |

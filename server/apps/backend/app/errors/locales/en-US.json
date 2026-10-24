@@ -60,6 +60,7 @@
   "STORAGE_ENCRYPTION_KEY_NOT_CONFIGURED": "Storage encryption key is not configured; please contact the system administrator",
   "AI_NOT_ENABLED": "AI assistant is not enabled. Please ask the family owner to configure and enable it in Settings",
   "AI_SERVICE_UNAVAILABLE": "AI service is temporarily unavailable, please try again later",
+  "AI_ENCRYPTION_KEY_NOT_CONFIGURED": "AI encryption key is not configured, please contact the system administrator",
   "AI_SERVICE_TIMEOUT": "AI service timed out, please try again later",
   "AI_CONFIG_MISSING_API_KEY": "An API Key is required to enable AI features",
   "AI_CONFIG_MISSING_PROVIDER": "An AI Provider must be selected to configure the API Key",
@@ -145,5 +146,14 @@
   "LEARNING_TRANSLATION_UNAVAILABLE": "Translation service unavailable, please try again later",
   "LEARNING_PATH_NOT_FOUND": "Learning path not found",
   "LEARNING_PATH_ACCESS_DENIED": "Access denied to this learning path",
-  "LEARNING_PATH_INVALID_MILESTONE": "Invalid milestone configuration"
+  "LEARNING_PATH_INVALID_MILESTONE": "Invalid milestone configuration",
+  "PRACTICE_QUESTION_NOT_FOUND": "Question not found",
+  "PRACTICE_QUESTION_INVALID": "Question data invalid",
+  "PRACTICE_TOPIC_NOT_FOUND": "Topic not found",
+  "PRACTICE_SESSION_NOT_FOUND": "Practice session not found",
+  "PRACTICE_SESSION_ALREADY_ENDED": "Practice session already ended",
+  "PRACTICE_NO_QUESTIONS_AVAILABLE": "No questions available for this topic",
+  "PRACTICE_DUPLICATE_ATTEMPT": "This question has already been answered",
+  "PRACTICE_QUESTION_NOT_IN_SESSION": "This question is not part of the current practice session",
+  "PRACTICE_TOPIC_LOCKED": "This topic is locked — complete prerequisites first"
 }

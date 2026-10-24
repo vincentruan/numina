@@ -148,7 +148,7 @@ def create_provider(
     if payload.api_key:
         api_key_encrypted = encrypt_api_key(payload.api_key)
         if api_key_encrypted is None:
-            raise AppError(ErrorCode.INTERNAL_ERROR, "加密服务不可用")
+            raise AppError(ErrorCode.AI_ENCRYPTION_KEY_NOT_CONFIGURED)
 
     # Auto-assign display_order if not provided
     display_order = payload.display_order
@@ -218,7 +218,7 @@ def update_provider(
         else:
             encrypted = encrypt_api_key(payload.api_key)
             if encrypted is None:
-                raise AppError(ErrorCode.INTERNAL_ERROR, "加密服务不可用")
+                raise AppError(ErrorCode.AI_ENCRYPTION_KEY_NOT_CONFIGURED)
             provider.api_key_encrypted = encrypted
 
     if payload.max_results is not None:

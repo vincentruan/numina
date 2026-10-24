@@ -40,3 +40,11 @@ Financial literacy badges in the child ecosystem, organized in 4 dimensions: 赚
 
 ### SnowflakeBase
 The base Pydantic response model every API response schema inherits from. At JSON serialization it converts `int` fields named `id` or ending in `_id` to `str` (the bigint-on-wire-as-string convention — JS doubles lose precision beyond 2^53). It is the mechanism that enforces the ID half of the money/bigint-as-strings wire convention; the money half is enforced per-schema by typing money fields `str` with a quantizing `field_validator`.
+
+## MCP external access
+
+### Synthetic service user
+A virtual User row (`role='external_token'`) created per family to represent external MCP callers within the existing MCPSession caller-binding contract. External MCP clients (Claude Desktop, custom agents) have no real user account; the synthetic user provides a `caller_user_id` that `_get_caller_user()` can resolve, preserving the session invariant that caller identity is frozen at construction. Must be excluded from family member list queries, rejected by the login endpoint, and included in `_VALID_ROLES` for MCP tool filtering. Created atomically alongside the family's first MCP API Token.
+
+### MCP API Token
+A family-scoped, long-lived credential (`mcp_` prefix + random string) that authenticates external MCP client connections to the backend's public SSE endpoint. One active token per family; stored as hash only (plaintext shown once at generation). Two-level access control: `allow_external` gates read-only tool access, `allow_write` (default off) gates write tools. Supports expiration, rotation (old token immediately invalidated), and soft revocation. Distinct from the internal agent JWT (`X-Agent-Token`, 5-min TTL) — the API Token is for external clients that cannot obtain or refresh JWTs.

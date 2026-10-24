@@ -5,6 +5,12 @@ import http from './index'
 
 // --- Interfaces (IDs as string — Snowflake serialization) ---
 
+export interface CurriculumStandard {
+  key: string
+  name: string
+  code: string | null
+}
+
 export interface TopicResponse {
   id: string
   topic_key: string
@@ -26,6 +32,8 @@ export interface TopicResponse {
   standards: string[]
   ability_dimensions: string[] | null
   deprecated: boolean
+  source_taxonomy: string
+  curriculum_standards: CurriculumStandard[] | null
 }
 
 export interface ProgressResponse {
@@ -42,6 +50,11 @@ export interface ProgressResponse {
   stability: number | null
   next_review_at: string | null
   ability_dimensions_score: Record<string, number> | null
+  /** Navigation index from /child/learning/map — lets the cluster map build
+   *  subject tabs and mastery nodes without fetching full topic detail. */
+  subject?: string | null
+  domain?: string | null
+  age_group?: string | null
 }
 
 export interface AssignmentResponse {
@@ -114,6 +127,7 @@ export interface ChildProgressOverview {
 export interface TodayLearningResponse {
   current_topic: TopicResponse | null
   pending_assignment: AssignmentResponse | null
+  review_due_topic: TopicResponse | null
   recommended_topic: TopicResponse | null
   study_minutes_today: number
   current_zone: string
@@ -133,10 +147,15 @@ export interface LearningStatsResponse {
   onboarding_completed: boolean
 }
 
+export interface TopicEdge {
+  topic: TopicResponse
+  review_status: string | null
+}
+
 export interface TopicGraphResponse {
   topic: TopicResponse
-  prerequisites: TopicResponse[]
-  dependents: TopicResponse[]
+  prerequisites: TopicEdge[]
+  dependents: TopicEdge[]
 }
 
 // Composite type: progress with topic detail for the map view
@@ -148,6 +167,22 @@ export interface ProgressWithTopic extends ProgressResponse {
 
 export async function getMyLearningMap(): Promise<ProgressResponse[]> {
   const res = await http.get('/child/learning/map')
+  return res.data
+}
+
+/** Slim per-row index for the cluster map — only topic_id, mastery_level,
+ *  next_review_at, subject, domain, age_group. */
+export async function getMyLearningMapIndex(): Promise<
+  Array<{
+    topic_id: string
+    mastery_level: string
+    next_review_at: string | null
+    subject?: string | null
+    domain?: string | null
+    age_group?: string | null
+  }>
+> {
+  const res = await http.get('/child/learning/map/index')
   return res.data
 }
 
@@ -218,6 +253,17 @@ export async function getTopicGraph(topicId: string): Promise<TopicGraphResponse
   return res.data
 }
 
+export interface DependencyEdge {
+  topic_id: string
+  prerequisite_id: string
+  strength: string | null
+}
+
+export async function getSubjectDependencies(subject: string): Promise<DependencyEdge[]> {
+  const res = await http.get(`/learning/dependencies`, { params: { subject } })
+  return res.data
+}
+
 /** Translate a topic's content to Chinese. Returns translated fields. */
 export async function translateTopic(topicId: string): Promise<{
   name_zh: string | null
@@ -270,6 +316,72 @@ export async function getMyPaths(): Promise<PathResponse[]> {
 
 export async function getMyPath(pathId: string): Promise<PathResponse> {
   const res = await http.get(`/child/learning/paths/${pathId}`)
+  return res.data
+}
+
+// --- Cluster Map types (U2) ---
+
+export interface ClusterResponse {
+  id: string
+  subject: string
+  domain: string
+  age_range_start: number | null
+  age_group: string
+  summary: string
+  topic_count: number
+}
+
+export interface BridgeResponse {
+  from_cluster_domain: string
+  from_subject: string
+  to_cluster_domain: string
+  to_subject: string
+  edge_count: number
+  source_type: 'explicit' | 'inferred' | 'mixed'
+  max_confidence: number
+}
+
+export async function getClusters(subject?: string): Promise<ClusterResponse[]> {
+  const res = await http.get('/child/learning/clusters', {
+    params: subject ? { subject } : {},
+  })
+  return res.data
+}
+
+export async function getBridges(subject?: string): Promise<BridgeResponse[]> {
+  const res = await http.get('/child/learning/bridges', {
+    params: subject ? { subject } : {},
+  })
+  return res.data
+}
+
+// --- Recommendation Path types ---
+
+export interface RecommendedTopic {
+  topic_id: string
+  topic_name: string
+  reasons: string[]
+  centrality: number
+  prerequisites_met: boolean
+  suggested_position: number
+}
+
+export interface RecommendationPathDetail {
+  name: string
+  topics: RecommendedTopic[]
+  total_count: number
+}
+
+export interface RecommendationPathResponse {
+  path: RecommendationPathDetail
+}
+
+export async function fetchRecommendationPath(
+  limit = 5,
+): Promise<RecommendationPathResponse> {
+  const res = await http.get('/child/learning/recommendations', {
+    params: { limit },
+  })
   return res.data
 }
 

@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ideation: Learning OS 增量完善（合并版）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --text: #1a1a2e;
+  --text-muted: #5a5a7a;
+  --accent: #4f46e5;
+  --accent-soft: #eef2ff;
+  --success: #059669;
+  --success-soft: #ecfdf5;
+  --warn: #d97706;
+  --warn-soft: #fffbeb;
+  --purple: #7c3aed;
+  --purple-soft: #f5f3ff;
+  --border: #e5e7eb;
+  --radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0f1a;
+    --surface: #1a1a2e;
+    --text: #e5e5f0;
+    --text-muted: #9ca3af;
+    --accent: #818cf8;
+    --accent-soft: #1e1b4b;
+    --success: #34d399;
+    --success-soft: #064e3b;
+    --warn: #fbbf24;
+    --warn-soft: #451a03;
+    --purple: #a78bfa;
+    --purple-soft: #2e1065;
+    --border: #374151;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.65;
+  padding: 0 16px;
+}
+.container { max-width: 900px; margin: 0 auto; padding: 2rem 0 4rem; }
+header { margin-bottom: 2.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; }
+.eyebrow { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 0.5rem; }
+h1 { font-size: 1.75rem; font-weight: 700; line-height: 1.3; margin-bottom: 0.75rem; }
+.meta { font-size: 0.85rem; color: var(--text-muted); }
+.meta span { margin-right: 1rem; }
+h2 { font-size: 1.25rem; font-weight: 600; margin: 2.5rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.5rem; }
+p { margin-bottom: 0.75rem; }
+.prose { max-width: 70ch; }
+
+/* Merge notice */
+.merge-notice {
+  background: var(--purple-soft);
+  border: 1px solid var(--purple);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.88rem;
+}
+.merge-notice strong { color: var(--purple); }
+
+/* Stats */
+.stats-strip { display: flex; gap: 1rem; margin: 1.5rem 0; flex-wrap: wrap; }
+.stat-pill { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem 1.25rem; text-align: center; flex: 1; min-width: 100px; }
+.stat-value { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+.stat-label { font-size: 0.75rem; color: var(--text-muted); }
+
+/* Jump list */
+.jump-list { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+.jump-list a { font-size: 0.8rem; color: var(--accent); text-decoration: none; padding: 0.25rem 0.6rem; border: 1px solid var(--border); border-radius: 20px; }
+.jump-list a:hover { background: var(--accent-soft); }
+
+/* Idea cards */
+.idea-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
+.idea-header { display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+.idea-rank { font-size: 0.8rem; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 0.15rem 0.5rem; border-radius: 4px; white-space: nowrap; }
+.idea-title { font-size: 1.05rem; font-weight: 600; }
+.idea-source { font-size: 0.7rem; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); padding: 0.1rem 0.4rem; border-radius: 4px; }
+.idea-source.both { color: var(--success); border-color: var(--success); }
+.idea-source.ce { color: var(--accent); }
+.idea-source.kg { color: var(--purple); }
+.idea-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+.chip { font-size: 0.72rem; font-weight: 500; padding: 0.2rem 0.55rem; border-radius: 12px; white-space: nowrap; }
+.chip-axis { background: var(--accent-soft); color: var(--accent); }
+.chip-conf-high { background: var(--success-soft); color: var(--success); }
+.chip-conf-med { background: var(--warn-soft); color: var(--warn); }
+.chip-complexity { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); }
+.idea-body p { font-size: 0.92rem; margin-bottom: 0.5rem; }
+.idea-body dt { font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-top: 0.75rem; }
+.idea-body dd { font-size: 0.88rem; margin-left: 0; margin-bottom: 0.25rem; }
+
+/* Comparison table */
+.compare-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-bottom: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.compare-table th { background: var(--accent-soft); font-weight: 600; text-align: left; padding: 0.5rem 0.75rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); border-bottom: 1px solid var(--border); }
+.compare-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); color: var(--text-muted); vertical-align: top; font-size: 0.85rem; }
+.compare-table tr:last-child td { border-bottom: none; }
+
+/* Grounding */
+.grounding-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 640px) { .grounding-grid { grid-template-columns: 1fr 1fr; } }
+.grounding-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.grounding-card h4 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; }
+.grounding-card ul { list-style: none; font-size: 0.85rem; }
+.grounding-card li { padding: 0.2rem 0; border-bottom: 1px solid var(--border); }
+.grounding-card li:last-child { border-bottom: none; }
+
+/* Rejection table */
+.rejection-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.rejection-table th { text-align: left; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); padding: 0.5rem; border-bottom: 2px solid var(--border); }
+.rejection-table td { padding: 0.5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+
+footer.composition-signal { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div class="eyebrow">Ideation · Merged</div>
+  <h1>Numina Learning OS 增量完善</h1>
+  <div class="meta">
+    <span>📅 2026-10-20</span>
+    <span>🏷️ learning-os-optimization</span>
+    <span>📍 repo-grounded</span>
+  </div>
+</header>
+
+<div class="merge-notice">
+  <strong>🔀 合并说明：</strong>本文档合并了两个独立调研的 ideation 报告：
+  <strong>CE-Ideate</strong>（5 frames × 39 ideas → 7 survivors，侧重代码审计+增量改进）和
+  <strong>Knowledge Graph Deep Research</strong>（20+ GitHub 项目调研+本地代码审计，侧重知识图谱设计+开源参考）。
+  每个 idea 标注了来源：<span class="idea-source both">双方共识</span> <span class="idea-source ce">CE-Ideate 独有</span> <span class="idea-source kg">KG Research 独有</span>
+</div>
+
+<section>
+  <div class="stats-strip">
+    <div class="stat-pill">
+      <div class="stat-value">39+20</div>
+      <div class="stat-label">Raw ideas (both)</div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-value">7</div>
+      <div class="stat-label">Merged survivors</div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-value">3</div>
+      <div class="stat-label">Both reports agreed</div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-value">4</div>
+      <div class="stat-label">New from KG report</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Cross-Report Comparison</h2>
+  <table class="compare-table">
+    <thead>
+      <tr><th>主题</th><th>CE-Ideate</th><th>KG Deep Research</th><th>合并结论</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>知识图谱可视化</strong></td><td>#1 交互式图谱 (ECharts)</td><td>D2: AntV G6 + D3: Duolingo 式路径</td><td><strong>共识 #1</strong> — 采纳 AntV G6 + Duolingo 式路径</td></tr>
+      <tr><td><strong>经验难度校准</strong></td><td>#3 Empirical Flywheel</td><td>E4: "让作答数据反选题目质量"</td><td><strong>共识</strong> — 合并进 Adaptive Engine Epic</td></tr>
+      <tr><td><strong>BKT 参数校准</strong></td><td>#4 Per-Skill BKT (pyBKT)</td><td>F1: "已实现，需校准参数"</td><td><strong>共识</strong> — 合并进 Adaptive Engine Epic</td></tr>
+      <tr><td><strong>推荐优化 295→5</strong></td><td>#7 Readiness-Ranked</td><td>F3: 三维度推荐 + 挫败感检测</td><td><strong>共识</strong> — 合并进 Adaptive Engine Epic</td></tr>
+      <tr><td><strong>错题回溯先修</strong></td><td>Rejected (#17 RPT)</td><td>G1: "错题回溯知识图谱" TOP</td><td><strong>KG 独有</strong> — 恢复为独立 idea</td></tr>
+      <tr><td><strong>SymPy 验证</strong></td><td>#2 SymPy Kernel</td><td>未提及</td><td><strong>CE 独有</strong> — 保留</td></tr>
+      <tr><td><strong>覆盖度 5 维指数</strong></td><td>#5 Coverage Index</td><td>未提及</td><td><strong>CE 独有</strong> — 保留</td></tr>
+      <tr><td><strong>Puzzle Rush</strong></td><td>#6 Blitz Sessions</td><td>未提及</td><td><strong>CE 独有</strong> — 保留</td></tr>
+      <tr><td><strong>节点类型分层</strong></td><td>未提及</td><td>C1: concept/skill/procedure/fact</td><td><strong>KG 独有</strong> — 新增</td></tr>
+      <tr><td><strong>常见误解诊断题</strong></td><td>未提及</td><td>E3: Misconception catalog</td><td><strong>KG 独有</strong> — 新增</td></tr>
+      <tr><td><strong>挫败感检测</strong></td><td>未提及</td><td>F3: 连续做错→降低难度</td><td><strong>KG 独有</strong> — 新增</td></tr>
+      <tr><td><strong>Desirable Difficulties</strong></td><td>未提及</td><td>G5: 维持 70-85% 正确率</td><td><strong>KG 独有</strong> — 新增</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Grounding Context</h2>
+  <div class="grounding-grid">
+    <div class="grounding-card">
+      <h4>📊 Knowledge Graph</h4>
+      <ul>
+        <li>os-taxonomy: 1,590 topics, 8 subjects</li>
+        <li>3,221 prerequisite dependencies (hard/soft)</li>
+        <li>Math: 503, Science: 547, English: 286</li>
+        <li>Map page = flat list (not interactive graph)</li>
+        <li>DNA graph = parent-only (not on child side)</li>
+        <li>Backend graph API exists but unused in child app</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>📝 Question Templates</h4>
+      <ul>
+        <li>46 templates: Math 35, Chinese 5, English 3, Science 3</li>
+        <li>Difficulty 1-3 only (no 4-5)</li>
+        <li>Hard-coded topic_key in each template</li>
+        <li>63% calculation type, 70% apply Bloom</li>
+        <li>LLM generator has 3-layer validation</li>
+        <li>Question model has empirical_difficulty column (unused)</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>🧠 Adaptive Engine</h4>
+      <ul>
+        <li>BKT: P(L₀)=0.1, P(T)=0.3, P(G)=0.25, P(S)=0.1</li>
+        <li>Global constants for all 1,590 topics</li>
+        <li>Falls back to RuleBased when &lt;5 attempts</li>
+        <li>No forgetting model (monotonic P(L))</li>
+        <li>SM-2 with classic intervals exists but simplified</li>
+        <li>Two mastery signals (score vs BKT) can disagree</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>🔗 Connectivity + External References</h4>
+      <ul>
+        <li>Coverage = binary existence (P7a-min)</li>
+        <li>295 recommendations returned, frontend shows 5</li>
+        <li>pyBKT (MIT, active) — per-skill calibration</li>
+        <li>AntV G6 — Vue 3 native, Chinese docs, touch</li>
+        <li>K12-KGraph — 7 node types (design reference)</li>
+        <li>FSRS — potentially better than SM-2 for review</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Merged Ranked Ideas</h2>
+
+  <ul class="jump-list">
+    <li><a href="#i1">1. Duolingo 式学习路径</a></li>
+    <li><a href="#i2">2. Adaptive Engine Epic</a></li>
+    <li><a href="#i3">3. SymPy 验证内核</a></li>
+    <li><a href="#i4">4. Coverage 5 维指数</a></li>
+    <li><a href="#i5">5. 错题回溯先修诊断</a></li>
+    <li><a href="#i6">6. 常见误解诊断题</a></li>
+    <li><a href="#i7">7. Puzzle Rush 闪电练习</a></li>
+  </ul>
+
+  <!-- IDEA 1 -->
+  <article class="idea-card" id="i1">
+    <div class="idea-header">
+      <span class="idea-rank">#1</span>
+      <span class="idea-title">Duolingo 式学习路径 — 儿童端交互式知识图谱</span>
+      <span class="idea-source both">双方共识</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Graph viz &amp; navigation</span>
+      <span class="chip chip-conf-high">Confidence: 92%</span>
+      <span class="chip chip-complexity">Complexity: Medium</span>
+    </div>
+    <div class="idea-body">
+      <p>将儿童端的扁平 TopicGrid 替换为 Duolingo 式线性学习路径：节点颜色表示 7 态掌握状态（locked=灰, learning=脉动, mastered=金色光晕, review=橙色），只显示当前附近 5-10 个节点，不暴露全图复杂性。使用 <strong>AntV G6</strong>（Vue 3 原生支持 <code>@antv/g6-vue</code>，中文文档，阿里云维护，WebGL 模式支持 10000+ 节点）替代 ECharts。同时为家长端提供 Khan Academy 式技能地图（层级树形：学科→域→知识点）。</p>
+      <dl>
+        <dt>Basis</dt>
+        <dd><strong>direct:</strong> LearningMapPage.vue 使用 flat TopicGrid；DnaGraph2D.vue 仅在 parent 端；3,221 先修边已存储。<strong>external:</strong> AntV G6（Vue 3 原生, 触摸支持, Tree-shake ~300KB）；Duolingo 式路径已验证对儿童有效（PresetLearningPath 表已存在）。</dd>
+        <dt>两份报告的共识</dt>
+        <dd>CE-Ideate 发现"map page 是 list 不是 graph"是最大 UX 缺口；KG Research 确认"最大缺口不是功能缺失，而是可视化"。两者独立得出相同结论。</dd>
+        <dt>关键设计决策</dt>
+        <dd>KG Research 建议默认显示所有节点（不锁定），用颜色区分"推荐学习"和"自由探索"，保护好奇心。这是 Numina 产品哲学的体现。</dd>
+        <dt>Downsides</dt>
+        <dd>新增 @antv/g6 依赖 (~300KB)。需设计 Duolingo 式路径的生成算法（从先修 DAG 提取线性序列）。移动端触摸交互需仔细调优。</dd>
+      </div>
+    </div>
+  </article>
+
+  <!-- IDEA 2 -->
+  <article class="idea-card" id="i2">
+    <div class="idea-header">
+      <span class="idea-rank">#2</span>
+      <span class="idea-title">Adaptive Engine Epic — 经验难度 + BKT 校准 + 就绪推荐</span>
+      <span class="idea-source both">双方共识 (3 ideas merged)</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Adaptive learning loop</span>
+      <span class="chip chip-conf-high">Confidence: 90%</span>
+      <span class="chip chip-complexity">Complexity: Medium</span>
+    </div>
+    <div class="idea-body">
+      <p>合并三个高度关联的改进为一个 epic：<br>
+      <strong>(a) 经验难度飞轮</strong>：激活 Question 模型中已有的 <code>empirical_difficulty</code>、<code>correct_count</code>、<code>times_used</code> 字段（P7e 预留），添加定时任务从作答记录计算实际难度，反馈到自适应选题。<br>
+      <strong>(b) Per-Skill BKT 校准</strong>：用 pyBKT（MIT, C++ 加速）替换全局常量 (0.1/0.3/0.25/0.1)，按技能拟合参数，用 EduData 基准先验初始化。<br>
+      <strong>(c) 就绪排序推荐</strong>：融合 BKT 掌握度、先修闭合度、复习到期紧急度，返回 5 个高置信推荐 + "因为你掌握了 X" 原因标签，解决 295→5 传输效率问题。</p>
+      <dl>
+        <dt>Basis</dt>
+        <dd><strong>direct:</strong> question.py:72-78 有 empirical_difficulty 列但零代码计算；adaptive_service.py:114 全局 BKT 常量；recommendation_service.py 返回 295 条但 limit=20。<strong>external:</strong> pyBKT (288 stars, MIT)；EduData (Apache-2.0)。</dd>
+        <dt>为什么合并为一个 epic</dt>
+        <dd>三者互为因果：(a) 产出真实难度 → (b) 更准确的 BKT 参数需要真实难度 → (c) 更好的掌握度估计产出更好的推荐。分开实施会降低各自效果。</dd>
+        <dt>实施顺序</dt>
+        <dd>(a) 最先（零数据收集，纯杠杆现有写入）→ (b) 次之（pyBKT 集成）→ (c) 最后（消费前两者的输出）</dd>
+        <dt>KG Research 补充</dt>
+        <dd>F3: 添加挫败感检测（连续做错 5 题→降低难度）和练习负担上限。G5: 维持 70-85% 正确率的"Desirable Difficulties"区间。</dd>
+        <dt>Downsides</dt>
+        <dd>pyBKT 增加 C++ 依赖。需要最小 N 守卫（3 次作答不重校）。就绪公式需调参。迁移可能影响现有家庭的掌握度判定。</dd>
+      </div>
+    </div>
+  </article>
+
+  <!-- IDEA 3 -->
+  <article class="idea-card" id="i3">
+    <div class="idea-header">
+      <span class="idea-rank">#3</span>
+      <span class="idea-title">SymPy 符号验证内核 — scoring_service 共享基础设施</span>
+      <span class="idea-source ce">CE-Ideate 独有</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Question template quality</span>
+      <span class="chip chip-conf-high">Confidence: 88%</span>
+      <span class="chip chip-complexity">Complexity: Low-Medium</span>
+    </div>
+    <div class="idea-body">
+      <p>用 SymPy（BSD, 15k stars）替换 scoring_service.py 的浮点容差验证器，暴露为统一的 <code>verify(question_type, answer, student_answer)</code> 内核。同一内核支持 llm_generator.py 的 layer-2 正确性验证，将 LLM 交叉检查部分确定性化。等价形式（3(x+2) ≡ 3x+6）不再被判错。</p>
+      <dl>
+        <dt>Basis</dt>
+        <dd><strong>direct:</strong> scoring_service.py 使用 <code>_float_eq()</code> + 1e-4 容差；llm_generator.py layer 2 只检查"answer present and numeric"。<strong>external:</strong> SymPy — 符号数学等价验证。</dd>
+        <dt>为什么 KG Research 没提这个</dt>
+        <dd>KG Research 侧重知识图谱设计和开源数据调研，未深入答案验证实现。CE-Ideate 的代码审计发现了这个共享基础设施机会。</dd>
+        <dt>复合价值</dt>
+        <dd>一次升级惠及所有 46 个模板 + 所有 LLM 生成题 + 未来所有新模板。降低 Chinese/English/Science 扩展成本（符号检查减少对 LLM 评分的依赖）。</dd>
+        <dt>Downsides</dt>
+        <dd>增加 sympy 依赖 (~5MB)。不是所有题型都受益（MC, TF 不需要）。复杂等价形式可能超出简化能力。</dd>
+      </div>
+    </div>
+  </article>
+
+  <!-- IDEA 4 -->
+  <article class="idea-card" id="i4">
+    <div class="idea-header">
+      <span class="idea-rank">#4</span>
+      <span class="idea-title">Coverage 5 维指数 — 连接知识图谱与生成队列</span>
+      <span class="idea-source ce">CE-Ideate 独有</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Knowledge-to-practice connectivity</span>
+      <span class="chip chip-conf-high">Confidence: 87%</span>
+      <span class="chip chip-complexity">Complexity: Medium</span>
+    </div>
+    <div class="idea-body">
+      <p>将 coverage_service.py 从二元存在检测升级为 5 维加权模型（存在性、难度分布、Bloom 分布、双语完整度、经验质量），修复 QuestionKnowledgePoint m2m 被忽略的问题。输出机器可读的 worklist 供 question_router 的 production plan 消费，自动调度 LLM 生成。</p>
+      <dl>
+        <dt>Basis</dt>
+        <dd><strong>direct:</strong> coverage_service.py 文档 "P7a-full will upgrade to 5-dim weighted model"；QuestionKnowledgePoint m2m 存在但所有查询忽略它。<strong>reasoned:</strong> 将 1,590-topic 图谱变为自优先 worklist，prerequisite_value 已排好优先级。</dd>
+        <dt>Downsides</dt>
+        <dd>5 维权重需调参。Family-scoped vs global 是设计决策。调度器集成增加复杂度。</dd>
+      </div>
+    </div>
+  </article>
+
+  <!-- IDEA 5 -->
+  <article class="idea-card" id="i5">
+    <div class="idea-header">
+      <span class="idea-rank">#5</span>
+      <span class="idea-title">错题回溯先修诊断 — 从失败中找到真正的薄弱点</span>
+      <span class="idea-source kg">KG Research 独有 (CE rejected, now restored)</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Adaptive learning loop</span>
+      <span class="chip chip-conf-high">Confidence: 84%</span>
+      <span class="chip chip-complexity">Complexity: Medium</span>
+    </div>
+    <div class="idea-body">
+      <p>当学生在某知识点持续失败时，系统沿知识图谱先修关系<strong>反向回溯</strong>，找到真正的薄弱基础概念。做错"分数加法"可能不是因为分数加法本身，而是"通分"没学会，或"最小公倍数"没掌握。自动创建"基础修复"会话，修复后重新开放高级主题。限制回溯深度 ≤2 层，避免打击信心。</p>
+      <dl>
+        <dt>Basis</dt>
+        <dd><strong>direct:</strong> adaptive_service.py:257-300 有 <code>find_weak_prerequisites()</code> 函数但仅被动调用；3,221 先修边可用于反向遍历。<strong>reasoned:</strong> KG Research 将其列为 TOP 假设——"从一道错题出发，沿着知识图谱回溯，找到真正的薄弱点"。</dd>
+        <dt>为什么 CE-Ideate 最初拒绝</dt>
+        <dd>CE 认为它与 readiness-ranked recommendations 重叠且复杂度高。但 KG Research 独立论证了它的独特价值：不只是推荐，而是<strong>自动诊断+修复</strong>的闭环。</dd>
+        <dt>实现要点</dt>
+        <dd>新增 <code>reverse_trace_gap()</code> 函数，反向遍历 prerequisite_id 边，查询每个先修的 PracticeAttempt 正确率，自动创建修复会话。后端 ~200 行，前端显示 "repairing foundation" 徽章。</dd>
+        <dt>Downsides</dt>
+        <dd>回溯可能追溯到太早的知识点（需限制深度 ≤2）。小样本可能误判。需要最小尝试数守卫。</dd>
+      </div>
+    </div>
+  </article>
+
+  <!-- IDEA 6 -->
+  <article class="idea-card" id="i6">
+    <div class="idea-header">
+      <span class="idea-rank">#6</span>
+      <span class="idea-title">常见误解诊断题 — 针对 misconceptions 的精准教学设计</span>
+      <span class="idea-source kg">KG Research 独有</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Question template quality</span>
+      <span class="chip chip-conf-high">Confidence: 80%</span>
+      <span class="chip chip-complexity">Complexity: Medium-High</span>
+    </div>
+    <div class="idea-body">
+      <p>建立<strong>常见误解库</strong>（misconception catalog），针对每种误解设计诊断题。例如分数加法的常见误解"分子加分母"（1/3 + 1/4 = 2/7），系统检测到后推送专门诊断题区分<strong>概念不清 vs 程序错误 vs 粗心</strong>。改变数字 ≠ 有价值的变式；有价值的变式改变表达形式、认知层级、误区触发、知识组合。</p>
+      <dl>
+        <dt>Basis</dt>
+        <dd><strong>external:</strong> 教育研究广泛证明 misconception-based diagnostic 是有效教学策略。<strong>direct:</strong> LLM 生成管线 + BKT 可提供基础。干扰项质量是 LLM 出题层 3 验证的盲区。</dd>
+        <dt>与 SymPy 的关系</dt>
+        <dd>SymPy 验证答案正确性；misconception catalog 验证教学设计价值。两者互补：SymPy 确保答案没错，misconception 确保题目有教学意义。</dd>
+        <dt>Downsides</dt>
+        <dd>需要教育学专家建立误解库。每种误解的诊断题需要验证。LLM 生成误解题的可靠性未验证。</dd>
+      </div>
+    </div>
+  </article>
+
+  <!-- IDEA 7 -->
+  <article class="idea-card" id="i7">
+    <div class="idea-header">
+      <span class="idea-rank">#7</span>
+      <span class="idea-title">Puzzle Rush 闪电练习 — 一键开始的微学习会话</span>
+      <span class="idea-source ce">CE-Ideate 独有</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Learning experience &amp; engagement</span>
+      <span class="chip chip-conf-high">Confidence: 82%</span>
+      <span class="chip chip-complexity">Complexity: Low-Medium</span>
+    </div>
+    <div class="idea-body">
+      <p>借鉴 Chess.com 的 Puzzle Rush，创建 "Topic Rush" — 10 道题，单知识点，由易到难基于 BKT 掌握度自动选题，倒计时 + 连续正确计数。<strong>一键开始</strong>：系统根据复习到期优先级自动选择知识点。结合间隔重复（到期知识点优先）与心流状态（即时反馈、快节奏）。</p>
+      <dl>
+        <dt>Basis</dt>
+        <dd><strong>external:</strong> Chess.com Puzzle Rush — 10 题 5 分钟，难度递增，高分榜。<strong>direct:</strong> session_service.py 会话创建需选题（微学习摩擦高）；SM-2 已追踪 next_review_at 可用于到期优先选题。</dd>
+        <dt>反游戏化</dt>
+        <dd>每日 XP 上限 100 + 已掌握不加分 — Rush 不会被利用为刷分工具。</dd>
+        <dt>Downsides</dt>
+        <dd>需计时器调参（适合年龄组）。可能鼓励速度而非准确性。需小心不变成纯粹的"做题比赛"。</dd>
+      </div>
+    </div>
+  </article>
+</section>
+
+<section>
+  <h2>Rejection Summary</h2>
+  <p class="prose" style="font-size:0.88rem;margin-bottom:1rem;">59+ ideas from both reports considered. 7 survived after merge. Key rejections:</p>
+  <table class="rejection-table">
+    <thead>
+      <tr><th>#</th><th>Idea</th><th>Source</th><th>Reason Rejected</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>Tube Map Abstraction</td><td>CE</td><td>AntV G6 + Duolingo path (#1) addresses same need better</td></tr>
+      <tr><td>2</td><td>Cognitive Muscle Map</td><td>CE</td><td>Requires domain-level aggregation that doesn't exist yet</td></tr>
+      <tr><td>3</td><td>Chess Opening Tree</td><td>CE</td><td>46 templates don't have enough variation space yet</td></tr>
+      <tr><td>4</td><td>GitHub Contribution Graph</td><td>CE</td><td>Simple but low-impact; streak badge exists already</td></tr>
+      <tr><td>5</td><td>Hiking Elevation Profile</td><td>CE</td><td>Good idea but session flow needs stabilization first</td></tr>
+      <tr><td>6</td><td>Waze Common Mistake Warnings</td><td>CE</td><td>Requires aggregate data that single-family app lacks</td></tr>
+      <tr><td>7</td><td>Ultra-Curated Essential Graph</td><td>CE</td><td>Arbitrary cutoff contradicts comprehensive taxonomy</td></tr>
+      <tr><td>8</td><td>Cross-Domain Bridges</td><td>CE</td><td>Requires 100+ manual bridges; no evidence children need this</td></tr>
+      <tr><td>9</td><td>Peer Review &amp; Teaching</td><td>CE</td><td>Too complex for family app with 1 child per family</td></tr>
+      <tr><td>10</td><td>Student-as-Question-Author</td><td>CE+KG</td><td>NLP validation unreliable for young children</td></tr>
+      <tr><td>11</td><td>Remove Template/LLM Routing</td><td>CE</td><td>Extraction pipeline is a large project, not incremental</td></tr>
+      <tr><td>12</td><td>Dynamic Topic-Key Binding</td><td>CE</td><td>Solves non-problem — topic_keys work fine for now</td></tr>
+      <tr><td>13</td><td>Stealth Assessment</td><td>CE</td><td>Conflicts with parent-visible assessment flow</td></tr>
+      <tr><td>14</td><td>节点类型分层 (concept/skill)</td><td>KG</td><td>Valuable but large refactor — defer to post-graph-viz</td></tr>
+      <tr><td>15</td><td>三层分离 (知识/教材/映射)</td><td>KG</td><td>Architecture insight, not a user-facing idea</td></tr>
+      <tr><td>16</td><td>边置信度权重</td><td>KG</td><td>Premature — need data before adjusting edge weights</td></tr>
+      <tr><td>17</td><td>学科特定组织策略</td><td>KG</td><td>Important design principle, not an implementation idea</td></tr>
+      <tr><td>18</td><td>Desirable Difficulties (70-85%)</td><td>KG</td><td>Good principle but subsumed by adaptive engine epic (#2)</td></tr>
+      <tr><td>19</td><td>错题关联图</td><td>KG</td><td>Subsumed by 错题回溯先修 (#5)</td></tr>
+      <tr><td>20</td><td>题目作为知识探索入口</td><td>KG</td><td>Innovative but requires misconception catalog first</td></tr>
+      <tr><td>21</td><td>让学生解释知识关系</td><td>KG</td><td>Requires LLM judgment that isn't reliable enough yet</td></tr>
+      <tr><td>22</td><td>从作答数据发现图谱错误</td><td>KG</td><td>Requires 30+ students minimum — premature for family app</td></tr>
+      <tr><td>23</td><td>SM-2 → FSRS 切换</td><td>KG</td><td>SM-2 works; switching cost not justified yet</td></tr>
+      <tr><td>24</td><td>DKT (深度学习知识追踪)</td><td>Both</td><td>Both reports agree: premature for &lt;1000 students</td></tr>
+      <tr><td>25</td><td>CAT (计算机自适应测试)</td><td>Both</td><td>Both agree: question bank too small</td></tr>
+      <tr><td>26</td><td>图数据库</td><td>Both</td><td>Both agree: PostgreSQL + JSON sufficient for 1590 nodes</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Shared Conclusions (Both Reports Agree)</h2>
+  <div class="grounding-grid">
+    <div class="grounding-card">
+      <h4>🔑 发现 1: 系统比认知中更成熟</h4>
+      <ul>
+        <li>完整知识分类 + 7 态状态机 + BKT + SM-2</li>
+        <li>46 参数化模板 + LLM 生成 + 3 层验证</li>
+        <li>最大缺口是<strong>可视化</strong>，不是功能缺失</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>🔑 发现 2: 开源参考 → 设计思想 > 数据</h4>
+      <ul>
+        <li>K12-KGraph 的 7 种节点类型 > 其实际数据</li>
+        <li>pyBKT/EduData 是校准工具，非替代</li>
+        <li>math-mastery 验证了模板系统的正确方向</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>🔑 发现 3: 最大风险是过度复杂化</h4>
+      <ul>
+        <li>&lt;1000 学生 → BKT + 规则已足够</li>
+        <li>DKT/CAT/IRT 是"有了数据再说"</li>
+        <li>从简单学习路径开始，不是 1590 节点力导向图</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>🔑 发现 4: 最重要的创新</h4>
+      <ul>
+        <li>不是引入新算法</li>
+        <li>而是<strong>把已有能力串联成对儿童和家长有价值的体验</strong></li>
+        <li>知识图谱可视化 + 自适应引擎校准 + 答案验证 = 闭环</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer class="composition-signal">
+  Composed 2026-10-20 by ce-ideate (merged with knowledge-graph-deep-research) · 5 frames + 20+ GitHub projects · 59+ raw → 7 merged survivors
+</footer>
+
+</div>
+</body>
+</html>

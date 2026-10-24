@@ -8,12 +8,21 @@ from sqlalchemy.orm import Session
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.schemas.learning import SessionCreate
 from apps.backend.app.services.learning import progress_service
+from packages.core.logging import get_logger
 from packages.db.models.learning.assignment import LearningAssignment
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
 
+logger = get_logger(__name__)
 
-def _build_difficulty_warning(db: Session, child_id: int, topic) -> dict | None:
+
+def _build_difficulty_warning(
+    db: Session,
+    child_id: int,
+    topic,
+    *,
+    source_taxonomy: str | None = None,
+) -> dict | None:
     """Build difficulty warning dict based on age group and prerequisites."""
     from apps.backend.app.services.learning.progress_service import (
         AGE_GROUP_ORDER,
@@ -21,6 +30,9 @@ def _build_difficulty_warning(db: Session, child_id: int, topic) -> dict | None:
         _compute_age,
         find_age_appropriate_topic,
         get_unmet_prerequisites,
+    )
+    from apps.backend.app.services.learning.topic_service import (
+        get_effective_source_taxonomy,
     )
     from packages.db.models.user import User
 
@@ -30,11 +42,15 @@ def _build_difficulty_warning(db: Session, child_id: int, topic) -> dict | None:
 
     child_age = _compute_age(child.birthday)
     child_age_group = _age_to_group(child_age)
+    if source_taxonomy is None:
+        source_taxonomy = get_effective_source_taxonomy(db, child.language)
 
     # Age difficulty check
     age_warning = None
     if AGE_GROUP_ORDER.get(topic.age_group, 1) > AGE_GROUP_ORDER.get(child_age_group, 1):
-        suggested = find_age_appropriate_topic(db, child_id, topic.subject)
+        suggested = find_age_appropriate_topic(
+            db, child_id, topic.subject, source_taxonomy=source_taxonomy
+        )
         age_warning = {
             "level": topic.age_group,
             "child_level": child_age_group,
@@ -74,11 +90,22 @@ def create_session(
     Returns a dict including ``difficulty_warning`` when the topic's
     age group exceeds the child's or prerequisites are unmet.
     """
+    from apps.backend.app.services.learning.topic_service import (
+        get_effective_source_taxonomy,
+    )
     from packages.db.models.learning.topic import LearningTopic
     from packages.db.models.user import User
 
     topic = db.query(LearningTopic).filter(LearningTopic.id == req.topic_id).first()
     if not topic:
+        raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
+
+    # Cross-source guard: ensure the topic belongs to the child's locale taxonomy
+    child = db.query(User).filter(User.id == child_id).first()
+    if not child:
+        raise AppError(ErrorCode.CHILD_NOT_FOUND)
+    expected_source = get_effective_source_taxonomy(db, child.language)
+    if topic.source_taxonomy != expected_source:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
 
     progress = progress_service.get_or_create_progress(db, child_id, req.topic_id)
@@ -96,8 +123,10 @@ def create_session(
     if progress.mastery_level == "available":
         progress_service.transition_to_learning(db, progress)
 
-    # Build difficulty warning
-    difficulty_warning = _build_difficulty_warning(db, child_id, topic)
+    # Build difficulty warning — reuse already-resolved child + taxonomy
+    difficulty_warning = _build_difficulty_warning(
+        db, child_id, topic, source_taxonomy=expected_source,
+    )
 
     # Resolve assignment: use provided, or find existing, or auto-create self_selected
     assignment_id = req.assignment_id
@@ -115,9 +144,6 @@ def create_session(
             assignment_id = existing_assignment.id
         else:
             # Auto-create self_selected assignment
-            child = db.query(User).filter(User.id == child_id).first()
-            if not child:
-                raise AppError(ErrorCode.CHILD_NOT_FOUND)
             assignment = LearningAssignment(
                 family_id=child.family_id,
                 child_id=child_id,
@@ -137,6 +163,9 @@ def create_session(
     )
     db.add(session)
     db.flush()
+    # Derive thread_id from session ID (same pattern as AIChatSession)
+    session.thread_id = str(session.id)
+    db.commit()
     db.refresh(session)
 
     return {
@@ -160,7 +189,12 @@ def end_session(
     score: float | None = None,
     ai_evaluation: dict | None = None,
 ) -> LearningSession:
-    """End a learning session, optionally recording a score and AI evaluation."""
+    """End a learning session, optionally recording a score and AI evaluation.
+
+    If a score is provided and the progress is in 'assessing' state, the
+    dual-track logic applies: high scores may auto-pass to 'mastered' via
+    AI assessment, while lower scores go to 'parent_review'.
+    """
     session = db.query(LearningSession).filter(LearningSession.id == session_id).first()
     if not session:
         raise AppError(ErrorCode.LEARNING_SESSION_NOT_FOUND)
@@ -179,8 +213,67 @@ def end_session(
         delta = session.ended_at - session.started_at
         session.duration_seconds = int(delta.total_seconds())
 
+    # Dual-track: auto-pass logic when score is provided and progress is assessing
+    if score is not None:
+        progress = (
+            db.query(LearningProgress)
+            .filter_by(child_id=session.child_id, topic_id=session.topic_id)
+            .first()
+        )
+        if not progress:
+            logger.warning(
+                "end_session: no progress record for child=%s topic=%s, skipping dual-track",
+                session.child_id,
+                session.topic_id,
+            )
+        elif progress.mastery_level != "assessing":
+            logger.info(
+                "end_session: progress in '%s' (not assessing), skipping dual-track for child=%s topic=%s",
+                progress.mastery_level,
+                session.child_id,
+                session.topic_id,
+            )
+        else:
+            ai_available = _check_ai_available(db, session.child_id)
+            ai_paused = progress_service.is_ai_auto_pass_paused(db, session.child_id)
+            auto_result = progress_service.check_auto_pass(
+                db,
+                score,
+                session.child_id,
+                ai_paused=ai_paused,
+                duration_seconds=session.duration_seconds,
+            )
+            try:
+                if ai_available and auto_result.should_auto_pass:
+                    progress_service.transition_to_mastered(
+                        db, progress, score, completed_via="ai_assessment"
+                    )
+                else:
+                    progress.mastery_level = "parent_review"
+                    progress.mastery_score = score
+            except Exception:
+                # If transition fails, fall back to parent_review so progress
+                # does not remain stuck in "assessing" indefinitely.
+                logger.exception(
+                    "end_session: transition_to_mastered failed for child=%s topic=%s, falling back to parent_review",
+                    session.child_id,
+                    session.topic_id,
+                )
+                progress.mastery_level = "parent_review"
+                progress.mastery_score = score
+
     db.flush()
+    db.commit()
     return session
+
+
+def _check_ai_available(db: Session, child_id: int) -> bool:
+    """Check whether AI assessment is available for this child's family.
+
+    Placeholder: returns True for now. The real implementation would check
+    the family's AI configuration (provider availability, model access, etc.).
+    """
+    return True
 
 
 def start_assessment(
@@ -211,10 +304,13 @@ def start_assessment(
     if not progress:
         raise AppError(ErrorCode.LEARNING_PROGRESS_NOT_FOUND)
 
-    # Transition learning -> assessing
-    progress_service.validate_transition(progress.mastery_level, "assessing")
-    progress.mastery_level = "assessing"
+    # Transition learning -> assessing (idempotent: re-entry on retry when
+    # already 'assessing' must not 409 — e.g. stream error + Retry button)
+    if progress.mastery_level != "assessing":
+        progress_service.validate_transition(progress.mastery_level, "assessing")
+        progress.mastery_level = "assessing"
     db.flush()
+    db.commit()
     return progress
 
 

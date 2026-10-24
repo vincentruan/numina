@@ -60,6 +60,7 @@
   "STORAGE_ENCRYPTION_KEY_NOT_CONFIGURED": "存储加密密钥未配置，请联系系统管理员",
   "AI_NOT_ENABLED": "AI 功能未开启，请联系家庭管理员在设置中配置并启用 AI 助手",
   "AI_SERVICE_UNAVAILABLE": "AI 服务暂时不可用，请稍后再试",
+  "AI_ENCRYPTION_KEY_NOT_CONFIGURED": "AI 加密密钥未配置，请联系系统管理员",
   "AI_SERVICE_TIMEOUT": "AI 服务响应超时，请稍后再试",
   "AI_CONFIG_MISSING_API_KEY": "启用 AI 功能需要配置 API Key",
   "AI_CONFIG_MISSING_PROVIDER": "配置 API Key 需要选择 AI Provider",
@@ -145,5 +146,14 @@
   "LEARNING_TRANSLATION_UNAVAILABLE": "翻译服务暂不可用，请稍后重试",
   "LEARNING_PATH_NOT_FOUND": "学习路径不存在",
   "LEARNING_PATH_ACCESS_DENIED": "无权访问该学习路径",
-  "LEARNING_PATH_INVALID_MILESTONE": "里程碑配置无效"
+  "LEARNING_PATH_INVALID_MILESTONE": "里程碑配置无效",
+  "PRACTICE_QUESTION_NOT_FOUND": "题目不存在",
+  "PRACTICE_QUESTION_INVALID": "题目数据无效",
+  "PRACTICE_TOPIC_NOT_FOUND": "知识点不存在",
+  "PRACTICE_SESSION_NOT_FOUND": "练习会话不存在",
+  "PRACTICE_SESSION_ALREADY_ENDED": "练习会话已结束",
+  "PRACTICE_NO_QUESTIONS_AVAILABLE": "该知识点暂无可用题目",
+  "PRACTICE_DUPLICATE_ATTEMPT": "该题目已作答，不可重复提交",
+  "PRACTICE_QUESTION_NOT_IN_SESSION": "该题目不在当前练习会话中",
+  "PRACTICE_TOPIC_LOCKED": "该知识点已锁定，请先完成前置条件"
 }

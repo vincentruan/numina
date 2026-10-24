@@ -1,5 +1,6 @@
 """Progress service — state machine + spaced repetition for learning progress."""
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func as sa_func
@@ -17,6 +18,18 @@ from packages.db.models.learning.topic import LearningDependency, LearningTopic
 
 logger = get_logger(__name__)
 
+# Auto-pass thresholds for AI assessment dual-track
+AUTO_PASS_THRESHOLD = 0.8
+CONSECUTIVE_OVERRIDE_LIMIT = 5
+SHORT_SESSION_SECONDS = 180  # 3 minutes
+
+
+@dataclass
+class AutoPassResult:
+    should_auto_pass: bool
+    reason: str  # "score_above_threshold", "score_below_threshold", "ai_paused", "no_score"
+    needs_attention: bool = False  # True for short sessions
+
 # Age group ordering for difficulty comparison
 AGE_GROUP_ORDER = {"low": 0, "mid": 1, "high": 2}
 
@@ -29,6 +42,114 @@ VALID_TRANSITIONS = {
     "mastered": {"review", "learning"},  # review via expiry; learning for re-study
     "review": {"learning"},              # fail -> re-learn; pass handled via assessing
 }
+
+
+def check_auto_pass(
+    db: Session,
+    score: float | None,
+    child_id: int,
+    ai_paused: bool = False,
+    duration_seconds: int | None = None,
+) -> AutoPassResult:
+    """Determine whether an AI assessment score should auto-pass to mastered.
+
+    Returns an AutoPassResult indicating whether to auto-pass, the reason,
+    and whether the result needs parent attention (short sessions).
+    """
+    if score is None:
+        return AutoPassResult(should_auto_pass=False, reason="no_score")
+    if ai_paused:
+        return AutoPassResult(should_auto_pass=False, reason="ai_paused")
+    if score >= AUTO_PASS_THRESHOLD:
+        needs_attention = (
+            duration_seconds is not None and duration_seconds < SHORT_SESSION_SECONDS
+        )
+        return AutoPassResult(
+            should_auto_pass=True,
+            reason="score_above_threshold",
+            needs_attention=needs_attention,
+        )
+    return AutoPassResult(should_auto_pass=False, reason="score_below_threshold")
+
+
+def _increment_consecutive_override_counter(db: Session, child_id: int) -> None:
+    """Increment the consecutive AI override counter on the child's stats."""
+    from apps.backend.app.services.learning.stats_service import get_or_create_stats
+    from packages.db.models.user import User
+
+    child_user = db.query(User).filter(User.id == child_id).first()
+    if not child_user:
+        logger.warning("_increment_consecutive_override_counter: child %s not found", child_id)
+        return
+    stats = get_or_create_stats(db, child_id, child_user.family_id)
+    stats.consecutive_ai_overrides = (stats.consecutive_ai_overrides or 0) + 1
+    db.flush()
+
+
+def is_ai_auto_pass_paused(db: Session, child_id: int) -> bool:
+    """Check whether AI auto-pass is paused due to consecutive parent overrides."""
+    from apps.backend.app.services.learning.stats_service import get_or_create_stats
+    from packages.db.models.user import User
+
+    child_user = db.query(User).filter(User.id == child_id).first()
+    if not child_user:
+        logger.warning("is_ai_auto_pass_paused: child %s not found", child_id)
+        return False
+    stats = get_or_create_stats(db, child_id, child_user.family_id)
+    return (stats.consecutive_ai_overrides or 0) >= CONSECUTIVE_OVERRIDE_LIMIT
+
+
+def get_consecutive_override_count(db: Session, child_id: int) -> int:
+    """Get the current consecutive AI override count for a child."""
+    from apps.backend.app.services.learning.stats_service import get_or_create_stats
+    from packages.db.models.user import User
+
+    child_user = db.query(User).filter(User.id == child_id).first()
+    if not child_user:
+        return 0
+    stats = get_or_create_stats(db, child_id, child_user.family_id)
+    return stats.consecutive_ai_overrides or 0
+
+
+def override_review(
+    db: Session,
+    progress_id: int,
+    parent_id: int,
+    new_decision: str,
+    reason: str | None = None,
+) -> LearningProgress:
+    """Parent overrides AI assessment decision.
+
+    ``new_decision`` is the target mastery_level (``"mastered"`` or ``"learning"``).
+    Records override metadata and increments the consecutive override counter.
+    """
+    progress = (
+        db.query(LearningProgress).filter(LearningProgress.id == progress_id).first()
+    )
+    if not progress:
+        raise AppError(ErrorCode.LEARNING_PROGRESS_NOT_FOUND)
+
+    # Validate the transition
+    validate_transition(progress.mastery_level, new_decision)
+
+    # Record override metadata
+    progress.overridden_by = parent_id
+    progress.overridden_at = datetime.now(UTC)
+    progress.override_reason = reason
+
+    if new_decision == "mastered":
+        # Use transition_to_mastered for full side-effects:
+        # SM-2 bookkeeping (stability, ease_factor, next_review_at),
+        # first_mastered_at, and dependent topic unlock.
+        transition_to_mastered(
+            db, progress, score=1.0, completed_via="parent_override"
+        )
+    else:
+        progress.mastery_level = new_decision
+    db.flush()
+
+    _increment_consecutive_override_counter(db, progress.child_id)
+    return progress
 
 
 def _all_hard_prereqs_met(db: Session, child_id: int, topic_id: int) -> bool:
@@ -91,6 +212,91 @@ def transition_to_learning(db: Session, progress: LearningProgress) -> LearningP
     return progress
 
 
+def compute_sm2_quality(score: float) -> int:
+    """Convert practice session score (0.0-1.0) to SM-2 quality (0-5).
+
+    0-2: blackout/failure, 3: correct with difficulty, 4-5: easy/perfect.
+    """
+    if score >= 0.95:
+        return 5
+    elif score >= 0.8:
+        return 4
+    elif score >= 0.6:
+        return 3
+    elif score >= 0.3:
+        return 2
+    else:
+        return 1
+
+
+def compute_next_review(progress: LearningProgress) -> datetime:
+    """Compute next review date using enhanced SM-2 with ease_factor.
+
+    Classic SM-2 interval recursion:
+    - I₁ = 1 day, I₂ = 6 days
+    - Iₙ = Iₙ₋₁ × ease_factor (when quality >= 3)
+    - quality < 3: reset interval to 1, don't update ease_factor
+    - ease_factor' = ease_factor + 0.1 - (5-q)(0.08 + (5-q)*0.02)
+    - ease_factor minimum: 1.3
+    """
+    ease = progress.ease_factor or 2.5
+    stability = progress.stability or 1.0
+
+    # Use stability as a proxy for current interval number
+    # stability tracks the "repetition depth" — higher = further along
+    if stability <= 1.0:
+        interval_days = 1
+    elif stability <= 2.0:
+        interval_days = 6
+    else:
+        # Iₙ = Iₙ₋₁ × ease_factor, approximated via stability exponent
+        interval_days = max(1, int(6 * (ease ** (stability - 2))))
+
+    return datetime.now(UTC) + timedelta(days=interval_days)
+
+
+def update_stability(progress: LearningProgress, score: float) -> float:
+    """Backward-compatible stability update (used by mcp_session and transition_to_mastered).
+
+    Delegates to the SM-2 rules internally.
+    """
+    quality = compute_sm2_quality(score)
+    current = progress.stability or 1.0
+    ease = progress.ease_factor or 2.5
+
+    if quality >= 3:
+        # Advance using ease_factor
+        if current <= 1.0:
+            return 2.0
+        elif current <= 2.0:
+            return 3.0
+        else:
+            return min(current * ease, 30.0)
+    else:
+        return max(current * 0.6, 1.0)
+
+
+def update_sm2_after_session(progress: LearningProgress, score: float) -> None:
+    """Update ease_factor and stability after a practice session.
+
+    Applies classic SM-2 update rules:
+    - quality >= 3: advance interval, update ease_factor
+    - quality < 3: reset interval to 1, don't change ease_factor
+    """
+    quality = compute_sm2_quality(score)
+    current_ease = progress.ease_factor or 2.5
+
+    if quality >= 3:
+        # Update ease_factor
+        diff = 5 - quality
+        progress.ease_factor = max(1.3, current_ease + 0.1 - diff * (0.08 + diff * 0.02))
+        # Advance stability (acts as repetition counter)
+        progress.stability = (progress.stability or 1.0) + 1
+    else:
+        # Reset: interval goes back to 1, ease_factor unchanged
+        progress.stability = 1.0
+
+
 def transition_to_mastered(
     db: Session,
     progress: LearningProgress,
@@ -99,7 +305,7 @@ def transition_to_mastered(
 ) -> LearningProgress:
     """Transition progress to 'mastered' state and update stability/review schedule."""
     validate_transition(progress.mastery_level, "mastered")
-    if completed_via not in ("ai_assessment", "parent_approval"):
+    if completed_via not in ("ai_assessment", "parent_approval", "practice_session", "parent_override"):
         raise ValueError(f"Invalid completed_via: {completed_via}")
     now = datetime.now(UTC)
     progress.mastery_level = "mastered"
@@ -108,32 +314,16 @@ def transition_to_mastered(
     if not progress.first_mastered_at:
         progress.first_mastered_at = now
     progress.stability = update_stability(progress, score)
+    # Update ease_factor too — update_stability only advances stability, so
+    # without this the ease stays at default 2.5 after mastery transitions.
+    quality = compute_sm2_quality(score)
+    if quality >= 3:
+        current_ease = progress.ease_factor or 2.5
+        diff = 5 - quality
+        progress.ease_factor = max(1.3, current_ease + 0.1 - diff * (0.08 + diff * 0.02))
     progress.next_review_at = compute_next_review(progress)
     db.flush()
     return progress
-
-
-def compute_next_review(progress: LearningProgress) -> datetime:
-    """Compute next review date using simplified SM-2 algorithm.
-
-    interval_days = max(1, int(3 * stability))
-    """
-    stability = progress.stability or 1.0
-    interval_days = max(1, int(3 * stability))
-    return datetime.now(UTC) + timedelta(days=interval_days)
-
-
-def update_stability(progress: LearningProgress, score: float) -> float:
-    """Update stability based on assessment score.
-
-    High score (>= 0.8): multiply by 1.3, capped at 10.0
-    Low score (< 0.8): multiply by 0.6, floored at 1.0
-    """
-    current = progress.stability or 1.0
-    if score >= 0.8:
-        return min(current * 1.3, 10.0)
-    else:
-        return max(current * 0.6, 1.0)
 
 
 def recheck_prerequisites(
@@ -234,6 +424,13 @@ def approve_parent_review(
 
     db.refresh(progress)
 
+    # Reset consecutive AI override counter — a normal parent approval
+    # breaks the override streak
+    from apps.backend.app.services.learning.stats_service import get_or_create_stats
+
+    stats_row = get_or_create_stats(db, progress.child_id, family_id)
+    stats_row.consecutive_ai_overrides = 0
+
     # Update spaced-repetition bookkeeping
     now = datetime.now(UTC)
     if not progress.first_mastered_at:
@@ -296,6 +493,7 @@ def approve_parent_review(
     except Exception:
         logger.warning('XP award failed on parent review for child %s', progress.child_id, exc_info=True)
 
+    db.commit()
     return progress
 
 
@@ -439,28 +637,29 @@ def record_failed_assessment(
 
 
 def find_recommended_topic(
-    db: Session, child_id: int
+    db: Session,
+    child_id: int,
+    source_taxonomy: str | None = None,
 ) -> LearningTopic | None:
     """Find a locked topic whose hard prereqs are all met — recommended next.
 
     Returns the first such topic sorted by topic_id (stable ordering),
     or None if no locked topics qualify.
     """
-    locked_progresses = (
+    locked_q = (
         db.query(LearningProgress)
         .filter(
             LearningProgress.child_id == child_id,
             LearningProgress.mastery_level == "locked",
         )
-        .all()
     )
+    locked_progresses = locked_q.all()
     for lp in sorted(locked_progresses, key=lambda p: p.topic_id):
         if _all_hard_prereqs_met(db, child_id, lp.topic_id):
-            return (
-                db.query(LearningTopic)
-                .filter(LearningTopic.id == lp.topic_id)
-                .first()
-            )
+            q = db.query(LearningTopic).filter(LearningTopic.id == lp.topic_id)
+            if source_taxonomy:
+                q = q.filter(LearningTopic.source_taxonomy == source_taxonomy)
+            return q.first()
     return None
 
 
@@ -482,7 +681,10 @@ def _age_to_group(age: int) -> str:
 
 
 def find_age_appropriate_topic(
-    db: Session, child_id: int, subject: str
+    db: Session,
+    child_id: int,
+    subject: str,
+    source_taxonomy: str | None = None,
 ) -> LearningTopic | None:
     """Find a topic in the same subject matching the child's age group.
 
@@ -499,7 +701,7 @@ def find_age_appropriate_topic(
     child_age_group = _age_to_group(age)
 
     # Find available/learning topics in same subject and age group
-    candidate = (
+    candidate_q = (
         db.query(LearningTopic)
         .join(
             LearningProgress,
@@ -509,25 +711,28 @@ def find_age_appropriate_topic(
         .filter(
             LearningTopic.subject == subject,
             LearningTopic.age_group == child_age_group,
-            LearningTopic.deprecated == False,  # noqa: E712
+            LearningTopic.deprecated.is_(False),
             LearningProgress.mastery_level.in_(["available", "learning"]),
         )
-        .order_by(LearningTopic.centrality.desc())
-        .first()
     )
+    if source_taxonomy:
+        candidate_q = candidate_q.filter(
+            LearningTopic.source_taxonomy == source_taxonomy
+        )
+    candidate = candidate_q.order_by(LearningTopic.centrality.desc()).first()
 
     if not candidate:
         # Fallback: any non-deprecated topic in the subject at child's level
-        candidate = (
-            db.query(LearningTopic)
-            .filter(
-                LearningTopic.subject == subject,
-                LearningTopic.age_group == child_age_group,
-                LearningTopic.deprecated == False,  # noqa: E712
-            )
-            .order_by(LearningTopic.centrality.desc())
-            .first()
+        fallback_q = db.query(LearningTopic).filter(
+            LearningTopic.subject == subject,
+            LearningTopic.age_group == child_age_group,
+            LearningTopic.deprecated.is_(False),
         )
+        if source_taxonomy:
+            fallback_q = fallback_q.filter(
+                LearningTopic.source_taxonomy == source_taxonomy
+            )
+        candidate = fallback_q.order_by(LearningTopic.centrality.desc()).first()
 
     return candidate
 

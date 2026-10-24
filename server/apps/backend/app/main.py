@@ -102,6 +102,7 @@ from apps.backend.app.routers import ai_input_polish as ai_input_polish_router
 from apps.backend.app.routers import ai_internal as ai_internal_router
 from apps.backend.app.routers import ai_literacy_report as ai_literacy_report_router
 from apps.backend.app.routers import ai_mcp as ai_mcp_router
+from apps.backend.app.routers import ai_mcp_token as ai_mcp_token_router
 from apps.backend.app.routers import ai_report as ai_report_router
 from apps.backend.app.routers import ai_skills as ai_skills_router
 from apps.backend.app.routers import ai_suggest as ai_suggest_router
@@ -146,10 +147,13 @@ from apps.backend.app.routers import itinerary_types as itinerary_types_router
 from apps.backend.app.routers import learning as learning_router
 from apps.backend.app.routers import learning_child as learning_child_router
 from apps.backend.app.routers import learning_family as learning_family_router
+from apps.backend.app.routers import learning_preset as learning_preset_router
+from apps.backend.app.routers import practice as practice_router
 from apps.backend.app.routers import literacy_child as literacy_child_router
 from apps.backend.app.routers import literacy_parent as literacy_parent_router
 from apps.backend.app.routers import manifesto as manifesto_router
 from apps.backend.app.routers import mcp_internal as mcp_internal_router
+from apps.backend.app.routers import mcp_public as mcp_public_router
 from apps.backend.app.routers import milestones as milestones_router
 from apps.backend.app.routers import (
     notification_channels as notification_channels_router,
@@ -361,6 +365,41 @@ async def lifespan(app: FastAPI):
                     adapter.fetch_and_store_rates(db)
             except Exception:
                 logger.warning("初始汇率获取失败", exc_info=True)
+        # Auto-seed practice questions if the question bank is empty
+        try:
+            from packages.db.models.learning.question import Question as QuestionModel
+
+            has_questions = db.query(QuestionModel).first() is not None
+            if not has_questions:
+                # Distributed lock prevents duplicate seeding when multiple
+                # workers start concurrently against an empty database.
+                from apps.backend.app.reconcile.lock import create_lock_provider
+
+                lock_provider = create_lock_provider(engine)
+                if lock_provider.acquire("question_seed"):
+                    try:
+                        # Re-check inside the lock — another worker may have
+                        # seeded while we waited.
+                        if db.query(QuestionModel).first() is None:
+                            logger.info("题库为空，自动导入模板题目...")
+                            from apps.backend.app.services.learning.question_seeder import (
+                                seed_questions_from_templates,
+                            )
+
+                            seed_result = seed_questions_from_templates(
+                                db, count_per_template=10
+                            )
+                            logger.info(
+                                "题库自动导入完成: 生成 %d 题，失败 %d 题",
+                                seed_result.generated,
+                                seed_result.failed,
+                            )
+                    finally:
+                        lock_provider.release("question_seed")
+                else:
+                    logger.warning("题库种子锁获取失败，跳过自动导入")
+        except Exception:
+            logger.warning("题库自动导入失败", exc_info=True)
     finally:
         db.close()
 
@@ -591,6 +630,7 @@ app.include_router(ai_config_router.router, prefix="/api/v1")
 app.include_router(ai_asr_router.router, prefix="/api/v1")
 app.include_router(ai_internal_router.router, prefix="/api/v1")
 app.include_router(mcp_internal_router.router, prefix="/api/v1")
+app.include_router(mcp_public_router.router, prefix="/api/v1")
 app.include_router(ai_report_router.router, prefix="/api/v1")
 app.include_router(ai_finance_coach_router.router, prefix="/api/v1")
 app.include_router(ai_suggest_router.router, prefix="/api/v1")
@@ -622,6 +662,7 @@ app.include_router(notification_config_router.router, prefix="/api/v1")
 app.include_router(notification_push_router.router, prefix="/api/v1")
 app.include_router(reminders_router.router, prefix="/api/v1")
 app.include_router(ai_mcp_router.router, prefix="/api/v1")
+app.include_router(ai_mcp_token_router.router, prefix="/api/v1")
 app.include_router(ai_skills_router.router, prefix="/api/v1")
 app.include_router(ai_agents_router.router, prefix="/api/v1")
 app.include_router(ai_agents_internal_router.router, prefix="/api/v1")
@@ -643,6 +684,8 @@ app.include_router(shared_router.router, prefix="/api/v1")
 app.include_router(learning_router.router, prefix="/api/v1")
 app.include_router(learning_family_router.router, prefix="/api/v1")
 app.include_router(learning_child_router.router, prefix="/api/v1")
+app.include_router(learning_preset_router.router, prefix="/api/v1")
+app.include_router(practice_router.router, prefix="/api/v1")
 
 # Serve uploaded files — authenticated endpoint with tenant isolation
 app.include_router(uploads_serve_router.router)

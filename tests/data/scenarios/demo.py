@@ -21,6 +21,7 @@ from factories.travel import (
     TripCoOrganizerFactory,
     TripFactory,
 )
+from factories.learning import LearningFactory
 from factories.users import FamilyFactory, UserFactory
 from factories.wishes import ChildWishFactory, WishFactory
 from models import Wish
@@ -634,4 +635,116 @@ def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
             user_id=child1.id,
         )
 
-    print("  [ok] demouser — 完整仿真数据已创建（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒+5行程+行程项+21费用+2结算+家庭约定）")
+    # ── 学习数据 ────────────────────────────────────────────────────────────
+    # 需要预先运行: cd server && uv run python scripts/seed_learning_topics.py --source beijing
+    topic_keys = [
+        "mt_OvyoRo47K-",     # 数学：加法（将两组物品合并）
+        "mt_zuKAX6lcYR",     # 数学：减法理解为"拿走"
+        "mt_KJeEeTutJI",     # 数学：二维图形
+        "mtc_007",           # 语文：识字方法·看图识字
+        "mtc_012",           # 语文：朗读·正确流利有感情
+        "mt_mB7DVai-Uf",     # 英语：倾听与回应
+    ]
+    topic_ids = LearningFactory.find_topic_ids_by_keys(db, topic_keys)
+
+    if topic_ids:
+        # 大宝: 数学 progressed (mastered + in-progress), 语文 started
+        dabao_math_01 = topic_ids.get("mt_OvyoRo47K-")
+        dabao_math_02 = topic_ids.get("mt_zuKAX6lcYR")
+        dabao_math_03 = topic_ids.get("mt_KJeEeTutJI")
+        dabao_cn_01 = topic_ids.get("mtc_007")
+
+        # Progress: 1 mastered, 2 learning
+        if dabao_math_01:
+            LearningFactory.get_or_create_progress(
+                db, child_id=child1.id, topic_id=dabao_math_01,
+                mastery_level="mastered", mastery_score=0.92,
+                attempts=5, xp_earned=250,
+            )
+        if dabao_math_02:
+            LearningFactory.get_or_create_progress(
+                db, child_id=child1.id, topic_id=dabao_math_02,
+                mastery_level="learning", mastery_score=0.55,
+                attempts=2, xp_earned=80,
+            )
+        if dabao_cn_01:
+            LearningFactory.get_or_create_progress(
+                db, child_id=child1.id, topic_id=dabao_cn_01,
+                mastery_level="learning", mastery_score=0.40,
+                attempts=1, xp_earned=40,
+            )
+
+        # Practice session for mastered topic
+        if dabao_math_01:
+            q1 = LearningFactory.create_question(
+                db, topic_id=dabao_math_01,
+                stem="1 + 2 = ?", answer_json='{"correct": "3"}', difficulty=1,
+            )
+            q2 = LearningFactory.create_question(
+                db, topic_id=dabao_math_01,
+                stem="3 + 4 = ?", answer_json='{"correct": "7"}', difficulty=2,
+            )
+            ps1 = LearningFactory.create_practice_session(
+                db, child_id=child1.id, topic_id=dabao_math_01,
+                question_ids=[q1.id, q2.id],
+                total_score=100.0, completed_count=2,
+            )
+            LearningFactory.create_attempt(
+                db, session_id=ps1.id, question_id=q1.id,
+                child_id=child1.id, topic_id=dabao_math_01,
+                is_correct=True, time_spent=15,
+            )
+            LearningFactory.create_attempt(
+                db, session_id=ps1.id, question_id=q2.id,
+                child_id=child1.id, topic_id=dabao_math_01,
+                is_correct=True, time_spent=25,
+            )
+
+        # Stats
+        LearningFactory.get_or_create_stats(
+            db, child_id=child1.id, family_id=fam.id,
+            cumulative_xp=370, level=2, streak=3, zone="review",
+        )
+
+        # Learning path (parent-assigned)
+        path_topic_ids = [t for t in [dabao_math_01, dabao_math_02, dabao_math_03] if t]
+        if path_topic_ids:
+            LearningFactory.create_path(
+                db, family_id=fam.id, child_id=child1.id,
+                name="大宝数学提升路径", topic_ids=path_topic_ids,
+                created_by=user.id,
+            )
+
+        # Assignments
+        for tid in [dabao_math_02, dabao_cn_01]:
+            if tid:
+                LearningFactory.create_assignment(
+                    db, family_id=fam.id, child_id=child1.id,
+                    topic_id=tid, assignment_type="parent_assigned",
+                    status="in_progress", created_by=user.id,
+                )
+        if dabao_math_03:
+            LearningFactory.create_assignment(
+                db, family_id=fam.id, child_id=child1.id,
+                topic_id=dabao_math_03, assignment_type="parent_assigned",
+                status="pending", created_by=user.id,
+            )
+
+        # 小宝: minimal — 1 topic started
+        xiaobao_topic = topic_ids.get("bj_cn_S1_R_N_01")
+        if xiaobao_topic:
+            LearningFactory.get_or_create_progress(
+                db, child_id=child2.id, topic_id=xiaobao_topic,
+                mastery_level="unseen", mastery_score=0.0,
+                attempts=0, xp_earned=0,
+            )
+        LearningFactory.get_or_create_stats(
+            db, child_id=child2.id, family_id=fam.id,
+            cumulative_xp=0, level=1, streak=0,
+        )
+
+        print(f"  [ok] demouser — 学习数据: 大宝 {sum(1 for t in [dabao_math_01, dabao_math_02, dabao_cn_01] if t)} 进度, 小宝 {1 if xiaobao_topic else 0} 进度")
+    else:
+        print("  [skip] demouser — 无学习主题数据 (请先运行 seed_learning_topics.py --source beijing)")
+
+    print("  [ok] demouser — 完整仿真数据已创建（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒+5行程+行程项+21费用+2结算+家庭约定+学习数据）")

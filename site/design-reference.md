@@ -1,6 +1,6 @@
 # Design Reference Guide
 
-Comprehensive design guidance for the Numina site module. For quick reference, see `CLAUDE.md`.
+Comprehensive design guidance for the Numina site module. For quick reference, see `AGENTS.md`.
 
 ## 1. Visual Tropes to Avoid — "AI Slop" Anti-Patterns
 
@@ -360,6 +360,6 @@ Page must call `window.postMessage({slideIndexChanged: N})` on init and slide ch
 
 ## References
 
-- `site/CLAUDE.md` — Architecture and conventions
+- `site/AGENTS.md` — Architecture and conventions
 - `site/good-design.txt` — Original aesthetic guidance
 - `site/Claude-Design-Sys-Prompt.txt` — Comprehensive design system prompt

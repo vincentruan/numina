@@ -53,17 +53,20 @@ async def test_trigger_agent_run_extracts_run_id():
     """trigger_agent_run should extract run_id from Content-Location header."""
     from apps.backend.app.services.bridge_consumer import trigger_agent_run
 
-    mock_client = AsyncMock()
-    mock_client.post = AsyncMock(
-        return_value=MagicMock(
-            headers={
-                "Content-Location": (
-                    "/internal/gateway/runs/learning-tutor/12345/67890"
-                ),
-            },
-            status_code=200,
+    mock_resp = AsyncMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {
+        "Content-Location": (
+            "/internal/gateway/runs/learning-tutor/12345/67890"
         ),
-    )
+    }
+
+    mock_stream = AsyncMock()
+    mock_stream.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_stream.__aexit__ = AsyncMock(return_value=None)
+
+    mock_client = AsyncMock()
+    mock_client.stream = MagicMock(return_value=mock_stream)
 
     result = await trigger_agent_run(
         agent_client=mock_client,
@@ -83,13 +86,16 @@ async def test_trigger_agent_run_empty_content_location():
     """trigger_agent_run should return empty run_id when header is missing."""
     from apps.backend.app.services.bridge_consumer import trigger_agent_run
 
+    mock_resp = AsyncMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {}
+
+    mock_stream = AsyncMock()
+    mock_stream.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_stream.__aexit__ = AsyncMock(return_value=None)
+
     mock_client = AsyncMock()
-    mock_client.post = AsyncMock(
-        return_value=MagicMock(
-            headers={},
-            status_code=200,
-        ),
-    )
+    mock_client.stream = MagicMock(return_value=mock_stream)
 
     result = await trigger_agent_run(
         agent_client=mock_client,

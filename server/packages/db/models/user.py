@@ -31,8 +31,8 @@ class User(Base):
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     avatar_token: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
     role: Mapped[str] = mapped_column(
-        String(10), default="member"
-    )  # 'owner', 'member', or 'child'
+        String(20), default="member"
+    )  # 'owner', 'member', 'child', or 'external_token'
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Child identity fields (NULL for adult accounts)

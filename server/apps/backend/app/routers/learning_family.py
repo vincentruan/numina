@@ -11,6 +11,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.learning import (
+    AIReviewStatusResponse,
     AssignmentCreate,
     AssignmentResponse,
     ChildLearningOverview,
@@ -18,7 +19,11 @@ from apps.backend.app.schemas.learning import (
     PathCreate,
     PathResponse,
     ProgressResponse,
+    RecommendationPathDetail,
+    RecommendationPathResponse,
+    RecommendedTopicItem,
     ReviewItemResponse,
+    ReviewOverrideRequest,
     TopicResponse,
 )
 from apps.backend.app.services.learning import (
@@ -26,6 +31,12 @@ from apps.backend.app.services.learning import (
     path_service,
     progress_service,
     stats_service,
+)
+from apps.backend.app.services.learning.recommendation_service import (
+    generate_recommendation_path,
+)
+from apps.backend.app.services.learning.topic_service import (
+    get_effective_source_taxonomy,
 )
 from apps.backend.app.services.notification.dispatcher import (
     notify_learning_approved,
@@ -128,7 +139,11 @@ def get_child_map(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    """Get child's knowledge map with mastery levels."""
+    """Get child's knowledge map with mastery levels.
+
+    Locale filter applied: progress rows for topics that no longer belong
+    to the parent's source taxonomy are hidden.
+    """
     # Verify child belongs to this family
     child = (
         db.query(User)
@@ -138,9 +153,14 @@ def get_child_map(
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
+    taxonomy = get_effective_source_taxonomy(db, user.language)
     return (
         db.query(LearningProgress)
-        .filter(LearningProgress.child_id == child_id)
+        .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
+        .filter(
+            LearningProgress.child_id == child_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
         .all()
     )
 
@@ -151,7 +171,11 @@ def get_child_progress(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    """Get child's progress details."""
+    """Get child's progress details.
+
+    Locale filter applied: progress rows for topics that no longer belong
+    to the parent's source taxonomy are hidden.
+    """
     child = (
         db.query(User)
         .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
@@ -160,9 +184,14 @@ def get_child_progress(
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
+    taxonomy = get_effective_source_taxonomy(db, user.language)
     return (
         db.query(LearningProgress)
-        .filter(LearningProgress.child_id == child_id)
+        .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
+        .filter(
+            LearningProgress.child_id == child_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
         .order_by(LearningProgress.updated_at.desc())
         .all()
     )
@@ -194,9 +223,14 @@ def get_child_sessions(
 
     # Batch-fetch topic names
     topic_ids = list({s.topic_id for s in sessions})
+    # Locale filter applied: session log topics scoped to parent's taxonomy.
+    taxonomy = get_effective_source_taxonomy(db, user.language)
     topics = (
         db.query(LearningTopic)
-        .filter(LearningTopic.id.in_(topic_ids))
+        .filter(
+            LearningTopic.id.in_(topic_ids),
+            LearningTopic.source_taxonomy == taxonomy,
+        )
         .all()
     ) if topic_ids else []
     topic_map = {t.id: t for t in topics}
@@ -220,14 +254,67 @@ def get_child_sessions(
     return result
 
 
+@router.get("/children/{child_id}/recommendations", response_model=RecommendationPathResponse)
+def get_recommendations(
+    child_id: int,
+    limit: int = Query(20, ge=1, le=100, description="Max topics to return (default 20)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_adult),
+):
+    """Get personalized learning recommendations for a child.
+
+    Returns up to ``limit`` topics ranked by priority
+    (知识断点 > 课标必会 > 高基础度 > 需要复习).
+    """
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == current_user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND, details={"child_id": child_id})
+
+    path = generate_recommendation_path(db, child_id, limit=limit)
+    topics = [
+        RecommendedTopicItem(
+            topic_id=t.topic_id,
+            topic_name=t.topic_name,
+            reasons=t.reasons,
+            centrality=t.centrality,
+            prerequisites_met=t.prerequisites_met,
+            suggested_position=t.suggested_position,
+        )
+        for t in path.topics
+    ]
+    return RecommendationPathResponse(
+        path=RecommendationPathDetail(
+            name=path.name,
+            topics=topics,
+            total_count=path.total_count,
+        )
+    )
+
+
 @router.get("/topics/{topic_id}", response_model=TopicResponse)
 def get_topic_detail(
     topic_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    """Get topic detail (parent view — no per-child progress embedded)."""
-    topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
+    """Get topic detail (parent view — no per-child progress embedded).
+
+    Locale filter applied: topic must belong to the parent's source taxonomy.
+    """
+    taxonomy = get_effective_source_taxonomy(db, user.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
     if not topic:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
     return topic
@@ -251,7 +338,16 @@ def create_assignment(
     assignment = assignment_service.create_assignment(db, user, req)
     # Fire notification — child name resolved from DB
     child = db.query(User).filter(User.id == req.child_id).first()
-    topic = db.query(LearningTopic).filter(LearningTopic.id == req.topic_id).first()
+    # Locale filter applied: assignment topic scoped to parent's taxonomy.
+    taxonomy = get_effective_source_taxonomy(db, user.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == req.topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
     if child and topic:
         child_name = child.display_name or child.username or ""
         topic_name = topic.name_zh or topic.name or ""
@@ -306,6 +402,8 @@ def review_queue(
         return []
 
     # Batch-fetch child names and topic info to avoid N+1 queries
+    # Locale filter applied: review topics scoped to parent's taxonomy.
+    taxonomy = get_effective_source_taxonomy(db, user.language)
     child_ids = {p.child_id for p in progress_items}
     topic_ids = {p.topic_id for p in progress_items}
 
@@ -315,7 +413,12 @@ def review_queue(
     }
     topics = {
         t.id: t
-        for t in db.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all()
+        for t in db.query(LearningTopic)
+        .filter(
+            LearningTopic.id.in_(topic_ids),
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .all()
     }
 
     # Aggregate study duration per (child_id, topic_id) from sessions
@@ -380,8 +483,17 @@ def approve_review(
     progress = progress_service.approve_parent_review(db, progress, user.family_id)
 
     # Fire notification — child approved
+    # Locale filter applied: notification topic scoped to parent's taxonomy.
     child_name = child.display_name or child.username or ""
-    topic = db.query(LearningTopic).filter(LearningTopic.id == progress.topic_id).first()
+    taxonomy = get_effective_source_taxonomy(db, user.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == progress.topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
     topic_name = (topic.name_zh or topic.name or "") if topic else ""
     with contextlib.suppress(Exception):
         notify_learning_approved(db, user.family_id, child_name, topic_name)
@@ -411,13 +523,104 @@ def reject_review(
     progress_service.transition_to_learning(db, progress)
 
     # Fire notification — child rejected, needs more work
+    # Locale filter applied: notification topic scoped to parent's taxonomy.
     child_name = child.display_name or child.username or ""
-    topic = db.query(LearningTopic).filter(LearningTopic.id == progress.topic_id).first()
+    taxonomy = get_effective_source_taxonomy(db, user.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == progress.topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
     topic_name = (topic.name_zh or topic.name or "") if topic else ""
     with contextlib.suppress(Exception):
         notify_learning_rejected(db, user.family_id, child_name, topic_name)
 
+    db.commit()
     return progress
+
+
+@router.post("/reviews/{progress_id}/override", response_model=ProgressResponse)
+def override_review_endpoint(
+    progress_id: int,
+    req: ReviewOverrideRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_adult),
+):
+    """Parent overrides AI assessment decision (auto-pass or rejection)."""
+    progress = db.query(LearningProgress).filter(LearningProgress.id == progress_id).first()
+    if not progress:
+        raise AppError(ErrorCode.LEARNING_PROGRESS_NOT_FOUND)
+
+    child = (
+        db.query(User)
+        .filter(User.id == progress.child_id, User.family_id == current_user.family_id)
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    result = progress_service.override_review(
+        db, progress_id, current_user.id, req.new_decision, req.reason
+    )
+    db.commit()
+    return result
+
+
+@router.get(
+    "/children/{child_id}/ai-review-status",
+    response_model=AIReviewStatusResponse,
+)
+def get_ai_review_status(
+    child_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_adult),
+):
+    """Get AI auto-pass status for a child (paused? consecutive override count?)."""
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == current_user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    paused = progress_service.is_ai_auto_pass_paused(db, child_id)
+    count = progress_service.get_consecutive_override_count(db, child_id)
+    return AIReviewStatusResponse(
+        ai_auto_pass_paused=paused,
+        consecutive_overrides=count,
+    )
+
+
+@router.post(
+    "/children/{child_id}/ai-review-resume",
+    response_model=AIReviewStatusResponse,
+)
+def resume_ai_review(
+    child_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_adult),
+):
+    """Resume AI auto-pass after parent paused it (reset override counter)."""
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == current_user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    stats = stats_service.get_or_create_stats(db, child_id, current_user.family_id)
+    stats.consecutive_ai_overrides = 0
+    db.flush()
+    db.commit()
+    return AIReviewStatusResponse(
+        ai_auto_pass_paused=False,
+        consecutive_overrides=0,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -19,6 +19,19 @@
       </div>
       <van-icon name="arrow" size="16" color="var(--color-muted-soft)" />
     </div>
+    <div v-if="sourceTag" class="today-learning-card__source">
+      <van-tag :type="sourceTagType" size="medium">{{ sourceTag }}</van-tag>
+    </div>
+    <div v-if="rejectionFeedback" class="today-learning-card__rejection">
+      <div class="rejection-banner">
+        <span class="rejection-icon">❌</span>
+        <span class="rejection-text">{{ rejectionFeedback.weakness }}</span>
+      </div>
+      <div class="rejection-actions">
+        <van-button size="mini" type="primary" @click.stop="relearn">{{ t('learning.rejection.relearn') }}</van-button>
+        <van-button size="mini" plain @click.stop="goPractice">{{ t('learning.rejection.goPractice') }}</van-button>
+      </div>
+    </div>
     <p class="today-learning-card__footer">
       {{ t('learning.todayCard.footer', { minutes: data.study_minutes_today }) }}
     </p>
@@ -47,10 +60,11 @@ const { t } = useI18n()
 const router = useRouter()
 const { topicDisplayName } = useLocalizedTopic()
 
-type DisplayMode = 'assignment' | 'current' | 'recommended' | 'explore'
+type DisplayMode = 'assignment' | 'review_due' | 'current' | 'recommended' | 'explore'
 
 const displayMode = computed<DisplayMode>(() => {
   if (props.data.pending_assignment) return 'assignment'
+  if (props.data.review_due_topic) return 'review_due'
   if (props.data.current_topic) return 'current'
   if (props.data.recommended_topic) return 'recommended'
   return 'explore'
@@ -59,6 +73,7 @@ const displayMode = computed<DisplayMode>(() => {
 const icon = computed(() => {
   switch (displayMode.value) {
     case 'assignment': return '📝'
+    case 'review_due': return '🔄'
     case 'current': return '📖'
     case 'recommended': return '🌟'
     case 'explore': return '📚'
@@ -71,6 +86,7 @@ const label = computed(() => t(`learning.todayCard.${displayMode.value}`))
 const topicName = computed(() => {
   switch (displayMode.value) {
     case 'assignment': return props.data.pending_assignment?.topic ? topicDisplayName(props.data.pending_assignment.topic) : ''
+    case 'review_due': return props.data.review_due_topic ? topicDisplayName(props.data.review_due_topic) : ''
     case 'current': return props.data.current_topic ? topicDisplayName(props.data.current_topic) : ''
     case 'recommended': return props.data.recommended_topic ? topicDisplayName(props.data.recommended_topic) : ''
     case 'explore': return t('learning.todayCard.exploreSub')
@@ -80,6 +96,7 @@ const topicName = computed(() => {
 
 const targetTopicId = computed(() => {
   if (props.data.pending_assignment) return props.data.pending_assignment.topic?.id
+  if (props.data.review_due_topic) return props.data.review_due_topic.id
   if (props.data.current_topic) return props.data.current_topic.id
   if (props.data.recommended_topic) return props.data.recommended_topic.id
   return null
@@ -91,6 +108,55 @@ function navigate() {
   } else {
     router.push('/learning')
   }
+}
+
+// Source tag: show where this topic came from
+// Gated by displayMode — not relevant for review_due cards
+const sourceTag = computed(() => {
+  if (displayMode.value === 'review_due') return null
+  if (props.data.pending_assignment) {
+    const assignmentType = props.data.pending_assignment.assignment_type
+    if (assignmentType === 'parent_assigned') return t('learning.source.parentAssigned')
+    if (assignmentType === 'self_selected') return t('learning.source.selfSelected')
+  }
+  if (props.data.recommended_topic) return t('learning.source.systemRecommended')
+  return null
+})
+
+const sourceTagType = computed<'primary' | 'success' | 'warning'>(() => {
+  if (props.data.pending_assignment?.assignment_type === 'parent_assigned') return 'primary'
+  if (props.data.pending_assignment?.assignment_type === 'self_selected') return 'success'
+  // Default to primary for non-assignment modes (current/recommended/explore)
+  return 'primary'
+})
+
+// Rejection feedback: show when topic failed assessment
+// TODO: Replace heuristic with actual rejection data from API.
+// Currently shows generic message when both current_topic and review_due_topic exist.
+// Needs backend to expose per-topic assessment failure data in TodayLearningResponse.
+const rejectionFeedback = computed(() => {
+  const topic = props.data.current_topic || props.data.review_due_topic
+  if (!topic) return null
+
+  // Check if this topic has parent_review mastery (indicates failed assessment)
+  // We need to check the progress data, but TodayLearningResponse doesn't include mastery_level
+  // For now, we'll show a generic message if there's a current_topic after a review_due
+  if (props.data.current_topic && props.data.review_due_topic) {
+    return {
+      weakness: t('learning.rejection.needsPractice'),
+    }
+  }
+  return null
+})
+
+function relearn() {
+  if (targetTopicId.value) {
+    router.push(`/learning/topic/${targetTopicId.value}`)
+  }
+}
+
+function goPractice() {
+  router.push('/learning/practice')
 }
 </script>
 
@@ -112,6 +178,46 @@ function navigate() {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.today-learning-card__source {
+  margin-top: 8px;
+  padding-left: 36px;
+}
+
+.today-learning-card__rejection {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--color-brand-coral-light, rgba(255, 107, 107, 0.1));
+  border-radius: var(--radius-md);
+}
+
+.rejection-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rejection-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.rejection-text {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-ink);
+  flex: 1;
+}
+
+.rejection-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.rejection-actions :deep(.van-button) {
+  min-width: 80px;
 }
 
 .today-learning-card__icon {

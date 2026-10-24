@@ -120,7 +120,7 @@ bsk snapshot --session <id>
 
 Assertions:
 - [ ] AssetAnalyticsPage renders (charts/allocations)
-- [ ] Allocation breakdown `{items, total}` renders (not a flat list — CLAUDE.md convention)
+- [ ] Allocation breakdown `{items, total}` renders (not a flat list — AGENTS.md convention)
 - [ ] `[console]` zero errors
 
 ---

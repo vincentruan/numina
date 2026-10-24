@@ -9,7 +9,7 @@ Verifies the contract between the v2 runs_stream router and the frontend:
 
 Uses FastAPI TestClient with a stub adapter — does NOT invoke the real
 DeerFlowClient. Real end-to-end verification requires running the agent
-locally, which is outside automated test scope (per CLAUDE.md: no dev servers).
+locally, which is outside automated test scope (per AGENTS.md: no dev servers).
 """
 
 from __future__ import annotations

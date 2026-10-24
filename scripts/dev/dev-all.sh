@@ -73,6 +73,12 @@ if [ -z "$MODE" ]; then
     fi
 fi
 
+# Normalize to lowercase (case-insensitive input)
+MODE="$(echo "$MODE" | tr '[:upper:]' '[:lower:]')"
+LOG="$(echo "$LOG" | tr '[:upper:]' '[:lower:]')"
+DB="$(echo "$DB" | tr '[:upper:]' '[:lower:]')"
+CACHE="$(echo "$CACHE" | tr '[:upper:]' '[:lower:]')"
+
 # Validate
 case "$MODE" in
     tmux|term|bg) ;;

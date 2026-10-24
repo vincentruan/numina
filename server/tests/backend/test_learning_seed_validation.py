@@ -52,6 +52,28 @@ def test_badge_subjects_unknown_subject(db, math_topics):
     assert "astrology" in result[0]
 
 
+def test_badge_subjects_literacy_dimensions_are_virtual(db, math_topics):
+    """Financial-literacy badge dimensions are a separate axis from topic subjects.
+
+    ``LiteracyBadgeDefinition.dimension`` carries either a topic subject slug or
+    one of the four financial-literacy dimensions. The literacy dimensions have
+    no corresponding ``LearningTopic`` row, so they must not be flagged — a
+    ``--source beijing`` re-seed raises on them otherwise.
+    """
+    from apps.backend.app.services.literacy_badge import ALL_DIMENSIONS
+
+    result = validate_badge_subjects(set(ALL_DIMENSIONS), db)
+    assert result == []
+
+
+def test_badge_subjects_literacy_dimension_mixed_with_unknown(db, math_topics):
+    """Only genuinely unknown subjects are reported, not the literacy dimensions."""
+    subjects = {"mathematics", "earning", "choosing", "waiting", "caring", "astrology"}
+    result = validate_badge_subjects(subjects, db)
+    assert len(result) == 1
+    assert "astrology" in result[0]
+
+
 def test_badge_subjects_empty_set_ok(db):
     """No badges defined -> nothing to validate -> passes."""
     result = validate_badge_subjects(set(), db)

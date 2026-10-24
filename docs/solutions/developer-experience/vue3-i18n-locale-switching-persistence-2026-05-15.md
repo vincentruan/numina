@@ -155,7 +155,7 @@ home: {
 }
 ```
 
-This satisfies the CLAUDE.md rule ("all user-facing strings through `t('key')`") without the bootstrap problem.
+This satisfies the AGENTS.md rule ("all user-facing strings through `t('key')`") without the bootstrap problem.
 
 ### 6. Convert static translated arrays to `computed()`
 
@@ -206,10 +206,10 @@ See `frontend/apps/child/src/utils/locale.ts` — the canonical implementation f
 
 2. **Bare localStorage key `'locale'` is collision-prone** — if apps share an origin (same domain, different paths), they silently overwrite each other's preference. Use a namespaced key: `'child:locale'`, `'main:locale'`, etc.
 
-3. **Hardcoded language labels in `.vue` files violate CLAUDE.md** — even with the bootstrap rationale, the rule has no carve-out. Store self-identifying labels as i18n keys with identical values in both locales.
+3. **Hardcoded language labels in `.vue` files violate AGENTS.md** — even with the bootstrap rationale, the rule has no carve-out. Store self-identifying labels as i18n keys with identical values in both locales.
 
 ## Related
 
-- `frontend/apps/child/CLAUDE.md` — i18n rules for the child app
-- `frontend/apps/main/CLAUDE.md` — comprehensive i18n rules (emoji convention, key sections, adding new messages)
+- `frontend/apps/child/AGENTS.md` — i18n rules for the child app
+- `frontend/apps/main/AGENTS.md` — comprehensive i18n rules (emoji convention, key sections, adding new messages)
 - `docs/solutions/best-practices/fastapi-pydantic-validation-error-localization-2026-04-16.md` — backend locale pattern (FastAPI/Pydantic validation errors)

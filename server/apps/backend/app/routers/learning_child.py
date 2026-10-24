@@ -2,7 +2,9 @@
 
 import contextlib
 import json
+from datetime import UTC, datetime
 
+import httpx
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -14,11 +16,17 @@ from apps.backend.app.models.user import User
 from apps.backend.app.schemas.learning import (
     AssessStreamRequest,
     AssignmentResponse,
+    BridgeResponse,
     ChildProgressOverview,
+    ClusterResponse,
     LearningStatsResponse,
+    MapIndexItem,
     OnboardingCompleteResponse,
     PathResponse,
     ProgressResponse,
+    RecommendationPathDetail,
+    RecommendationPathResponse,
+    RecommendedTopicItem,
     SessionCreate,
     SessionResponse,
     TodayLearningResponse,
@@ -31,6 +39,14 @@ from apps.backend.app.services.learning import (
     session_service,
     stats_service,
     zone_service,
+)
+from apps.backend.app.services.learning.recommendation_service import (
+    generate_recommendation_path,
+)
+from apps.backend.app.services.learning.topic_service import (
+    get_cross_subject_bridges,
+    get_effective_source_taxonomy,
+    list_clusters_with_topic_counts,
 )
 from apps.backend.app.services.notification.dispatcher import (
     notify_learning_submitted_for_review,
@@ -64,12 +80,109 @@ def my_knowledge_map(
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
-    """Get my knowledge map with mastery levels."""
-    return (
-        db.query(LearningProgress)
-        .filter(LearningProgress.child_id == child.id)
+    """Get my knowledge map with mastery levels.
+
+    Locale filter applied: progress rows for topics that no longer belong to
+    the child's source taxonomy are hidden (taxonomy switched since the
+    progress was created, or topic was deprecated).
+
+    Subject/domain/age_group are joined in so the cluster map can build its
+    subject tabs and mastery-coloured nodes without a second round-trip that
+    fetches every topic's full detail.
+    """
+    taxonomy = get_effective_source_taxonomy(db, child.language)
+    rows = (
+        db.query(
+            LearningProgress,
+            LearningTopic.subject,
+            LearningTopic.domain,
+            LearningTopic.age_group,
+        )
+        .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
+        .filter(
+            LearningProgress.child_id == child.id,
+            # taxonomy filter here is intentional — drops orphan progress rows; matches /map behavior.
+            LearningTopic.source_taxonomy == taxonomy,
+        )
         .all()
     )
+    result = []
+    for progress, subject, domain, age_group in rows:
+        item = ProgressResponse.model_validate(progress)
+        item.subject = subject
+        item.domain = domain
+        item.age_group = age_group
+        result.append(item)
+    return result
+
+
+@router.get("/map/index", response_model=list[MapIndexItem])
+def my_knowledge_map_index(
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Slim per-row index for the cluster map.
+
+    Returns only ``topic_id``, ``mastery_level``, ``next_review_at``,
+    ``subject``, ``domain``, ``age_group`` — the minimum the cluster map
+    needs to render subject tabs and mastery-coloured nodes.  Omits the
+    heavy ``ProgressResponse`` fields (evidence, standards,
+    assessment_prompt, ability_dimensions_score, …) that drive the
+    original ``/map`` payload well above 3G budgets.
+    """
+    taxonomy = get_effective_source_taxonomy(db, child.language)
+    rows = (
+        db.query(
+            LearningTopic.id,
+            LearningProgress.mastery_level,
+            LearningProgress.next_review_at,
+            LearningTopic.subject,
+            LearningTopic.domain,
+            LearningTopic.age_group,
+        )
+        .outerjoin(LearningTopic, LearningTopic.id == LearningProgress.topic_id)
+        .filter(
+            LearningProgress.child_id == child.id,
+            # taxonomy filter here is intentional — drops orphan progress rows; matches /map behavior.
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .all()
+    )
+    return [
+        MapIndexItem(
+            topic_id=topic_id,
+            mastery_level=mastery_level,
+            next_review_at=next_review_at,
+            subject=subject,
+            domain=domain,
+            age_group=age_group,
+        )
+        for topic_id, mastery_level, next_review_at, subject, domain, age_group in rows
+    ]
+
+
+@router.get("/clusters", response_model=list[ClusterResponse])
+def list_my_clusters(
+    subject: str | None = Query(None),
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """List clusters enriched with topic counts for the child's taxonomy."""
+    taxonomy = get_effective_source_taxonomy(db, child.language)
+    return list_clusters_with_topic_counts(
+        db, subject=subject, source_taxonomy=taxonomy
+    )
+
+
+@router.get("/bridges", response_model=list[BridgeResponse])
+def list_my_bridges(
+    subject: str | None = Query(None),
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """List cross-subject bridge edges between cluster domains."""
+    taxonomy = get_effective_source_taxonomy(db, child.language)
+    return get_cross_subject_bridges(db, source_taxonomy=taxonomy, subject=subject)
 
 
 @router.get("/assignments", response_model=list[AssignmentResponse])
@@ -87,7 +200,38 @@ def today_learning(
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
-    """Today's learning summary — drives the TodayLearningCard on ChildHomePage."""
+    """Today's learning summary — drives the TodayLearningCard on ChildHomePage.
+
+    Locale filter applied: current topic, pending assignment topic, and
+    recommended topic are scoped to the child's effective taxonomy
+    (locale-mapped, falling back to os-taxonomy when unseeded).
+    """
+    taxonomy = get_effective_source_taxonomy(db, child.language)
+
+    # 0. review_due: mastered topics whose next_review_at has passed
+    now_utc = datetime.now(UTC)
+    review_due_progress = (
+        db.query(LearningProgress)
+        .filter(
+            LearningProgress.child_id == child.id,
+            LearningProgress.mastery_level == "mastered",
+            LearningProgress.next_review_at <= now_utc,
+            LearningProgress.next_review_at.isnot(None),
+        )
+        .order_by(LearningProgress.next_review_at.asc())
+        .first()
+    )
+    review_due_topic = None
+    if review_due_progress:
+        review_due_topic = (
+            db.query(LearningTopic)
+            .filter(
+                LearningTopic.id == review_due_progress.topic_id,
+                LearningTopic.source_taxonomy == taxonomy,
+            )
+            .first()
+        )
+
     # 1. current_topic: first progress with mastery_level=="learning", ORDER BY updated_at DESC
     current_progress = (
         db.query(LearningProgress)
@@ -102,7 +246,10 @@ def today_learning(
     if current_progress:
         current_topic = (
             db.query(LearningTopic)
-            .filter(LearningTopic.id == current_progress.topic_id)
+            .filter(
+                LearningTopic.id == current_progress.topic_id,
+                LearningTopic.source_taxonomy == taxonomy,
+            )
             .first()
         )
 
@@ -120,14 +267,19 @@ def today_learning(
     if pending_assignment_orm:
         a_topic = (
             db.query(LearningTopic)
-            .filter(LearningTopic.id == pending_assignment_orm.topic_id)
+            .filter(
+                LearningTopic.id == pending_assignment_orm.topic_id,
+                LearningTopic.source_taxonomy == taxonomy,
+            )
             .first()
         )
         pending_assignment = AssignmentResponse.model_validate(pending_assignment_orm)
         pending_assignment.topic = a_topic
 
     # 3. recommended_topic: zone-aware recommendation (Growth > Comfort by centrality)
-    recommended_topic, _zone_label = zone_service.get_zone_recommended_topic(db, child.id)
+    recommended_topic, _zone_label = zone_service.get_zone_recommended_topic(
+        db, child.id, source_taxonomy=taxonomy
+    )
 
     # 4. study_minutes_today
     study_minutes = progress_service.aggregate_study_minutes(db, child.id)
@@ -138,6 +290,7 @@ def today_learning(
     return TodayLearningResponse(
         current_topic=current_topic,
         pending_assignment=pending_assignment,
+        review_due_topic=review_due_topic,
         recommended_topic=recommended_topic,
         study_minutes_today=study_minutes["today_study_minutes"],
         current_zone=stats.current_zone,
@@ -175,7 +328,7 @@ def complete_onboarding(
     """Mark onboarding as completed for this child."""
     stats = stats_service.get_or_create_stats(db, child.id, child.family_id)
     stats.onboarding_completed = True
-    db.flush()
+    db.commit()
     return OnboardingCompleteResponse(onboarding_completed=True)
 
 
@@ -185,8 +338,21 @@ def get_topic_detail(
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
-    """Get topic detail — public topic info (no per-child progress embedded)."""
-    topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
+    """Get topic detail — public topic info (no per-child progress embedded).
+
+    Locale filter applied: topic must belong to the child's effective
+    taxonomy (locale-mapped, falling back to os-taxonomy when unseeded).
+    """
+    taxonomy = get_effective_source_taxonomy(db, child.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+            LearningTopic.deprecated == False,  # noqa: E712
+        )
+        .first()
+    )
     if not topic:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
     return topic
@@ -262,7 +428,16 @@ def submit_assignment(
         .first()
     )
     if assignment:
-        topic = db.query(LearningTopic).filter(LearningTopic.id == assignment.topic_id).first()
+        # Locale filter applied: topic lookup scoped to child's taxonomy.
+        taxonomy = get_effective_source_taxonomy(db, child.language)
+        topic = (
+            db.query(LearningTopic)
+            .filter(
+                LearningTopic.id == assignment.topic_id,
+                LearningTopic.source_taxonomy == taxonomy,
+            )
+            .first()
+        )
         child_name = child.display_name or child.username or ""
         topic_name = (topic.name_zh or topic.name or "") if topic else ""
         with contextlib.suppress(Exception):
@@ -333,6 +508,43 @@ def get_my_path(
     return path_service.build_path_response(path, progress)
 
 
+# ---------------------------------------------------------------------------
+# Recommendation path (child view)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/recommendations", response_model=RecommendationPathResponse)
+def my_recommendations(
+    limit: int = Query(5, ge=1, le=100, description="Max topics to return (default 5)"),
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Get my personalized learning recommendations.
+
+    Child-facing equivalent of the family endpoint. Returns up to ``limit``
+    topics ranked by priority (知识断点 > 课标必会 > 高基础度 > 需要复习).
+    """
+    path = generate_recommendation_path(db, child.id, limit=limit)
+    topics = [
+        RecommendedTopicItem(
+            topic_id=t.topic_id,
+            topic_name=t.topic_name,
+            reasons=t.reasons,
+            centrality=t.centrality,
+            prerequisites_met=t.prerequisites_met,
+            suggested_position=t.suggested_position,
+        )
+        for t in path.topics
+    ]
+    return RecommendationPathResponse(
+        path=RecommendationPathDetail(
+            name=path.name,
+            topics=topics,
+            total_count=path.total_count,
+        )
+    )
+
+
 @router.post("/sessions/{session_id}/assess/stream")
 async def stream_assessment(
     session_id: int,
@@ -375,7 +587,18 @@ async def stream_assessment(
         session.thread_id = thread_id
 
     # 2. Build agent trigger body
-    topic = db.query(LearningTopic).filter(LearningTopic.id == session.topic_id).first()
+    # Locale filter applied: session topic must belong to the child's
+    # source taxonomy; sessions referencing a deprecated/switched topic
+    # are rejected.
+    taxonomy = get_effective_source_taxonomy(db, child.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == session.topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
     if not topic:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
 
@@ -406,6 +629,8 @@ async def stream_assessment(
         )
 
     agent_body = {
+        "family_id": str(family_id),
+        "user_id": str(child.id),
         "input": {
             "messages": [{"role": "user", "content": agent_content}],
         },
@@ -439,6 +664,18 @@ async def stream_assessment(
             json_body=agent_body,
             task_id=task_id,
         )
+    except httpx.HTTPStatusError as e:
+        _fdb = SessionLocal()
+        try:
+            AITaskService.fail_task(task_id, f"agent trigger failed: {type(e).__name__}", _fdb)
+        finally:
+            _fdb.close()
+        # Agent returned 409 Conflict — another run is already active on this thread.
+        # Propagate as 409 to the frontend so it can show a "session in progress"
+        # state instead of a generic 503 error.
+        if e.response.status_code == 409:
+            raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}) from e
     except Exception as e:
         _fdb = SessionLocal()
         try:
@@ -457,7 +694,6 @@ async def stream_assessment(
         family_id=family_id,
         run_id=result["run_id"],
         bridge=shared_bridge,
-        thread_id=thread_id,
     )
 
     last_event_id = http_request.headers.get("Last-Event-ID")

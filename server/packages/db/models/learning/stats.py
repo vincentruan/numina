@@ -31,6 +31,7 @@ class ChildLearningStats(Base):
     )
     xp_today: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_xp_date: Mapped[date | None] = mapped_column(Date(), nullable=True)
+    consecutive_ai_overrides: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now()
     )

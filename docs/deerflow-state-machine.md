@@ -546,4 +546,4 @@ interface StreamEvent {
 - Numina Agent Chat Router: `server/apps/agent/routers/chat.py`
 - Numina Stream Events: `server/apps/agent/services/stream_events.py`
 - Numina Frontend: `frontend/apps/main/src/pages/AIChatPage.vue`
-- NDJSON Protocol: Documented in `server/apps/agent/CLAUDE.md`
+- NDJSON Protocol: Documented in `server/apps/agent/AGENTS.md`

@@ -5,13 +5,17 @@
       :key="group.domain"
       class="domain-group"
     >
-      <h3 class="domain-group__title">{{ group.domain }}</h3>
+      <h3 class="domain-group__title">{{ translateDomain(t, group.domain) }}</h3>
       <div class="domain-group__cards">
         <button
           v-for="item in group.items"
           :key="item.topic.id"
           class="topic-card"
-          :class="`topic-card--${masteryStatus(item)}`"
+          :class="{
+            [`topic-card--${masteryStatus(item)}`]: true,
+            'topic-card--review-due': isReviewDue(item),
+            'topic-card--rejected': isRejected(item),
+          }"
           @click="$emit('topicClick', item.topic.id)"
         >
           <span class="topic-card__status" aria-hidden="true">{{ statusIcon(masteryStatus(item)) }}</span>
@@ -22,6 +26,7 @@
               <span v-if="item.attempts" class="topic-card__meta">
                 {{ t('learning.attempts', { count: item.attempts }) }}
               </span>
+              <span v-if="isRejected(item)" class="topic-card__rejected-icon" aria-hidden="true">⚠️</span>
             </div>
           </div>
         </button>
@@ -37,6 +42,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProgressWithTopic } from '@/api/learning'
 import ZoneBadge from './ZoneBadge.vue'
+import { domainLabel as translateDomain } from '@/utils/domainLabel'
 
 const { t, locale } = useI18n()
 
@@ -64,6 +70,14 @@ function masteryStatus(item: ProgressWithTopic): MasteryStatus {
   if (level === 'learning' || level === 'assessing') return 'learning'
   if (level === 'locked') return 'locked'
   return 'available'
+}
+
+function isReviewDue(item: ProgressWithTopic): boolean {
+  return item.mastery_level === 'mastered' && item.next_review_at !== null && new Date(item.next_review_at) <= new Date()
+}
+
+function isRejected(item: ProgressWithTopic): boolean {
+  return item.mastery_level === 'parent_review'
 }
 
 function statusIcon(status: MasteryStatus): string {
@@ -109,6 +123,7 @@ const domainGroups = computed<DomainGroup[]>(() => {
   }
   return Array.from(map.entries()).map(([domain, items]) => ({ domain, items }))
 })
+
 </script>
 
 <style scoped>
@@ -162,6 +177,30 @@ const domainGroups = computed<DomainGroup[]>(() => {
 
 .topic-card--review {
   border-color: var(--color-brand-ochre);
+}
+
+.topic-card--review-due {
+  position: relative;
+  animation: review-pulse 2s ease-in-out infinite;
+}
+
+@keyframes review-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(232, 185, 74, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(232, 185, 74, 0);
+  }
+}
+
+.topic-card--rejected {
+  border: 2px dashed var(--color-brand-coral);
+  background: var(--color-brand-coral-light, rgba(255, 107, 107, 0.05));
+}
+
+.topic-card__rejected-icon {
+  font-size: 14px;
+  margin-left: 4px;
 }
 
 .topic-card--learning {
