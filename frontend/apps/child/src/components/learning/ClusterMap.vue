@@ -37,7 +37,8 @@
     <!-- Collapsible domain sections (#133). One section per territory: the
          territory list is already deduplicated per domain (#142). -->
     <div v-else class="cluster-map__domains">
-      <DomainSection
+      <div class="continent-canvas">
+        <DomainSection
         v-for="territory in territories"
         :key="domainKey(territory)"
         :domain="territory.domain"
@@ -62,6 +63,7 @@
           />
         </div>
       </DomainSection>
+      </div>
     </div>
 
     <!-- SVG path overlay for recommendation path -->
@@ -576,6 +578,17 @@ function onPrereqGoTo(topicId: string) {
 /* ── Domain groups ── */
 
 .cluster-map__domains {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Continent canvas — warm shared landmass behind all territories (U3) */
+.continent-canvas {
+  background: var(--continent-canvas-bg);
+  border: 1px solid var(--continent-canvas-border);
+  border-radius: var(--radius-xl);
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 14px;

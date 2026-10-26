@@ -267,4 +267,34 @@ describe('ClusterTerritory', () => {
     const wrapper = mountTerritory(makeCluster({ domain: 'Fractions' }))
     expect(wrapper.find('.cluster-territory').attributes('data-cluster-domain')).toBe('Fractions')
   })
+
+  it('applies subject-specific territory modifier class for math', () => {
+    const wrapper = mountTerritory(makeCluster({ subject: 'mathematics' }))
+    expect(wrapper.find('.cluster-territory').classes()).toContain('territory--math')
+  })
+
+  it('applies science territory modifier for science subject', () => {
+    const wrapper = mountTerritory(makeCluster({ subject: 'science' }))
+    expect(wrapper.find('.cluster-territory').classes()).toContain('territory--science')
+  })
+
+  it('applies default territory modifier for unknown subject', () => {
+    const wrapper = mountTerritory(makeCluster({ subject: 'unknown_subject' }))
+    expect(wrapper.find('.cluster-territory').classes()).toContain('territory--default')
+  })
+
+  it('renders territory marker icon based on subject', () => {
+    const wrapper = mountTerritory(makeCluster({ subject: 'mathematics' }))
+    expect(wrapper.find('.cluster-territory__marker').text()).toBe('📐')
+  })
+
+  it('renders science marker for science subject', () => {
+    const wrapper = mountTerritory(makeCluster({ subject: 'science' }))
+    expect(wrapper.find('.cluster-territory__marker').text()).toBe('🔬')
+  })
+
+  it('sets data-subject attribute on root element', () => {
+    const wrapper = mountTerritory(makeCluster({ subject: 'mathematics' }))
+    expect(wrapper.find('.cluster-territory').attributes('data-subject')).toBe('mathematics')
+  })
 })

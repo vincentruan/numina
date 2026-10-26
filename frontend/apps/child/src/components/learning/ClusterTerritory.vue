@@ -1,14 +1,16 @@
 <template>
   <div
     class="cluster-territory"
+    :class="territoryClasses"
     :data-cluster-domain="cluster.domain"
-    :class="{ 'cluster-territory--frontier': isFrontierCluster }"
+    :data-subject="cluster.subject"
   >
     <!-- The title duplicates the enclosing DomainSection header, so callers
          that already show the domain can suppress it. The frontier badge is
          the card's own signal and always survives. -->
     <div v-if="!hideTitle || isFrontierCluster" class="cluster-territory__header">
       <h3 v-if="!hideTitle" class="cluster-territory__title">
+        <span class="cluster-territory__marker">{{ territoryIcon }}</span>
         {{ translateDomain(t, cluster.domain) }}
         <span class="cluster-territory__count">({{ items.length }})</span>
       </h3>
@@ -71,6 +73,53 @@ defineEmits<{
 
 const displayBridges = computed(() => props.bridges.slice(0, 2))
 
+/** Subject → terrain modifier class for continent styling (U3) */
+const SUBJECT_TERRAIN_MAP: Record<string, string> = {
+  mathematics: 'math',
+  science: 'science',
+  chinese: 'language',
+  english: 'language',
+  physics: 'science',
+  chemistry: 'science',
+  biology: 'science',
+  history: 'social',
+  geography: 'social',
+  politics: 'social',
+  art: 'arts',
+  music: 'arts',
+  physical_education: 'arts',
+  information_technology: 'science',
+}
+
+const SUBJECT_ICON_MAP: Record<string, string> = {
+  mathematics: '📐',
+  science: '🔬',
+  chinese: '📖',
+  english: '🔤',
+  physics: '⚡',
+  chemistry: '🧪',
+  biology: '🌿',
+  history: '📜',
+  geography: '🌍',
+  politics: '🏛',
+  art: '🎨',
+  music: '🎵',
+  physical_education: '🏃',
+  information_technology: '💻',
+}
+
+const territoryClasses = computed(() => {
+  const terrain = SUBJECT_TERRAIN_MAP[props.cluster.subject] ?? 'default'
+  return {
+    'cluster-territory--frontier': props.isFrontierCluster,
+    [`territory--${terrain}`]: true,
+  }
+})
+
+const territoryIcon = computed(() =>
+  SUBJECT_ICON_MAP[props.cluster.subject] ?? '📚',
+)
+
 function subjectLabel(subject: string): string {
   const key = `learning.subject.${subject}`
   const translated = t(key)
@@ -82,9 +131,20 @@ function subjectLabel(subject: string): string {
 .cluster-territory {
   background: var(--color-surface-card);
   border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-lg);
+  border-radius: 20px;
   padding: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
 }
+
+/* Subject-specific terrain backgrounds (U3) */
+.territory--math       { background: linear-gradient(180deg, var(--continent-terrain-math) 0%, var(--color-surface-card) 60%); border-top: 2px solid var(--color-brand-mint); }
+.territory--science    { background: linear-gradient(180deg, var(--continent-terrain-science) 0%, var(--color-surface-card) 60%); border-top: 2px solid var(--color-brand-lavender); }
+.territory--language   { background: linear-gradient(180deg, var(--continent-terrain-language) 0%, var(--color-surface-card) 60%); border-top: 2px solid var(--color-brand-peach); }
+.territory--arts       { background: linear-gradient(180deg, var(--continent-terrain-arts) 0%, var(--color-surface-card) 60%); border-top: 2px solid var(--color-brand-pink); }
+.territory--social     { background: linear-gradient(180deg, var(--continent-terrain-social) 0%, var(--color-surface-card) 60%); border-top: 2px solid var(--color-brand-ochre); }
+.territory--default    { background: linear-gradient(180deg, var(--continent-terrain-default) 0%, var(--color-surface-card) 60%); border-top: 2px solid var(--color-hairline); }
 
 .cluster-territory--frontier {
   border-color: var(--color-brand-ochre);
@@ -104,6 +164,14 @@ function subjectLabel(subject: string): string {
   font-weight: 600;
   color: var(--color-ink);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cluster-territory__marker {
+  font-size: 18px;
+  line-height: 1;
 }
 
 .cluster-territory__count {
@@ -183,5 +251,12 @@ function subjectLabel(subject: string): string {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+/* Reduced motion — disable transitions (U3) */
+@media (prefers-reduced-motion: reduce) {
+  .cluster-territory {
+    transition: none;
+  }
 }
 </style>
