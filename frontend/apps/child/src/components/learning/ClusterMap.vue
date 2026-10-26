@@ -129,9 +129,11 @@ import { domainLabel as translateDomain } from '@/utils/domainLabel'
 import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
 import { useClusterTerritories } from '@/composables/useClusterTerritories'
+import { useReducedMotion } from '@/composables/useReducedMotion'
 
 const { t, locale } = useI18n()
 const router = useRouter()
+const reducedMotion = useReducedMotion()
 
 const props = defineProps<{
   items: ProgressWithTopic[]
@@ -358,12 +360,13 @@ const frontierClusterDomain = computed(() => {
 
 // ── Auto-scroll to frontier on load, or to bridge target ──
 
-// The frontier scroll is one-shot (it brings the child to their place on
-// first view); a bridge tap must work on *every* subject switch, because
-// the target territory only exists in the DOM after the new clusters and
-// topics resolve. Tracking the two modes separately is what the previous
-// `{ once: … }` could not express — it disabled the bridge scroll too
-// whenever the child had a frontier.
+// The frontier scroll is one-shot per component lifecycle: it brings the child
+// to their place on first view. The component is not KeepAlive-cached, so
+// returning from practice remounts it and the flag starts fresh. Bridge taps
+// must work on *every* subject switch, because the target territory only
+// exists in the DOM after the new clusters and topics resolve. Tracking the
+// two modes separately is what the previous `{ once: … }` could not express —
+// it disabled the bridge scroll too whenever the child had a frontier.
 let frontierScrolled = false
 
 /** Domains that were expanded programmatically rather than by the child.
@@ -386,7 +389,7 @@ function scrollToDomain(targetDomain: string): boolean {
   const anchor =
     section.querySelector(`[data-cluster-domain="${CSS.escape(targetDomain)}"]`) ??
     section
-  anchor.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  anchor.scrollIntoView({ behavior: reducedMotion.value ? 'auto' : 'smooth', block: 'center' })
   return true
 }
 
