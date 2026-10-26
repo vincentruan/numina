@@ -890,6 +890,10 @@ export default {
       correctOf: '答对了 {correct} / {total} 题',
       again: '再来一组',
       backToMap: '返回地图',
+      discovery: '你发现了新知识！继续探索吧',
+      discoveryMastery: '你掌握了新知识，太厉害了！',
+      discoveryHighScore: '你做得很棒，继续保持！',
+      discoveryKeepGoing: '继续努力，你会越来越棒的！',
     },
     errors: {
       startFailed: '开始练习失败了，再试一次吧',

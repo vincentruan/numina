@@ -670,6 +670,10 @@ export default {
       correctOf: 'Got {correct} / {total} correct',
       again: 'Try Again',
       backToMap: 'Back to Map',
+      discovery: 'You discovered new knowledge! Keep exploring',
+      discoveryMastery: 'You mastered something new — amazing!',
+      discoveryHighScore: 'You did great, keep it up!',
+      discoveryKeepGoing: 'Keep going, you\'re getting better!',
     },
     errors: {
       startFailed: 'Could not start practice, please try again',
