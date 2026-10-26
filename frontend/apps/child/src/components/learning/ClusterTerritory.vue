@@ -42,6 +42,9 @@
         @tap="$emit('topicTap', $event)"
       />
     </div>
+
+    <!-- Fog-of-war overlay (U4) — pointer-events: none, nodes tappable through it -->
+    <ContinentFog v-if="masteryRatio !== undefined" :mastery-ratio="masteryRatio" />
   </div>
 </template>
 
@@ -52,6 +55,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProgressWithTopic, ClusterResponse, BridgeResponse } from '@/api/learning'
 import TopicNode from './TopicNode.vue'
+import ContinentFog from './ContinentFog.vue'
 import { domainLabel as translateDomain } from '@/utils/domainLabel'
 
 const { t } = useI18n()
@@ -64,6 +68,8 @@ const props = defineProps<{
   frontierTopicId?: string | null
   /** Suppress the domain title when an enclosing section already shows it. */
   hideTitle?: boolean
+  /** Aggregate mastery ratio (0-1) for fog-of-war opacity (U4). */
+  masteryRatio?: number
 }>()
 
 defineEmits<{

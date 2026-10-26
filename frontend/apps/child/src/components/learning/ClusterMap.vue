@@ -57,6 +57,7 @@
             :bridges="territory.bridges"
             :is-frontier-cluster="frontierClusterDomain === territory.domain"
             :frontier-topic-id="frontierTopic?.topic.id ?? null"
+            :mastery-ratio="territory.items.length > 0 ? territory.masteredCount / territory.items.length : 0"
             hide-title
             @topic-tap="onTopicTap"
             @bridge-tap="onBridgeTap"
