@@ -616,6 +616,11 @@ export default {
     translating: 'Translating...',
     translationFailed: 'Translation failed, please try again',
     translationComplete: 'Translation complete',
+    challenge: {
+      check: 'Check',
+      continue: 'Continue',
+      placedCount: 'Placed {placed} / {total}',
+    },
     difficultyWarning: {
       ageTitle: 'Difficulty Warning',
       ageMessage: 'This task is {level} difficulty — it might be a bit challenging for you.',

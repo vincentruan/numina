@@ -836,6 +836,11 @@ export default {
     translating: '正在翻译...',
     translationFailed: '翻译失败了，再试一次吧',
     translationComplete: '翻译好啦',
+    challenge: {
+      check: '检查',
+      continue: '继续',
+      placedCount: '已放置 {placed} / {total}',
+    },
     difficultyWarning: {
       ageTitle: '难度提示',
       ageMessage: '这个任务属于{level}难度，对你来说可能有点挑战。',
