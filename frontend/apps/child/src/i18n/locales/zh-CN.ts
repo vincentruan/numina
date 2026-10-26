@@ -466,6 +466,9 @@ export default {
       prereqGoTo: '前往学习',
       prereqAllMet: '✅ 所有前置条件已满足！',
       otherDomain: '其他',
+      bridgeExplicit: '🔗',
+      bridgeInferred: '🔍',
+      bridgeArrow: '→',
     },
     domainSection: {
       expandSection: '展开',

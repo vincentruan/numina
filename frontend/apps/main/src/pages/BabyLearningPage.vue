@@ -191,7 +191,7 @@
               </template>
             </van-collapse-item>
 
-            <!-- Module 5: DNA Graph preview (default collapsed) -->
+            <!-- Module 5: Knowledge Map / Graph view (default collapsed) -->
             <van-collapse-item name="dnaGraph">
               <template #title>
                 <div class="collapse-title-row">
@@ -199,7 +199,30 @@
                   <span>{{ t('learning.dnaGraph') }}</span>
                 </div>
               </template>
-              <DnaGraph2D :items="dnaGraphItems" :loading="dnaGraphLoading" />
+              <!-- View mode toggle -->
+              <div class="view-mode-toggle">
+                <button
+                  class="view-mode-btn"
+                  :class="{ 'view-mode-btn--active': graphViewMode === 'dna' }"
+                  @click="graphViewMode = 'dna'"
+                >
+                  {{ t('learning.viewModeDna') }}
+                </button>
+                <button
+                  class="view-mode-btn"
+                  :class="{ 'view-mode-btn--active': graphViewMode === 'cluster' }"
+                  @click="graphViewMode = 'cluster'"
+                >
+                  {{ t('learning.viewModeCluster') }}
+                </button>
+              </div>
+              <DnaGraph2D v-if="graphViewMode === 'dna'" :items="dnaGraphItems" :loading="dnaGraphLoading" />
+              <ParentClusterMap
+                v-else
+                :items="clusterMapItems"
+                :child-id="babyStore.selectedChildId"
+                :loading="clusterMapLoading"
+              />
             </van-collapse-item>
           </van-collapse>
         </template>
@@ -269,17 +292,21 @@ import {
   getRecommendations,
   getPresetPaths,
   getChildMap,
+  getTopicsBatch,
   type ChildLearningOverview,
   type ReviewItem,
   type PathResponse,
   type PresetPathResponse,
   type RecommendationTopicItem,
+  type ProgressResponse,
   type ProgressWithTopic,
+  type TopicResponse,
 } from '@/api/learning'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import IIcon from '@/components/IIcon.vue'
 import DnaGraph2D from '@/components/learning/DnaGraph2D.vue'
+import ParentClusterMap from '@/components/learning/ParentClusterMap.vue'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -300,6 +327,14 @@ const pathsLoading = ref(false)
 const actioningId = ref<string | null>(null)
 const dnaGraphItems = ref<ProgressWithTopic[]>([])
 const dnaGraphLoading = ref(false)
+
+// Graph view mode: 'dna' (DnaGraph2D) or 'cluster' (ParentClusterMap)
+const graphViewMode = ref<'dna' | 'cluster'>('dna')
+
+// Cluster map data: compose ProgressWithTopic[] from progress + topic details
+const clusterMapItems = ref<ProgressWithTopic[]>([])
+const clusterMapLoading = ref(false)
+const clusterMapTopicCache = ref<Map<string, TopicResponse>>(new Map())
 
 // Review expand state
 const showAllReviews = ref(false)
@@ -433,17 +468,40 @@ async function loadPaths() {
   }
 }
 
+// Shared progress rows from getChildMap — avoids duplicate fetch between DNA graph and cluster map
+const sharedProgressRows = ref<ProgressResponse[]>([])
+
 async function loadDnaGraph() {
+  dnaGraphItems.value = sharedProgressRows.value as ProgressWithTopic[]
+}
+
+async function loadClusterMap() {
   const childId = babyStore.selectedChildId
   if (!childId) return
-  dnaGraphLoading.value = true
+  clusterMapLoading.value = true
   try {
-    const data = await getChildMap(childId)
-    dnaGraphItems.value = data as ProgressWithTopic[]
+    const progressRows = sharedProgressRows.value
+    // Batch-fetch topic details for all progress rows
+    const topicIds = [...new Set(progressRows.map((r) => r.topic_id))]
+    // Use cached topics to avoid redundant fetches
+    const uncachedIds = topicIds.filter((id) => !clusterMapTopicCache.value.has(id))
+    if (uncachedIds.length > 0) {
+      const topics = await getTopicsBatch(uncachedIds)
+      const next = new Map(clusterMapTopicCache.value)
+      for (const topic of topics) next.set(topic.id, topic)
+      clusterMapTopicCache.value = next
+    }
+    // Compose ProgressWithTopic[]
+    clusterMapItems.value = progressRows
+      .filter((r) => clusterMapTopicCache.value.has(r.topic_id))
+      .map((r) => ({
+        ...r,
+        topic: clusterMapTopicCache.value.get(r.topic_id)!,
+      }))
   } catch {
-    dnaGraphItems.value = []
+    clusterMapItems.value = []
   } finally {
-    dnaGraphLoading.value = false
+    clusterMapLoading.value = false
   }
 }
 
@@ -456,11 +514,33 @@ async function loadChildren() {
 }
 
 async function loadChildDependentData() {
-  await Promise.all([
-    loadRecommendations(),
-    loadDnaGraph(),
-  ])
+  const childId = babyStore.selectedChildId
+  // Fetch progress rows once — shared between DNA graph and cluster map
+  if (childId) {
+    try {
+      sharedProgressRows.value = await getChildMap(childId)
+    } catch {
+      sharedProgressRows.value = []
+    }
+  }
+  dnaGraphLoading.value = true
+  try {
+    await loadDnaGraph()
+  } finally {
+    dnaGraphLoading.value = false
+  }
+  await loadRecommendations()
+  // Cluster map is loaded lazily when user switches to cluster view
 }
+
+// Lazy-load cluster data when user switches to cluster view
+let clusterMapLoaded = false
+watch(graphViewMode, async (mode) => {
+  if (mode === 'cluster' && !clusterMapLoaded) {
+    clusterMapLoaded = true
+    await loadClusterMap()
+  }
+})
 
 async function loadData() {
   await Promise.all([
@@ -532,7 +612,10 @@ async function onRefresh() {
 
 // Reload child-dependent data when selected child changes
 watch(() => babyStore.selectedChildId, (newId) => {
-  if (newId) loadChildDependentData()
+  if (newId) {
+    clusterMapLoaded = false
+    loadChildDependentData()
+  }
 })
 
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first mount
@@ -857,5 +940,36 @@ onActivated(async () => {
   font-weight: 400;
   color: var(--text-secondary);
   margin-left: 4px;
+}
+
+/* View mode toggle (DNA Graph / Cluster Map) */
+.view-mode-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--van-gray-3, #dee0e3);
+}
+
+.view-mode-btn {
+  flex: 1;
+  padding: 6px 12px;
+  border: none;
+  background: var(--van-gray-1, #f7f8fa);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-mode-btn--active {
+  background: var(--van-primary-color);
+  color: #fff;
+}
+
+.view-mode-btn:active {
+  opacity: 0.85;
 }
 </style>

@@ -464,6 +464,9 @@ export default {
       prereqGoTo: 'Go learn',
       prereqAllMet: '✅ All prerequisites met!',
       otherDomain: 'Other',
+      bridgeExplicit: '🔗',
+      bridgeInferred: '🔍',
+      bridgeArrow: '→',
     },
     domainSection: {
       expandSection: 'Expand',
