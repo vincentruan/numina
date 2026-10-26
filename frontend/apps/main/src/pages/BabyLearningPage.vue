@@ -298,6 +298,7 @@ import {
   type PathResponse,
   type PresetPathResponse,
   type RecommendationTopicItem,
+  type ProgressResponse,
   type ProgressWithTopic,
   type TopicResponse,
 } from '@/api/learning'
@@ -467,18 +468,11 @@ async function loadPaths() {
   }
 }
 
+// Shared progress rows from getChildMap — avoids duplicate fetch between DNA graph and cluster map
+const sharedProgressRows = ref<ProgressResponse[]>([])
+
 async function loadDnaGraph() {
-  const childId = babyStore.selectedChildId
-  if (!childId) return
-  dnaGraphLoading.value = true
-  try {
-    const data = await getChildMap(childId)
-    dnaGraphItems.value = data as ProgressWithTopic[]
-  } catch {
-    dnaGraphItems.value = []
-  } finally {
-    dnaGraphLoading.value = false
-  }
+  dnaGraphItems.value = sharedProgressRows.value as ProgressWithTopic[]
 }
 
 async function loadClusterMap() {
@@ -486,7 +480,7 @@ async function loadClusterMap() {
   if (!childId) return
   clusterMapLoading.value = true
   try {
-    const progressRows = await getChildMap(childId)
+    const progressRows = sharedProgressRows.value
     // Batch-fetch topic details for all progress rows
     const topicIds = [...new Set(progressRows.map((r) => r.topic_id))]
     // Use cached topics to avoid redundant fetches
@@ -520,12 +514,33 @@ async function loadChildren() {
 }
 
 async function loadChildDependentData() {
-  await Promise.all([
-    loadRecommendations(),
-    loadDnaGraph(),
-    loadClusterMap(),
-  ])
+  const childId = babyStore.selectedChildId
+  // Fetch progress rows once — shared between DNA graph and cluster map
+  if (childId) {
+    try {
+      sharedProgressRows.value = await getChildMap(childId)
+    } catch {
+      sharedProgressRows.value = []
+    }
+  }
+  dnaGraphLoading.value = true
+  try {
+    await loadDnaGraph()
+  } finally {
+    dnaGraphLoading.value = false
+  }
+  await loadRecommendations()
+  // Cluster map is loaded lazily when user switches to cluster view
 }
+
+// Lazy-load cluster data when user switches to cluster view
+let clusterMapLoaded = false
+watch(graphViewMode, async (mode) => {
+  if (mode === 'cluster' && !clusterMapLoaded) {
+    clusterMapLoaded = true
+    await loadClusterMap()
+  }
+})
 
 async function loadData() {
   await Promise.all([
@@ -597,7 +612,10 @@ async function onRefresh() {
 
 // Reload child-dependent data when selected child changes
 watch(() => babyStore.selectedChildId, (newId) => {
-  if (newId) loadChildDependentData()
+  if (newId) {
+    clusterMapLoaded = false
+    loadChildDependentData()
+  }
 })
 
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first mount

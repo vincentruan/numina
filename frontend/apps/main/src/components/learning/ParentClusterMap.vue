@@ -1,7 +1,7 @@
 <template>
   <div class="parent-cluster-map">
     <van-skeleton v-if="loading" :rows="5" :round="true" />
-    <EmptyState v-else-if="allItems.length === 0" :description="t('learning.noGraphData')" />
+    <EmptyState v-else-if="items.length === 0" :description="t('learning.noGraphData')" />
 
     <template v-else>
       <!-- Subject filter chips -->
@@ -172,7 +172,6 @@ watch(availableSubjects, (subjects) => {
 }, { immediate: true })
 
 // Items for current subject
-const allItems = computed(() => props.items)
 const currentItems = computed(() =>
   props.items.filter((i) => i.topic.subject === selectedSubject.value),
 )
@@ -217,6 +216,10 @@ watch(selectedSubject, () => {
   loadClusters()
 })
 
+watch(() => props.childId, () => {
+  loadClusters()
+})
+
 onMounted(() => {
   if (selectedSubject.value) loadClusters()
 })
@@ -232,6 +235,10 @@ interface Territory {
 }
 
 const AGE_GROUP_ORDER = ['low', 'mid', 'high']
+function ageGroupIndex(ag: string | null): number {
+  const idx = AGE_GROUP_ORDER.indexOf(ag ?? '')
+  return idx === -1 ? AGE_GROUP_ORDER.length : idx
+}
 
 const territories = computed<Territory[]>(() => {
   const items = currentItems.value
@@ -280,7 +287,7 @@ const territories = computed<Territory[]>(() => {
   const result: Territory[] = [...domainMap.entries()].map(([domain, domainItems]) => {
     const cluster = representatives.get(domain)
     const sorted = [...domainItems].sort(
-      (a, b) => AGE_GROUP_ORDER.indexOf(a.topic.age_group) - AGE_GROUP_ORDER.indexOf(b.topic.age_group),
+      (a, b) => ageGroupIndex(a.topic.age_group) - ageGroupIndex(b.topic.age_group),
     )
     return {
       domain,
