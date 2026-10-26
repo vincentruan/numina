@@ -2204,6 +2204,12 @@ export default {
     reasonReview: '需要复习',
     viewModeDna: '图谱',
     viewModeCluster: '地图',
+    parentOverlay: {
+      noProgress: '孩子还没有开始探索',
+      masteredCount: '已掌握 {mastered}/{total}',
+      exploredToday: '今天探索了{domain}',
+      suggestionsTitle: '家庭练习建议',
+    },
   },
   family: {
     title: '家庭',

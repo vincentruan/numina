@@ -1946,6 +1946,12 @@ Keep the tone warm, like a chat between family members.`,
     reasonReview: 'Due for review',
     viewModeDna: 'Graph',
     viewModeCluster: 'Map',
+    parentOverlay: {
+      noProgress: 'Your child hasn\'t started exploring yet',
+      masteredCount: '{mastered}/{total} mastered',
+      exploredToday: 'Explored {domain} today',
+      suggestionsTitle: 'Family Practice Suggestions',
+    },
   },
   milestone: {
     firstchore: 'Completed first chore',
