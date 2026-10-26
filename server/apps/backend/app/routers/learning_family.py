@@ -14,8 +14,10 @@ from apps.backend.app.schemas.learning import (
     AIReviewStatusResponse,
     AssignmentCreate,
     AssignmentResponse,
+    BridgeResponse,
     ChildLearningOverview,
     ChildSessionLogResponse,
+    ClusterResponse,
     PathCreate,
     PathResponse,
     ProgressResponse,
@@ -36,7 +38,9 @@ from apps.backend.app.services.learning.recommendation_service import (
     generate_recommendation_path,
 )
 from apps.backend.app.services.learning.topic_service import (
+    get_cross_subject_bridges,
     get_effective_source_taxonomy,
+    list_clusters_with_topic_counts,
 )
 from apps.backend.app.services.notification.dispatcher import (
     notify_learning_approved,
@@ -718,3 +722,53 @@ def archive_path(
     db.refresh(path)
     progress = path_service.get_path_progress(db, path.id, user.family_id)
     return path_service.build_path_response(path, progress)
+
+
+@router.get("/children/{child_id}/clusters", response_model=list[ClusterResponse])
+def get_child_clusters(
+    child_id: int,
+    subject: str | None = Query(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """List clusters enriched with topic counts for a specific child's taxonomy.
+
+    Parents can see the same cluster territory layout their children use,
+    helping them understand the learning progression structure.
+    """
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    taxonomy = get_effective_source_taxonomy(db, user.language)
+    return list_clusters_with_topic_counts(
+        db, subject=subject, source_taxonomy=taxonomy
+    )
+
+
+@router.get("/children/{child_id}/bridges", response_model=list[BridgeResponse])
+def get_child_bridges(
+    child_id: int,
+    subject: str | None = Query(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """List cross-subject bridge edges for a specific child's taxonomy.
+
+    Parents can see bridge badges that connect cluster territories across
+    subjects, helping them understand cross-subject connections.
+    """
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    taxonomy = get_effective_source_taxonomy(db, user.language)
+    return get_cross_subject_bridges(db, source_taxonomy=taxonomy, subject=subject)

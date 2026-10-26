@@ -2188,6 +2188,16 @@ export default {
       archiveConfirm: '归档后路径将移出活跃列表，但历史记录保留。确定归档「{name}」？',
       archived: '已归档',
     },
+    // Cluster map (parent view)
+    clusterMap: '知识地图',
+    clusterProgress: '{mastered}/{total} 已掌握',
+    clusterEmpty: '这个学科暂时没有学习内容',
+    clusterAttempts: '{count} 次尝试',
+    clusterLastPractice: '最近练习: {date}',
+    clusterStudyDuration: '约 {minutes} 分钟',
+    clusterOtherDomain: '其他',
+    viewModeDna: '图谱',
+    viewModeCluster: '地图',
   },
   family: {
     title: '家庭',
