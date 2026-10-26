@@ -47,22 +47,6 @@
           :class="`chat-msg--${msg.role}`"
         >
           <div class="chat-msg__bubble">
-            <!-- Tool call display (collapsible) -->
-            <details v-if="msg.toolCall" class="tool-details">
-              <summary class="tool-details__summary">
-                🔧 {{ msg.toolCall.name }}
-              </summary>
-              <pre class="tool-details__content">{{ JSON.stringify(msg.toolCall.arguments, null, 2) }}</pre>
-            </details>
-
-            <!-- Tool result display (collapsible) -->
-            <details v-if="msg.toolResult" class="tool-details">
-              <summary class="tool-details__summary">
-                📋 {{ msg.toolResult.name }}
-              </summary>
-              <pre class="tool-details__content">{{ typeof msg.toolResult.output === 'string' ? msg.toolResult.output : JSON.stringify(msg.toolResult.output, null, 2) }}</pre>
-            </details>
-
             <!-- Regular text content -->
             <div v-if="msg.content" class="chat-msg__text">{{ msg.content }}</div>
           </div>
@@ -446,33 +430,6 @@ onUnmounted(() => {
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
-}
-
-/* Tool details (collapsible) */
-.tool-details {
-  margin: 4px 0;
-  font-size: 12px;
-}
-
-.tool-details__summary {
-  cursor: pointer;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 12px;
-  color: var(--color-body);
-  padding: 2px 0;
-}
-
-.tool-details__content {
-  background: var(--color-canvas);
-  border-radius: var(--radius-md);
-  padding: 8px;
-  margin: 4px 0 0;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 11px;
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  color: var(--color-body);
 }
 
 /* Chat error */
