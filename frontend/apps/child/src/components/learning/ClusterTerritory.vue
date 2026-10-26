@@ -25,8 +25,8 @@
         :class="['bridge-badge', { 'bridge-badge--inferred': bridge.source_type === 'inferred' }]"
         @click="$emit('bridgeTap', bridge)"
       >
-        <span class="bridge-badge__icon">{{ bridge.source_type === 'inferred' ? '🔍' : '🔗' }}</span>
-        <span class="bridge-badge__label">{{ subjectLabel(bridge.to_subject) }} → {{ translateDomain(t, bridge.to_cluster_domain) }}</span>
+        <span class="bridge-badge__icon">{{ bridge.source_type === 'inferred' ? t('learning.cluster.bridgeInferred') : t('learning.cluster.bridgeExplicit') }}</span>
+        <span class="bridge-badge__label">{{ subjectLabel(bridge.to_subject) }} {{ t('learning.cluster.bridgeArrow') }} {{ translateDomain(t, bridge.to_cluster_domain) }}</span>
       </button>
       <span v-if="bridges.length > 2" class="bridge-badge__overflow">+{{ bridges.length - 2 }}</span>
     </div>

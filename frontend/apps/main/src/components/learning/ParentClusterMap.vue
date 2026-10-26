@@ -62,16 +62,14 @@
 
               <!-- Bridge badges -->
               <div v-if="territory.bridges.length > 0" class="bridge-badges">
-                <span
+                <BridgeBadge
                   v-for="bridge in territory.bridges.slice(0, 3)"
                   :key="`${bridge.to_subject}-${bridge.to_cluster_domain}`"
-                  :class="['bridge-badge', { 'bridge-badge--inferred': bridge.source_type === 'inferred' }]"
-                >
-                  <span class="bridge-badge__icon">{{ bridge.source_type === 'inferred' ? '🔍' : '🔗' }}</span>
-                  <span class="bridge-badge__label">
-                    {{ subjectLabel(t, bridge.to_subject) }} → {{ domainLabel(t, bridge.to_cluster_domain) }}
-                  </span>
-                </span>
+                  :bridge="bridge"
+                  :explicit-label="t('learning.bridgeExplicit')"
+                  :inferred-label="t('learning.bridgeInferred')"
+                  :arrow-label="t('learning.bridgeArrow')"
+                />
               </div>
 
               <!-- Topic nodes -->
@@ -99,6 +97,16 @@
                     </div>
                     <div class="topic-popover-stat">
                       {{ t('learning.clusterStudyDuration', { minutes: Math.round((item.xp_earned || 0) / 10) }) }}
+                    </div>
+                    <div v-if="topicReasons(item.topic.id).length" class="topic-popover-reasons">
+                      <van-tag
+                        v-for="reason in topicReasons(item.topic.id)"
+                        :key="reason"
+                        type="primary"
+                        size="medium"
+                        round
+                        plain
+                      >{{ reason }}</van-tag>
                     </div>
                   </div>
                   <template #reference>
@@ -132,13 +140,15 @@ defineOptions({ name: 'ParentClusterMap' })
 import { ref, computed, watch, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/common/EmptyState.vue'
+import BridgeBadge from './BridgeBadge.vue'
 import { domainLabel, subjectLabel } from '@/utils/domainLabel'
 import type {
   ProgressWithTopic,
   ClusterResponse,
   BridgeResponse,
 } from '@/api/learning'
-import { getChildClusters, getChildBridges } from '@/api/learning'
+import { getChildClusters, getChildBridges, getRecommendations } from '@/api/learning'
+import { useClusterTerritories } from '@/composables/useClusterTerritories'
 
 const { t, locale } = useI18n()
 
@@ -217,99 +227,59 @@ watch(selectedSubject, () => {
 })
 
 watch(() => props.childId, () => {
+  // Clear stale recommendation reasons before loading new data
+  for (const key of Object.keys(recommendationReasons)) delete recommendationReasons[key]
   loadClusters()
+  loadRecommendations()
 })
 
 onMounted(() => {
-  if (selectedSubject.value) loadClusters()
+  if (selectedSubject.value) {
+    loadClusters()
+    loadRecommendations()
+  }
 })
 
-// ── Territory computation ──
+// ── Territory computation (shared composable) ──
 
-interface Territory {
-  domain: string
-  summary: string
-  items: ProgressWithTopic[]
-  masteredCount: number
-  bridges: BridgeResponse[]
+const { territories } = useClusterTerritories(
+  currentItems,
+  computed(() => clusters.value),
+  computed(() => bridges.value),
+  computed(() => selectedSubject.value),
+  computed(() => clustersLoading.value),
+)
+
+// ── Recommendation reasons ──
+
+const recommendationReasons = reactive<Record<string, string[]>>({})
+
+const REASON_I18N_MAP: Record<string, string> = {
+  '知识断点': 'learning.reasonBreakpoint',
+  '课标必会': 'learning.reasonCurriculum',
+  '需要复习': 'learning.reasonReview',
 }
 
-const AGE_GROUP_ORDER = ['low', 'mid', 'high']
-function ageGroupIndex(ag: string | null): number {
-  const idx = AGE_GROUP_ORDER.indexOf(ag ?? '')
-  return idx === -1 ? AGE_GROUP_ORDER.length : idx
+function translateReason(raw: string): string {
+  const key = REASON_I18N_MAP[raw]
+  return key ? t(key) : raw
 }
 
-const territories = computed<Territory[]>(() => {
-  const items = currentItems.value
-  if (items.length === 0) return []
+function topicReasons(topicId: string): string[] {
+  return (recommendationReasons[topicId] ?? []).map(translateReason)
+}
 
-  // Group items by domain
-  const domainMap = new Map<string, ProgressWithTopic[]>()
-  const unmatched: ProgressWithTopic[] = []
-
-  const hasClusters = clusters.value.some((c) => c.subject === selectedSubject.value)
-
-  for (const item of items) {
-    const domain = item.topic.domain
-    if (!hasClusters && !clustersLoading.value) {
-      const target = domain || '__other__'
-      if (!domainMap.has(target)) domainMap.set(target, [])
-      domainMap.get(target)!.push(item)
-      continue
+async function loadRecommendations() {
+  if (!props.childId) return
+  try {
+    const data = await getRecommendations(props.childId)
+    for (const topic of data.path.topics) {
+      recommendationReasons[topic.topic_id] = topic.reasons
     }
-
-    const target =
-      domain !== null && clusters.value.some((c) => c.domain === domain)
-        ? domain
-        : domain === null
-          ? clusters.value.find((c) => c.subject === item.topic.subject)?.domain
-          : undefined
-
-    if (target === undefined) {
-      unmatched.push(item)
-      continue
-    }
-    if (!domainMap.has(target)) domainMap.set(target, [])
-    domainMap.get(target)!.push(item)
+  } catch {
+    // Recommendations are supplementary — silently ignore failures
   }
-
-  // Build representative cluster per domain for summary text
-  const representatives = new Map<string, ClusterResponse>()
-  for (const c of clusters.value) {
-    if (!domainMap.has(c.domain)) continue
-    const kept = representatives.get(c.domain)
-    if (!kept || (c.age_range_start !== null && (kept.age_range_start === null || c.age_range_start < kept.age_range_start))) {
-      representatives.set(c.domain, c)
-    }
-  }
-
-  const result: Territory[] = [...domainMap.entries()].map(([domain, domainItems]) => {
-    const cluster = representatives.get(domain)
-    const sorted = [...domainItems].sort(
-      (a, b) => ageGroupIndex(a.topic.age_group) - ageGroupIndex(b.topic.age_group),
-    )
-    return {
-      domain,
-      summary: cluster?.summary ?? '',
-      items: sorted,
-      masteredCount: sorted.filter((i) => i.mastery_level === 'mastered').length,
-      bridges: bridges.value.filter((b) => b.from_cluster_domain === domain),
-    }
-  })
-
-  if (!clustersLoading.value && unmatched.length > 0) {
-    result.push({
-      domain: '__other__',
-      summary: '',
-      items: unmatched,
-      masteredCount: unmatched.filter((i) => i.mastery_level === 'mastered').length,
-      bridges: [],
-    })
-  }
-
-  return result
-})
+}
 
 function autoExpandDomains() {
   const toExpand: string[] = []
@@ -471,27 +441,6 @@ function formatPracticeDate(dateStr: string): string {
   margin-bottom: 10px;
 }
 
-.bridge-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border: 1px solid var(--van-gray-3, #dee0e3);
-  border-radius: 12px;
-  background: var(--van-gray-1, #f7f8fa);
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.bridge-badge--inferred {
-  border-style: dashed;
-  opacity: 0.75;
-}
-
-.bridge-badge__icon {
-  font-size: 11px;
-}
-
 /* ── Topic nodes ── */
 
 .topic-nodes {
@@ -602,6 +551,13 @@ function formatPracticeDate(dateStr: string): string {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 2px;
+}
+
+.topic-popover-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
 }
 
 /* ── Misc ── */
