@@ -26,7 +26,15 @@
       </div>
     </div>
 
-    <!-- Phase 2: answering -->
+    <!-- Phase 2: hands-on manipulation (U6) -->
+    <div v-else-if="phase === 'manipulate' && challengeConfig" class="manipulate-phase">
+      <ManipulateObserveReflect
+        :config="challengeConfig"
+        @complete="onChallengeComplete"
+      />
+    </div>
+
+    <!-- Phase 3: answering -->
     <div v-else-if="phase === 'answering'" class="answer-phase">
       <van-progress
         :percentage="progressPercent"
@@ -114,6 +122,9 @@ import {
 import PracticeQuestionCard from '@/components/learning/PracticeQuestionCard.vue'
 import PracticeAnswerInput from '@/components/learning/PracticeAnswerInput.vue'
 import PracticeResultSummary from '@/components/learning/PracticeResultSummary.vue'
+import ManipulateObserveReflect from '@/components/learning/ManipulateObserveReflect.vue'
+import { getChallengeForTopic } from '@/data/learning-challenge/fair-distribution'
+import type { ChallengeConfig } from '@/types/learning-challenge'
 
 defineOptions({ name: 'PracticeSessionPage' })
 
@@ -128,8 +139,9 @@ const error = ref('')
 const starting = ref(false)
 const submitting = ref(false)
 
-const phase = ref<'mode' | 'answering' | 'result'>('mode')
+const phase = ref<'mode' | 'manipulate' | 'answering' | 'result'>('mode')
 const session = ref<PracticeSessionResponse | null>(null)
+const challengeConfig = ref<ChallengeConfig | null>(null)
 const questions = ref<QuestionResponse[]>([])
 const currentIndex = ref(0)
 const lastAttempt = ref<PracticeAttemptResponse | null>(null)
@@ -180,7 +192,14 @@ async function startSession(count: number) {
       error.value = t('practice.errors.noQuestions')
       return
     }
-    phase.value = 'answering'
+    // Check if this topic has a hands-on challenge (U6)
+    const challenge = getChallengeForTopic(topicId.value)
+    if (challenge) {
+      challengeConfig.value = challenge
+      phase.value = 'manipulate'
+    } else {
+      phase.value = 'answering'
+    }
   } catch (e: unknown) {
     const code = extractErrorCode(e)
     error.value = mapPracticeErrorCode(code)
@@ -257,9 +276,14 @@ async function doFinish() {
   }
 }
 
+function onChallengeComplete() {
+  phase.value = 'answering'
+}
+
 function onAgain() {
   phase.value = 'mode'
   session.value = null
+  challengeConfig.value = null
   questions.value = []
   currentIndex.value = 0
   lastAttempt.value = null
