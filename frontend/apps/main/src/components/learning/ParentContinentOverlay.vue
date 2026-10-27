@@ -58,6 +58,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProgressWithTopic } from '@/api/learning'
+import { domainLabel } from '@/utils/domainLabel'
 
 defineOptions({ name: 'ParentContinentOverlay' })
 
@@ -70,62 +71,38 @@ const props = defineProps<{
   }>
 }>()
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 const hasProgress = computed(() =>
   props.items.some((i) => i.mastery_level !== 'locked' && i.mastery_level !== 'available'),
 )
 
-/** Domain label helper */
-function domainLabel(domain: string): string {
-  const key = `learning.domains.${domain}`
-  const translated = t(key)
-  return translated === key ? domain : translated
-}
-
 /** Check if a territory has activity in the last 24 hours */
-function hasRecentActivity(items: ProgressWithTopic[]): boolean {
-  const dayAgo = new Date()
-  dayAgo.setDate(dayAgo.getDate() - 1)
+function hasRecentActivity(items: ProgressWithTopic[], dayAgoMs: number): boolean {
   return items.some(
-    (i) => i.last_practice_at && new Date(i.last_practice_at) > dayAgo,
+    (i) => i.last_practice_at && Date.parse(i.last_practice_at) > dayAgoMs,
   )
 }
 
-const territoriesWithDepth = computed(() =>
-  props.territories.map((ter) => ({
+const territoriesWithDepth = computed(() => {
+  const dayAgoMs = Date.now() - 24 * 60 * 60 * 1000
+  return props.territories.map((ter) => ({
     domain: ter.domain,
-    label: domainLabel(ter.domain),
+    label: domainLabel(t, ter.domain),
     masteredCount: ter.masteredCount,
     totalCount: ter.items.length,
     depthPercent: ter.items.length > 0
       ? Math.round((ter.masteredCount / ter.items.length) * 100)
       : 0,
-    hasRecentActivity: hasRecentActivity(ter.items),
-  })),
-)
+    hasRecentActivity: hasRecentActivity(ter.items, dayAgoMs),
+  }))
+})
 
-/**
- * Static family practice suggestions keyed to the child's frontier domains.
- * P1 uses static text per domain; P3 may introduce dynamic generation.
- */
-const SUGGESTION_TEXTS: Record<string, { en: string; zh: string }> = {
-  Fractions: {
-    en: 'Your child is exploring fractions — try letting them help measure ingredients while cooking.',
-    zh: '孩子正在探索分数——做饭时让他们帮忙量食材吧。',
-  },
-  Addition: {
-    en: 'Your child is learning addition — count everyday objects together (steps, fruits, toys).',
-    zh: '孩子正在学习加法——一起数数日常物品吧（台阶、水果、玩具）。',
-  },
-  Multiplication: {
-    en: 'Your child is exploring multiplication — arrange snacks in rows to show groups.',
-    zh: '孩子正在探索乘法——把零食摆成行列来展示分组。',
-  },
-  __default__: {
-    en: 'Ask your child what they learned today and let them teach you!',
-    zh: '问问孩子今天学了什么，让他们教你吧！',
-  },
+/** Domain keys that have static practice suggestions. */
+const SUGGESTION_KEYS: Record<string, string> = {
+  Fractions: 'learning.parentOverlay.suggestionFractions',
+  Addition: 'learning.parentOverlay.suggestionAddition',
+  Multiplication: 'learning.parentOverlay.suggestionMultiplication',
 }
 
 const suggestions = computed(() => {
@@ -133,21 +110,17 @@ const suggestions = computed(() => {
     ter.items.some((i) => i.mastery_level === 'learning' || i.mastery_level === 'available'),
   )
   if (frontier.length === 0) {
-    const def = SUGGESTION_TEXTS.__default__
     return [{
       domain: '__default__',
       domainLabel: '',
-      text: locale.value.startsWith('zh') ? def.zh : def.en,
+      text: t('learning.parentOverlay.suggestionDefault'),
     }]
   }
-  return frontier.slice(0, 3).map((ter) => {
-    const entry = SUGGESTION_TEXTS[ter.domain] ?? SUGGESTION_TEXTS.__default__
-    return {
-      domain: ter.domain,
-      domainLabel: domainLabel(ter.domain),
-      text: locale.value.startsWith('zh') ? entry.zh : entry.en,
-    }
-  })
+  return frontier.slice(0, 3).map((ter) => ({
+    domain: ter.domain,
+    domainLabel: domainLabel(t, ter.domain),
+    text: t(SUGGESTION_KEYS[ter.domain] ?? 'learning.parentOverlay.suggestionDefault'),
+  }))
 })
 </script>
 
@@ -179,7 +152,7 @@ const suggestions = computed(() => {
 .overlay-territory {
   padding: 12px;
   background: var(--card-bg);
-  border-radius: 12px;
+  border-radius: var(--radius-md, 12px);
 }
 
 .overlay-territory__header {
@@ -235,7 +208,7 @@ const suggestions = computed(() => {
 .overlay-suggestion-card {
   padding: 12px;
   background: var(--card-bg);
-  border-radius: 12px;
+  border-radius: var(--radius-md, 12px);
   border-left: 3px solid var(--van-primary-color, #1989fa);
   margin-bottom: 8px;
 }

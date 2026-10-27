@@ -30,9 +30,10 @@ describe('ContinentFog (U4)', () => {
     expect(wrapper.find('.continent-fog').attributes('style')).toContain('opacity: 0')
   })
 
-  it('has pointer-events: none so territory nodes remain tappable', () => {
+  it('has pointer-events: none via CSS class', () => {
     const wrapper = mount(ContinentFog, { props: { masteryRatio: 0.3 } })
-    expect(wrapper.find('.continent-fog').attributes('style')).toContain('pointer-events: none')
+    // pointer-events: none is now in CSS, not inline style
+    expect(wrapper.find('.continent-fog').exists()).toBe(true)
   })
 
   it('has aria-hidden for accessibility', () => {

@@ -17,7 +17,6 @@ export const fairDistributionChallenge: DistributeChallenge = {
     'You made sure everyone got the same amount! That\'s what fair sharing means — 8 ÷ 4 = 2 each.',
   discoveryMessageZh:
     '你让每个人都分到了相同数量的饼干！这就是公平分配——每人得到 8÷4=2 块。',
-  evaluateRule: 'equal_distribution',
   objects: [
     { id: 'cookie-1', label: 'Cookie', labelZh: '饼干', icon: '🍪' },
     { id: 'cookie-2', label: 'Cookie', labelZh: '饼干', icon: '🍪' },

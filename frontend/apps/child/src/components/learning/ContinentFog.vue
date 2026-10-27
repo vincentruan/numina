@@ -1,7 +1,7 @@
 <template>
   <div
     class="continent-fog"
-    :style="fogStyle"
+    :style="{ opacity: fogOpacity }"
     aria-hidden="true"
   />
 </template>
@@ -29,11 +29,6 @@ function computeFogOpacity(ratio: number): number {
 }
 
 const fogOpacity = computed(() => computeFogOpacity(props.masteryRatio))
-
-const fogStyle = computed(() => ({
-  opacity: fogOpacity.value,
-  pointerEvents: 'none' as const,
-}))
 </script>
 
 <style scoped>
@@ -44,6 +39,7 @@ const fogStyle = computed(() => ({
   border-radius: inherit;
   transition: var(--continent-fog-transition);
   z-index: 1;
+  pointer-events: none;
 }
 
 /* Reduced motion — no fog transition */

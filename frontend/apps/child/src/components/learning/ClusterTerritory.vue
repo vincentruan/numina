@@ -137,7 +137,7 @@ function subjectLabel(subject: string): string {
 .cluster-territory {
   background: var(--color-surface-card);
   border: 1px solid var(--color-hairline);
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   padding: 16px;
   position: relative;
   overflow: hidden;

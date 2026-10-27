@@ -620,6 +620,10 @@ export default {
       check: 'Check',
       continue: 'Continue',
       placedCount: 'Placed {placed} / {total}',
+      hintUnequal: 'Some groups have more than others. Try to make them equal!',
+      hintAlmost: 'Almost there! Check if each group has the same amount.',
+      hintMisplaced: '"{label}" doesn\'t belong here. Look at its features!',
+      hintPlaceAll: 'Place all items in their correct groups.',
     },
     difficultyWarning: {
       ageTitle: 'Difficulty Warning',

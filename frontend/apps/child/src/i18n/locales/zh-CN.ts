@@ -840,6 +840,10 @@ export default {
       check: '检查',
       continue: '继续',
       placedCount: '已放置 {placed} / {total}',
+      hintUnequal: '有些组分的多，有些组分的少，试试让每组一样多吧！',
+      hintAlmost: '很接近了！检查一下每组是不是同样多。',
+      hintMisplaced: '"{label}" 不属于这里，看看它的特点！',
+      hintPlaceAll: '把所有物品放到正确的组里。',
     },
     difficultyWarning: {
       ageTitle: '难度提示',

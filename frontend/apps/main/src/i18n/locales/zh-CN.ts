@@ -2209,6 +2209,10 @@ export default {
       masteredCount: '已掌握 {mastered}/{total}',
       exploredToday: '今天探索了{domain}',
       suggestionsTitle: '家庭练习建议',
+      suggestionFractions: '孩子正在探索分数——做饭时让他们帮忙量食材吧。',
+      suggestionAddition: '孩子正在学习加法——一起数数日常物品吧（台阶、水果、玩具）。',
+      suggestionMultiplication: '孩子正在探索乘法——把零食摆成行列来展示分组。',
+      suggestionDefault: '问问孩子今天学了什么，让他们教你吧！',
     },
   },
   family: {

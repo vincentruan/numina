@@ -25,13 +25,13 @@
         v-for="zone in config.zones"
         :key="zone.id"
         class="challenge-zone"
-        :class="{ 'challenge-zone--active': selectedObjectId && placements[zone.id]?.length }"
+        :class="{ 'challenge-zone--active': selectedObjectId && placements[zone.id].length }"
         @click="placeInZone(zone.id)"
       >
         <div class="challenge-zone__label">{{ localizedLabel(zone.label, zone.labelZh) }}</div>
         <div class="challenge-zone__items">
           <span
-            v-for="objId in (placements[zone.id] || [])"
+            v-for="objId in placements[zone.id]"
             :key="objId"
             class="challenge-zone__placed"
             @click.stop="returnToPool(objId, zone.id)"
@@ -40,7 +40,7 @@
           </span>
         </div>
         <div class="challenge-zone__count">
-          {{ (placements[zone.id] || []).length }}
+          {{ placements[zone.id].length }}
         </div>
       </div>
     </div>
@@ -95,7 +95,6 @@ const placements = reactive<Record<string, string[]>>({})
 const completed = ref(false)
 const feedbackMessage = ref('')
 const feedbackIsCorrect = ref(false)
-const attemptCount = ref(0)
 
 // Initialize placements for all zones
 for (const zone of props.config.zones) {
@@ -104,25 +103,34 @@ for (const zone of props.config.zones) {
 
 // ── Computed ──
 
+const isZh = computed(() => locale.value.startsWith('zh'))
+
 const localizedScenario = computed(() =>
-  locale.value.startsWith('zh') ? props.config.scenarioZh : props.config.scenario,
+  isZh.value ? props.config.scenarioZh : props.config.scenario,
 )
+
+/** Consolidated placement summary — single traversal instead of 3 separate .flat() calls. */
+const placementSummary = computed(() => {
+  const allPlaced = Object.values(placements).flat()
+  return {
+    placedIds: new Set(allPlaced),
+    totalPlaced: allPlaced.length,
+  }
+})
 
 /** Objects not yet placed in any zone. */
-const poolObjects = computed(() => {
-  const placedIds = new Set(Object.values(placements).flat())
-  return props.config.objects.filter((o) => !placedIds.has(o.id))
-})
-
-const hasAnyPlacement = computed(() =>
-  Object.values(placements).some((ids) => ids.length > 0),
+const poolObjects = computed(() =>
+  props.config.objects.filter((o) => !placementSummary.value.placedIds.has(o.id)),
 )
 
-const statusText = computed(() => {
-  const totalPlaced = Object.values(placements).flat().length
-  const total = props.config.objects.length
-  return t('learning.challenge.placedCount', { placed: totalPlaced, total })
-})
+const hasAnyPlacement = computed(() => placementSummary.value.totalPlaced > 0)
+
+const statusText = computed(() =>
+  t('learning.challenge.placedCount', {
+    placed: placementSummary.value.totalPlaced,
+    total: props.config.objects.length,
+  }),
+)
 
 const feedbackClass = computed(() =>
   feedbackIsCorrect.value ? 'challenge-feedback__message--correct' : 'challenge-feedback__message--wrong',
@@ -131,7 +139,7 @@ const feedbackClass = computed(() =>
 // ── Interaction methods ──
 
 function localizedLabel(en: string, zh?: string): string {
-  if (locale.value.startsWith('zh') && zh) return zh
+  if (isZh.value && zh) return zh
   return en
 }
 
@@ -160,16 +168,15 @@ function returnToPool(objId: string, zoneId: string) {
 }
 
 function checkAnswer() {
-  attemptCount.value += 1
   const result = evaluate()
   feedbackIsCorrect.value = result.isCorrect
   if (result.isCorrect) {
     completed.value = true
-    feedbackMessage.value = locale.value.startsWith('zh')
+    feedbackMessage.value = isZh.value
       ? props.config.discoveryMessageZh
       : props.config.discoveryMessage
   } else {
-    feedbackMessage.value = locale.value.startsWith('zh') ? result.hintZh : result.hint
+    feedbackMessage.value = isZh.value ? result.hintZh : result.hint
   }
 }
 
@@ -192,7 +199,7 @@ function evaluateDistribute(
   currentPlacements: Record<string, string[]>,
 ): { isCorrect: boolean; hint: string; hintZh: string } {
   if (config.type !== 'distribute') return { isCorrect: false, hint: '', hintZh: '' }
-  const zoneCounts = config.zones.map((z) => (currentPlacements[z.id] || []).length)
+  const zoneCounts = config.zones.map((z) => currentPlacements[z.id].length)
   const allEqual = zoneCounts.every((c) => c === zoneCounts[0]) && zoneCounts[0] > 0
   const allPlaced = zoneCounts.reduce((a, b) => a + b, 0) === config.objects.length
 
@@ -206,14 +213,14 @@ function evaluateDistribute(
   if (maxCount - minCount > 1) {
     return {
       isCorrect: false,
-      hint: 'Some groups have more than others. Try to make them equal!',
-      hintZh: '有些组分的多，有些组分的少，试试让每组一样多吧！',
+      hint: t('learning.challenge.hintUnequal'),
+      hintZh: t('learning.challenge.hintUnequal'),
     }
   }
   return {
     isCorrect: false,
-    hint: 'Almost there! Check if each group has the same amount.',
-    hintZh: '很接近了！检查一下每组是不是同样多。',
+    hint: t('learning.challenge.hintAlmost'),
+    hintZh: t('learning.challenge.hintAlmost'),
   }
 }
 
@@ -229,17 +236,17 @@ function evaluateClassify(
         const label = obj ? localizedLabel(obj.label, obj.labelZh) : objId
         return {
           isCorrect: false,
-          hint: `"${label}" doesn't belong here. Look at its features!`,
-          hintZh: `"${label}" 不属于这里，看看它的特点！`,
+          hint: t('learning.challenge.hintMisplaced', { label }),
+          hintZh: t('learning.challenge.hintMisplaced', { label }),
         }
       }
     }
   }
-  const allPlaced = Object.values(currentPlacements).flat().length === config.objects.length
+  const allPlaced = placementSummary.value.totalPlaced === config.objects.length
   if (allPlaced) {
     return { isCorrect: true, hint: '', hintZh: '' }
   }
-  return { isCorrect: false, hint: 'Place all items in their correct groups.', hintZh: '把所有物品放到正确的组里。' }
+  return { isCorrect: false, hint: t('learning.challenge.hintPlaceAll'), hintZh: t('learning.challenge.hintPlaceAll') }
 }
 </script>
 

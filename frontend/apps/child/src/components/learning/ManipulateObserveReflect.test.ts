@@ -15,7 +15,6 @@ function makeDistributeConfig(overrides: Partial<DistributeChallenge> = {}): Dis
     scenarioZh: '把4块饼干公平分给2个朋友。',
     discoveryMessage: 'You made it fair!',
     discoveryMessageZh: '你分得真公平！',
-    evaluateRule: 'equal_distribution',
     objects: [
       { id: 'c1', label: 'Cookie', icon: '🍪' },
       { id: 'c2', label: 'Cookie', icon: '🍪' },
@@ -39,7 +38,6 @@ function makeClassifyConfig(): ClassifyChallenge {
     scenarioZh: '按类型分类动物。',
     discoveryMessage: 'You sorted them correctly!',
     discoveryMessageZh: '你分对了！',
-    evaluateRule: 'correct_sort',
     objects: [
       { id: 'a1', label: 'Dog', icon: '🐕' },
       { id: 'a2', label: 'Cat', icon: '🐈' },

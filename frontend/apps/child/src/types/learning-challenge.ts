@@ -22,17 +22,11 @@ export interface ChallengeZone {
   labelZh?: string
 }
 
-/** Current state of a zone: which objects are placed in it. */
-export interface ZonePlacement {
-  zoneId: string
-  objectIds: string[]
-}
-
 /**
  * Discriminated union of challenge types. Each variant defines its objects,
- * zones, success predicate key, and feedback messages.
+ * zones, and feedback messages. Evaluation dispatches on the `type` tag.
  */
-export type ChallengeConfig = DistributeChallenge | ClassifyChallenge | CompareChallenge
+export type ChallengeConfig = DistributeChallenge | ClassifyChallenge
 
 /** Base fields shared by all challenge variants. */
 interface ChallengeBase {
@@ -48,8 +42,6 @@ interface ChallengeBase {
   discoveryMessage: string
   /** Discovery message (Chinese). */
   discoveryMessageZh: string
-  /** Rule key for evaluation logic. */
-  evaluateRule: string
 }
 
 /** Distribute items evenly across targets (e.g., fair sharing). */
@@ -66,20 +58,4 @@ export interface ClassifyChallenge extends ChallengeBase {
   zones: ChallengeZone[]
   /** Maps object id → correct zone id. */
   correctMapping: Record<string, string>
-}
-
-/** Compare quantities or shapes. */
-export interface CompareChallenge extends ChallengeBase {
-  type: 'compare'
-  objects: ChallengeObject[]
-  zones: ChallengeZone[]
-}
-
-/** Evaluation result returned after checking a child's arrangement. */
-export interface EvaluationResult {
-  isCorrect: boolean
-  /** Hint text when incorrect (English). */
-  hint: string
-  /** Hint text when incorrect (Chinese). */
-  hintZh: string
 }
