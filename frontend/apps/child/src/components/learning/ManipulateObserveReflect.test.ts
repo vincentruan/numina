@@ -151,14 +151,13 @@ describe('ManipulateObserveReflect (U5)', () => {
     expect(wrapper.find('.challenge-check-btn').attributes('disabled')).toBeDefined()
   })
 
-  it('all interactive elements have min 44px touch target (CSS)', () => {
+  it('all interactive elements use semantic <button> for accessibility', () => {
     const wrapper = mountChallenge()
+    // Challenge objects are <button> elements — ensures keyboard/screen-reader access
     const objects = wrapper.findAll('.challenge-object')
-    // CSS sets min-height: 52px and min-width: 52px (> 44px)
-    // We verify the classes are present for CSS to apply
-    expect(objects[0].classes()).toContain('challenge-object')
-    const zones = wrapper.findAll('.challenge-zone')
-    expect(zones[0].classes()).toContain('challenge-zone')
+    expect(objects[0].element.tagName).toBe('BUTTON')
+    // Check/continue buttons are also <button>
+    expect(wrapper.find('.challenge-check-btn').element.tagName).toBe('BUTTON')
   })
 
   it('renders nothing when config has no objects', () => {

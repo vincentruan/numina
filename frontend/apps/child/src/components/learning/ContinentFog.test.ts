@@ -30,10 +30,14 @@ describe('ContinentFog (U4)', () => {
     expect(wrapper.find('.continent-fog').attributes('style')).toContain('opacity: 0')
   })
 
-  it('has pointer-events: none via CSS class', () => {
+  it('fog overlay does not block interaction — decorative only', () => {
     const wrapper = mount(ContinentFog, { props: { masteryRatio: 0.3 } })
-    // pointer-events: none is now in CSS, not inline style
-    expect(wrapper.find('.continent-fog').exists()).toBe(true)
+    const fog = wrapper.find('.continent-fog')
+    // pointer-events: none is set via CSS (not testable in jsdom),
+    // but we verify the element is present and aria-hidden for accessibility.
+    // Actual pointer-events behavior is covered by E2E tests.
+    expect(fog.exists()).toBe(true)
+    expect(fog.attributes('aria-hidden')).toBe('true')
   })
 
   it('has aria-hidden for accessibility', () => {

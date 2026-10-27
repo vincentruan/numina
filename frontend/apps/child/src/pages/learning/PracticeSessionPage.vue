@@ -34,8 +34,10 @@
       />
     </div>
 
-    <!-- Phase 3: answering -->
-    <div v-else-if="phase === 'answering'" class="answer-phase">
+    <!-- Phase 2 fallback: manipulate requested but no config → skip to answering -->
+
+    <!-- Phase 3: answering (also covers manipulate-without-config fallback) -->
+    <div v-else-if="phase === 'answering' || (phase === 'manipulate' && !challengeConfig)" class="answer-phase">
       <van-progress
         :percentage="progressPercent"
         stroke-width="6"

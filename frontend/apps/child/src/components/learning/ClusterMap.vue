@@ -52,7 +52,7 @@
       >
         <div class="cluster-map__territories">
           <ClusterTerritory
-            :cluster="{ domain: territory.domain, summary: territory.summary } as ClusterResponse"
+            :cluster="{ domain: territory.domain, summary: territory.summary, subject: selectedSubject } as ClusterResponse"
             :items="territory.items"
             :bridges="territory.bridges"
             :is-frontier-cluster="frontierClusterDomain === territory.domain"

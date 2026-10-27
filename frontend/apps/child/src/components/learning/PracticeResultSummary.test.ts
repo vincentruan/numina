@@ -87,4 +87,22 @@ describe('PracticeResultSummary — discovery-first (R6, R7)', () => {
     // The old design had ⚡ 🪙 🌟 emoji icons as .reward-icon
     expect(wrapper.find('.reward-icon').exists()).toBe(false)
   })
+
+  it('emits "again" when Try Again button is clicked', async () => {
+    const wrapper = mountSummary(makeResult())
+    const buttons = wrapper.findAll('button')
+    const againBtn = buttons.find((b) => b.text().includes('再来') || b.text().includes('Again'))
+    expect(againBtn).toBeDefined()
+    await againBtn!.trigger('click')
+    expect(wrapper.emitted('again')).toBeTruthy()
+  })
+
+  it('emits "back" when Back to Map button is clicked', async () => {
+    const wrapper = mountSummary(makeResult())
+    const buttons = wrapper.findAll('button')
+    const backBtn = buttons.find((b) => b.text().includes('返回') || b.text().includes('Back'))
+    expect(backBtn).toBeDefined()
+    await backBtn!.trigger('click')
+    expect(wrapper.emitted('back')).toBeTruthy()
+  })
 })
