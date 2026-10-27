@@ -22,9 +22,13 @@ const props = defineProps<{
  */
 function computeFogOpacity(ratio: number): number {
   const clamped = Math.max(0, Math.min(1, ratio))
+  // 80%+ → fully clear
   if (clamped >= 0.8) return 0
+  // 50-79% → lightly veiled
   if (clamped >= 0.5) return 0.15
+  // 1-49% → dimmed
   if (clamped > 0) return 0.4
+  // 0% → mostly obscured
   return 0.7
 }
 
