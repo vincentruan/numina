@@ -199,7 +199,7 @@ function evaluateDistribute(
   currentPlacements: Record<string, string[]>,
 ): { isCorrect: boolean; hint: string; hintZh: string } {
   if (config.type !== 'distribute') return { isCorrect: false, hint: '', hintZh: '' }
-  const zoneCounts = config.zones.map((z) => currentPlacements[z.id].length)
+  const zoneCounts = config.zones.map((z) => (currentPlacements[z.id] ?? []).length)
   const allEqual = zoneCounts.every((c) => c === zoneCounts[0]) && zoneCounts[0] > 0
   const allPlaced = zoneCounts.reduce((a, b) => a + b, 0) === config.objects.length
 

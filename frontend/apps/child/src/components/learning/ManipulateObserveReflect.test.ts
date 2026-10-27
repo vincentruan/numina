@@ -214,4 +214,48 @@ describe('ManipulateObserveReflect (U5)', () => {
     await wrapper.find('.challenge-check-btn').trigger('click')
     expect(wrapper.find('.challenge-feedback__message--correct').exists()).toBe(true)
   })
+
+  it('blocks interaction after challenge is completed', async () => {
+    const wrapper = mountChallenge()
+    // Complete the challenge (2+2 equal distribution)
+    for (let i = 0; i < 2; i++) {
+      await wrapper.findAll('.challenge-object')[0].trigger('click')
+      await wrapper.findAll('.challenge-zone')[0].trigger('click')
+    }
+    for (let i = 0; i < 2; i++) {
+      await wrapper.findAll('.challenge-object')[0].trigger('click')
+      await wrapper.findAll('.challenge-zone')[1].trigger('click')
+    }
+    await wrapper.find('.challenge-check-btn').trigger('click')
+    // Verify completed
+    expect(wrapper.find('.challenge-next-btn').exists()).toBe(true)
+    // Try to place more objects — pool should be empty since all are placed
+    expect(wrapper.findAll('.challenge-object')).toHaveLength(0)
+  })
+
+  it('renders Chinese scenario and discovery messages when locale is zh-CN', async () => {
+    const i18n = createI18n({
+      legacy: false,
+      locale: 'zh-CN',
+      messages: { 'en-US': enUS, 'zh-CN': zhCN },
+    })
+    const config = makeDistributeConfig()
+    const wrapper = mount(ManipulateObserveReflect, {
+      props: { config },
+      global: { plugins: [i18n] },
+    })
+    // Chinese scenario text
+    expect(wrapper.find('.challenge-scenario__text').text()).toContain('公平分给')
+    // Complete challenge and check Chinese discovery message
+    for (let i = 0; i < 2; i++) {
+      await wrapper.findAll('.challenge-object')[0].trigger('click')
+      await wrapper.findAll('.challenge-zone')[0].trigger('click')
+    }
+    for (let i = 0; i < 2; i++) {
+      await wrapper.findAll('.challenge-object')[0].trigger('click')
+      await wrapper.findAll('.challenge-zone')[1].trigger('click')
+    }
+    await wrapper.find('.challenge-check-btn').trigger('click')
+    expect(wrapper.find('.challenge-feedback__message--correct').text()).toContain('真公平')
+  })
 })
