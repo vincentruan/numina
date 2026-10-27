@@ -62,9 +62,16 @@
         {{ t('learning.challenge.check') }}
       </button>
       <button
-        v-else
+        v-if="showTutorSuggestion"
+        class="challenge-tutor-btn"
+        @click="$emit('requestTutor')"
+      >
+        {{ t('learning.challenge.askTutor') }}
+      </button>
+      <button
+        v-if="completed"
         class="challenge-next-btn"
-        @click="$emit('complete')"
+        @click="onContinue"
       >
         {{ t('learning.challenge.continue') }}
       </button>
@@ -73,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ChallengeConfig, ChallengeObject } from '@/types/learning-challenge'
 
@@ -81,11 +88,18 @@ const props = defineProps<{
   config: ChallengeConfig
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   complete: []
+  requestTutor: []
 }>()
 
 const { t, locale } = useI18n()
+
+/** Shape returned by all evaluate* functions. */
+interface EvaluateResult {
+  isCorrect: boolean
+  hint: string
+}
 
 // ── Interaction state ──
 
@@ -95,11 +109,79 @@ const placements = reactive<Record<string, string[]>>({})
 const completed = ref(false)
 const feedbackMessage = ref('')
 const feedbackIsCorrect = ref(false)
+const attemptCount = ref(0)
 
 // Initialize placements for all zones
 for (const zone of props.config.zones) {
   placements[zone.id] = []
 }
+
+// ── Session persistence (AE5) ──
+// The child can leave mid-challenge and come back; the arrangement and attempt
+// count are preserved so they resume where they left off, without penalty.
+
+const STORAGE_KEY = `numina:challenge:${props.config.id}`
+
+interface PersistedState {
+  placements: Record<string, string[]>
+  attemptCount: number
+  completed: boolean
+  feedbackMessage: string
+  feedbackIsCorrect: boolean
+}
+
+function restoreState() {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    if (!raw) return
+    const saved = JSON.parse(raw) as PersistedState
+    // Only restore zone IDs this config actually has — a changed config must
+    // not resurrect placements for zones that no longer exist.
+    for (const zone of props.config.zones) {
+      const savedIds = saved.placements?.[zone.id] ?? []
+      placements[zone.id] = savedIds.filter((id) =>
+        props.config.objects.some((o) => o.id === id),
+      )
+    }
+    attemptCount.value = saved.attemptCount ?? 0
+    completed.value = saved.completed ?? false
+    feedbackMessage.value = saved.feedbackMessage ?? ''
+    feedbackIsCorrect.value = saved.feedbackIsCorrect ?? false
+  } catch {
+    // Storage unavailable (private mode, quota) — start fresh rather than crash
+  }
+}
+
+function clearState() {
+  try {
+    sessionStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // Storage unavailable — nothing to clear
+  }
+}
+
+restoreState()
+
+watch(
+  [placements, attemptCount, completed, feedbackMessage, feedbackIsCorrect],
+  () => {
+    try {
+      const state: PersistedState = {
+        placements: Object.fromEntries(
+          props.config.zones.map((z) => [z.id, [...(placements[z.id] ?? [])]]),
+        ),
+        attemptCount: attemptCount.value,
+        completed: completed.value,
+        feedbackMessage: feedbackMessage.value,
+        feedbackIsCorrect: feedbackIsCorrect.value,
+      }
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    } catch {
+      // Storage unavailable — persistence is best-effort
+    }
+  },
+  { deep: true },
+)
 
 // ── Computed ──
 
@@ -136,6 +218,11 @@ const feedbackClass = computed(() =>
   feedbackIsCorrect.value ? 'challenge-feedback__message--correct' : 'challenge-feedback__message--wrong',
 )
 
+/** After 2 failed attempts, suggest asking the AI tutor (F3). */
+const showTutorSuggestion = computed(() =>
+  attemptCount.value >= 2 && !completed.value,
+)
+
 // ── Interaction methods ──
 
 function localizedLabel(en: string, zh?: string): string {
@@ -167,7 +254,13 @@ function returnToPool(objId: string, zoneId: string) {
   if (idx >= 0) placements[zoneId].splice(idx, 1)
 }
 
-function checkAnswer() {
+/** Challenge finished — drop the saved state so a re-entry starts fresh. */
+function onContinue() {
+  clearState()
+  emit('complete')
+}
+
+function checkAnswer() {  attemptCount.value++
   const result = evaluate()
   feedbackIsCorrect.value = result.isCorrect
   if (result.isCorrect) {
@@ -176,7 +269,7 @@ function checkAnswer() {
       ? props.config.discoveryMessageZh
       : props.config.discoveryMessage
   } else {
-    feedbackMessage.value = isZh.value ? result.hintZh : result.hint
+    feedbackMessage.value = result.hint
   }
 }
 
@@ -184,51 +277,43 @@ function checkAnswer() {
  * Evaluate the current placement against the challenge rule.
  * P1 supports 'equal_distribution' — each zone must have the same count.
  */
-function evaluate(): { isCorrect: boolean; hint: string; hintZh: string } {
+function evaluate(): EvaluateResult {
   if (props.config.type === 'distribute') {
     return evaluateDistribute(props.config, placements)
   }
   if (props.config.type === 'classify') {
     return evaluateClassify(props.config, placements)
   }
-  return { isCorrect: false, hint: 'Try again', hintZh: '再试一次' }
+  return { isCorrect: false, hint: t('learning.challenge.hintGeneric') }
 }
 
 function evaluateDistribute(
   config: ChallengeConfig,
   currentPlacements: Record<string, string[]>,
-): { isCorrect: boolean; hint: string; hintZh: string } {
-  if (config.type !== 'distribute') return { isCorrect: false, hint: '', hintZh: '' }
+): EvaluateResult {
+  if (config.type !== 'distribute') return { isCorrect: false, hint: '' }
   const zoneCounts = config.zones.map((z) => (currentPlacements[z.id] ?? []).length)
   const allEqual = zoneCounts.every((c) => c === zoneCounts[0]) && zoneCounts[0] > 0
   const allPlaced = zoneCounts.reduce((a, b) => a + b, 0) === config.objects.length
 
   if (allEqual && allPlaced) {
-    return { isCorrect: true, hint: '', hintZh: '' }
+    return { isCorrect: true, hint: '' }
   }
 
   // Generate a helpful hint
   const maxCount = Math.max(...zoneCounts)
   const minCount = Math.min(...zoneCounts)
   if (maxCount - minCount > 1) {
-    return {
-      isCorrect: false,
-      hint: t('learning.challenge.hintUnequal'),
-      hintZh: t('learning.challenge.hintUnequal'),
-    }
+    return { isCorrect: false, hint: t('learning.challenge.hintUnequal') }
   }
-  return {
-    isCorrect: false,
-    hint: t('learning.challenge.hintAlmost'),
-    hintZh: t('learning.challenge.hintAlmost'),
-  }
+  return { isCorrect: false, hint: t('learning.challenge.hintAlmost') }
 }
 
 function evaluateClassify(
   config: ChallengeConfig,
   currentPlacements: Record<string, string[]>,
-): { isCorrect: boolean; hint: string; hintZh: string } {
-  if (config.type !== 'classify') return { isCorrect: false, hint: '', hintZh: '' }
+): EvaluateResult {
+  if (config.type !== 'classify') return { isCorrect: false, hint: '' }
   for (const [zoneId, objIds] of Object.entries(currentPlacements)) {
     for (const objId of objIds) {
       if (config.correctMapping[objId] !== zoneId) {
@@ -237,16 +322,15 @@ function evaluateClassify(
         return {
           isCorrect: false,
           hint: t('learning.challenge.hintMisplaced', { label }),
-          hintZh: t('learning.challenge.hintMisplaced', { label }),
         }
       }
     }
   }
   const allPlaced = placementSummary.value.totalPlaced === config.objects.length
   if (allPlaced) {
-    return { isCorrect: true, hint: '', hintZh: '' }
+    return { isCorrect: true, hint: '' }
   }
-  return { isCorrect: false, hint: t('learning.challenge.hintPlaceAll'), hintZh: t('learning.challenge.hintPlaceAll') }
+  return { isCorrect: false, hint: t('learning.challenge.hintPlaceAll') }
 }
 </script>
 
@@ -448,6 +532,12 @@ function evaluateClassify(
 .challenge-next-btn {
   background: var(--color-brand-mint);
   color: var(--color-ink);
+}
+
+.challenge-tutor-btn {
+  background: var(--color-surface-card);
+  color: var(--color-brand-ochre);
+  border: 1px solid var(--color-brand-ochre);
 }
 
 /* Reduced motion */

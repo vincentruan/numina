@@ -39,31 +39,31 @@
     <div v-else class="cluster-map__domains">
       <div class="continent-canvas">
         <DomainSection
-        v-for="territory in territories"
-        :key="domainKey(territory)"
-        :domain="territory.domain"
-        :domain-label="translateDomain(t, territory.domain)"
-        :mastered-count="territory.masteredCount"
-        :total-count="territory.items.length"
-        :expanded="isExpanded(territory)"
-        :instant="isInstant(territory)"
-        :path-count="pathCountByDomain.get(territory.domain) ?? 0"
-        @toggle="toggleDomain(territory)"
-      >
-        <div class="cluster-map__territories">
-          <ClusterTerritory
-            :cluster="{ domain: territory.domain, summary: territory.summary, subject: selectedSubject } as ClusterResponse"
-            :items="territory.items"
-            :bridges="territory.bridges"
-            :is-frontier-cluster="frontierClusterDomain === territory.domain"
-            :frontier-topic-id="frontierTopic?.topic.id ?? null"
-            :mastery-ratio="territory.items.length > 0 ? territory.masteredCount / territory.items.length : 0"
-            hide-title
-            @topic-tap="onTopicTap"
-            @bridge-tap="onBridgeTap"
-          />
-        </div>
-      </DomainSection>
+          v-for="territory in territories"
+          :key="domainKey(territory)"
+          :domain="territory.domain"
+          :domain-label="translateDomain(t, territory.domain)"
+          :mastered-count="territory.masteredCount"
+          :total-count="territory.items.length"
+          :expanded="isExpanded(territory)"
+          :instant="isInstant(territory)"
+          :path-count="pathCountByDomain.get(territory.domain) ?? 0"
+          @toggle="toggleDomain(territory)"
+        >
+          <div class="cluster-map__territories">
+            <ClusterTerritory
+              :cluster="{ domain: territory.domain, summary: territory.summary, subject: selectedSubject } as ClusterResponse"
+              :items="territory.items"
+              :bridges="territory.bridges"
+              :is-frontier-cluster="frontierClusterDomain === territory.domain"
+              :frontier-topic-id="frontierTopic?.topic.id ?? null"
+              :mastery-ratio="territory.items.length > 0 ? territory.masteredCount / territory.items.length : 0"
+              hide-title
+              @topic-tap="onTopicTap"
+              @bridge-tap="onBridgeTap"
+            />
+          </div>
+        </DomainSection>
       </div>
     </div>
 

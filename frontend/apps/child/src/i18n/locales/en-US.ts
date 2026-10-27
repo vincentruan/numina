@@ -624,6 +624,8 @@ export default {
       hintAlmost: 'Almost there! Check if each group has the same amount.',
       hintMisplaced: '"{label}" doesn\'t belong here. Look at its features!',
       hintPlaceAll: 'Place all items in their correct groups.',
+      hintGeneric: 'Try again — look carefully at how to share.',
+      askTutor: 'Ask AI tutor for help',
     },
     difficultyWarning: {
       ageTitle: 'Difficulty Warning',

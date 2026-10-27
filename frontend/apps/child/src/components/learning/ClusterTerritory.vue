@@ -19,8 +19,8 @@
 
     <p v-if="cluster.summary" class="cluster-territory__summary">{{ cluster.summary }}</p>
 
-    <!-- Bridge badges (U4) -->
-    <div v-if="bridges.length > 0" class="cluster-territory__bridges">
+    <!-- Bridge badges — only visible when territory has been explored (R3) -->
+    <div v-if="displayBridges.length > 0" class="cluster-territory__bridges">
       <button
         v-for="bridge in displayBridges"
         :key="`${bridge.to_subject}-${bridge.to_cluster_domain}`"
@@ -77,45 +77,33 @@ defineEmits<{
   bridgeTap: [bridge: BridgeResponse]
 }>()
 
-const displayBridges = computed(() => props.bridges.slice(0, 2))
+const displayBridges = computed(() => {
+  // R3: only show bridges when the territory has been explored (at least one non-locked item)
+  const hasExplored = props.items.some((i) => i.mastery_level !== 'locked')
+  if (!hasExplored) return []
+  return props.bridges.slice(0, 2)
+})
 
-/** Subject → terrain modifier class for continent styling (U3) */
-const SUBJECT_TERRAIN_MAP: Record<string, string> = {
-  mathematics: 'math',
-  science: 'science',
-  chinese: 'language',
-  english: 'language',
-  physics: 'science',
-  chemistry: 'science',
-  biology: 'science',
-  history: 'social',
-  geography: 'social',
-  politics: 'social',
-  art: 'arts',
-  music: 'arts',
-  physical_education: 'arts',
-  information_technology: 'science',
-}
-
-const SUBJECT_ICON_MAP: Record<string, string> = {
-  mathematics: '📐',
-  science: '🔬',
-  chinese: '📖',
-  english: '🔤',
-  physics: '⚡',
-  chemistry: '🧪',
-  biology: '🌿',
-  history: '📜',
-  geography: '🌍',
-  politics: '🏛',
-  art: '🎨',
-  music: '🎵',
-  physical_education: '🏃',
-  information_technology: '💻',
+/** Subject → terrain class + marker icon (single source of truth, U3) */
+const SUBJECT_META: Record<string, { terrain: string; icon: string }> = {
+  mathematics:          { terrain: 'math',     icon: '📐' },
+  science:              { terrain: 'science',  icon: '🔬' },
+  chinese:              { terrain: 'language', icon: '📖' },
+  english:              { terrain: 'language', icon: '🔤' },
+  physics:              { terrain: 'science',  icon: '⚡' },
+  chemistry:            { terrain: 'science',  icon: '🧪' },
+  biology:              { terrain: 'science',  icon: '🌿' },
+  history:              { terrain: 'social',   icon: '📜' },
+  geography:            { terrain: 'social',   icon: '🌍' },
+  politics:             { terrain: 'social',   icon: '🏛' },
+  art:                  { terrain: 'arts',     icon: '🎨' },
+  music:                { terrain: 'arts',     icon: '🎵' },
+  physical_education:   { terrain: 'arts',     icon: '🏃' },
+  information_technology: { terrain: 'science', icon: '💻' },
 }
 
 const territoryClasses = computed(() => {
-  const terrain = SUBJECT_TERRAIN_MAP[props.cluster.subject] ?? 'default'
+  const terrain = SUBJECT_META[props.cluster.subject]?.terrain ?? 'default'
   return {
     'cluster-territory--frontier': props.isFrontierCluster,
     [`territory--${terrain}`]: true,
@@ -123,7 +111,7 @@ const territoryClasses = computed(() => {
 })
 
 const territoryIcon = computed(() =>
-  SUBJECT_ICON_MAP[props.cluster.subject] ?? '📚',
+  SUBJECT_META[props.cluster.subject]?.icon ?? '📚',
 )
 
 function subjectLabel(subject: string): string {

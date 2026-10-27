@@ -105,4 +105,19 @@ describe('PracticeResultSummary — discovery-first (R6, R7)', () => {
     await backBtn!.trigger('click')
     expect(wrapper.emitted('back')).toBeTruthy()
   })
+
+  it('shows challenge discovery message when challengeDiscovery prop is set', async () => {
+    const wrapper = mountSummary(makeResult())
+    await wrapper.setProps({ challengeDiscovery: 'You found that 1/2 and 2/4 are the same!' })
+    const text = wrapper.find('.result-discovery__text').text()
+    expect(text).toContain('1/2 and 2/4')
+  })
+
+  it('challenge discovery takes priority over generic mastery text', async () => {
+    const wrapper = mountSummary(makeResult({ mastery_changed: true }))
+    await wrapper.setProps({ challengeDiscovery: 'You discovered equal sharing!' })
+    const text = wrapper.find('.result-discovery__text').text()
+    expect(text).toContain('equal sharing')
+    expect(text).not.toContain('掌握')
+  })
 })

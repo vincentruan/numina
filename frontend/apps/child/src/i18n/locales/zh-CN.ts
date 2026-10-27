@@ -844,6 +844,8 @@ export default {
       hintAlmost: '很接近了！检查一下每组是不是同样多。',
       hintMisplaced: '"{label}" 不属于这里，看看它的特点！',
       hintPlaceAll: '把所有物品放到正确的组里。',
+      hintGeneric: '再试一次，仔细看看怎么分。',
+      askTutor: '让AI小老师来帮忙',
     },
     difficultyWarning: {
       ageTitle: '难度提示',

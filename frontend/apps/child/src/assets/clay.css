@@ -259,6 +259,13 @@
   --continent-canvas-border: var(--color-hairline);
 
   --continent-fog-color: #1a2a2a;
+  --continent-fog-transition: opacity 0.6s ease;
+
+  /* Challenge interaction tokens (dark mode) */
+  --challenge-object-bg: var(--color-surface-card);
+  --challenge-object-active: rgba(var(--color-brand-ochre-rgb), 0.15);
+  --challenge-zone-bg: var(--color-surface-soft);
+  --challenge-zone-active: rgba(var(--color-brand-mint-rgb), 0.18);
 }
 
 /* ── Vant dark mode overrides ── */

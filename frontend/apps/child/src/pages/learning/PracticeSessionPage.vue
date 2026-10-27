@@ -31,6 +31,7 @@
       <ManipulateObserveReflect
         :config="challengeConfig"
         @complete="onChallengeComplete"
+        @request-tutor="onRequestTutor"
       />
     </div>
 
@@ -82,6 +83,7 @@
     <div v-else-if="phase === 'result'" class="result-phase">
       <PracticeResultSummary
         :result="sessionResult!"
+        :challenge-discovery="challengeDiscoveryMessage || undefined"
         @again="onAgain"
         @back="goBack"
       />
@@ -125,6 +127,7 @@ import PracticeQuestionCard from '@/components/learning/PracticeQuestionCard.vue
 import PracticeAnswerInput from '@/components/learning/PracticeAnswerInput.vue'
 import PracticeResultSummary from '@/components/learning/PracticeResultSummary.vue'
 import ManipulateObserveReflect from '@/components/learning/ManipulateObserveReflect.vue'
+import { createSession } from '@/api/learning'
 import { getChallengeForTopic } from '@/data/learning-challenge/fair-distribution'
 import type { ChallengeConfig } from '@/types/learning-challenge'
 
@@ -144,6 +147,7 @@ const submitting = ref(false)
 const phase = ref<'mode' | 'manipulate' | 'answering' | 'result'>('mode')
 const session = ref<PracticeSessionResponse | null>(null)
 const challengeConfig = ref<ChallengeConfig | null>(null)
+const challengeDiscoveryMessage = ref('')
 const questions = ref<QuestionResponse[]>([])
 const currentIndex = ref(0)
 const lastAttempt = ref<PracticeAttemptResponse | null>(null)
@@ -279,13 +283,31 @@ async function doFinish() {
 }
 
 function onChallengeComplete() {
+  // Capture the challenge's discovery message for the result screen (R6)
+  if (challengeConfig.value) {
+    challengeDiscoveryMessage.value = locale.value.startsWith('zh')
+      ? challengeConfig.value.discoveryMessageZh
+      : challengeConfig.value.discoveryMessage
+  }
   phase.value = 'answering'
+}
+
+/** After 2 failed attempts the child can ask the AI tutor (F3). The tutor
+ *  route takes a session id, so create one for this topic first. */
+async function onRequestTutor() {
+  try {
+    const tutorSession = await createSession({ topic_id: topicId.value })
+    router.push(`/learning/session/${tutorSession.id}`)
+  } catch {
+    showFailToast(t('practice.errors.startFailed'))
+  }
 }
 
 function onAgain() {
   phase.value = 'mode'
   session.value = null
   challengeConfig.value = null
+  challengeDiscoveryMessage.value = ''
   questions.value = []
   currentIndex.value = 0
   lastAttempt.value = null

@@ -43,7 +43,11 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { PracticeResultResponse } from '@/api/practice'
 
-const props = defineProps<{ result: PracticeResultResponse }>()
+const props = defineProps<{
+  result: PracticeResultResponse
+  /** Discovery message from a completed hands-on challenge (R6). */
+  challengeDiscovery?: string
+}>()
 
 defineEmits<{ again: []; back: [] }>()
 
@@ -59,6 +63,8 @@ const discoveryEmoji = computed(() => {
 })
 
 const discoveryText = computed(() => {
+  // Challenge discovery message takes priority (R6 — concept-specific)
+  if (props.challengeDiscovery) return props.challengeDiscovery
   if (props.result.mastery_changed) return t('practice.result.discoveryMastery')
   if (props.result.total_score >= 0.8) return t('practice.result.discoveryHighScore')
   return t('practice.result.discoveryKeepGoing')

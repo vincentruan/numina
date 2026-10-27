@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { nextTick } from 'vue'
 import zhCN from '@/i18n/locales/zh-CN'
 import enUS from '@/i18n/locales/en-US'
 import type { DistributeChallenge, ClassifyChallenge, ChallengeConfig } from '@/types/learning-challenge'
@@ -64,6 +65,10 @@ function mountChallenge(config: ChallengeConfig = makeDistributeConfig()) {
 }
 
 describe('ManipulateObserveReflect (U5)', () => {
+  beforeEach(() => {
+    sessionStorage.clear()
+  })
+
   it('renders scenario text and object pool from config', () => {
     const wrapper = mountChallenge()
     expect(wrapper.find('.challenge-scenario__text').text()).toContain('Share 4 cookies')
@@ -256,5 +261,61 @@ describe('ManipulateObserveReflect (U5)', () => {
     }
     await wrapper.find('.challenge-check-btn').trigger('click')
     expect(wrapper.find('.challenge-feedback__message--correct').text()).toContain('真公平')
+  })
+
+  it('shows AI tutor suggestion button after 2 failed attempts', async () => {
+    const wrapper = mountChallenge()
+    // Fail twice (all in zone 1 = unequal)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      for (let i = 0; i < 4; i++) {
+        await wrapper.findAll('.challenge-object')[0].trigger('click')
+        await wrapper.findAll('.challenge-zone')[0].trigger('click')
+      }
+      await wrapper.find('.challenge-check-btn').trigger('click')
+      expect(wrapper.find('.challenge-feedback__message--wrong').exists()).toBe(true)
+      // Return all to pool for next attempt
+      for (const placed of wrapper.findAll('.challenge-zone__placed')) {
+        await placed.trigger('click')
+      }
+    }
+    // After 2 failed attempts, tutor suggestion should appear alongside check button
+    expect(wrapper.find('.challenge-tutor-btn').exists()).toBe(true)
+    expect(wrapper.find('.challenge-check-btn').exists()).toBe(true)
+  })
+
+  it('restores placements and attempts from sessionStorage on remount (AE5)', async () => {
+    const config = makeDistributeConfig()
+    const first = mountChallenge(config)
+    // Place 2 cookies in zone 1 and fail once
+    for (let i = 0; i < 2; i++) {
+      await first.findAll('.challenge-object')[0].trigger('click')
+      await first.findAll('.challenge-zone')[0].trigger('click')
+    }
+    await first.find('.challenge-check-btn').trigger('click')
+    await nextTick()
+
+    // Simulate the child leaving and returning: fresh mount, same config
+    const second = mountChallenge(config)
+    // 2 objects remain placed in zone 1, pool is back down to 2
+    expect(second.findAll('.challenge-zone__placed')).toHaveLength(2)
+    expect(second.findAll('.challenge-object')).toHaveLength(2)
+    // The failed-attempt hint is still shown
+    expect(second.find('.challenge-feedback__message--wrong').exists()).toBe(true)
+  })
+
+  it('clears persisted state after continuing past the challenge', async () => {
+    const config = makeDistributeConfig()
+    const wrapper = mountChallenge(config)
+    for (let i = 0; i < 2; i++) {
+      await wrapper.findAll('.challenge-object')[0].trigger('click')
+      await wrapper.findAll('.challenge-zone')[0].trigger('click')
+    }
+    for (let i = 0; i < 2; i++) {
+      await wrapper.findAll('.challenge-object')[0].trigger('click')
+      await wrapper.findAll('.challenge-zone')[1].trigger('click')
+    }
+    await wrapper.find('.challenge-check-btn').trigger('click')
+    await wrapper.find('.challenge-next-btn').trigger('click')
+    expect(sessionStorage.getItem(`numina:challenge:${config.id}`)).toBeNull()
   })
 })
