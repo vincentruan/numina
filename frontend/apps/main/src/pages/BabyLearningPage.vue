@@ -2,9 +2,13 @@
   <div class="baby-learning-page">
     <PageHeader :title="t('learning.parentTitle')" />
 
-    <!-- Child switcher tabs (spec §2.3) -->
+    <!-- Child switcher tabs (spec §2.3).
+         v-show, not v-if: van-tabs must be mounted before its van-tab children
+         arrive. With v-if the tabs and their children mount in the same patch,
+         and Vant's child-registration push does not schedule the follow-up
+         render, leaving the nav empty. -->
     <van-tabs
-      v-if="children.length > 0"
+      v-show="children.length > 0"
       v-model:active="childTabIndex"
       class="child-tabs"
       shrink
@@ -405,17 +409,27 @@ function pathStatusLabel(status: string): string {
   }
 }
 
-// Recommendation helpers
+// Recommendation helpers.
+// The backend emits Chinese reason labels (see RecommendationsPage.vue REASON_*
+// constants and ParentClusterMap.vue); comparing against English snake_case keys
+// silently degrades every tag to the default type and 📌 emoji.
+const REASON_BREAKPOINT = '知识断点'
+const REASON_CURRICULUM = '课标必会'
+const REASON_HIGH_CENTRALITY = '高基础度'
+const REASON_REVIEW = '需要复习'
+
 function reasonToTagType(reasons: string[]): 'primary' | 'success' | 'warning' | 'default' {
-  if (reasons.includes('weak_point')) return 'warning'
-  if (reasons.includes('mastery_gained')) return 'success'
+  if (reasons.includes(REASON_BREAKPOINT)) return 'warning'
+  if (reasons.includes(REASON_REVIEW)) return 'warning'
+  if (reasons.includes(REASON_CURRICULUM)) return 'success'
   return 'primary'
 }
 
 function getReasonEmoji(reasons: string[]): string {
-  if (reasons.includes('weak_point')) return '⚠️'
-  if (reasons.includes('mastery_gained')) return '✅'
-  if (reasons.includes('recommended')) return '💡'
+  if (reasons.includes(REASON_BREAKPOINT)) return '🔗'
+  if (reasons.includes(REASON_CURRICULUM)) return '⭐'
+  if (reasons.includes(REASON_REVIEW)) return '🔄'
+  if (reasons.includes(REASON_HIGH_CENTRALITY)) return '💎'
   return '📌'
 }
 

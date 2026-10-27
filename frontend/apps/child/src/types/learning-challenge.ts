@@ -26,7 +26,7 @@ export interface ChallengeZone {
  * Discriminated union of challenge types. Each variant defines its objects,
  * zones, and feedback messages. Evaluation dispatches on the `type` tag.
  */
-export type ChallengeConfig = DistributeChallenge | ClassifyChallenge
+export type ChallengeConfig = DistributeChallenge | ClassifyChallenge | OrderChallenge | BalanceChallenge
 
 /** Base fields shared by all challenge variants. */
 interface ChallengeBase {
@@ -42,6 +42,10 @@ interface ChallengeBase {
   discoveryMessage: string
   /** Discovery message (Chinese). */
   discoveryMessageZh: string
+  /** Difficulty level 1-5. Maps to backend adaptive difficulty ranges. */
+  difficulty: number
+  /** Target age group: early (6-8), mid (8-10), late (10-12). */
+  ageGroup: 'early' | 'mid' | 'late'
 }
 
 /** Distribute items evenly across targets (e.g., fair sharing). */
@@ -58,4 +62,25 @@ export interface ClassifyChallenge extends ChallengeBase {
   zones: ChallengeZone[]
   /** Maps object id → correct zone id. */
   correctMapping: Record<string, string>
+}
+
+/** Arrange items in the correct sequential order (seriation / ordinal reasoning). */
+export interface OrderChallenge extends ChallengeBase {
+  type: 'order'
+  objects: ChallengeObject[]
+  /** Object IDs in correct sequential order (index 0 = first/leftmost). */
+  correctOrder: string[]
+}
+
+/** Balance a scale by matching the total value on both sides (algebraic thinking). */
+export interface BalanceChallenge extends ChallengeBase {
+  type: 'balance'
+  /** Fixed items on the left side (cannot be moved). */
+  leftFixed: ChallengeObject[]
+  /** Number of empty slots on the right side where child places objects. */
+  rightSlots: number
+  /** Available objects to place on the right side. */
+  objects: ChallengeObject[]
+  /** Numeric value of each object (for weight calculation). Keyed by object id. */
+  objectValues: Record<string, number>
 }

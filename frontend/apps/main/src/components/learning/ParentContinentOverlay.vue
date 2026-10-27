@@ -98,11 +98,34 @@ const territoriesWithDepth = computed(() => {
   }))
 })
 
-/** Domain keys that have static practice suggestions. */
-const SUGGESTION_KEYS: Record<string, string> = {
-  Fractions: 'learning.parentOverlay.suggestionFractions',
-  Addition: 'learning.parentOverlay.suggestionAddition',
-  Multiplication: 'learning.parentOverlay.suggestionMultiplication',
+/** Domain keys that have specific practice suggestions. */
+const DOMAIN_SPECIFIC_SUGGESTIONS: Record<string, (items: ProgressWithTopic[]) => string> = {
+  Fractions: (items) => {
+    const learning = items.filter((i) => i.mastery_level === 'learning')
+    if (learning.length > 0) return 'learning.parentOverlay.suggestionFractionsActive'
+    return 'learning.parentOverlay.suggestionFractions'
+  },
+  Addition: (items) => {
+    const lowAccuracy = items.filter(
+      (i) => i.attempts > 0 && (i.xp_earned === 0 || i.mastery_level === 'available'),
+    )
+    if (lowAccuracy.length > 0) return 'learning.parentOverlay.suggestionAdditionPractice'
+    return 'learning.parentOverlay.suggestionAddition'
+  },
+  Multiplication: () => 'learning.parentOverlay.suggestionMultiplication',
+}
+
+/** Generate a generic suggestion for any domain based on mastery ratio. */
+function genericSuggestion(
+  domain: string,
+  label: string,
+  masteredCount: number,
+  totalCount: number,
+): string {
+  const ratio = totalCount > 0 ? masteredCount / totalCount : 0
+  if (ratio === 0) return 'learning.parentOverlay.suggestionStartExploring'
+  if (ratio < 0.5) return 'learning.parentOverlay.suggestionKeepPracticing'
+  return 'learning.parentOverlay.suggestionTeachBack'
 }
 
 const suggestions = computed(() => {
@@ -116,11 +139,18 @@ const suggestions = computed(() => {
       text: t('learning.parentOverlay.suggestionDefault'),
     }]
   }
-  return frontier.slice(0, 3).map((ter) => ({
-    domain: ter.domain,
-    domainLabel: domainLabel(t, ter.domain),
-    text: t(SUGGESTION_KEYS[ter.domain] ?? 'learning.parentOverlay.suggestionDefault'),
-  }))
+  return frontier.slice(0, 3).map((ter) => {
+    const label = domainLabel(t, ter.domain)
+    const specific = DOMAIN_SPECIFIC_SUGGESTIONS[ter.domain]
+    const key = specific
+      ? specific(ter.items)
+      : genericSuggestion(ter.domain, label, ter.masteredCount, ter.items.length)
+    return {
+      domain: ter.domain,
+      domainLabel: label,
+      text: t(key, { domain: label, mastered: ter.masteredCount, total: ter.items.length }),
+    }
+  })
 })
 </script>
 

@@ -1,5 +1,8 @@
 <template>
-  <div class="child-selector" v-if="children.length > 1">
+  <!-- Force van-tabs to re-mount when children arrive to avoid Vant's
+       registration timing bug. The key changes from 0 to children.length,
+       triggering a full re-mount with children already present. -->
+  <div class="child-selector" v-show="children.length > 1">
     <van-tabs
       v-model:active="activeIndex"
       shrink
@@ -26,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, getCurrentInstance } from 'vue'
 import type { ReportChild } from '@/api/literacy'
 import UserAvatar from '@/components/common/UserAvatar.vue'
 
@@ -39,6 +42,8 @@ const emit = defineEmits<{
   'update:selectedChildId': [childId: string]
 }>()
 
+const instance = getCurrentInstance()
+
 /**
  * Use a plain ref (not a computed) for v-model:active.
  * Vant's van-tabs writes to the active binding on internal tab lifecycle
@@ -47,6 +52,22 @@ const emit = defineEmits<{
  * "Cannot destructure property 'title' of 'children[index]' as it is undefined."
  */
 const activeIndex = ref(0)
+
+// Watch children and force re-render after they arrive to work around
+// Vant's registration timing bug where van-tabs + van-tab mount in the
+// same patch and leave the nav as empty comments.
+watch(
+  () => props.children.length,
+  (newLen) => {
+    if (newLen > 1) {
+      // Defer forceUpdate to next tick to ensure children are rendered first
+      setTimeout(() => {
+        instance?.proxy?.$forceUpdate()
+      }, 0)
+    }
+  },
+  { immediate: true },
+)
 
 // Sync activeIndex when props change (child switch from parent, or children array update)
 watch(
