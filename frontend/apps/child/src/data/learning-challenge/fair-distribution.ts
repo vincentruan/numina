@@ -35,9 +35,14 @@ export const fairDistributionChallenge: DistributeChallenge = {
   ],
 }
 
-/** Static lookup: topic_id → challenge config ID. P1 has one challenge. */
+/** Static lookup: topic_key → challenge config ID. P1 has one challenge.
+ *
+ * Keyed by `topic_key` (e.g. `mt_IHipFGTFEY`), not a slug — the practice route
+ * carries a snowflake topic id, so the caller resolves the key first via
+ * `getTopicDetail(topicId)`.
+ */
 const TOPIC_CHALLENGE_MAP: Record<string, string> = {
-  'math.fractions.understanding': 'fair-distribution-cookies',
+  mt_IHipFGTFEY: 'fair-distribution-cookies',
 }
 
 /** All registered challenge configs. */
@@ -45,9 +50,9 @@ const CHALLENGE_CONFIGS: Record<string, DistributeChallenge> = {
   'fair-distribution-cookies': fairDistributionChallenge,
 }
 
-/** Get challenge config for a topic, or null if none exists. */
-export function getChallengeForTopic(topicId: string): DistributeChallenge | null {
-  const configId = TOPIC_CHALLENGE_MAP[topicId]
+/** Get challenge config for a topic key, or null if none exists. */
+export function getChallengeForTopic(topicKey: string): DistributeChallenge | null {
+  const configId = TOPIC_CHALLENGE_MAP[topicKey]
   if (!configId) return null
   return CHALLENGE_CONFIGS[configId] ?? null
 }

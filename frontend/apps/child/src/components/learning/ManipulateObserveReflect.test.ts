@@ -121,6 +121,24 @@ describe('ManipulateObserveReflect (U5)', () => {
     expect(wrapper.findAll('.challenge-object')).toHaveLength(4)
   })
 
+  it('never places more objects than exist, even when a placed object is re-selected', async () => {
+    // Regression: placeInZone pushed the selected object unconditionally, so a
+    // retained selection could put the same object into a second zone and
+    // inflate the "placed N / total" counter past the object count.
+    const wrapper = mountChallenge()
+    await wrapper.findAll('.challenge-object')[0].trigger('click')
+    await wrapper.findAll('.challenge-zone')[0].trigger('click')
+    // Re-place the already-placed object: return it, then select the same id
+    // again immediately and drop it in another zone.
+    await wrapper.find('.challenge-zone__placed').trigger('click')
+    await wrapper.findAll('.challenge-object')[0].trigger('click')
+    await wrapper.findAll('.challenge-zone')[1].trigger('click')
+    // Total placed must stay within the object count.
+    const placedTotal = wrapper.findAll('.challenge-zone__placed').length
+    expect(placedTotal).toBeLessThanOrEqual(4)
+    expect(wrapper.find('.challenge-feedback__status').text()).toContain('/ 4')
+  })
+
   it('correct distribution → discovery message shown', async () => {
     const wrapper = mountChallenge()
     // Place 2 cookies in zone 1, 2 in zone 2

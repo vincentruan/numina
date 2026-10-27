@@ -243,6 +243,12 @@ function selectObject(objId: string) {
 function placeInZone(zoneId: string) {
   if (!selectedObjectId.value || completed.value) return
   const objId = selectedObjectId.value
+  // An object lives in exactly one zone — a retained selection must not be able
+  // to push the same object into a second zone and inflate the placed count.
+  if (placementSummary.value.placedIds.has(objId)) {
+    selectedObjectId.value = null
+    return
+  }
   if (!placements[zoneId]) placements[zoneId] = []
   placements[zoneId].push(objId)
   selectedObjectId.value = null
