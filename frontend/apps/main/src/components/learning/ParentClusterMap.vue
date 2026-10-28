@@ -130,6 +130,13 @@
       <div v-if="clustersLoading" class="clusters-loading">
         <van-loading size="20" />
       </div>
+
+      <!-- Continent overlay: mastery depth + practice suggestions (U7) -->
+      <ParentContinentOverlay
+        v-if="territories.length > 0 && !clustersLoading"
+        :items="currentItems"
+        :territories="territories"
+      />
     </template>
   </div>
 </template>
@@ -141,6 +148,7 @@ import { ref, computed, watch, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/common/EmptyState.vue'
 import BridgeBadge from './BridgeBadge.vue'
+import ParentContinentOverlay from './ParentContinentOverlay.vue'
 import { domainLabel, subjectLabel } from '@/utils/domainLabel'
 import type {
   ProgressWithTopic,

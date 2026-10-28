@@ -1,14 +1,16 @@
 <template>
   <div
     class="cluster-territory"
+    :class="territoryClasses"
     :data-cluster-domain="cluster.domain"
-    :class="{ 'cluster-territory--frontier': isFrontierCluster }"
+    :data-subject="cluster.subject"
   >
     <!-- The title duplicates the enclosing DomainSection header, so callers
          that already show the domain can suppress it. The frontier badge is
          the card's own signal and always survives. -->
     <div v-if="!hideTitle || isFrontierCluster" class="cluster-territory__header">
       <h3 v-if="!hideTitle" class="cluster-territory__title">
+        <span class="cluster-territory__marker">{{ territoryIcon }}</span>
         {{ translateDomain(t, cluster.domain) }}
         <span class="cluster-territory__count">({{ items.length }})</span>
       </h3>
@@ -17,8 +19,8 @@
 
     <p v-if="cluster.summary" class="cluster-territory__summary">{{ cluster.summary }}</p>
 
-    <!-- Bridge badges (U4) -->
-    <div v-if="bridges.length > 0" class="cluster-territory__bridges">
+    <!-- Bridge badges — only visible when territory has been explored (R3) -->
+    <div v-if="displayBridges.length > 0" class="cluster-territory__bridges">
       <button
         v-for="bridge in displayBridges"
         :key="`${bridge.to_subject}-${bridge.to_cluster_domain}`"
@@ -40,6 +42,9 @@
         @tap="$emit('topicTap', $event)"
       />
     </div>
+
+    <!-- Fog-of-war overlay (U4) — pointer-events: none, nodes tappable through it -->
+    <ContinentFog v-if="masteryRatio !== undefined" :mastery-ratio="masteryRatio" />
   </div>
 </template>
 
@@ -50,6 +55,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProgressWithTopic, ClusterResponse, BridgeResponse } from '@/api/learning'
 import TopicNode from './TopicNode.vue'
+import ContinentFog from './ContinentFog.vue'
 import { domainLabel as translateDomain } from '@/utils/domainLabel'
 
 const { t } = useI18n()
@@ -62,6 +68,8 @@ const props = defineProps<{
   frontierTopicId?: string | null
   /** Suppress the domain title when an enclosing section already shows it. */
   hideTitle?: boolean
+  /** Aggregate mastery ratio (0-1) for fog-of-war opacity (U4). */
+  masteryRatio?: number
 }>()
 
 defineEmits<{
@@ -69,7 +77,42 @@ defineEmits<{
   bridgeTap: [bridge: BridgeResponse]
 }>()
 
-const displayBridges = computed(() => props.bridges.slice(0, 2))
+const displayBridges = computed(() => {
+  // R3: only show bridges when the territory has been explored (at least one non-locked item)
+  const hasExplored = props.items.some((i) => i.mastery_level !== 'locked')
+  if (!hasExplored) return []
+  return props.bridges.slice(0, 2)
+})
+
+/** Subject → terrain class + marker icon (single source of truth, U3) */
+const SUBJECT_META: Record<string, { terrain: string; icon: string }> = {
+  mathematics:          { terrain: 'math',     icon: '📐' },
+  science:              { terrain: 'science',  icon: '🔬' },
+  chinese:              { terrain: 'language', icon: '📖' },
+  english:              { terrain: 'language', icon: '🔤' },
+  physics:              { terrain: 'science',  icon: '⚡' },
+  chemistry:            { terrain: 'science',  icon: '🧪' },
+  biology:              { terrain: 'science',  icon: '🌿' },
+  history:              { terrain: 'social',   icon: '📜' },
+  geography:            { terrain: 'social',   icon: '🌍' },
+  politics:             { terrain: 'social',   icon: '🏛' },
+  art:                  { terrain: 'arts',     icon: '🎨' },
+  music:                { terrain: 'arts',     icon: '🎵' },
+  physical_education:   { terrain: 'arts',     icon: '🏃' },
+  information_technology: { terrain: 'science', icon: '💻' },
+}
+
+const territoryClasses = computed(() => {
+  const terrain = SUBJECT_META[props.cluster.subject]?.terrain ?? 'default'
+  return {
+    'cluster-territory--frontier': props.isFrontierCluster,
+    [`territory--${terrain}`]: true,
+  }
+})
+
+const territoryIcon = computed(() =>
+  SUBJECT_META[props.cluster.subject]?.icon ?? '📚',
+)
 
 function subjectLabel(subject: string): string {
   const key = `learning.subject.${subject}`
@@ -82,9 +125,20 @@ function subjectLabel(subject: string): string {
 .cluster-territory {
   background: var(--color-surface-card);
   border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   padding: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
 }
+
+/* Subject-specific terrain backgrounds (U3) */
+.territory--math       { background: linear-gradient(180deg, var(--continent-terrain-math) 0%, var(--color-surface-card) 60%); border-top: 2px solid var(--color-brand-mint); }
+.territory--science    { background: linear-gradient(180deg, var(--continent-terrain-science) 0%, var(--color-surface-card) 60%); border-top: 2px solid var(--color-brand-lavender); }
+.territory--language   { background: linear-gradient(180deg, var(--continent-terrain-language) 0%, var(--color-surface-card) 60%); border-top: 2px solid var(--color-brand-peach); }
+.territory--arts       { background: linear-gradient(180deg, var(--continent-terrain-arts) 0%, var(--color-surface-card) 60%); border-top: 2px solid var(--color-brand-pink); }
+.territory--social     { background: linear-gradient(180deg, var(--continent-terrain-social) 0%, var(--color-surface-card) 60%); border-top: 2px solid var(--color-brand-ochre); }
+.territory--default    { background: linear-gradient(180deg, var(--continent-terrain-default) 0%, var(--color-surface-card) 60%); border-top: 2px solid var(--color-hairline); }
 
 .cluster-territory--frontier {
   border-color: var(--color-brand-ochre);
@@ -104,6 +158,14 @@ function subjectLabel(subject: string): string {
   font-weight: 600;
   color: var(--color-ink);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cluster-territory__marker {
+  font-size: 18px;
+  line-height: 1;
 }
 
 .cluster-territory__count {
@@ -183,5 +245,12 @@ function subjectLabel(subject: string): string {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+/* Reduced motion — disable transitions (U3) */
+@media (prefers-reduced-motion: reduce) {
+  .cluster-territory {
+    transition: none;
+  }
 }
 </style>

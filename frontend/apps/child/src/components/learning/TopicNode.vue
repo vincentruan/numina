@@ -3,6 +3,7 @@
     class="topic-node-wrapper"
     :class="[`topic-node-wrapper--${masteryStatus}`]"
     :data-topic-id="item.topic.id"
+    :data-label="topicDisplayName(item.topic)"
     @click="$emit('tap', item)"
   >
     <div
@@ -64,9 +65,12 @@ function topicDisplayName(topic: ProgressWithTopic['topic']): string {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  gap: 2px;
   /* 44px minimum touch target */
   min-width: 44px;
   min-height: 44px;
+  max-width: 58px;
   padding: 2px;
   border: none;
   background: transparent;
@@ -90,6 +94,9 @@ function topicDisplayName(topic: ProgressWithTopic['topic']): string {
   overflow: hidden;
 }
 
+/* The label is visually hidden in the circular node (the circle carries
+   mastery colour only). A visible caption below the circle is rendered by
+   the wrapper's ::after so young children can read what each node is. */
 .topic-node__label {
   position: absolute;
   width: 1px;
@@ -97,6 +104,26 @@ function topicDisplayName(topic: ProgressWithTopic['topic']): string {
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
+}
+
+/* ── Visible caption (child readability) ── */
+.topic-node-wrapper::after {
+  content: attr(data-label);
+  display: -webkit-box;
+  width: 56px;
+  font-family: Inter, sans-serif;
+  font-size: 9px;
+  line-height: 1.15;
+  color: var(--color-body);
+  text-align: center;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-all;
+}
+
+.topic-node-wrapper--locked::after {
+  color: var(--color-muted);
 }
 
 .topic-node__here {

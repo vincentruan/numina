@@ -26,8 +26,19 @@
       </div>
     </div>
 
-    <!-- Phase 2: answering -->
-    <div v-else-if="phase === 'answering'" class="answer-phase">
+    <!-- Phase 2: hands-on manipulation (U6) -->
+    <div v-else-if="phase === 'manipulate' && challengeConfig" class="manipulate-phase">
+      <ManipulateObserveReflect
+        :config="challengeConfig"
+        @complete="onChallengeComplete"
+        @request-tutor="onRequestTutor"
+      />
+    </div>
+
+    <!-- Phase 2 fallback: manipulate requested but no config → skip to answering -->
+
+    <!-- Phase 3: answering (also covers manipulate-without-config fallback) -->
+    <div v-else-if="phase === 'answering' || (phase === 'manipulate' && !challengeConfig)" class="answer-phase">
       <van-progress
         :percentage="progressPercent"
         stroke-width="6"
@@ -72,6 +83,7 @@
     <div v-else-if="phase === 'result'" class="result-phase">
       <PracticeResultSummary
         :result="sessionResult!"
+        :challenge-discovery="challengeDiscoveryMessage || undefined"
         @again="onAgain"
         @back="goBack"
       />
@@ -114,6 +126,10 @@ import {
 import PracticeQuestionCard from '@/components/learning/PracticeQuestionCard.vue'
 import PracticeAnswerInput from '@/components/learning/PracticeAnswerInput.vue'
 import PracticeResultSummary from '@/components/learning/PracticeResultSummary.vue'
+import ManipulateObserveReflect from '@/components/learning/ManipulateObserveReflect.vue'
+import { createSession, getTopicDetail } from '@/api/learning'
+import { getChallengeForTopic } from '@/data/learning-challenge/fair-distribution'
+import type { ChallengeConfig } from '@/types/learning-challenge'
 
 defineOptions({ name: 'PracticeSessionPage' })
 
@@ -128,8 +144,10 @@ const error = ref('')
 const starting = ref(false)
 const submitting = ref(false)
 
-const phase = ref<'mode' | 'answering' | 'result'>('mode')
+const phase = ref<'mode' | 'manipulate' | 'answering' | 'result'>('mode')
 const session = ref<PracticeSessionResponse | null>(null)
+const challengeConfig = ref<ChallengeConfig | null>(null)
+const challengeDiscoveryMessage = ref('')
 const questions = ref<QuestionResponse[]>([])
 const currentIndex = ref(0)
 const lastAttempt = ref<PracticeAttemptResponse | null>(null)
@@ -180,7 +198,16 @@ async function startSession(count: number) {
       error.value = t('practice.errors.noQuestions')
       return
     }
-    phase.value = 'answering'
+    // Check if this topic has a hands-on challenge (U6).
+    // The route carries a snowflake topic id; challenges are keyed by topic_key,
+    // so resolve the key from the topic detail before looking up the config.
+    const challenge = getChallengeForTopic(await resolveTopicKey())
+    if (challenge) {
+      challengeConfig.value = challenge
+      phase.value = 'manipulate'
+    } else {
+      phase.value = 'answering'
+    }
   } catch (e: unknown) {
     const code = extractErrorCode(e)
     error.value = mapPracticeErrorCode(code)
@@ -194,6 +221,20 @@ async function startSession(count: number) {
 function extractErrorCode(e: unknown): string | null {
   const err = e as { response?: { data?: { code?: string } } }
   return err?.response?.data?.code ?? null
+}
+
+/**
+ * Resolve the topic_key for the route's topic id.
+ * Returns '' when the lookup fails — challenges are optional, so a failed
+ * resolution must degrade to the plain answering flow, not break the session.
+ */
+async function resolveTopicKey(): Promise<string> {
+  try {
+    const topic = await getTopicDetail(topicId.value)
+    return topic.topic_key
+  } catch {
+    return ''
+  }
 }
 
 /** Map backend practice error codes to i18n keys */
@@ -257,9 +298,32 @@ async function doFinish() {
   }
 }
 
+function onChallengeComplete() {
+  // Capture the challenge's discovery message for the result screen (R6)
+  if (challengeConfig.value) {
+    challengeDiscoveryMessage.value = locale.value.startsWith('zh')
+      ? challengeConfig.value.discoveryMessageZh
+      : challengeConfig.value.discoveryMessage
+  }
+  phase.value = 'answering'
+}
+
+/** After 2 failed attempts the child can ask the AI tutor (F3). The tutor
+ *  route takes a session id, so create one for this topic first. */
+async function onRequestTutor() {
+  try {
+    const tutorSession = await createSession({ topic_id: topicId.value })
+    router.push(`/learning/session/${tutorSession.id}`)
+  } catch {
+    showFailToast(t('practice.errors.startFailed'))
+  }
+}
+
 function onAgain() {
   phase.value = 'mode'
   session.value = null
+  challengeConfig.value = null
+  challengeDiscoveryMessage.value = ''
   questions.value = []
   currentIndex.value = 0
   lastAttempt.value = null

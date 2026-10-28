@@ -24,7 +24,7 @@ def _gen_animals(params: dict) -> GeneratedQuestion:
         question_type="multiple_choice",
         difficulty=1,
         bloom_level="remember",
-        topic_key="english.vocabulary.animals",
+        topic_key="mt_zVLOm6U7bh",
         age_group="low",
         options=options,
     )
@@ -48,7 +48,7 @@ def _gen_colors(params: dict) -> GeneratedQuestion:
         question_type="multiple_choice",
         difficulty=1,
         bloom_level="remember",
-        topic_key="english.vocabulary.colors",
+        topic_key="mt_NP101Zl-4g",
         age_group="low",
         options=options,
     )

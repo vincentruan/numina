@@ -200,7 +200,7 @@ describe('ClusterTerritory', () => {
       makeBridge({ to_subject: 'english', to_cluster_domain: 'Grammar' }),
       makeBridge({ to_subject: 'chinese', to_cluster_domain: 'Poetry' }),
     ]
-    const wrapper = mountTerritory(makeCluster(), [], bridges)
+    const wrapper = mountTerritory(makeCluster(), [makeItem()], bridges)
 
     const badges = wrapper.findAll('.bridge-badge')
     expect(badges).toHaveLength(2) // capped at 2
@@ -211,7 +211,7 @@ describe('ClusterTerritory', () => {
     const bridges = [
       makeBridge({ to_subject: 'science', to_cluster_domain: 'Units' }),
     ]
-    const wrapper = mountTerritory(makeCluster(), [], bridges)
+    const wrapper = mountTerritory(makeCluster(), [makeItem()], bridges)
 
     expect(wrapper.findAll('.bridge-badge')).toHaveLength(1)
     expect(wrapper.find('.bridge-badge__overflow').exists()).toBe(false)
@@ -219,7 +219,7 @@ describe('ClusterTerritory', () => {
 
   it('emits bridgeTap when a bridge badge is clicked', async () => {
     const bridge = makeBridge({ to_subject: 'science', to_cluster_domain: 'Units' })
-    const wrapper = mountTerritory(makeCluster(), [], [bridge])
+    const wrapper = mountTerritory(makeCluster(), [makeItem()], [bridge])
 
     await wrapper.find('.bridge-badge').trigger('click')
     expect(wrapper.emitted('bridgeTap')).toBeTruthy()
@@ -237,7 +237,7 @@ describe('ClusterTerritory', () => {
 
   it('renders inferred bridge with dashed style and 🔍 icon', () => {
     const bridge = makeBridge({ source_type: 'inferred', max_confidence: 0.65 })
-    const wrapper = mountTerritory(makeCluster(), [], [bridge])
+    const wrapper = mountTerritory(makeCluster(), [makeItem()], [bridge])
 
     const badge = wrapper.find('.bridge-badge')
     expect(badge.classes()).toContain('bridge-badge--inferred')
@@ -246,7 +246,7 @@ describe('ClusterTerritory', () => {
 
   it('renders explicit bridge with default style and 🔗 icon', () => {
     const bridge = makeBridge({ source_type: 'explicit' })
-    const wrapper = mountTerritory(makeCluster(), [], [bridge])
+    const wrapper = mountTerritory(makeCluster(), [makeItem()], [bridge])
 
     const badge = wrapper.find('.bridge-badge')
     expect(badge.classes()).not.toContain('bridge-badge--inferred')
@@ -266,5 +266,47 @@ describe('ClusterTerritory', () => {
   it('sets data-cluster-domain attribute', () => {
     const wrapper = mountTerritory(makeCluster({ domain: 'Fractions' }))
     expect(wrapper.find('.cluster-territory').attributes('data-cluster-domain')).toBe('Fractions')
+  })
+
+  it('applies subject-specific territory modifier class for math', () => {
+    const wrapper = mountTerritory(makeCluster({ subject: 'mathematics' }))
+    expect(wrapper.find('.cluster-territory').classes()).toContain('territory--math')
+  })
+
+  it('applies science territory modifier for science subject', () => {
+    const wrapper = mountTerritory(makeCluster({ subject: 'science' }))
+    expect(wrapper.find('.cluster-territory').classes()).toContain('territory--science')
+  })
+
+  it('applies default territory modifier for unknown subject', () => {
+    const wrapper = mountTerritory(makeCluster({ subject: 'unknown_subject' }))
+    expect(wrapper.find('.cluster-territory').classes()).toContain('territory--default')
+  })
+
+  it('renders territory marker icon based on subject', () => {
+    const wrapper = mountTerritory(makeCluster({ subject: 'mathematics' }))
+    expect(wrapper.find('.cluster-territory__marker').text()).toBe('📐')
+  })
+
+  it('renders science marker for science subject', () => {
+    const wrapper = mountTerritory(makeCluster({ subject: 'science' }))
+    expect(wrapper.find('.cluster-territory__marker').text()).toBe('🔬')
+  })
+
+  it('sets data-subject attribute on root element', () => {
+    const wrapper = mountTerritory(makeCluster({ subject: 'mathematics' }))
+    expect(wrapper.find('.cluster-territory').attributes('data-subject')).toBe('mathematics')
+  })
+
+  it('hides bridges when no items are explored (all locked)', () => {
+    const items = [makeItem({ mastery_level: 'locked' }), makeItem({ id: 'p2', topic_id: 't2', mastery_level: 'locked' })]
+    const wrapper = mountTerritory(makeCluster({ subject: 'mathematics' }), items, [makeBridge()])
+    expect(wrapper.find('.cluster-territory__bridges').exists()).toBe(false)
+  })
+
+  it('shows bridges when at least one item is explored', () => {
+    const items = [makeItem({ mastery_level: 'locked' }), makeItem({ id: 'p2', topic_id: 't2', mastery_level: 'available' })]
+    const wrapper = mountTerritory(makeCluster({ subject: 'mathematics' }), items, [makeBridge()])
+    expect(wrapper.find('.cluster-territory__bridges').exists()).toBe(true)
   })
 })

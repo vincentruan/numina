@@ -131,6 +131,30 @@
   --color-path-dot:        var(--color-brand-ochre);
   --color-path-badge-bg:   var(--color-brand-ochre);
   --color-path-badge-text: var(--color-on-dark);
+
+  /* ── Continent territory tokens (light mode) ──
+   * Subject-specific terrain accents. Alpha overlays over surface-card
+   * so they work naturally on the warm Clay base. */
+  --continent-terrain-math:       rgba(164, 212, 197, 0.18);
+  --continent-terrain-science:    rgba(184, 164, 237, 0.18);
+  --continent-terrain-language:   rgba(255, 176, 132, 0.18);
+  --continent-terrain-arts:       rgba(255, 77, 139, 0.15);
+  --continent-terrain-social:     rgba(232, 185, 74, 0.18);
+  --continent-terrain-default:    rgba(0, 0, 0, 0.04);
+
+  /* Continent canvas — warm parchment feel */
+  --continent-canvas-bg:   rgba(0, 0, 0, 0.02);
+  --continent-canvas-border: var(--color-hairline-soft);
+
+  /* Fog-of-war tokens (U4) */
+  --continent-fog-color: #e8e0d0;
+  --continent-fog-transition: opacity 0.6s ease;
+
+  /* Challenge interaction tokens (U5) */
+  --challenge-object-bg: var(--color-surface-card);
+  --challenge-object-active: rgba(var(--color-brand-ochre-rgb), 0.2);
+  --challenge-zone-bg: var(--color-surface-soft);
+  --challenge-zone-active: rgba(var(--color-brand-mint-rgb), 0.25);
 }
 
 /* ── Dark mode overrides ── */
@@ -222,6 +246,26 @@
   --color-path-dot:        var(--color-brand-ochre);
   --color-path-badge-bg:   var(--color-brand-ochre);
   --color-path-badge-text: var(--color-on-dark);
+
+  /* ── Continent territory tokens (dark mode) ── */
+  --continent-terrain-math:       rgba(138, 188, 173, 0.15);
+  --continent-terrain-science:    rgba(154, 140, 208, 0.15);
+  --continent-terrain-language:   rgba(224, 152, 112, 0.15);
+  --continent-terrain-arts:       rgba(168, 41, 96, 0.15);
+  --continent-terrain-social:     rgba(212, 168, 58, 0.15);
+  --continent-terrain-default:    rgba(255, 255, 255, 0.04);
+
+  --continent-canvas-bg:   rgba(255, 255, 255, 0.02);
+  --continent-canvas-border: var(--color-hairline);
+
+  --continent-fog-color: #1a2a2a;
+  --continent-fog-transition: opacity 0.6s ease;
+
+  /* Challenge interaction tokens (dark mode) */
+  --challenge-object-bg: var(--color-surface-card);
+  --challenge-object-active: rgba(var(--color-brand-ochre-rgb), 0.15);
+  --challenge-zone-bg: var(--color-surface-soft);
+  --challenge-zone-active: rgba(var(--color-brand-mint-rgb), 0.18);
 }
 
 /* ── Vant dark mode overrides ── */

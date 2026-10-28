@@ -30,7 +30,7 @@ def _gen_number_sequence(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=3,
         bloom_level="analyze",
-        topic_key="math.patterns.number_sequence",
+        topic_key="mt_WXW0hjNhph",
         age_group="low",
         solution={"steps": [f"规律：{rule}", f"下一个数 = {answer}"]},
     )
