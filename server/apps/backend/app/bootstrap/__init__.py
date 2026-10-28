@@ -27,6 +27,7 @@ def run_bootstrap(db: Session) -> None:
         bootstrap_family_mcp_servers,
     )
     from apps.backend.app.bootstrap.invitation_codes import bootstrap_invitation_codes
+    from apps.backend.app.bootstrap.learning_topics import bootstrap_learning_topics
     from apps.backend.app.bootstrap.skills import bootstrap_skills
     from apps.backend.app.seed.expense_categories import (
         bootstrap_expense_categories,
@@ -40,5 +41,8 @@ def run_bootstrap(db: Session) -> None:
     bootstrap_skills(db)
     bootstrap_family_mcp_servers(db)
     bootstrap_expense_categories(db)
+    # Learning topics must be seeded before question auto-seed (main.py)
+    # so that topic_key → topic_id resolution succeeds.
+    bootstrap_learning_topics(db)
 
     logger.info("系统初始化数据检查完成")

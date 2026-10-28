@@ -22,7 +22,7 @@ def _gen_mean(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="math.statistics.mean",
+        topic_key="mt_Cg8VPguS_V",
         age_group="low",
     )
 
@@ -45,6 +45,6 @@ def _gen_probability(params: dict) -> GeneratedQuestion:
         question_type="fill_blank",
         difficulty=3,
         bloom_level="understand",
-        topic_key="math.statistics.probability_basic",
+        topic_key="mt_J4j7d3iAfg",
         age_group="low",
     )

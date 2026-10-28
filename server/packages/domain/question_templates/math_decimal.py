@@ -19,7 +19,7 @@ def _gen_decimal_addition(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="math.decimal.addition",
+        topic_key="mt_M1tnXqmYbn",
         age_group="low",
         solution={"steps": [f"{a} + {b} = {answer}"]},
     )
@@ -38,7 +38,7 @@ def _gen_decimal_subtraction(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="math.decimal.subtraction",
+        topic_key="mt_JH_6RpNWjr",
         age_group="low",
     )
 
@@ -56,6 +56,6 @@ def _gen_decimal_multiplication(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=3,
         bloom_level="apply",
-        topic_key="math.decimal.multiplication",
+        topic_key="mt_4ubP_RMg9o",
         age_group="low",
     )

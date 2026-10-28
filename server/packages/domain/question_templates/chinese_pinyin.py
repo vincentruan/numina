@@ -31,7 +31,7 @@ def _gen_pinyin_initials(params: dict) -> GeneratedQuestion:
         question_type="multiple_choice",
         difficulty=1,
         bloom_level="remember",
-        topic_key="chinese.pinyin.initials",
+        topic_key="mtc_001",
         age_group="low",
         options=options,
     )
@@ -61,7 +61,7 @@ def _gen_pinyin_finals(params: dict) -> GeneratedQuestion:
         question_type="multiple_choice",
         difficulty=1,
         bloom_level="remember",
-        topic_key="chinese.pinyin.finals",
+        topic_key="mtc_002",
         age_group="low",
         options=options,
     )
@@ -79,6 +79,6 @@ def _gen_pinyin_spelling(params: dict) -> GeneratedQuestion:
         question_type="fill_blank",
         difficulty=1,
         bloom_level="remember",
-        topic_key="chinese.pinyin.spelling",
+        topic_key="mtc_003",
         age_group="low",
     )
