@@ -43,6 +43,10 @@ requires_beijing_data = pytest.mark.skipif(
 @pytest.fixture(scope="module")
 def topics(loader: BeijingLoader) -> list[NormalizedTopic]:
     """Load all topics once for the test module."""
+    if not _beijing_data_dir().is_dir():
+        pytest.skip(
+            f"Beijing taxonomy data directory absent ({_beijing_data_dir()})"
+        )
     return loader.load_topics()
 
 
@@ -267,6 +271,7 @@ class TestCurriculumStandardHashability:
 class TestLoadDependencies:
     """Tests for load_dependencies()."""
 
+    @requires_beijing_data
     def test_includes_zh_dependencies(self, loader: BeijingLoader) -> None:
         """Dependencies include mt_→mt_ edges from dependencies.zh.json."""
         deps = loader.load_dependencies()
@@ -276,6 +281,7 @@ class TestLoadDependencies:
         ]
         assert len(mt_to_mt) == 3221
 
+    @requires_beijing_data
     def test_includes_cn_dependencies(self, loader: BeijingLoader) -> None:
         """Dependencies include mtc_→mtc_ edges from cn-dependencies.json."""
         deps = loader.load_dependencies()
@@ -286,6 +292,7 @@ class TestLoadDependencies:
         # 2619 total minus 420 rejected = 2199
         assert len(mtc_to_mtc) == 2619 - 420
 
+    @requires_beijing_data
     def test_includes_bridge_dependencies(self, loader: BeijingLoader) -> None:
         """Dependencies include bridge edges from cn-bridge-dependencies.json."""
         deps = loader.load_dependencies()
@@ -296,11 +303,13 @@ class TestLoadDependencies:
         # 47 total minus 1 rejected = 46
         assert len(bridge) == 47 - 1
 
+    @requires_beijing_data
     def test_rejected_excluded(self, loader: BeijingLoader) -> None:
         """Edges with reviewStatus='rejected' are excluded."""
         deps = loader.load_dependencies()
         assert all(d.review_status != "rejected" for d in deps)
 
+    @requires_beijing_data
     def test_total_count(self, loader: BeijingLoader) -> None:
         """Total dependency count after filtering."""
         deps = loader.load_dependencies()
@@ -311,16 +320,19 @@ class TestLoadDependencies:
 class TestLoadClusters:
     """Tests for load_clusters()."""
 
+    @requires_beijing_data
     def test_cluster_count(self, loader: BeijingLoader) -> None:
         """clusters.zh.json contains exactly 183 clusters."""
         clusters = loader.load_clusters()
         assert len(clusters) == 183
 
+    @requires_beijing_data
     def test_all_source_taxonomy_beijing(self, loader: BeijingLoader) -> None:
         """All clusters have source_taxonomy='beijing'."""
         clusters = loader.load_clusters()
         assert all(c.source_taxonomy == "beijing" for c in clusters)
 
+    @requires_beijing_data
     def test_subject_slug_mapping(self, loader: BeijingLoader) -> None:
         """Cluster subjects are mapped to slugs."""
         clusters = loader.load_clusters()
@@ -332,6 +344,7 @@ class TestLoadClusters:
         assert "English" not in subjects
         assert "Mathematics" not in subjects
 
+    @requires_beijing_data
     def test_summary_zh_populated(self, loader: BeijingLoader) -> None:
         """Clusters have summary_zh populated from summary field."""
         clusters = loader.load_clusters()
