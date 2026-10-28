@@ -139,3 +139,5 @@ def bootstrap_categories(db: Session) -> None:
 
     if added or rows:
         db.commit()
+
+    logger.info("已初始化 %s 个系统分类（新增=%s，图标迁移=%s）", len(SYSTEM_CATEGORIES), added, len(rows))
