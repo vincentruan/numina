@@ -331,6 +331,35 @@ def test_event_availability_with_expiry_asset(client, auth_headers, db):
     assert avail["expiring_soon"] == "ready"
 
 
+def test_event_availability_ignores_expired_dates(client, auth_headers, db):
+    """A past expiry date can never fire, so the badge must not say ready."""
+    from datetime import date, timedelta
+
+    from apps.backend.app.models.asset import Asset
+    from apps.backend.app.models.category import Category
+    from apps.backend.app.utils.snowflake import next_id
+
+    me = client.get("/api/v1/auth/me", headers=auth_headers).json()["data"]
+    category = db.query(Category).first()
+    db.add(
+        Asset(
+            id=next_id(),
+            family_id=int(me["family_id"]),
+            user_id=int(me["id"]),
+            category_id=category.id,
+            name="Expired Warranty",
+            asset_type="physical",
+            is_archived=False,
+            warranty_expiry_date=date.today() - timedelta(days=10),
+        )
+    )
+    db.commit()
+
+    resp = client.get("/api/v1/notification-config/status", headers=auth_headers)
+    avail = {e["event_type"]: e["status"] for e in resp.json()["data"]["event_availability"]}
+    assert avail["expiring_soon"] == "no_data"
+
+
 def test_event_availability_large_purchase_with_threshold(client, auth_headers):
     """Configuring a threshold makes large_purchase ready."""
     client.put(

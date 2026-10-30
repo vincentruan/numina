@@ -23,16 +23,7 @@
           <span>{{ t('reminders.subscriberCountLabel', { count: largePurchase.subscribing_channel_count }) }}</span>
         </template>
         <template #value>
-          <van-button
-            v-if="!largePurchase.threshold_configured"
-            plain
-            type="primary"
-            size="mini"
-            @click="$router.push('/settings/notifications')"
-          >
-            {{ t('reminders.goConfigureChannels') }}
-          </van-button>
-          <span v-else-if="largePurchase.subscribing_channel_names.length">
+          <span v-if="largePurchase.subscribing_channel_count > 0">
             {{ t('reminders.subscribingChannelsList', { names: largePurchase.subscribing_channel_names.join(', ') }) }}
           </span>
           <van-button

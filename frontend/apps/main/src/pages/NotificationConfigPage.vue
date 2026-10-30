@@ -164,7 +164,7 @@
 
         <van-cell>
           <div class="save-actions">
-            <van-button type="primary" block @click="saveChannel">{{ t('common.save') }}</van-button>
+            <van-button type="primary" block @click="saveChannel()">{{ t('common.save') }}</van-button>
             <van-button
               v-if="editingChannel"
               plain
@@ -552,11 +552,13 @@ onMounted(refreshAll)
 function openAdd() {
   editingChannel.value = null
   resetForm()
+  testResult.value = null
   showSheet.value = true
 }
 
 function editChannel(channel: NotificationChannelResponse) {
   editingChannel.value = channel
+  testResult.value = null
   form.name = channel.name
   form.channel_type = channel.channel_type
   form.subscriptions = [...channel.subscriptions]
@@ -602,7 +604,9 @@ function onTimeConfirm({ selectedValues }: { selectedValues: string[] }) {
   showTimePicker.value = false
 }
 
-async function saveChannel(): Promise<NotificationChannelResponse | null> {
+async function saveChannel({
+  keepSheetOpen = false,
+}: { keepSheetOpen?: boolean } = {}): Promise<NotificationChannelResponse | null> {
   if (!form.name.trim()) {
     showToast(t('reminders.channelNameRequired'))
     return null
@@ -686,13 +690,16 @@ async function saveChannel(): Promise<NotificationChannelResponse | null> {
   }
   testResult.value = null
   showSuccessToast(t('toast.channelSaved'))
-  showSheet.value = false
-  editingChannel.value = null
+  if (!keepSheetOpen) {
+    showSheet.value = false
+    editingChannel.value = null
+  }
   return savedChannel
 }
 
 async function saveAndTest() {
-  const target = await saveChannel()
+  // Keep the sheet open so the inline result banner is actually visible.
+  const target = await saveChannel({ keepSheetOpen: true })
   if (!target) return
   testSending.value = true
   testResult.value = null

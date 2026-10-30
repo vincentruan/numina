@@ -1,4 +1,6 @@
 # backend/app/routers/notification_config.py
+from datetime import date
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -51,13 +53,17 @@ def get_feature_status(
         )
         .all()
     )
-    # Check data availability for event-selector badges.
+    # Check data availability for event-selector badges. Dates already in the
+    # past can never fire (rules.check_expiring_soon / check_maturity bail on
+    # days_left < 0), so they must not count toward "ready".
+    today = date.today()
     has_expiring = (
         db.query(func.count(Asset.id))
         .filter(
             Asset.family_id == user.family_id,
             Asset.is_archived == False,  # noqa: E712
             Asset.warranty_expiry_date.isnot(None),
+            Asset.warranty_expiry_date >= today,
         )
         .scalar()
         > 0
@@ -68,6 +74,7 @@ def get_feature_status(
             Asset.family_id == user.family_id,
             Asset.is_archived == False,  # noqa: E712
             Asset.maturity_date.isnot(None),
+            Asset.maturity_date >= today,
         )
         .scalar()
         > 0
