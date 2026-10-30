@@ -14,22 +14,7 @@ Numina (Family Asset Visualization) is a privacy-first, self-hosted family asset
 | Frontend | Vue 3 + TypeScript + Vite + Vant 4 + ECharts |
 | Infrastructure | Docker Compose + Nginx |
 
-## Instruction Hierarchy
-
-This repository keeps its agent instructions in `AGENTS.md` files: one at the repository root (this file) and one in each module directory. There is no second, parallel instruction system.
-
-**Do not add a `CLAUDE.md`.** Where a `CLAUDE.md` exists alongside an `AGENTS.md` in the same directory, Claude Code loads only the `CLAUDE.md` and silently skips the `AGENTS.md` at that level.
-
-**Precedence.** The closest module `AGENTS.md` wins over a parent `AGENTS.md`, which wins over this root file. Module files may restate or specialize root rules; where they conflict, the module file governs inside its own directory.
-
-**Workflow contract.** Before editing:
-
-1. Read this file, then load the `AGENTS.md` for the module you are about to change.
-2. Keep changes minimal and scoped; do not refactor unrelated code.
-3. Verify only with commands defined in the relevant `AGENTS.md` (module scope first).
-4. In reports, state: changed files, verification commands run, and unresolved risks.
-
-**Single source of truth.** Conventions belong in the `AGENTS.md` that owns their scope. Do not copy a rule into this root file when a module file should own it, and do not duplicate one rule across multiple files — pick an owner and reference it.
+**Note:** This repo uses `AGENTS.md` files, not `CLAUDE.md`. Do not add a `CLAUDE.md` — it would shadow the `AGENTS.md` at the same level and silently skip it.
 
 ## Engineering Principles
 
@@ -128,7 +113,7 @@ Verification is scoped to the module you changed. Run the commands its `AGENTS.m
 | Frontend | [`frontend/AGENTS.md`](./frontend/AGENTS.md) §Commands |
 | E2E / visual regression | [`tests/AGENTS.md`](./tests/AGENTS.md) §Commands |
 
-Python backend tests live in `server/tests/backend/`.
+Test locations: Python backend → `server/tests/backend/`, E2E/visual → `tests/e2e/` (specs) and `tests/visual/` (screenshots). New E2E specs go in `tests/e2e/`, shell runners in `tests/e2e/scripts/`.
 
 ## Structural Code Search
 
@@ -148,14 +133,6 @@ CodeGraph is a tree-sitter-parsed knowledge graph of every symbol, edge, and fil
 | "Is the index healthy?" | `codegraph_status` |
 
 These tools are provided by a CodeGraph MCP server. If your agent has no MCP support or the server is not configured, fall back to `grep`/`read` for the same questions.
-
-### Rules of thumb
-
-- **Trust codegraph results.** They come from a full AST parse. Do NOT re-verify with grep — slower, less accurate, wastes context.
-- **Don't grep first** when looking up a symbol by name. `codegraph_search` returns kind + location + signature in one call.
-- **Don't chain `codegraph_search` + `codegraph_node`** for context — `codegraph_context` is one call.
-- **Don't loop `codegraph_node`** over many symbols — one `codegraph_explore` returns several symbols' source in a single capped call.
-- **Index lag**: file watcher debounces ~500ms behind writes; don't re-query immediately after editing.
 
 ### If `.codegraph/` doesn't exist
 
@@ -178,50 +155,3 @@ The MCP server returns "not initialized." Ask: *"Want me to run `codegraph init 
 | [`basehttpmiddleware-exception`](./docs/solutions/runtime-errors/basehttpmiddleware-exception-bypasses-fastapi-handlers.md) | BaseHTTPMiddleware 异常绕过 FastAPI 处理器 |
 
 Domain-specific solutions: see [`server/AGENTS.md`](./server/AGENTS.md) §Solutions, [`frontend/AGENTS.md`](./frontend/AGENTS.md) §Solutions, [`tests/AGENTS.md`](./tests/AGENTS.md) §Solutions.
-
-## Documentation Map
-
-Module-specific dev commands, conventions, and patterns:
-
-| Module | AGENTS.md | README |
-|--------|-----------|--------|
-| Server workspace | [`server/AGENTS.md`](./server/AGENTS.md) | — |
-| Backend | [`server/apps/backend/AGENTS.md`](./server/apps/backend/AGENTS.md) | [`server/apps/backend/README.md`](./server/apps/backend/README.md) |
-| Agent | [`server/apps/agent/AGENTS.md`](./server/apps/agent/AGENTS.md) | [`server/apps/agent/README.md`](./server/apps/agent/README.md) |
-| Scheduler Worker | [`server/apps/scheduler_worker/AGENTS.md`](./server/apps/scheduler_worker/AGENTS.md) | [`server/apps/scheduler_worker/README.md`](./server/apps/scheduler_worker/README.md) |
-| server/packages/core | [`server/packages/core/AGENTS.md`](./server/packages/core/AGENTS.md) | [`server/packages/core/README.md`](./server/packages/core/README.md) |
-| server/packages/db | [`server/packages/db/AGENTS.md`](./server/packages/db/AGENTS.md) | [`server/packages/db/README.md`](./server/packages/db/README.md) |
-| server/packages/domain | [`server/packages/domain/AGENTS.md`](./server/packages/domain/AGENTS.md) | [`server/packages/domain/README.md`](./server/packages/domain/README.md) |
-| server/packages/security | [`server/packages/security/AGENTS.md`](./server/packages/security/AGENTS.md) | [`server/packages/security/README.md`](./server/packages/security/README.md) |
-| server/packages/storage | [`server/packages/storage/AGENTS.md`](./server/packages/storage/AGENTS.md) | [`server/packages/storage/README.md`](./server/packages/storage/README.md) |
-| Frontend workspace | [`frontend/AGENTS.md`](./frontend/AGENTS.md) | — |
-| Frontend (main) | [`frontend/apps/main/AGENTS.md`](./frontend/apps/main/AGENTS.md) | [`frontend/apps/main/README.md`](./frontend/apps/main/README.md) |
-| Frontend (child) | [`frontend/apps/child/AGENTS.md`](./frontend/apps/child/AGENTS.md) | — |
-| Frontend packages | [`frontend/packages/AGENTS.md`](./frontend/packages/AGENTS.md) | — |
-| Site | [`site/AGENTS.md`](./site/AGENTS.md) | — |
-| Tests | [`tests/AGENTS.md`](./tests/AGENTS.md) | [`tests/README.md`](./tests/README.md) |
-
-### Tests Directory (`tests/`)
-
-E2E / visual regression / testing tools root directory. Python backend tests live in `server/tests/backend/`.
-
-```
-tests/
-├── e2e/              # Playwright specs (*.spec.ts) + Python smoke (smoke_test.py)
-│   └── scripts/      # Shell runners (acceptance.sh, extended.sh …)
-├── visual/           # Visual regression (visual.config.ts, visual-check.*)
-├── lib/              # TS shared utilities (auth, fixtures, routes)
-├── data/             # Python test data (factories/, scenarios/, seed_data.py)
-├── fixtures/         # Static fixtures (openapi.snapshot.json)
-├── tools/            # Standalone tools (screenshot/, page-agent/ config)
-├── scripts/          # Helper scripts (update-openapi-snapshot.js)
-├── reports/          # Historical audit reports (ui-audit-*.md)
-├── docs/             # Test documentation (TEST_SPEC.md …)
-├── playwright.config.ts / tsconfig.json / package.json
-└── run-regression.sh # One-command regression entry point
-```
-
-**Rules:**
-- New specs go in `e2e/`, shell scripts go in `e2e/scripts/`
-- Screenshot outputs (`.png`) are `.gitignore`-excluded, not committed
-- `reports/` holds historical audit reports only
