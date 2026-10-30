@@ -299,8 +299,13 @@ input[type="url"]:disabled {
   text-decoration: underline;
   cursor: pointer;
   font-size: 0.85rem;
-  padding: 0;
+  padding: 0.5rem 0;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
   margin-top: 0.3rem;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .connect-btn {
@@ -343,6 +348,10 @@ input[type="url"]:disabled {
   color: var(--shell-text-secondary);
   font-size: 0.85rem;
   text-decoration: none;
+  padding: 0.5rem;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .footer-links a:hover {

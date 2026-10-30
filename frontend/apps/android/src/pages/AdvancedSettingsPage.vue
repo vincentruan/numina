@@ -9,6 +9,7 @@ import {
 } from '@/utils/server-config'
 
 const router = useRouter()
+const appVersion = __APP_VERSION__
 
 const currentUrl = ref<string | null>(null)
 const advancedMode = ref(false)
@@ -73,7 +74,7 @@ function goBack() {
       <div class="setting-card info-card">
         <h3>About</h3>
         <p class="description">
-          Numina Android Shell v1.0.0<br />
+          Numina Android Shell v{{ appVersion }}<br />
           This app connects to your self-hosted Numina server.
           All data stays on your server — this app is a thin WebView wrapper.
         </p>
@@ -100,9 +101,11 @@ function goBack() {
   color: var(--shell-primary);
   font-size: 0.9rem;
   cursor: pointer;
-  padding: 0.3rem 0;
-  margin-bottom: 0.5rem;
+  padding: 0.75rem 0.5rem;
+  min-height: 44px;
+  margin-bottom: 0.25rem;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 h1 {
@@ -165,7 +168,8 @@ h1 {
 }
 
 .action-btn {
-  padding: 0.5rem 1rem;
+  padding: 0.75rem 1rem;
+  min-height: 44px;
   font-size: 0.85rem;
   font-weight: 600;
   border: 1px solid var(--shell-border);
@@ -174,6 +178,7 @@ h1 {
   color: var(--shell-danger);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -188,7 +193,10 @@ h1 {
   gap: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
+  min-height: 44px;
+  padding: 0.25rem 0;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .toggle-row input[type="checkbox"] {
