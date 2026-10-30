@@ -46,6 +46,7 @@ def get_feature_status(
         )
         .filter(
             NotificationChannel.family_id == user.family_id,
+            NotificationChannel.is_enabled == True,  # noqa: E712
             NotificationSubscription.reminder_type == "large_purchase",
         )
         .all()

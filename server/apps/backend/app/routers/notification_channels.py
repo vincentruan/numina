@@ -168,7 +168,7 @@ def create_channel(
             )
     db.commit()
     db.refresh(channel)
-    return _to_response(channel, db)
+    return _to_response(channel, db, _latest_deliveries(db, [channel.id]).get(channel.id))
 
 
 @router.put("/{channel_id}", response_model=NotificationChannelResponse)
@@ -233,7 +233,7 @@ def update_channel(
         channel.digest_time = req.digest_time
     db.commit()
     db.refresh(channel)
-    return _to_response(channel, db)
+    return _to_response(channel, db, _latest_deliveries(db, [channel.id]).get(channel.id))
 
 
 @router.get("/{channel_id}/delivery-history", response_model=list[DeliveryRecord])

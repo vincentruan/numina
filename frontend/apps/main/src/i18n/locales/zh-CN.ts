@@ -3117,6 +3117,12 @@ export default {
       treasure_redeemed: '宝藏兑换',
       wish_redeemed: '心愿兑换',
       mcp_anomaly_detected: 'MCP 异常调用',
+      learning_assignment_created: '学习任务创建',
+      learning_submitted_for_review: '学习任务待审核',
+      learning_approved: '学习任务通过',
+      learning_rejected: '学习任务未通过',
+      learning_streak_3_failures: '连续学习失败',
+      family_interaction: '家庭互动',
     },
     categories: {
       asset: '资产',

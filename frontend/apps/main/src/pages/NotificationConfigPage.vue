@@ -247,7 +247,7 @@
         </template>
       </van-nav-bar>
       <van-loading v-if="historyLoading" class="history-loading" />
-      <van-empty v-else-if="!deliveryHistory.length" :description="t('reminders.deliveryHistoryEmpty')" />
+      <EmptyState v-else-if="!deliveryHistory.length" :description="t('reminders.deliveryHistoryEmpty')" />
       <van-cell v-for="record in deliveryHistory" v-else :key="record.id" :title="record.reminder_title">
         <template #label>{{ t('reminders.types.' + record.reminder_type) }}</template>
         <template #value>
@@ -274,8 +274,10 @@ import {
   type NotificationFeatureStatus,
 } from '@/api/notificationChannels'
 import EventSelectorPopup from '@/components/notification/EventSelectorPopup.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import { parseApiDate } from '@/utils/format'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 
 const channels = ref<NotificationChannelResponse[]>([])
@@ -433,7 +435,13 @@ function deliveryStatusText(channel: NotificationChannelResponse): string {
     channel.last_delivery_status === 'sent'
       ? 'reminders.lastDeliverySuccess'
       : 'reminders.lastDeliveryFailed'
-  const time = new Date(channel.last_delivery_at).toLocaleString()
+  const time = parseApiDate(channel.last_delivery_at).toLocaleString(locale.value, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
   return t(key, { time })
 }
 
