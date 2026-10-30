@@ -49,7 +49,24 @@
                 @click="toggleEvent(event.type)"
               >
                 <template #title>
-                  <span class="event-label">{{ t(event.labelKey) }}</span>
+                  <div class="event-row">
+                    <div class="event-row__main">
+                      <span class="event-label">{{ t(event.labelKey) }}</span>
+                      <span
+                        v-if="availabilityMap[event.type]"
+                        :class="[
+                          'event-badge',
+                          `event-badge--${availabilityMap[event.type]}`,
+                        ]"
+                        @click.stop="onBadgeClick(event.type)"
+                      >
+                        {{ availabilityLabel(event.type) }}
+                      </span>
+                    </div>
+                    <span class="event-condition">
+                      {{ t(`reminders.eventConditions.${event.type}`, '') }}
+                    </span>
+                  </div>
                 </template>
                 <template #right-icon>
                   <van-checkbox :name="event.type" shape="square" />
@@ -70,10 +87,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   notificationChannelsApi,
+  type EventAvailability,
   type NotificationEvent,
   type NotificationEventCategory,
 } from '@/api/notificationChannels'
@@ -93,14 +111,40 @@ interface CategoryWithEvents {
 const props = defineProps<{
   modelValue: boolean
   initialTypes?: string[]
+  eventAvailability?: EventAvailability[]
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'save', types: string[]): void
+  (e: 'navigate-to-threshold'): void
 }>()
 
 const { t } = useI18n()
+
+const availabilityMap = computed(() => {
+  const map: Record<string, string> = {}
+  if (props.eventAvailability) {
+    for (const ea of props.eventAvailability) {
+      map[ea.event_type] = ea.status
+    }
+  }
+  return map
+})
+
+function availabilityLabel(eventType: string): string {
+  const status = availabilityMap.value[eventType]
+  if (status === 'ready') return t('reminders.eventStatusReady')
+  if (status === 'needs_config') return t('reminders.eventStatusNeedsConfig')
+  if (status === 'no_data') return t('reminders.eventStatusNoData')
+  return ''
+}
+
+function onBadgeClick(eventType: string) {
+  if (availabilityMap.value[eventType] === 'needs_config') {
+    emit('navigate-to-threshold')
+  }
+}
 
 const loading = ref(false)
 const categories = ref<CategoryWithEvents[]>([])
@@ -232,5 +276,50 @@ watch(
 
 .event-label {
   font-size: 14px;
+}
+
+.event-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 36px;
+}
+
+.event-row__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.event-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  line-height: 1.4;
+  cursor: default;
+}
+
+.event-badge--ready {
+  color: var(--van-success-color);
+  background: rgba(0, 200, 0, 0.08);
+}
+
+.event-badge--needs_config {
+  color: var(--van-warning-color);
+  background: rgba(255, 165, 0, 0.08);
+  cursor: pointer;
+}
+
+.event-badge--no_data {
+  color: var(--van-text-color-3);
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.event-condition {
+  font-size: 12px;
+  color: var(--van-text-color-2);
+  line-height: 1.3;
 }
 </style>

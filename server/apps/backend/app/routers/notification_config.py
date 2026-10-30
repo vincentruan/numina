@@ -1,17 +1,20 @@
 # backend/app/routers/notification_config.py
 from fastapi import APIRouter, Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.notification_config import (
+    EventAvailability,
     LargePurchaseStatus,
     NotificationConfigResponse,
     NotificationConfigUpdate,
     NotificationFeatureStatus,
 )
 from apps.backend.app.utils.snowflake import next_id
+from packages.db.models.asset import Asset
 from packages.db.models.notification_channel import NotificationChannel
 from packages.db.models.notification_config import NotificationConfig
 from packages.db.models.notification_subscription import NotificationSubscription
@@ -47,12 +50,50 @@ def get_feature_status(
         )
         .all()
     )
+    # Check data availability for event-selector badges.
+    has_expiring = (
+        db.query(func.count(Asset.id))
+        .filter(
+            Asset.family_id == user.family_id,
+            Asset.is_archived == False,  # noqa: E712
+            Asset.warranty_expiry_date.isnot(None),
+        )
+        .scalar()
+        > 0
+    )
+    has_maturity = (
+        db.query(func.count(Asset.id))
+        .filter(
+            Asset.family_id == user.family_id,
+            Asset.is_archived == False,  # noqa: E712
+            Asset.maturity_date.isnot(None),
+        )
+        .scalar()
+        > 0
+    )
+
+    event_availability = [
+        EventAvailability(
+            event_type="expiring_soon",
+            status="ready" if has_expiring else "no_data",
+        ),
+        EventAvailability(
+            event_type="maturity",
+            status="ready" if has_maturity else "no_data",
+        ),
+        EventAvailability(
+            event_type="large_purchase",
+            status="ready" if threshold_configured else "needs_config",
+        ),
+    ]
+
     return NotificationFeatureStatus(
         large_purchase=LargePurchaseStatus(
             threshold_configured=threshold_configured,
             subscribing_channel_count=len(subscribing_channels),
             subscribing_channel_names=[c.name for c in subscribing_channels],
-        )
+        ),
+        event_availability=event_availability,
     )
 
 

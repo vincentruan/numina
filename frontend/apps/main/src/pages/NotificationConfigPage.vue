@@ -55,6 +55,31 @@
       </van-swipe-cell>
       <van-cell :title="t('reminders.addChannel')" is-link icon="plus" @click="openAdd" />
     </van-cell-group>
+
+    <!-- Post-creation onboarding card -->
+    <div v-if="showOnboarding && newChannel" class="onboarding-card">
+      <div class="onboarding-card__header">
+        <span>{{ t('reminders.onboardingTitle') }}</span>
+        <van-icon name="cross" class="onboarding-card__close" @click="showOnboarding = false" />
+      </div>
+      <div class="onboarding-card__steps">
+        <div class="onboarding-step" :class="{ 'onboarding-step--done': newChannel.subscriptions.length > 0 }">
+          <span class="onboarding-step__icon">{{ newChannel.subscriptions.length > 0 ? '✅' : '1️⃣' }}</span>
+          <span class="onboarding-step__label">{{ t('reminders.onboardingSubscribe') }}</span>
+          <van-button v-if="!newChannel.subscriptions.length" size="mini" plain type="primary" @click="editChannel(newChannel)">{{ t('reminders.onboardingGo') }}</van-button>
+        </div>
+        <div v-if="showThresholdStep" class="onboarding-step" :class="{ 'onboarding-step--done': thresholdConfigured }">
+          <span class="onboarding-step__icon">{{ thresholdConfigured ? '✅' : '2️⃣' }}</span>
+          <span class="onboarding-step__label">{{ t('reminders.onboardingThreshold') }}</span>
+          <van-button v-if="!thresholdConfigured" size="mini" plain type="primary" @click="router.push('/settings/notifications/threshold')">{{ t('reminders.onboardingGo') }}</van-button>
+        </div>
+        <div class="onboarding-step">
+          <span class="onboarding-step__icon">3️⃣</span>
+          <span class="onboarding-step__label">{{ t('reminders.onboardingTest') }}</span>
+          <van-button size="mini" plain type="primary" :loading="testSending" @click="sendTestForOnboarding">{{ t('reminders.onboardingGo') }}</van-button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <van-popup v-model:show="showSheet" position="bottom" round teleport="body" :style="{ height: '80%' }">
@@ -138,7 +163,24 @@
         />
 
         <van-cell>
-          <van-button type="primary" block @click="saveChannel">{{ t('common.save') }}</van-button>
+          <div class="save-actions">
+            <van-button type="primary" block @click="saveChannel">{{ t('common.save') }}</van-button>
+            <van-button
+              v-if="editingChannel"
+              plain
+              type="success"
+              block
+              :loading="testSending"
+              :disabled="testSending"
+              class="save-actions__test"
+              @click="saveAndTest"
+            >
+              {{ testSending ? t('reminders.testSending') : t('reminders.saveAndTest') }}
+            </van-button>
+          </div>
+          <div v-if="testResult !== null" :class="['test-result', testResult.success ? 'test-result--success' : 'test-result--fail']">
+            {{ testResult.success ? t('reminders.testSuccess') : t('reminders.testFailedWithReason', { reason: testResult.error || t('reminders.testFailed') }) }}
+          </div>
         </van-cell>
       </van-cell-group>
     </div>
@@ -148,7 +190,9 @@
   <EventSelectorPopup
     v-model="showEventSelector"
     :initial-types="form.subscriptions"
+    :event-availability="featureStatus?.event_availability"
     @save="onEventsSaved"
+    @navigate-to-threshold="onNavigateToThreshold"
   />
 
   <!-- Mention config popup -->
@@ -217,7 +261,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, computed } from 'vue'
+import { ref, onMounted, onActivated, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showFailToast } from 'vant'
@@ -246,6 +290,14 @@ const testSending = ref(false)
 const deliveryHistory = ref<DeliveryRecord[]>([])
 const historyLoading = ref(false)
 const featureStatus = ref<NotificationFeatureStatus | null>(null)
+const showOnboarding = ref(false)
+const newChannel = ref<NotificationChannelResponse | null>(null)
+const testResult = ref<ChannelTestResult | null>(null)
+
+const thresholdConfigured = computed(() => featureStatus.value?.large_purchase.threshold_configured ?? false)
+const showThresholdStep = computed(
+  () => newChannel.value?.subscriptions.includes('large_purchase') ?? false,
+)
 
 const typePickerColumns = computed(() => [
   { text: t('reminders.channelType.telegram'), value: 'telegram' },
@@ -434,14 +486,24 @@ function onLargePurchaseLinkClick() {
   }
 }
 
-onMounted(async () => {
+function onNavigateToThreshold() {
+  showEventSelector.value = false
+  router.push('/settings/notifications/threshold')
+}
+
+async function refreshAll() {
   const [listed, status] = await Promise.all([
     notificationChannelsApi.list(),
     notificationChannelsApi.getFeatureStatus().catch(() => null),
   ])
   channels.value = listed
   featureStatus.value = status
-})
+}
+
+onMounted(refreshAll)
+
+// Refetch when returning from threshold page or other navigation
+onActivated(refreshAll)
 
 function openAdd() {
   editingChannel.value = null
@@ -570,10 +632,48 @@ async function saveChannel() {
       digest_time: form.digest_time,
     })
     channels.value.push(created)
+    // Show onboarding card for new channels
+    newChannel.value = created
+    showOnboarding.value = true
   }
+  testResult.value = null
   showSuccessToast(t('toast.channelSaved'))
   showSheet.value = false
   editingChannel.value = null
+}
+
+async function saveAndTest() {
+  await saveChannel()
+  if (!newChannel.value && !editingChannel.value) return
+  const target = newChannel.value || editingChannel.value
+  if (!target) return
+  testSending.value = true
+  testResult.value = null
+  try {
+    const result = await notificationChannelsApi.testChannel(target.id)
+    testResult.value = result
+  } catch {
+    testResult.value = { success: false, error: t('reminders.testFailed') }
+  } finally {
+    testSending.value = false
+  }
+}
+
+async function sendTestForOnboarding() {
+  if (!newChannel.value) return
+  testSending.value = true
+  try {
+    const result = await notificationChannelsApi.testChannel(newChannel.value.id)
+    if (result.success) {
+      showSuccessToast(t('reminders.testSuccess'))
+    } else {
+      showFailToast(result.error || t('reminders.testFailed'))
+    }
+  } catch {
+    showFailToast(t('reminders.testFailed'))
+  } finally {
+    testSending.value = false
+  }
 }
 
 async function removeChannel(id: string) {
@@ -648,5 +748,66 @@ function onTypeConfirm({ selectedValues }: { selectedValues: string[] }) {
   display: flex;
   justify-content: center;
   padding: 48px 0;
+}
+.save-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.save-actions__test {
+  margin-top: 0;
+}
+.test-result {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.test-result--success {
+  background: rgba(0, 200, 0, 0.08);
+  color: var(--van-success-color);
+}
+.test-result--fail {
+  background: rgba(255, 0, 0, 0.06);
+  color: var(--van-danger-color);
+}
+.onboarding-card {
+  margin: 12px 16px;
+  padding: 12px 16px;
+  background: var(--van-background-2);
+  border-radius: 8px;
+  border: 1px solid var(--van-primary-color);
+}
+.onboarding-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.onboarding-card__close {
+  cursor: pointer;
+  color: var(--van-text-color-2);
+}
+.onboarding-card__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.onboarding-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.onboarding-step--done {
+  opacity: 0.6;
+}
+.onboarding-step__icon {
+  flex-shrink: 0;
+}
+.onboarding-step__label {
+  flex: 1;
 }
 </style>

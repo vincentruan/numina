@@ -64,8 +64,14 @@ export interface LargePurchaseStatus {
   subscribing_channel_names: string[]
 }
 
+export interface EventAvailability {
+  event_type: string
+  status: 'ready' | 'needs_config' | 'no_data'
+}
+
 export interface NotificationFeatureStatus {
   large_purchase: LargePurchaseStatus
+  event_availability: EventAvailability[]
 }
 
 export interface ChannelTestResult {

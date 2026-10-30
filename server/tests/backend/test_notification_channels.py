@@ -233,3 +233,60 @@ def test_webpush_channel_crud(client, auth_headers):
     data = resp.json()["data"]
     assert data["channel_type"] == "webpush"
     assert "large_purchase" in data["subscriptions"]
+
+
+def test_event_availability_defaults(client, auth_headers):
+    """With no special assets, expiring_soon/maturity are no_data."""
+    resp = client.get("/api/v1/notification-config/status", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    avail = {e["event_type"]: e["status"] for e in data["event_availability"]}
+    assert avail["expiring_soon"] == "no_data"
+    assert avail["maturity"] == "no_data"
+    assert avail["large_purchase"] == "needs_config"
+
+
+def test_event_availability_with_expiry_asset(client, auth_headers, db):
+    """An asset with warranty_expiry_date makes expiring_soon ready."""
+    from datetime import date, timedelta
+
+    from apps.backend.app.models.asset import Asset
+    from apps.backend.app.models.category import Category
+    from apps.backend.app.utils.snowflake import next_id
+
+    # Get the auth'd user's family_id via /me endpoint
+    me = client.get("/api/v1/auth/me", headers=auth_headers).json()["data"]
+    family_id = int(me["family_id"])
+    user_id = int(me["id"])
+
+    category = db.query(Category).first()
+    asset = Asset(
+        id=next_id(),
+        family_id=family_id,
+        user_id=user_id,
+        category_id=category.id,
+        name="Expiring Asset",
+        asset_type="physical",
+        is_archived=False,
+        warranty_expiry_date=date.today() + timedelta(days=30),
+    )
+    db.add(asset)
+    db.commit()
+
+    resp = client.get("/api/v1/notification-config/status", headers=auth_headers)
+    data = resp.json()["data"]
+    avail = {e["event_type"]: e["status"] for e in data["event_availability"]}
+    assert avail["expiring_soon"] == "ready"
+
+
+def test_event_availability_large_purchase_with_threshold(client, auth_headers):
+    """Configuring a threshold makes large_purchase ready."""
+    client.put(
+        "/api/v1/notification-config",
+        headers=auth_headers,
+        json={"large_purchase_threshold_fixed": 5000},
+    )
+    resp = client.get("/api/v1/notification-config/status", headers=auth_headers)
+    data = resp.json()["data"]
+    avail = {e["event_type"]: e["status"] for e in data["event_availability"]}
+    assert avail["large_purchase"] == "ready"

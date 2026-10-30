@@ -33,5 +33,15 @@ class LargePurchaseStatus(SnowflakeBase):
     subscribing_channel_names: list[str] = []
 
 
+class EventAvailability(SnowflakeBase):
+    """Per-event data-availability status for the event selector badges."""
+
+    event_type: str
+    # "ready" = data/config present; "needs_config" = partially configured;
+    # "no_data" = no data to ever trigger this event.
+    status: str  # "ready" | "needs_config" | "no_data"
+
+
 class NotificationFeatureStatus(SnowflakeBase):
     large_purchase: LargePurchaseStatus
+    event_availability: list[EventAvailability] = []
