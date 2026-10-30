@@ -51,5 +51,23 @@ class StorageBackend(ABC):
         """Delete a file at the given remote_path."""
 
     @abstractmethod
+    async def load(self, remote_path: str) -> bytes:
+        """Read and return the content at remote_path.
+
+        Raises FileNotFoundError when the file does not exist, so callers can
+        tell "no such backup" apart from a transport or auth failure.
+        """
+
+    @abstractmethod
+    async def list(self, prefix: str) -> list[dict]:
+        """List entries under prefix.
+
+        Returns dicts with ``path``, ``size``, and ``last_modified``. A missing
+        prefix yields an empty list rather than an error. This is what lets a
+        backup be discovered from remote storage alone, after the database that
+        recorded it is gone.
+        """
+
+    @abstractmethod
     def get_url(self, remote_path: str) -> str:
         """Return a URL suitable for accessing/previewing the file."""

@@ -170,6 +170,74 @@ class GitHubStorageBackend(StorageBackend):
             if response.status_code in (401, 403):
                 raise StorageAuthError(f"GitHub 认证失败: {response.status_code}")
 
+    async def load(self, remote_path: str) -> bytes:
+        """Download file content via the raw media type."""
+        try:
+            response = await self._client.get(
+                f"/repos/{self._repo}/contents/{remote_path}",
+                params={"ref": self._branch},
+                headers={"Accept": "application/vnd.github.raw+octet-stream"},
+            )
+        except httpx.TransportError as exc:
+            raise StorageConnectionError(str(exc)) from exc
+
+        self._check_rate_limit(response)
+
+        if response.status_code == 200:
+            return response.content
+        if response.status_code == 404:
+            raise FileNotFoundError(f"GitHub 上不存在该文件: {remote_path}")
+        if response.status_code in (401, 403):
+            raise StorageAuthError(f"GitHub 认证失败: {response.status_code}")
+        if response.status_code in (413, 422):
+            raise StorageFileSizeError(
+                f"GitHub 拒绝下载 {remote_path}: HTTP {response.status_code}",
+                max_size=_MAX_CONTENT_BYTES,
+            )
+        raise StorageConnectionError(
+            f"GET {remote_path} 返回 {response.status_code}"
+        )
+
+    async def list(self, prefix: str) -> list[dict]:
+        """List directory entries at prefix."""
+        try:
+            response = await self._client.get(
+                f"/repos/{self._repo}/contents/{prefix}",
+                params={"ref": self._branch},
+            )
+        except httpx.TransportError as exc:
+            raise StorageConnectionError(str(exc)) from exc
+
+        self._check_rate_limit(response)
+
+        if response.status_code == 404:
+            return []
+        if response.status_code in (401, 403):
+            raise StorageAuthError(f"GitHub 认证失败: {response.status_code}")
+        if response.status_code != 200:
+            raise StorageConnectionError(
+                f"GET {prefix} 返回 {response.status_code}"
+            )
+
+        payload = response.json()
+        if not isinstance(payload, list):
+            # A single file was requested rather than a directory.
+            return [
+                {
+                    "path": payload.get("path", prefix),
+                    "size": payload.get("size", 0),
+                    "last_modified": None,
+                }
+            ]
+        return [
+            {
+                "path": entry.get("path", ""),
+                "size": entry.get("size", 0),
+                "last_modified": None,
+            }
+            for entry in payload
+        ]
+
     def get_url(self, remote_path: str) -> str:
         owner, repo_name = self._repo.split("/", 1)
         return f"https://raw.githubusercontent.com/{owner}/{repo_name}/{self._branch}/{remote_path}"

@@ -69,6 +69,12 @@ class _DummyBackend(StorageBackend):
     async def delete(self, remote_path):
         return None
 
+    async def load(self, remote_path):
+        return b""
+
+    async def list(self, prefix):
+        return []
+
     def get_url(self, remote_path):
         return f"/{remote_path}"
 
