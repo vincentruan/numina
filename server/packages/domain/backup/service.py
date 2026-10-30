@@ -12,13 +12,14 @@ definition. Two rules govern everything here:
 
 from __future__ import annotations
 
+import contextlib
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from packages.db.models.asset import Asset
+from packages.db.models.asset import Asset, asset_tags
 from packages.db.models.asset_snapshot import AssetSnapshot
 from packages.db.models.cached_file import CachedFile
 from packages.db.models.category import Category
@@ -47,6 +48,7 @@ from packages.db.models.user import User
 from packages.db.models.wish import Wish
 
 EXPORT_VERSION = "2.0"
+VALID_EXPORT_VERSIONS: tuple[str, ...] = ("1.0", "2.0")
 
 # Describes the column set captured per table. Dates and money are converted
 # by ``_serialize``; anything not listed is copied through unchanged.
@@ -284,6 +286,19 @@ def _coerce(name: str, value: Any) -> Any:
     return value
 
 
+def _decoerce(name: str, value: Any) -> Any:
+    """Turn JSON strings back into ORM-friendly date/datetime values."""
+    if value is None:
+        return None
+    if (name.endswith("_date") or name.endswith("_at")) and isinstance(value, str):
+        for parser in (datetime.fromisoformat, date.fromisoformat):
+            try:
+                return parser(value)
+            except ValueError:
+                continue
+    return value
+
+
 _ASSET_FIELDS = (
     "id",
     "user_id",
@@ -363,8 +378,18 @@ _USER_FIELDS = (
     "display_name",
     "avatar_url",
     "is_active",
-    "birth_date",
+    "birthday",
     "created_at",
+    # Credentials travel with the backup: a restore that leaves nobody able to
+    # log in has not restored the family. These are already password/PIN hashes
+    # and WebAuthn credential records, inside the same trust boundary as the
+    # encrypted config blobs above.
+    "password_hash",
+    "pin_hash",
+    "numeric_pin_hash",
+    "second_factor_type",
+    "second_factor_enabled",
+    "webauthn_credentials",
 )
 _CHORE_TEMPLATE_FIELDS = (
     "id",
@@ -642,3 +667,604 @@ _AI_PROVIDER_FIELDS = (
     "provider_name",
     "display_order",
 )
+
+
+# ── Restore ───────────────────────────────────────────────────────────────────
+
+
+def validate_backup_data(payload: Any) -> list[str]:
+    """Validate a backup payload without writing.
+
+    Returns a list of error strings; an empty list means the payload is valid.
+    """
+    if not isinstance(payload, dict):
+        return ["备份不是有效的字典"]
+    version = payload.get("export_version")
+    if version not in VALID_EXPORT_VERSIONS:
+        supported = ", ".join(VALID_EXPORT_VERSIONS)
+        return [f"不支持的备份版本: {version}，当前支持: {supported}"]
+
+    errors: list[str] = []
+    categories_in_payload: set[str] = set()
+    for cat in payload.get("categories", []):
+        cat_id = cat.get("id")
+        if cat_id is not None:
+            categories_in_payload.add(str(cat_id))
+
+    # Orphan check: category_id references must be satisfied by the payload or
+    # by a system row (family_id IS NULL) already in the database.
+    system_category_ids: set[str] = set()
+    try:
+        from packages.db.session import SessionLocal
+
+        db = SessionLocal()
+        try:
+            system_category_ids = {
+                str(row.id)
+                for row in db.query(Category).filter(Category.family_id.is_(None)).all()
+            }
+        finally:
+            db.close()
+    except Exception:
+        # No live database available — skip system-row resolution. The caller
+        # (import_family_data) will validate with the session it owns.
+        pass
+
+    for section_name in (
+        "assets",
+        "liabilities",
+        "wishes",
+        "rental_contracts",
+        "expense_entries",
+        "itinerary_items",
+    ):
+        for row in payload.get(section_name, []):
+            cat_id = row.get("category_id")
+            if cat_id is None:
+                continue
+            if (
+                str(cat_id) not in categories_in_payload
+                and str(cat_id) not in system_category_ids
+            ):
+                errors.append(
+                    f"{section_name} 引用了不存在的分类: category_id={cat_id}"
+                )
+                break
+    return errors
+
+
+def preview_restore(
+    db: Session, family_id: int, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Count rows that would be deleted and inserted by a restore."""
+    delete_counts: dict[str, int] = {}
+    for model in _DELETE_ORDER:
+        count = _delete_count(db, model, family_id)
+        if count:
+            delete_counts[_section_name_for(model)] = count
+
+    insert_counts: dict[str, int] = {}
+    for section in _INSERT_SECTIONS:
+        rows = payload.get(section) or []
+        if rows:
+            insert_counts[section] = len(rows)
+
+    return {
+        "delete": delete_counts,
+        "insert": insert_counts,
+        "backup_date": payload.get("export_date"),
+        "export_version": payload.get("export_version"),
+    }
+
+
+def import_family_data(
+    db: Session, family_id: int, user_id: int, payload: dict[str, Any]
+) -> dict[str, int]:
+    """Restore a family from a backup payload inside a single transaction.
+
+    Raises ``ValueError`` for validation failures — the existing data is left
+    untouched in that case.
+    """
+    from apps.backend.app.models.ai_provider_config import AIProviderConfig
+    from apps.backend.app.models.child_milestone import ChildMilestone
+
+    errors = validate_backup_data_with_session(db, payload)
+    if errors:
+        raise ValueError(errors[0])
+
+    # Delete existing family-scoped rows in FK-safe order.
+    for model in _DELETE_ORDER:
+        if model is Asset:
+            # asset_tags has no family_id of its own, so clear the links for
+            # this family's assets before the assets themselves go.
+            _clear_asset_tags(db, family_id)
+        _delete_all(db, model, family_id)
+    db.flush()
+    # Bulk delete bypasses identity-map bookkeeping; a new row with the same
+    # primary key as a just-deleted one otherwise collides with the stale
+    # identity entry. expunge_all clears the stale entries.
+    db.expunge_all()
+
+    stats: dict[str, int] = {}
+    obj: Any
+    # Category and tag remapping — the payload's rows may reference categories
+    # and tags by name (composite key for categories) rather than by ID.
+    category_map = _remap_categories(db, family_id, payload.get("categories", []))
+    tag_map = _remap_tags(db, family_id, payload.get("tags", []))
+
+    stats["categories"] = _insert_rows(
+        db, Category, family_id, payload.get("categories", []), category_map
+    )
+    stats["tags"] = _insert_rows(db, Tag, family_id, payload.get("tags", []), {})
+    # Users are identity, not family content: upsert so members who joined after
+    # the backup keep their accounts, and so re-inserting a preserved primary key
+    # does not collide with the row that is still there.
+    stats["users"] = _upsert_users(db, family_id, payload.get("users", []))
+
+    # Assets carry tag_names; resolve them against tag_map.
+    for row in payload.get("assets", []):
+        row["category_id"] = category_map.get(
+            str(row.get("category_id", "")), row.get("category_id")
+        )
+        resolved_tag_names = [
+            t for t in (row.pop("tag_names", None) or []) if t in tag_map
+        ]
+        asset = Asset(**_filter_fields(row, _ASSET_FIELDS))
+        asset.user_id = int(asset.user_id) if asset.user_id is not None else user_id
+        asset.family_id = (
+            int(asset.family_id) if asset.family_id is not None else family_id
+        )
+        asset.category_id = int(asset.category_id) if asset.category_id else None
+        _coerce_asset(asset)
+        if resolved_tag_names:
+            asset.tags = _tag_objects(db, resolved_tag_names, tag_map)
+        db.add(asset)
+        stats["assets"] = stats.get("assets", 0) + 1
+
+    model_sections: list[tuple[str, Any, tuple[str, ...]]] = [
+        ("liabilities", Liability, _LIABILITY_FIELDS),
+        ("wishes", Wish, _WISH_FIELDS),
+        ("rental_contracts", RentalContract, _RENTAL_FIELDS),
+        ("asset_snapshots", AssetSnapshot, _SNAPSHOT_FIELDS),
+        ("trips", Trip, _TRIP_FIELDS),
+        ("itinerary_items", ItineraryItem, _ITINERARY_FIELDS),
+        ("expense_entries", ExpenseEntry, _EXPENSE_FIELDS),
+        ("expense_categories", ExpenseCategory, _EXPENSE_CATEGORY_FIELDS),
+        ("cached_files", CachedFile, _CACHED_FILE_FIELDS),
+        ("notification_channels", NotificationChannel, _NOTIFICATION_CHANNEL_FIELDS),
+        ("notification_configs", NotificationConfig, _NOTIFICATION_CONFIG_FIELDS),
+        ("reminders", Reminder, _REMINDER_FIELDS),
+    ]
+    for model_name, model, fields in model_sections:
+        count = 0
+        for row in payload.get(model_name, []):
+            obj = model(**_filter_fields(row, fields))
+            _ensure_family(obj, family_id, user_id)
+            _coerce_ids(obj, family_id, category_map)
+            db.add(obj)
+            count += 1
+        stats[model_name] = count
+
+    # App-owned models — imported lazily.
+    app_models: list[tuple[str, Any]] = [
+        ("milestones", ChildMilestone),
+        ("ai_provider_configs", AIProviderConfig),
+    ]
+    for model_name, model in app_models:
+        count = 0
+        app_fields = _fields_for(model_name)
+        if app_fields is None:
+            continue
+        for row in payload.get(model_name, []):
+            obj = model(**_filter_fields(row, app_fields))
+            _ensure_family(obj, family_id, user_id)
+            db.add(obj)
+            count += 1
+        stats[model_name] = count
+
+    # File remote locations — reached through the file_id's family.
+    for row in payload.get("file_remote_locations", []):
+        obj = FileRemoteLocation(**_filter_fields(row, _REMOTE_LOCATION_FIELDS))
+        _coerce_ids(obj, family_id, {})
+        db.add(obj)
+        stats["file_remote_locations"] = stats.get("file_remote_locations", 0) + 1
+
+    # Storage backend config — encrypted blob preserved verbatim.
+    for row in payload.get("storage_backends", []):
+        obj = StorageBackend(**_filter_fields(row, _STORAGE_BACKEND_FIELDS))
+        _coerce_ids(obj, family_id, {})
+        db.add(obj)
+        stats["storage_backends"] = stats.get("storage_backends", 0) + 1
+
+    # Learning tables — keyed by child_id, which is already in the payload.
+    for row in payload.get("learning_progress", []):
+        obj = LearningProgress(**_filter_fields(row, _LEARNING_PROGRESS_FIELDS))
+        _coerce_ids(obj, family_id, {})
+        db.add(obj)
+        stats["learning_progress"] = stats.get("learning_progress", 0) + 1
+
+    for row in payload.get("learning_stats", []):
+        obj = ChildLearningStats(**_filter_fields(row, _LEARNING_STATS_FIELDS))
+        _coerce_ids(obj, family_id, {})
+        db.add(obj)
+        stats["learning_stats"] = stats.get("learning_stats", 0) + 1
+
+    for row in payload.get("learning_sessions", []):
+        session_obj: Any
+        if row.get("kind") == "session":
+            session_obj = LearningSession(
+                **_filter_fields(row, _LEARNING_SESSION_FIELDS)
+            )
+        else:
+            session_obj = LearningAssessmentAttempt(
+                **_filter_fields(row, _LEARNING_ATTEMPT_FIELDS)
+            )
+        obj = session_obj
+        _coerce_ids(obj, family_id, {})
+        db.add(obj)
+        stats["learning_sessions"] = stats.get("learning_sessions", 0) + 1
+
+    for row in payload.get("chores", []):
+        if row.get("kind") == "template":
+            obj = ChoreTemplate(**_filter_fields(row, _CHORE_TEMPLATE_FIELDS))
+        else:
+            obj = ChoreInstance(**_filter_fields(row, _CHORE_INSTANCE_FIELDS))
+        _coerce_ids(obj, family_id, {})
+        db.add(obj)
+        stats["chores"] = stats.get("chores", 0) + 1
+
+    for row in payload.get("coin_transactions", []):
+        obj = CoinTransaction(**_filter_fields(row, _COIN_FIELDS))
+        _coerce_ids(obj, family_id, {})
+        db.add(obj)
+        stats["coin_transactions"] = stats.get("coin_transactions", 0) + 1
+
+    for row in payload.get("reminder_notifications", []):
+        obj = ReminderNotification(**_filter_fields(row, _REMINDER_NOTIFICATION_FIELDS))
+        _coerce_ids(obj, family_id, {})
+        db.add(obj)
+        stats["reminder_notifications"] = stats.get("reminder_notifications", 0) + 1
+
+    db.flush()
+    return stats
+
+
+def validate_backup_data_with_session(
+    db: Session, payload: dict[str, Any]
+) -> list[str]:
+    """Validate a backup using the caller's live session for orphan resolution."""
+    if not isinstance(payload, dict):
+        return ["备份不是有效的字典"]
+    version = payload.get("export_version")
+    if version not in VALID_EXPORT_VERSIONS:
+        supported = ", ".join(VALID_EXPORT_VERSIONS)
+        return [f"不支持的备份版本: {version}，当前支持: {supported}"]
+
+    categories_in_payload: set[str] = {
+        str(c.get("id"))
+        for c in payload.get("categories", [])
+        if c.get("id") is not None
+    }
+    system_category_ids = {
+        str(row.id)
+        for row in db.query(Category).filter(Category.family_id.is_(None)).all()
+    }
+    asset_refs = payload.get("assets", [])
+    errors: list[str] = []
+    for row in asset_refs:
+        cat_id = row.get("category_id")
+        if cat_id is None:
+            continue
+        if (
+            str(cat_id) not in categories_in_payload
+            and str(cat_id) not in system_category_ids
+        ):
+            errors.append(f"资产引用了不存在的分类: category_id={cat_id}")
+    return errors
+
+
+# ── Delete order ──────────────────────────────────────────────────────────────
+
+
+_DELETE_ORDER = (
+    ReminderNotification,
+    Reminder,
+    NotificationChannel,
+    NotificationConfig,
+    AssetSnapshot,
+    ExpenseEntry,
+    ItineraryItem,
+    Trip,
+    CachedFile,
+    FileRemoteLocation,
+    RentalContract,
+    CoinTransaction,
+    ChoreInstance,
+    ChoreTemplate,
+    Liability,
+    Asset,
+    Wish,
+    Tag,
+    Category,
+)
+
+
+def _family_predicate(db: Session, model, family_id: int):
+    """Return a query filter that selects rows owned by this family."""
+    if model is ReminderNotification:
+        reminder_ids = [
+            r.id for r in db.query(Reminder).filter_by(family_id=family_id).all()
+        ]
+        return (
+            ReminderNotification.reminder_id.in_(reminder_ids) if reminder_ids else None
+        )
+    if model is FileRemoteLocation:
+        file_ids = [
+            f.id for f in db.query(CachedFile).filter_by(family_id=family_id).all()
+        ]
+        return FileRemoteLocation.file_id.in_(file_ids) if file_ids else None
+    return model.family_id == family_id
+
+
+def _delete_count(db: Session, model, family_id: int) -> int:
+    predicate = _family_predicate(db, model, family_id)
+    if predicate is None:
+        return 0
+    count = db.query(model).filter(predicate).count()
+    return int(count)
+
+
+def _delete_all(db: Session, model, family_id: int) -> None:
+    predicate = _family_predicate(db, model, family_id)
+    if predicate is None:
+        return
+    db.query(model).filter(predicate).delete(synchronize_session=False)
+
+
+def _clear_asset_tags(db: Session, family_id: int) -> None:
+    """Drop asset/tag links for this family before the assets are deleted."""
+    asset_ids = [a.id for a in db.query(Asset).filter_by(family_id=family_id).all()]
+    if asset_ids:
+        db.execute(asset_tags.delete().where(asset_tags.c.asset_id.in_(asset_ids)))
+
+
+_SECTION_NAMES = {
+    Asset: "assets",
+    Liability: "liabilities",
+    Category: "categories",
+    Tag: "tags",
+    User: "users",
+    Wish: "wishes",
+    ChoreTemplate: "chores",
+    ChoreInstance: "chores",
+    CoinTransaction: "coin_transactions",
+    RentalContract: "rental_contracts",
+    AssetSnapshot: "asset_snapshots",
+    Trip: "trips",
+    ItineraryItem: "itinerary_items",
+    ExpenseEntry: "expense_entries",
+    ExpenseCategory: "expense_categories",
+    CachedFile: "cached_files",
+    FileRemoteLocation: "file_remote_locations",
+    StorageBackend: "storage_backends",
+    LearningProgress: "learning_progress",
+    ChildLearningStats: "learning_stats",
+    NotificationChannel: "notification_channels",
+    NotificationConfig: "notification_configs",
+    Reminder: "reminders",
+    ReminderNotification: "reminder_notifications",
+}
+
+
+def _section_name_for(model) -> str:
+    """Map a model to its payload section; app-owned models resolve lazily."""
+    name = _SECTION_NAMES.get(model)
+    if name is not None:
+        return name
+    from apps.backend.app.models.ai_provider_config import AIProviderConfig
+    from apps.backend.app.models.child_milestone import ChildMilestone
+
+    if model is ChildMilestone:
+        return "milestones"
+    if model is AIProviderConfig:
+        return "ai_provider_configs"
+    return str(model.__tablename__)
+
+
+_INSERT_SECTIONS = (
+    "categories",
+    "tags",
+    "users",
+    "assets",
+    "liabilities",
+    "wishes",
+    "rental_contracts",
+    "asset_snapshots",
+    "trips",
+    "itinerary_items",
+    "expense_entries",
+    "expense_categories",
+    "cached_files",
+    "notification_channels",
+    "notification_configs",
+    "reminders",
+)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _remap_categories(
+    db: Session, family_id: int, payload_categories: list[dict]
+) -> dict[str, str]:
+    """Build a map of payload category_id -> inserted category_id."""
+    existing = {
+        (c.name, c.asset_type): c.id
+        for c in db.query(Category)
+        .filter((Category.family_id == family_id) | (Category.family_id.is_(None)))
+        .all()
+    }
+    system = {
+        str(c.id): str(c.id)
+        for c in db.query(Category).filter(Category.family_id.is_(None)).all()
+    }
+    payload_to_inserted: dict[str, str] = {**system}
+    for cat in payload_categories:
+        key = (cat.get("name"), cat.get("asset_type"))
+        cat_id = cat.get("id")
+        if key in existing:
+            if cat_id is not None:
+                payload_to_inserted[str(cat_id)] = str(existing[key])
+        else:
+            if cat_id is not None:
+                payload_to_inserted[str(cat_id)] = str(cat_id)
+    return payload_to_inserted
+
+
+def _remap_tags(
+    db: Session, family_id: int, payload_tags: list[dict]
+) -> dict[str, str]:
+    existing = {
+        t.name: str(t.id)
+        for t in db.query(Tag).filter(Tag.family_id == family_id).all()
+    }
+    tag_map: dict[str, str] = dict(existing)
+    for tag in payload_tags:
+        name = tag.get("name")
+        if name is None:
+            continue
+        tag_map[name] = str(tag.get("id"))
+    return tag_map
+
+
+def _tag_objects(db: Session, names: list[str], tag_map: dict[str, str]) -> list:
+    ids = [int(tag_map[n]) for n in names if n in tag_map]
+    if not ids:
+        return []
+    return db.query(Tag).filter(Tag.id.in_(ids)).all()
+
+
+def _upsert_users(db: Session, family_id: int, rows: list[dict]) -> int:
+    """Merge backed-up users into the family, updating existing rows in place."""
+    count = 0
+    for row in rows:
+        data = _filter_fields(row, _USER_FIELDS)
+        user_id = data.get("id")
+        existing = None
+        if user_id is not None:
+            existing = db.query(User).filter(User.id == int(user_id)).one_or_none()
+        if existing is None:
+            obj = User(**data)
+            _ensure_family(obj, family_id, None)
+            _coerce_ids(obj, family_id, {})
+            db.add(obj)
+        else:
+            for name, value in data.items():
+                if name == "id":
+                    continue
+                setattr(existing, name, value)
+        count += 1
+    return count
+
+
+def _insert_rows(
+    db: Session, model, family_id: int, rows: list[dict], remap: dict
+) -> int:
+    fields = _fields_for_model(model)
+    if fields is None:
+        return 0
+    count = 0
+    for row in rows:
+        data = dict(_filter_fields(row, fields))
+        if "category_id" in data and data["category_id"] is not None:
+            data["category_id"] = remap.get(
+                str(data["category_id"]), data["category_id"]
+            )
+        obj = model(**data)
+        _ensure_family(obj, family_id, None)
+        _coerce_ids(obj, family_id, remap)
+        db.add(obj)
+        count += 1
+    return count
+
+
+def _fields_for(section: str) -> tuple | None:
+    return {
+        "milestones": _MILESTONE_FIELDS,
+        "ai_provider_configs": _AI_PROVIDER_FIELDS,
+    }.get(section)
+
+
+def _fields_for_model(model) -> tuple | None:
+    return {
+        Category: _CATEGORY_FIELDS,
+        Tag: _TAG_FIELDS,
+        User: _USER_FIELDS,
+        Liability: _LIABILITY_FIELDS,
+        Wish: _WISH_FIELDS,
+        RentalContract: _RENTAL_FIELDS,
+        AssetSnapshot: _SNAPSHOT_FIELDS,
+        Trip: _TRIP_FIELDS,
+        ItineraryItem: _ITINERARY_FIELDS,
+        ExpenseEntry: _EXPENSE_FIELDS,
+        ExpenseCategory: _EXPENSE_CATEGORY_FIELDS,
+        CachedFile: _CACHED_FILE_FIELDS,
+        NotificationChannel: _NOTIFICATION_CHANNEL_FIELDS,
+        NotificationConfig: _NOTIFICATION_CONFIG_FIELDS,
+        Reminder: _REMINDER_FIELDS,
+    }.get(model)
+
+
+def _filter_fields(row: dict[str, Any], fields: tuple[str, ...]) -> dict[str, Any]:
+    out = {}
+    for name in fields:
+        value = row.get(name)
+        if value is None:
+            continue
+        out[name] = _decoerce(name, value)
+    return out
+
+
+def _ensure_family(obj, family_id: int, user_id: int | None) -> None:
+    if hasattr(obj, "family_id") and obj.family_id is None:
+        obj.family_id = family_id
+    if user_id is not None and hasattr(obj, "user_id") and obj.user_id is None:
+        obj.user_id = user_id
+
+
+def _coerce_ids(obj, family_id: int, remap: dict) -> None:
+    for name in (
+        "id",
+        "family_id",
+        "user_id",
+        "child_id",
+        "child_user_id",
+        "category_id",
+        "linked_asset_id",
+        "file_id",
+        "backend_id",
+        "reminder_id",
+        "channel_id",
+        "trip_id",
+        "template_id",
+    ):
+        value = getattr(obj, name, None)
+        if value is None:
+            continue
+        if name == "category_id":
+            value = remap.get(str(value), value)
+        with contextlib.suppress(TypeError, ValueError):
+            setattr(obj, name, int(value))
+
+
+def _coerce_asset(asset: Asset) -> None:
+    for name in ("id", "family_id", "user_id", "category_id", "from_wish_id"):
+        value = getattr(asset, name)
+        if value is None:
+            continue
+        with contextlib.suppress(TypeError, ValueError):
+            setattr(asset, name, int(value))
+    if asset.purchase_price is not None and isinstance(asset.purchase_price, str):
+        asset.purchase_price = Decimal(asset.purchase_price)
+    if asset.current_value is not None and isinstance(asset.current_value, str):
+        asset.current_value = Decimal(asset.current_value)
