@@ -826,3 +826,95 @@ async def _dispatch_digest(db: Session, channel: NotificationChannel) -> None:
             reminder.digest_sent_at = now
 
     db.commit()
+
+
+async def send_test_notification(
+    db: Session, channel: NotificationChannel, config: dict
+) -> tuple[bool, str | None]:
+    """Send a one-off test message through *channel* to verify connectivity.
+
+    Returns ``(success, error_message)``. Unlike real dispatch this does not
+    write ReminderNotification rows — a test send is not a delivery of any
+    reminder and must not affect retry counters or digest bookkeeping.
+    """
+    locale = _resolve_locale(db, channel.family_id)
+    prefix = _env_prefix(locale)
+    text = "🔔 Numina 通知测试" if locale.startswith("zh") else "🔔 Numina test notification"
+    if prefix:
+        text = f"{prefix} {text}"
+
+    if channel.channel_type == "telegram":
+        bot_token = str(config.get("bot_token", ""))
+        chat_id = str(config.get("chat_id", ""))
+        if not bot_token or not chat_id:
+            return False, "bot_token 与 chat_id 未配置"
+        ok = await NotificationSender.send_telegram(
+            bot_token=bot_token, chat_id=chat_id, text=text
+        )
+        return ok, None if ok else "Telegram 发送失败，请检查 Bot Token 与 Chat ID"
+
+    if channel.channel_type == "email":
+        try:
+            port = int(config.get("smtp_port", 587))
+        except (TypeError, ValueError):
+            return False, "SMTP 端口无效"
+        ok = await asyncio.to_thread(
+            NotificationSender.send_email,
+            smtp_host=str(config.get("smtp_host", "")),
+            smtp_port=port,
+            smtp_user=str(config.get("smtp_user", "")),
+            smtp_password=str(config.get("smtp_password", "")),
+            smtp_from=str(config.get("smtp_from", "")),
+            to=str(config.get("to", "")),
+            subject=text,
+            body=text,
+        )
+        return ok, None if ok else "邮件发送失败，请检查 SMTP 配置"
+
+    if channel.channel_type == "feishu":
+        webhook_url = str(config.get("webhook_url", ""))
+        if not webhook_url:
+            return False, "webhook_url 未配置"
+        ok = await NotificationSender.send_feishu(
+            webhook_url=webhook_url,
+            secret=str(config.get("secret", "")),
+            text=text,
+        )
+        return ok, None if ok else "飞书发送失败，请检查 Webhook 地址与签名"
+
+    if channel.channel_type == "webpush":
+        vapid_private_key = str(
+            config.get("vapid_private_key") or settings.VAPID_PRIVATE_KEY
+        )
+        if not vapid_private_key:
+            return False, "VAPID 私钥未配置"
+        subscriptions = (
+            db.query(PushSubscription)
+            .filter(PushSubscription.family_id == channel.family_id)
+            .all()
+        )
+        if not subscriptions:
+            return False, "当前家庭没有已注册的推送订阅，请先在浏览器中允许通知"
+        vapid_claims = {"sub": settings.VAPID_SUBJECT}
+        delivered = 0
+        for sub in subscriptions:
+            result = await asyncio.to_thread(
+                NotificationSender.send_webpush,
+                {
+                    "endpoint": sub.endpoint,
+                    "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
+                },
+                {"title": text, "body": text, "reminder_type": "test"},
+                vapid_private_key,
+                vapid_claims,
+            )
+            if result == "gone":
+                db.delete(sub)
+            elif result:
+                delivered += 1
+        db.commit()
+        if delivered:
+            return True, None
+        return False, "所有推送订阅均已失效或发送失败"
+
+    return False, f"不支持的渠道类型: {channel.channel_type}"

@@ -361,8 +361,44 @@ def literacy_report_weekly_job() -> None:
 # ── Job 10: Daily notification digest ─────────────────────────────────────────
 
 
+def _parse_digest_time(value: str) -> tuple[int, int] | None:
+    """Parse an ``HH:MM`` digest_time string. Returns None when malformed."""
+    parts = value.strip().split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        hour, minute = int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return hour, minute
+
+
+def _in_digest_window(digest_time: str, now: datetime, window_minutes: int = 2) -> bool:
+    """True when *now* falls within ±window_minutes of *digest_time*.
+
+    The job runs every 5 minutes, so a ±2-minute window covers the full
+    interval without letting one channel match twice. The comparison is
+    circular over the day so 00:01 is correctly matched at 23:59.
+    """
+    parsed = _parse_digest_time(digest_time)
+    if parsed is None:
+        return False
+    target_seconds = parsed[0] * 3600 + parsed[1] * 60
+    now_seconds = now.hour * 3600 + now.minute * 60
+    diff = abs(now_seconds - target_seconds)
+    diff = min(diff, 86400 - diff)
+    return diff <= window_minutes * 60
+
+
 async def notification_digest_job() -> None:
-    """Send daily digest notifications for channels with digest_mode='daily'."""
+    """Send daily digest notifications for channels whose digest_time is now.
+
+    Runs every 5 minutes and only processes channels whose configured
+    ``digest_time`` falls inside the current window, so per-channel delivery
+    times set by the user actually take effect.
+    """
     from packages.db.session import SessionLocal  # noqa: PLC0415
 
     db = SessionLocal()
@@ -374,17 +410,25 @@ async def notification_digest_job() -> None:
             NotificationChannel,  # noqa: PLC0415
         )
 
-        channels = (
+        now = datetime.now()
+        candidates = (
             db.query(NotificationChannel)
             .filter_by(digest_mode="daily", is_enabled=True)
             .all()
         )
-        for channel in channels:
+        due = [c for c in candidates if _in_digest_window(c.digest_time, now)]
+        if not due:
+            return
+        for channel in due:
             try:
                 await _dispatch_digest(db, channel)
             except Exception:
                 logger.exception("Digest send failed for channel %s", channel.id)
-        logger.info("Notification digest job completed")
+        logger.info(
+            "Notification digest job completed: %d/%d channels due",
+            len(due),
+            len(candidates),
+        )
     except Exception:
         logger.exception("Notification digest job failed")
     finally:

@@ -168,19 +168,19 @@ def setup_all_jobs() -> None:
     )
     logger.info("识字周报生成任务已配置（每周日 02:00）")
 
-    # Job 10: Daily notification digest — daily at 21:00
+    # Job 10: Daily notification digest — every 5 minutes, per-channel
+    # digest_time filtering happens inside the job (see _in_digest_window).
     scheduler.add_job(
         notification_digest_job,
         trigger="cron",
-        hour=21,
-        minute=0,
+        minute="*/5",
         id="notification_digest",
         name="notification_digest_job",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
     )
-    logger.info("通知摘要定时任务已配置（每日 21:00）")
+    logger.info("通知摘要定时任务已配置（每 5 分钟，按渠道 digest_time 过滤）")
 
     # Job 11: Travel trip auto-transitions — daily at 06:00
     scheduler.add_job(

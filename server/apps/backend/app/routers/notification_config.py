@@ -6,13 +6,54 @@ from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.notification_config import (
+    LargePurchaseStatus,
     NotificationConfigResponse,
     NotificationConfigUpdate,
+    NotificationFeatureStatus,
 )
 from apps.backend.app.utils.snowflake import next_id
+from packages.db.models.notification_channel import NotificationChannel
 from packages.db.models.notification_config import NotificationConfig
+from packages.db.models.notification_subscription import NotificationSubscription
 
 router = APIRouter(prefix="/notification-config", tags=["notification-config"])
+
+
+@router.get("/status", response_model=NotificationFeatureStatus)
+def get_feature_status(
+    db: Session = Depends(get_db), user: User = Depends(require_adult)
+):
+    """Report which half of a two-part feature is missing.
+
+    ``large_purchase`` only fires when *both* a threshold is configured and at
+    least one enabled channel subscribes to the event. Each side lives on a
+    different page, so the UI needs this to tell the user what is missing.
+    """
+    config = db.query(NotificationConfig).filter_by(family_id=user.family_id).first()
+    threshold_configured = config is not None and (
+        config.large_purchase_threshold_fixed is not None
+        or config.large_purchase_threshold_multiplier is not None
+    )
+
+    subscribing_channels = (
+        db.query(NotificationChannel)
+        .join(
+            NotificationSubscription,
+            NotificationChannel.id == NotificationSubscription.channel_id,
+        )
+        .filter(
+            NotificationChannel.family_id == user.family_id,
+            NotificationSubscription.reminder_type == "large_purchase",
+        )
+        .all()
+    )
+    return NotificationFeatureStatus(
+        large_purchase=LargePurchaseStatus(
+            threshold_configured=threshold_configured,
+            subscribing_channel_count=len(subscribing_channels),
+            subscribing_channel_names=[c.name for c in subscribing_channels],
+        )
+    )
 
 
 @router.get("", response_model=NotificationConfigResponse)

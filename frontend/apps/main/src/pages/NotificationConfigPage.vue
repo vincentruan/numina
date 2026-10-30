@@ -6,15 +6,43 @@
   />
 
   <div class="page-content">
+    <!-- Large-purchase linkage hint -->
+    <div v-if="largePurchaseHint" class="linkage-hint">
+      <van-notice-bar
+        :text="largePurchaseHint.text"
+        :type="largePurchaseHint.type"
+        left-icon="info-o"
+        :clickable="!!largePurchaseHint.action"
+        @click="onLargePurchaseLinkClick"
+      />
+    </div>
+
     <van-cell-group inset :title="t('reminders.channelGroupTitle')" class="section">
       <van-swipe-cell v-for="channel in channels" :key="channel.id">
         <van-cell
           :title="channel.name"
           :label="channelLabel(channel)"
-          :value="channel.is_enabled ? t('reminders.channelEnabled') : t('reminders.channelDisabled')"
           is-link
           @click="editChannel(channel)"
-        />
+        >
+          <template #value>
+            <div class="channel-status" @click.stop="openDeliveryHistory(channel, $event)">
+              <span
+                v-if="channel.last_delivery_status === 'sent'"
+                class="status-dot status-dot--sent"
+              />
+              <span
+                v-else-if="channel.last_delivery_status === 'failed'"
+                class="status-dot status-dot--failed"
+              />
+              <span
+                v-else
+                class="status-dot status-dot--none"
+              />
+              <span class="status-text">{{ deliveryStatusText(channel) }}</span>
+            </div>
+          </template>
+        </van-cell>
         <template #right>
           <van-button
             square
@@ -33,6 +61,17 @@
     <div class="popup-content">
       <van-nav-bar :title="editingChannel ? t('reminders.editChannelTitle') : t('reminders.addChannelTitle')">
         <template #right>
+          <van-button
+            v-if="editingChannel"
+            plain
+            type="primary"
+            size="small"
+            :loading="testSending"
+            :disabled="testSending"
+            @click="sendTest"
+          >
+            {{ testSending ? t('reminders.testSending') : t('reminders.sendTest') }}
+          </van-button>
           <van-icon name="cross" @click="showSheet = false" />
         </template>
       </van-nav-bar>
@@ -61,6 +100,9 @@
           <van-field v-model="form.smtp_password" :label="t('reminders.smtpPasswordLabel')" type="password" />
           <van-field v-model="form.smtp_from" :label="t('reminders.smtpFromLabel')" :placeholder="t('reminders.smtpFromPlaceholder')" />
           <van-field v-model="form.email_to" :label="t('reminders.emailToLabel')" :placeholder="t('reminders.smtpToPlaceholder')" />
+        </template>
+        <template v-if="form.channel_type === 'webpush'">
+          <van-cell :title="t('reminders.webpushHint')" />
         </template>
 
         <!-- Subscription events — opens EventSelectorPopup -->
@@ -151,18 +193,46 @@
       @cancel="showTypePicker = false"
     />
   </van-popup>
+
+  <!-- Delivery history popup -->
+  <van-popup v-model:show="showDeliveryHistory" position="bottom" round teleport="body" :style="{ height: '50%' }">
+    <div class="popup-content">
+      <van-nav-bar :title="t('reminders.deliveryHistory')">
+        <template #right>
+          <van-icon name="cross" @click="showDeliveryHistory = false" />
+        </template>
+      </van-nav-bar>
+      <van-loading v-if="historyLoading" class="history-loading" />
+      <van-empty v-else-if="!deliveryHistory.length" :description="t('reminders.deliveryHistoryEmpty')" />
+      <van-cell v-for="record in deliveryHistory" v-else :key="record.id" :title="record.reminder_title">
+        <template #label>{{ t('reminders.types.' + record.reminder_type) }}</template>
+        <template #value>
+          <span :class="record.status === 'sent' ? 'delivery-status--sent' : 'delivery-status--failed'">
+            {{ record.status === 'sent' ? t('reminders.deliveryStatusSent') : t('reminders.deliveryStatusFailed') }}
+          </span>
+        </template>
+      </van-cell>
+    </div>
+  </van-popup>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showSuccessToast } from 'vant'
+import { useRouter } from 'vue-router'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import {
   notificationChannelsApi,
   type NotificationChannelResponse,
+  type NotificationChannelType,
+  type ChannelTestResult,
+  type DeliveryRecord,
+  type NotificationFeatureStatus,
 } from '@/api/notificationChannels'
+import EventSelectorPopup from '@/components/notification/EventSelectorPopup.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const channels = ref<NotificationChannelResponse[]>([])
 const showSheet = ref(false)
@@ -170,17 +240,23 @@ const showTypePicker = ref(false)
 const showEventSelector = ref(false)
 const showMentionSheet = ref(false)
 const showTimePicker = ref(false)
+const showDeliveryHistory = ref(false)
 const editingChannel = ref<NotificationChannelResponse | null>(null)
+const testSending = ref(false)
+const deliveryHistory = ref<DeliveryRecord[]>([])
+const historyLoading = ref(false)
+const featureStatus = ref<NotificationFeatureStatus | null>(null)
 
 const typePickerColumns = computed(() => [
   { text: t('reminders.channelType.telegram'), value: 'telegram' },
   { text: t('reminders.channelType.email'), value: 'email' },
   { text: t('reminders.channelType.feishu'), value: 'feishu' },
+  { text: t('reminders.channelType.webpush'), value: 'webpush' },
 ])
 
 const form = reactive({
   name: '',
-  channel_type: 'telegram' as 'telegram' | 'email' | 'feishu',
+  channel_type: 'telegram' as NotificationChannelType,
   bot_token: '',
   chat_id: '',
   webhook_url: '',
@@ -232,6 +308,36 @@ const mentionSummary = computed(() => {
   return ''
 })
 
+/** Hint banner above the channel list about large-purchase linkage. */
+const largePurchaseHint = computed(() => {
+  const status = featureStatus.value?.large_purchase
+  if (!status) return null
+  const hasSubscription = channels.value.some((c) => c.subscriptions.includes('large_purchase'))
+  if (status.threshold_configured && status.subscribing_channel_count > 0) {
+    return {
+      type: 'primary' as const,
+      text: t('reminders.largePurchaseLinkageOk', { count: status.subscribing_channel_count }),
+      action: undefined as 'threshold' | 'channels' | undefined,
+    }
+  }
+  if (!status.threshold_configured && hasSubscription) {
+    return {
+      type: 'warning' as const,
+      text: t('reminders.largePurchaseNoThreshold'),
+      action: 'threshold' as const,
+    }
+  }
+  if (status.threshold_configured && !hasSubscription) {
+    return {
+      type: 'warning' as const,
+      text: t('reminders.largePurchaseNoChannel'),
+      action: 'channels' as const,
+    }
+  }
+  // Neither side configured — silent until one side is.
+  return null
+})
+
 function resetForm() {
   form.name = ''
   form.channel_type = 'telegram'
@@ -266,8 +372,75 @@ function channelLabel(channel: NotificationChannelResponse): string {
   return parts.join(' · ')
 }
 
+function deliveryStatusText(channel: NotificationChannelResponse): string {
+  if (!channel.last_delivery_status || !channel.last_delivery_at) {
+    return t('reminders.lastDeliveryNone')
+  }
+  const key =
+    channel.last_delivery_status === 'sent'
+      ? 'reminders.lastDeliverySuccess'
+      : 'reminders.lastDeliveryFailed'
+  const time = new Date(channel.last_delivery_at).toLocaleString()
+  return t(key, { time })
+}
+
+async function openDeliveryHistory(channel: NotificationChannelResponse, ev: MouseEvent) {
+  ev.stopPropagation()
+  editingChannel.value = null
+  deliveryHistory.value = []
+  historyLoading.value = true
+  showDeliveryHistory.value = true
+  try {
+    deliveryHistory.value = await notificationChannelsApi.getDeliveryHistory(channel.id)
+  } catch {
+    showFailToast(t('reminders.loadHistoryFailed'))
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function sendTest() {
+  if (!editingChannel.value) {
+    showToast(t('reminders.saveBeforeTest'))
+    return
+  }
+  testSending.value = true
+  let result: ChannelTestResult
+  try {
+    result = await notificationChannelsApi.testChannel(editingChannel.value.id)
+  } catch {
+    showFailToast(t('reminders.testFailed'))
+    return
+  } finally {
+    testSending.value = false
+  }
+  if (result.success) {
+    showSuccessToast(t('reminders.testSuccess'))
+  } else {
+    showFailToast(
+      result.error
+        ? t('reminders.testFailedWithReason', { reason: result.error })
+        : t('reminders.testFailed'),
+    )
+  }
+}
+
+function onLargePurchaseLinkClick() {
+  const action = largePurchaseHint.value?.action
+  if (action === 'threshold') {
+    router.push('/settings/notifications/threshold')
+  } else if (action === 'channels') {
+    // Stay on this page — user just needs to subscribe a channel.
+  }
+}
+
 onMounted(async () => {
-  channels.value = await notificationChannelsApi.list()
+  const [listed, status] = await Promise.all([
+    notificationChannelsApi.list(),
+    notificationChannelsApi.getFeatureStatus().catch(() => null),
+  ])
+  channels.value = listed
+  featureStatus.value = status
 })
 
 function openAdd() {
@@ -283,20 +456,26 @@ function editChannel(channel: NotificationChannelResponse) {
   form.subscriptions = [...channel.subscriptions]
   form.digestEnabled = channel.digest_mode === 'daily'
   form.digest_time = channel.digest_time || '21:00'
-  // Populate config fields from decrypted config
+  // Populate config fields from decrypted config. Masked sensitive values are
+  // preserved verbatim so the save path sends them back for the backend to
+  // keep the existing ciphertext.
   const cfg = channel.config || {}
   if (channel.channel_type === 'telegram') {
     form.bot_token = String(cfg.bot_token || '')
     form.chat_id = String(cfg.chat_id || '')
-    const mc = (cfg.mention_config || {}) as Record<string, string>
-    form.mention_username = String(mc.username || '')
-    form.mention_user_id = String(mc.user_id || '')
+    const mc = cfg.mention_config as Record<string, string> | string | undefined
+    if (mc && typeof mc === 'object') {
+      form.mention_username = String(mc.username || '')
+      form.mention_user_id = String(mc.user_id || '')
+    }
   } else if (channel.channel_type === 'feishu') {
     form.webhook_url = String(cfg.webhook_url || '')
     form.secret = String(cfg.secret || '')
-    const mc = (cfg.mention_config || {}) as Record<string, string>
-    form.mention_name = String(mc.name || '')
-    form.mention_open_id = String(mc.open_id || '')
+    const mc = cfg.mention_config as Record<string, string> | string | undefined
+    if (mc && typeof mc === 'object') {
+      form.mention_name = String(mc.name || '')
+      form.mention_open_id = String(mc.open_id || '')
+    }
   } else if (channel.channel_type === 'email') {
     form.smtp_host = String(cfg.smtp_host || '')
     form.smtp_port = typeof cfg.smtp_port === 'number' ? cfg.smtp_port : parseInt(String(cfg.smtp_port || '587')) || 587
@@ -344,7 +523,8 @@ async function saveChannel() {
       ? { bot_token: form.bot_token, chat_id: form.chat_id }
       : form.channel_type === 'feishu'
       ? { webhook_url: form.webhook_url, secret: form.secret }
-      : {
+      : form.channel_type === 'email'
+      ? {
           smtp_host: form.smtp_host,
           smtp_port: typeof form.smtp_port === 'number' ? form.smtp_port : parseInt(form.smtp_port) || 587,
           smtp_user: form.smtp_user,
@@ -352,6 +532,7 @@ async function saveChannel() {
           smtp_from: form.smtp_from,
           to: form.email_to,
         }
+      : {} // webpush has no user-configurable config
 
   // Attach mention_config for telegram / feishu
   if (form.channel_type === 'telegram' && (form.mention_username || form.mention_user_id)) {
@@ -402,7 +583,7 @@ async function removeChannel(id: string) {
 }
 
 function onTypeConfirm({ selectedValues }: { selectedValues: string[] }) {
-  form.channel_type = selectedValues[0] as 'telegram' | 'email' | 'feishu'
+  form.channel_type = selectedValues[0] as NotificationChannelType
   showTypePicker.value = false
 }
 </script>
@@ -420,5 +601,52 @@ function onTypeConfirm({ selectedValues }: { selectedValues: string[] }) {
 .popup-content {
   height: 100%;
   overflow-y: auto;
+}
+.linkage-hint {
+  margin: 8px 16px 0;
+}
+.channel-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  cursor: pointer;
+  min-width: 80px;
+}
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.status-dot--sent {
+  background: var(--van-success-color);
+}
+.status-dot--failed {
+  background: var(--van-danger-color);
+}
+.status-dot--none {
+  background: var(--van-gray-4);
+}
+.status-text {
+  font-size: 11px;
+  color: var(--van-text-color-3);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.delivery-status--sent {
+  color: var(--van-success-color);
+  font-size: 12px;
+}
+.delivery-status--failed {
+  color: var(--van-danger-color);
+  font-size: 12px;
+}
+.history-loading {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
 }
 </style>

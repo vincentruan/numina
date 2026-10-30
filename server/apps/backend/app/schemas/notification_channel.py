@@ -37,3 +37,20 @@ class NotificationChannelResponse(SnowflakeBase):
     digest_time: str = "21:00"
     created_at: datetime
     updated_at: datetime
+    # Latest delivery outcome, joined from reminder_notifications.
+    last_delivery_status: str | None = None
+    last_delivery_at: datetime | None = None
+
+
+class ChannelTestResult(BaseModel):
+    success: bool
+    error: str | None = None
+
+
+class DeliveryRecord(SnowflakeBase):
+    id: int
+    reminder_id: int
+    reminder_type: str
+    reminder_title: str
+    status: str
+    created_at: datetime
