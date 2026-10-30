@@ -62,9 +62,11 @@ async function handleConnect() {
   connecting.value = true
   await setServerUrl(url)
 
-  // Brief success feedback, then navigate the WebView to the remote H5
+  // Brief success feedback, then navigate the WebView to the remote H5.
+  // replace (not href): pushing the setup page into history makes canGoBack()
+  // true at the H5 root and the exit prompt unreachable.
   setTimeout(() => {
-    window.location.href = url
+    window.location.replace(url)
   }, 500)
 }
 

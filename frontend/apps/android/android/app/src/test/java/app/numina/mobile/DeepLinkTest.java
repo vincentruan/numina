@@ -68,6 +68,23 @@ public class DeepLinkTest {
     }
 
     @Test
+    public void routeFrom_preservesPercentEncodedQuery() {
+        // %26 is &; getRaw* keeps it literal so ?q=a%26b survives as one param.
+        assertEquals("/search?q=a%26b", DeepLink.routeFrom(URI.create("numina://open/search?q=a%26b")));
+    }
+
+    @Test
+    public void routeFrom_preservesPercentEncodedPath() {
+        // %2F is /; a decoded path accessor would split this into two segments.
+        assertEquals("/files/a%2Fb", DeepLink.routeFrom(URI.create("numina://open/files/a%2Fb")));
+    }
+
+    @Test
+    public void routeFrom_preservesPercentEncodedFragment() {
+        assertEquals("/sec#tag%23hash", DeepLink.routeFrom(URI.create("numina://open/sec#tag%23hash")));
+    }
+
+    @Test
     public void routeFrom_returnsNullForNonDeepLink() {
         assertNull(DeepLink.routeFrom(URI.create("https://example.com/reminders")));
     }

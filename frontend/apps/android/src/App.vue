@@ -8,7 +8,10 @@ onMounted(async () => {
     // Skip the round-trip when unreachable: the setup page lets the user fix it.
     const valid = await validateServer(savedUrl)
     if (valid) {
-      window.location.href = savedUrl
+      // replace, not href: pushing the shell page into WebView history would
+      // make canGoBack() true after navigating to the remote H5, and the
+      // back-button exit prompt would never be reachable.
+      window.location.replace(savedUrl)
     }
   }
 })

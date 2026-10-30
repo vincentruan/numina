@@ -52,12 +52,13 @@ export async function validateServer(url: string): Promise<boolean> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 8000)
   try {
-    const resp = await fetch(`${url}/api/health`, {
-      signal: controller.signal,
-      // Include credentials so cookies from a prior session count as proof of life
-      credentials: 'include',
-    })
-    return resp.ok
+    // No credentials: the shell runs from Capacitor's https://localhost origin,
+    // which is not in any default CORS_ORIGINS list, so a credentialed cross-
+    // origin fetch would be blocked and always report "Cannot reach server".
+    // A reachability probe does not need the user's session — an OK status is
+    // enough, and a 401 (anonymous) also proves the server is up.
+    const resp = await fetch(`${url}/api/health`, { signal: controller.signal })
+    return resp.ok || resp.status === 401
   } catch {
     return false
   } finally {
@@ -68,9 +69,12 @@ export async function validateServer(url: string): Promise<boolean> {
 /**
  * Classify a server URL for UX messaging.
  * - 'https': secure, full-featured
- * - 'http-lan': private network, works but not recommended for production
- * - 'http-public': cleartext on a public domain — dangerous
+ * - 'http-lan': private network (RFC-1918, loopback, .local/.lan suffix)
+ * - 'http-public': cleartext on a public domain — blocked
  * - 'localhost': dev-only
+ *
+ * IP checks are numeric so a public hostname whose label happens to start with
+ * "10." or "192.168." is not misclassified as LAN.
  */
 export function classifyUrl(raw: string): 'https' | 'http-lan' | 'http-public' | 'localhost' | 'invalid' {
   let parsed: URL
@@ -84,16 +88,21 @@ export function classifyUrl(raw: string): 'https' | 'http-lan' | 'http-public' |
   if (parsed.protocol !== 'http:') return 'invalid'
 
   const host = parsed.hostname.toLowerCase()
-  // WHATWG URL keeps the brackets on IPv6 literals, so "[::1]" is the form to match.
   if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]') return 'localhost'
-  if (
-    host.startsWith('192.168.') ||
-    host.startsWith('10.') ||
-    host.endsWith('.local') ||
-    host.endsWith('.lan') ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-  ) {
-    return 'http-lan'
-  }
+  if (isPrivateIpv4(host)) return 'http-lan'
+  if (host.endsWith('.local') || host.endsWith('.lan')) return 'http-lan'
   return 'http-public'
+}
+
+/** True only when {@code host} is an IPv4 literal in the loopback or RFC-1918 range. */
+function isPrivateIpv4(host: string): boolean {
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
+  if (!match) return false
+  const a = Number(match[1]), b = Number(match[2])
+  if (a > 255 || b > 255 || Number(match[3]) > 255 || Number(match[4]) > 255) return false
+  if (a === 10) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 192 && b === 168) return true
+  if (a === 127) return true
+  return false
 }

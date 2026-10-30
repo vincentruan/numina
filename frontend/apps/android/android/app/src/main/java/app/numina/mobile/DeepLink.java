@@ -33,13 +33,17 @@ final class DeepLink {
     static String routeFrom(URI uri) {
         if (!isDeepLink(uri)) return null;
 
-        String path = uri.getPath();
+        // getRaw* — not getPath/getQuery/getFragment — so percent-escapes
+        // survive: getRawPath keeps %2F literal, getRawQuery keeps %26 literal.
+        // The decoded accessors would fold an encoded slash into the route as a
+        // path segment, or split an encoded ampersand into two query params.
+        String path = uri.getRawPath();
         if (path == null || path.isEmpty()) path = "/";
 
         StringBuilder route = new StringBuilder(path);
-        String query = uri.getQuery();
+        String query = uri.getRawQuery();
         if (query != null && !query.isEmpty()) route.append('?').append(query);
-        String fragment = uri.getFragment();
+        String fragment = uri.getRawFragment();
         if (fragment != null && !fragment.isEmpty()) route.append('#').append(fragment);
         return route.toString();
     }

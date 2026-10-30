@@ -6,10 +6,11 @@ const config: CapacitorConfig = {
   // After `pnpm build`, the web assets live in `dist/`.
   // `cap sync` copies them into android/app/src/main/assets/public/.
   webDir: 'dist',
-  // Allow cleartext (HTTP) traffic for self-hosted LAN deployments.
-  // Users are warned in the setup page when using HTTP.
   android: {
-    allowMixedContent: true,
+    // allowMixedContent is left at its default (false): LAN cleartext is granted
+    // by usesCleartextTraffic in AndroidManifest.xml, but allowing mixed content
+    // would downgrade an HTTPS document to load HTTP subresources — a pure
+    // regression for every recommended HTTPS deployment.
   },
   plugins: {
     App: {
@@ -19,9 +20,15 @@ const config: CapacitorConfig = {
       disableBackButtonHandler: true,
     },
   },
-  // The server block is for development only — pointing at a local dev server.
-  // Production builds ignore this; the app loads the server URL from Preferences.
   server: {
+    // The WebView stays on Capacitor's local https://localhost origin during
+    // the setup page, then navigates to the user's self-hosted server. Without
+    // allowNavigation, Capacitor's BridgeWebViewClient.shouldOverrideUrlLoading
+    // routes every cross-origin navigation to the system browser — so the
+    // redirect after setup would open Chrome instead of loading the H5 in-app.
+    // A wildcard is appropriate here because the host is user-configurable at
+    // setup time (any self-deployed domain).
+    allowNavigation: ['*'],
     // Uncomment to test against a local dev server during development:
     // url: 'http://localhost:5173',
   },
