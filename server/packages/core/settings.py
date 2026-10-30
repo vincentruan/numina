@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./data/uploads"
     WORKSPACE_ROOT: str = "./data/workspaces"
     FILE_SYNC_INTERVAL_MINUTES: int = 15
+    FILE_SYNC_FAILED_RECOVERY_HOURS: int = 24  # Re-queue exhausted failures after this many hours
     STORAGE_ENCRYPTION_KEY: str = ""
 
     # Chat session storage configuration

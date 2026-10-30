@@ -267,9 +267,11 @@ def _make_backend_row(*, config: str | None = "enc:cfg", backend_id: int = 11):
     """构造默认存储后端行（SimpleNamespace 模拟 ORM 对象）。"""
     return SimpleNamespace(
         id=backend_id,
+        family_id=7,
         backend_type="local",
         config=config,
         is_active=True,
+        last_synced_at=None,
     )
 
 
@@ -312,9 +314,13 @@ def _configure_db_query(mock_session, *, backend_rows, pending, cached_files):
         if name == "StorageBackend":
             q.filter_by.return_value.all.return_value = backend_rows
         elif name == "FileRemoteLocation":
-            # filter_by(...).filter(...).filter(...).limit(...).all()
-            chain = q.filter_by.return_value.filter.return_value.filter.return_value
+            # Self-referential chain: N calls to .filter() all return the same
+            # mock, so these tests stay valid as the job's query grows.
+            chain = MagicMock()
+            chain.filter.return_value = chain
             chain.limit.return_value.all.return_value = pending
+            chain.update.return_value = 0  # auto-recovery sweep: no-op here
+            q.filter_by.return_value = chain
         elif name == "CachedFile":
             q.filter.return_value.all.return_value = cached_files
         return q

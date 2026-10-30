@@ -26,6 +26,15 @@ class StorageAuthError(StorageError):
     """Raised when authentication to a remote backend fails (401/403)."""
 
 
+class StorageFileSizeError(StorageError):
+    """Raised when a file exceeds the backend's maximum supported size."""
+
+    def __init__(self, message: str = "File too large", file_size: int = 0, max_size: int = 0):
+        super().__init__(message)
+        self.file_size = file_size
+        self.max_size = max_size
+
+
 class StorageBackend(ABC):
     """Abstract interface for file storage backends."""
 

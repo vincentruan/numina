@@ -8,8 +8,13 @@ from packages.storage.base import (
     StorageBackend,
     StorageConflictError,
     StorageConnectionError,
+    StorageFileSizeError,
     StorageRateLimitError,
 )
+
+# GitHub Contents API hard limit is 1MB for the base64-encoded payload.
+# Base64 expands size by ~33%, so raw content must stay under 750KB to be safe.
+_MAX_CONTENT_BYTES = 750 * 1024
 
 
 class GitHubStorageBackend(StorageBackend):
@@ -40,6 +45,14 @@ class GitHubStorageBackend(StorageBackend):
             raise StorageRateLimitError(reset_at=reset_at)
 
     async def save(self, content: bytes, filename: str, date_dir: str, family_id: str = "", user_id: str = "") -> str:
+        if len(content) > _MAX_CONTENT_BYTES:
+            raise StorageFileSizeError(
+                f"文件 {filename} 过大 ({len(content)} bytes)，"
+                f"GitHub Contents API 限制 {_MAX_CONTENT_BYTES} bytes (base64 后 ~1MB)",
+                file_size=len(content),
+                max_size=_MAX_CONTENT_BYTES,
+            )
+
         remote_path = f"{date_dir}/{filename}"
         b64 = base64.b64encode(content).decode()
 
@@ -84,6 +97,14 @@ class GitHubStorageBackend(StorageBackend):
 
             if response.status_code in (401, 403):
                 raise StorageAuthError(f"GitHub 认证失败: {response.status_code}")
+
+            if response.status_code in (413, 422):
+                # 413 = Payload Too Large, 422 = Unprocessable Entity (also used for size violations)
+                raise StorageFileSizeError(
+                    f"GitHub 拒绝上传 {filename}: HTTP {response.status_code} (文件可能过大)",
+                    file_size=len(content),
+                    max_size=_MAX_CONTENT_BYTES,
+                )
 
         raise StorageConflictError(f"GitHub 冲突无法解决，已重试 3 次: {remote_path}")
 
