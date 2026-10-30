@@ -836,6 +836,10 @@ async def send_test_notification(
     Returns ``(success, error_message)``. Unlike real dispatch this does not
     write ReminderNotification rows — a test send is not a delivery of any
     reminder and must not affect retry counters or digest bookkeeping.
+
+    The one stored state it may change is pruning push subscriptions the push
+    service reports as permanently gone (HTTP 410), which is correct hygiene
+    rather than delivery bookkeeping.
     """
     locale = _resolve_locale(db, channel.family_id)
     prefix = _env_prefix(locale)

@@ -109,8 +109,17 @@ def test_response_masks_sensitive_config(client, auth_headers):
     assert data["config"]["chat_id"] == "12345"
 
 
-def test_update_preserves_masked_secrets(client, auth_headers):
-    """Echoing back the mask keeps the existing ciphertext unchanged."""
+def test_update_preserves_masked_secrets(client, auth_headers, db):
+    """Echoing back the mask keeps the existing ciphertext unchanged.
+
+    Asserts on the stored ciphertext, not the response: the response is masked
+    unconditionally, so a response-only assertion would still pass if the
+    preservation guard were removed.
+    """
+    from packages.db.models.notification_channel_config import (
+        NotificationChannelConfig,
+    )
+
     create_resp = client.post(
         "/api/v1/notification-channels",
         headers=auth_headers,
@@ -122,7 +131,23 @@ def test_update_preserves_masked_secrets(client, auth_headers):
             "subscriptions": [],
         },
     )
-    channel_id = create_resp.json()["data"]["id"]
+    channel_id = int(create_resp.json()["data"]["id"])
+
+    def stored_bot_token_plaintext() -> str | None:
+        row = (
+            db.query(NotificationChannelConfig)
+            .filter_by(channel_id=channel_id, key="bot_token")
+            .first()
+        )
+        if row is None:
+            return None
+        from packages.storage.config_crypto import decrypt_config
+
+        decrypted = decrypt_config(row.value_encrypted)
+        return decrypted.get("bot_token") if decrypted else None
+
+    assert stored_bot_token_plaintext() == "original"
+
     # Frontend sends back the mask for bot_token and a new chat_id.
     resp = client.put(
         f"/api/v1/notification-channels/{channel_id}",
@@ -132,14 +157,27 @@ def test_update_preserves_masked_secrets(client, auth_headers):
         },
     )
     assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["config"]["chat_id"] == "2"
-    # Bot token still masked (not overwritten with the literal mask).
-    assert data["config"]["bot_token"] == "••••••••"
+    assert resp.json()["data"]["config"]["chat_id"] == "2"
+    # The real secret survived: the mask was not re-encrypted over it.
+    assert stored_bot_token_plaintext() == "original"
+
+    # A genuine new value still replaces the stored secret.
+    resp = client.put(
+        f"/api/v1/notification-channels/{channel_id}",
+        headers=auth_headers,
+        json={"config": {"bot_token": "rotated", "chat_id": "2"}},
+    )
+    assert resp.status_code == 200
+    assert stored_bot_token_plaintext() == "rotated"
 
 
-def test_delete_cleans_up_configs(client, auth_headers):
+def test_delete_cleans_up_configs(client, auth_headers, db):
     """Deleting a channel must also remove its encrypted config rows."""
+    from packages.db.models.notification_channel_config import (
+        NotificationChannelConfig,
+    )
+    from packages.db.models.notification_subscription import NotificationSubscription
+
     create_resp = client.post(
         "/api/v1/notification-channels",
         headers=auth_headers,
@@ -148,14 +186,28 @@ def test_delete_cleans_up_configs(client, auth_headers):
             "name": "ToDelete",
             "config": {"smtp_password": "s3cret", "to": "a@b.com"},
             "is_enabled": True,
-            "subscriptions": [],
+            "subscriptions": ["large_purchase"],
         },
     )
-    channel_id = create_resp.json()["data"]["id"]
+    channel_id = int(create_resp.json()["data"]["id"])
+    assert (
+        db.query(NotificationChannelConfig).filter_by(channel_id=channel_id).count()
+        == 2
+    )
+
     resp = client.delete(
         f"/api/v1/notification-channels/{channel_id}", headers=auth_headers
     )
     assert resp.status_code == 204
+
+    # Both related row sets are gone; the channel row itself is gone too.
+    assert (
+        db.query(NotificationChannelConfig).filter_by(channel_id=channel_id).count()
+        == 0
+    )
+    assert (
+        db.query(NotificationSubscription).filter_by(channel_id=channel_id).count() == 0
+    )
 
 
 def test_feature_status_endpoint(client, auth_headers):

@@ -60,7 +60,7 @@
     <div v-if="showOnboarding && newChannel" class="onboarding-card">
       <div class="onboarding-card__header">
         <span>{{ t('reminders.onboardingTitle') }}</span>
-        <van-icon name="cross" class="onboarding-card__close" @click="showOnboarding = false" />
+        <van-icon name="cross" class="onboarding-card__close" @click="dismissOnboarding" />
       </div>
       <div class="onboarding-card__steps">
         <div class="onboarding-step" :class="{ 'onboarding-step--done': newChannel.subscriptions.length > 0 }">
@@ -261,7 +261,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onActivated, reactive, computed } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showFailToast } from 'vant'
@@ -293,6 +293,7 @@ const featureStatus = ref<NotificationFeatureStatus | null>(null)
 const showOnboarding = ref(false)
 const newChannel = ref<NotificationChannelResponse | null>(null)
 const testResult = ref<ChannelTestResult | null>(null)
+let savedChannel: NotificationChannelResponse | null = null
 
 const thresholdConfigured = computed(() => featureStatus.value?.large_purchase.threshold_configured ?? false)
 const showThresholdStep = computed(
@@ -451,20 +452,28 @@ async function openDeliveryHistory(channel: NotificationChannelResponse, ev: Mou
   }
 }
 
-async function sendTest() {
-  if (!editingChannel.value) {
-    showToast(t('reminders.saveBeforeTest'))
-    return
-  }
+/**
+ * Single owner of a channel test call. Callers differ only in presentation:
+ * `toast` reports through Vant toasts, `inline` stores the result in
+ * `testResult` for the form banner.
+ */
+async function runChannelTest(
+  channelId: string,
+  report: 'toast' | 'inline',
+): Promise<ChannelTestResult> {
   testSending.value = true
   let result: ChannelTestResult
   try {
-    result = await notificationChannelsApi.testChannel(editingChannel.value.id)
+    result = await notificationChannelsApi.testChannel(channelId)
   } catch {
-    showFailToast(t('reminders.testFailed'))
-    return
+    result = { success: false, error: t('reminders.testFailed') }
   } finally {
     testSending.value = false
+  }
+
+  if (report === 'inline') {
+    testResult.value = result
+    return result
   }
   if (result.success) {
     showSuccessToast(t('reminders.testSuccess'))
@@ -475,6 +484,15 @@ async function sendTest() {
         : t('reminders.testFailed'),
     )
   }
+  return result
+}
+
+async function sendTest() {
+  if (!editingChannel.value) {
+    showToast(t('reminders.saveBeforeTest'))
+    return
+  }
+  await runChannelTest(editingChannel.value.id, 'toast')
 }
 
 function onLargePurchaseLinkClick() {
@@ -491,6 +509,8 @@ function onNavigateToThreshold() {
   router.push('/settings/notifications/threshold')
 }
 
+const ONBOARDING_KEY = 'numina:notification-onboarding-channel'
+
 async function refreshAll() {
   const [listed, status] = await Promise.all([
     notificationChannelsApi.list(),
@@ -498,12 +518,28 @@ async function refreshAll() {
   ])
   channels.value = listed
   featureStatus.value = status
+  // The page remounts on every return (it is not a KeepAlive-cached tab), so
+  // the onboarding card is restored from sessionStorage and re-bound to the
+  // freshly listed record to keep its step states accurate.
+  const pendingId = sessionStorage.getItem(ONBOARDING_KEY)
+  if (pendingId) {
+    const restored = listed.find((c) => c.id === pendingId)
+    if (restored) {
+      newChannel.value = restored
+      showOnboarding.value = true
+    } else {
+      sessionStorage.removeItem(ONBOARDING_KEY)
+    }
+  }
+}
+
+function dismissOnboarding() {
+  showOnboarding.value = false
+  newChannel.value = null
+  sessionStorage.removeItem(ONBOARDING_KEY)
 }
 
 onMounted(refreshAll)
-
-// Refetch when returning from threshold page or other navigation
-onActivated(refreshAll)
 
 function openAdd() {
   editingChannel.value = null
@@ -558,26 +594,26 @@ function onTimeConfirm({ selectedValues }: { selectedValues: string[] }) {
   showTimePicker.value = false
 }
 
-async function saveChannel() {
+async function saveChannel(): Promise<NotificationChannelResponse | null> {
   if (!form.name.trim()) {
     showToast(t('reminders.channelNameRequired'))
-    return
+    return null
   }
   if (form.channel_type === 'telegram' && !form.chat_id.trim()) {
     showToast(t('reminders.chatIdRequired'))
-    return
+    return null
   }
   if (form.channel_type === 'telegram' && !/^-?\d+$/.test(form.chat_id)) {
     showToast(t('reminders.chatIdInvalid'))
-    return
+    return null
   }
   if (form.channel_type === 'email' && !form.smtp_host.trim()) {
     showToast(t('reminders.smtpHostRequired'))
-    return
+    return null
   }
   if (form.channel_type === 'feishu' && !form.webhook_url.trim()) {
     showToast(t('reminders.webhookUrlRequired'))
-    return
+    return null
   }
 
   const config: Record<string, string | number | Record<string, string>> =
@@ -621,6 +657,7 @@ async function saveChannel() {
     })
     const idx = channels.value.findIndex((c) => c.id === editingChannel.value!.id)
     if (idx >= 0) channels.value[idx] = updated
+    savedChannel = updated
   } else {
     const created = await notificationChannelsApi.create({
       channel_type: form.channel_type,
@@ -632,20 +669,22 @@ async function saveChannel() {
       digest_time: form.digest_time,
     })
     channels.value.push(created)
-    // Show onboarding card for new channels
+    // Show onboarding card for new channels; it survives the remount that
+    // happens when the user navigates to the threshold page and back.
     newChannel.value = created
     showOnboarding.value = true
+    sessionStorage.setItem(ONBOARDING_KEY, created.id)
+    savedChannel = created
   }
   testResult.value = null
   showSuccessToast(t('toast.channelSaved'))
   showSheet.value = false
   editingChannel.value = null
+  return savedChannel
 }
 
 async function saveAndTest() {
-  await saveChannel()
-  if (!newChannel.value && !editingChannel.value) return
-  const target = newChannel.value || editingChannel.value
+  const target = await saveChannel()
   if (!target) return
   testSending.value = true
   testResult.value = null
@@ -661,19 +700,7 @@ async function saveAndTest() {
 
 async function sendTestForOnboarding() {
   if (!newChannel.value) return
-  testSending.value = true
-  try {
-    const result = await notificationChannelsApi.testChannel(newChannel.value.id)
-    if (result.success) {
-      showSuccessToast(t('reminders.testSuccess'))
-    } else {
-      showFailToast(result.error || t('reminders.testFailed'))
-    }
-  } catch {
-    showFailToast(t('reminders.testFailed'))
-  } finally {
-    testSending.value = false
-  }
+  await runChannelTest(newChannel.value.id, 'toast')
 }
 
 async function removeChannel(id: string) {
