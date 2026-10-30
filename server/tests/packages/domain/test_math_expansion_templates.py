@@ -14,7 +14,8 @@ class TestDecimalTemplates:
         gq = generate_question("math.decimal.addition", {})
         assert gq.question_type == "calculation"
         assert "answer" in gq.answer
-        assert gq.topic_key.startswith("math.")
+        # topic_key references the standardized taxonomy key (mt_ prefix)
+        assert gq.topic_key.startswith("mt_")
 
 
 class TestEstimationTemplates:

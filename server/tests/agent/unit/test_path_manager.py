@@ -34,7 +34,9 @@ class TestPathManagerInit:
 
     def test_expands_tilde(self, monkeypatch, tmp_path):
         from packages.core.path_manager import PathManager
+        # Windows expanduser() prefers USERPROFILE; POSIX uses HOME.
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
         pm = PathManager(data_root="~/mydata")
         assert str(pm.data_root).startswith(str(tmp_path))
 
@@ -168,7 +170,10 @@ class TestAssertUnderRoot:
         outside_dir.mkdir()
         link = tmp_data_root / "db" / "escape_link"
         link.parent.mkdir(parents=True, exist_ok=True)
-        link.symlink_to(outside_dir)
+        try:
+            link.symlink_to(outside_dir)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks require admin/developer mode on Windows")
         from packages.core.path_manager import PathSecurityError
         with pytest.raises(PathSecurityError):
             pm.assert_under_root(link)

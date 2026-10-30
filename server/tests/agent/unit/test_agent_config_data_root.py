@@ -21,6 +21,11 @@ def _resolve(p: str) -> str:
     return str(Path(p).resolve())
 
 
+def _join(root: str, *parts: str) -> str:
+    """Join path parts in an OS-native way (tests run on Windows and POSIX)."""
+    return os.path.join(root, *parts)
+
+
 class TestDataRootExpansion:
     def test_default_data_root_expands_tilde(self):
         s = _make_agent_settings()
@@ -35,19 +40,19 @@ class TestDataRootExpansion:
 class TestDerivedPaths:
     def test_sessions_data_dir_derived_from_data_root(self):
         s = _make_agent_settings(DATA_ROOT="/tmp/test-agent")
-        assert _resolve("/tmp/test-agent") + "/workspaces" == s.SESSIONS_DATA_DIR
+        assert _join(_resolve("/tmp/test-agent"), "workspaces") == s.SESSIONS_DATA_DIR
 
     def test_agent_data_dir_derived_from_data_root(self):
         s = _make_agent_settings(DATA_ROOT="/tmp/test-agent")
-        assert _resolve("/tmp/test-agent") + "/workspaces" == s.AGENT_DATA_DIR
+        assert _join(_resolve("/tmp/test-agent"), "workspaces") == s.AGENT_DATA_DIR
 
     def test_log_dir_derived_from_data_root(self):
         s = _make_agent_settings(DATA_ROOT="/tmp/test-agent")
-        assert _resolve("/tmp/test-agent") + "/logs" == s.LOG_DIR
+        assert _join(_resolve("/tmp/test-agent"), "logs") == s.LOG_DIR
 
     def test_deerflow_db_path_derived_from_data_root(self):
         s = _make_agent_settings(DATA_ROOT="/tmp/test-agent")
-        assert _resolve("/tmp/test-agent") + "/db/deerflow-checkpoints.db" == s.DEERFLOW_DB_PATH
+        assert _join(_resolve("/tmp/test-agent"), "db", "deerflow-checkpoints.db") == s.DEERFLOW_DB_PATH
 
 
 class TestExplicitOverrides:
