@@ -278,6 +278,7 @@ import {
 import EventSelectorPopup from '@/components/notification/EventSelectorPopup.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { parseApiDate } from '@/utils/format'
+import { normalizeDigestTime } from '@/utils/date'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -565,7 +566,9 @@ function editChannel(channel: NotificationChannelResponse) {
   form.channel_type = channel.channel_type
   form.subscriptions = [...channel.subscriptions]
   form.digestEnabled = channel.digest_mode === 'daily'
-  form.digest_time = channel.digest_time || '21:00'
+  // Normalize so a legacy unpadded value ("8:00") is repaired here instead of
+  // being echoed back on save, where the API pattern would reject the whole update.
+  form.digest_time = normalizeDigestTime(channel.digest_time)
   // Populate config fields from decrypted config. Masked sensitive values are
   // preserved verbatim so the save path sends them back for the backend to
   // keep the existing ciphertext.

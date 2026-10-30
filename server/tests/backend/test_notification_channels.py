@@ -457,3 +457,183 @@ def test_email_digest_pinned_to_immediate(client, auth_headers):
     )
     assert resp.status_code == 201
     assert resp.json()["data"]["digest_mode"] == "immediate"
+
+
+def test_update_pins_email_and_webpush_digest_to_immediate(client, auth_headers):
+    """email / webpush cannot deliver digests — the PUT path must pin them too.
+
+    The create path already pins; without the same guard on update a client can
+    flip an existing email channel to 'daily', which makes the digest job skip
+    it while immediate dispatch is also skipped, so it never delivers at all.
+    """
+    create_resp = client.post(
+        "/api/v1/notification-channels",
+        headers=auth_headers,
+        json={
+            "channel_type": "email",
+            "name": "Mail",
+            "config": {"smtp_host": "smtp.example.com", "to": "a@b.com"},
+            "is_enabled": True,
+            "subscriptions": [],
+        },
+    )
+    email_id = create_resp.json()["data"]["id"]
+    assert create_resp.json()["data"]["digest_mode"] == "immediate"
+
+    resp = client.put(
+        f"/api/v1/notification-channels/{email_id}",
+        headers=auth_headers,
+        json={"digest_mode": "daily", "digest_time": "08:00"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"]["digest_mode"] == "immediate"
+    # The time is still stored: it is meaningless for an immediate channel but
+    # dropping it would silently lose a user's setting if the type ever gains
+    # digest support.
+    assert resp.json()["data"]["digest_time"] == "08:00"
+
+    # A channel type that *can* digest keeps what the user asked for.
+    tg = client.post(
+        "/api/v1/notification-channels",
+        headers=auth_headers,
+        json={
+            "channel_type": "telegram",
+            "name": "TG",
+            "config": {"bot_token": "t", "chat_id": "1"},
+            "is_enabled": True,
+            "subscriptions": [],
+        },
+    )
+    tg_id = tg.json()["data"]["id"]
+    resp = client.put(
+        f"/api/v1/notification-channels/{tg_id}",
+        headers=auth_headers,
+        json={"digest_mode": "daily", "digest_time": "08:00"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"]["digest_mode"] == "daily"
+
+    # webpush goes through the same pin.
+    wp = client.post(
+        "/api/v1/notification-channels",
+        headers=auth_headers,
+        json={
+            "channel_type": "webpush",
+            "name": "Push",
+            "config": {},
+            "is_enabled": True,
+            "subscriptions": [],
+        },
+    )
+    wp_id = wp.json()["data"]["id"]
+    resp = client.put(
+        f"/api/v1/notification-channels/{wp_id}",
+        headers=auth_headers,
+        json={"digest_mode": "daily"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"]["digest_mode"] == "immediate"
+
+
+def test_delivery_history_returns_records_newest_first(client, auth_headers, db):
+    """The history query joins reminders, orders by time and honors limit."""
+    from datetime import datetime
+
+    from apps.backend.app.models.reminder import Reminder
+    from apps.backend.app.utils.snowflake import next_id
+    from packages.db.models.reminder_notification import ReminderNotification
+
+    me = client.get("/api/v1/auth/me", headers=auth_headers).json()["data"]
+    family_id = int(me["family_id"])
+
+    create_resp = client.post(
+        "/api/v1/notification-channels",
+        headers=auth_headers,
+        json={
+            "channel_type": "telegram",
+            "name": "History",
+            "config": {"bot_token": "t", "chat_id": "1"},
+            "is_enabled": True,
+            "subscriptions": [],
+        },
+    )
+    channel_id = int(create_resp.json()["data"]["id"])
+
+    # Snowflake ids are time-ordered, but created_at is what the endpoint sorts
+    # by, so set it explicitly rather than relying on wall-clock ordering.
+    times = [
+        datetime(2026, 1, 1, 8, 0),
+        datetime(2026, 1, 2, 8, 0),
+        datetime(2026, 1, 3, 8, 0),
+    ]
+    for i, created_at in enumerate(times):
+        reminder_id = next_id()
+        db.add(
+            Reminder(
+                id=reminder_id,
+                family_id=family_id,
+                reminder_type="maturity",
+                title=f"提醒 {i}",
+                body="body",
+                severity="info",
+            )
+        )
+        db.add(
+            ReminderNotification(
+                id=next_id(),
+                reminder_id=reminder_id,
+                channel_id=channel_id,
+                status="sent" if i != 1 else "failed",
+                created_at=created_at,
+            )
+        )
+    db.commit()
+
+    resp = client.get(
+        f"/api/v1/notification-channels/{channel_id}/delivery-history",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    rows = resp.json()["data"]
+    assert [r["reminder_title"] for r in rows] == ["提醒 2", "提醒 1", "提醒 0"]
+    # The join must carry the reminder's type through, not the notification's.
+    assert {r["reminder_type"] for r in rows} == {"maturity"}
+    assert [r["status"] for r in rows] == ["sent", "failed", "sent"]
+    # Snowflake ids are serialized as strings.
+    assert all(isinstance(r["id"], str) and isinstance(r["reminder_id"], str) for r in rows)
+
+    limited = client.get(
+        f"/api/v1/notification-channels/{channel_id}/delivery-history",
+        headers=auth_headers,
+        params={"limit": 2},
+    )
+    assert [r["reminder_title"] for r in limited.json()["data"]] == ["提醒 2", "提醒 1"]
+
+    # A limit outside the sane range is clamped, not rejected.
+    clamped = client.get(
+        f"/api/v1/notification-channels/{channel_id}/delivery-history",
+        headers=auth_headers,
+        params={"limit": 0},
+    )
+    assert clamped.status_code == 200
+    assert len(clamped.json()["data"]) == 1
+
+
+def test_delivery_history_only_lists_own_channel(client, auth_headers, second_user_headers):
+    other = client.post(
+        "/api/v1/notification-channels",
+        headers=auth_headers,
+        json={
+            "channel_type": "telegram",
+            "name": "Mine",
+            "config": {"bot_token": "t", "chat_id": "1"},
+            "is_enabled": True,
+            "subscriptions": [],
+        },
+    ).json()["data"]
+
+    resp = client.get(
+        f"/api/v1/notification-channels/{other['id']}/delivery-history",
+        headers=second_user_headers,
+    )
+    assert resp.status_code == 404

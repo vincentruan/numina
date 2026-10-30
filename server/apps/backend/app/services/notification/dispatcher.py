@@ -500,7 +500,15 @@ def _get_channel_config(db: Session, channel: NotificationChannel) -> dict:
 def _dispatch_notifications(
     db: Session, reminder: Reminder, template_vars: dict
 ) -> None:
-    """向订阅了该 reminder_type 的所有启用渠道发送通知（失败静默）。"""
+    """向订阅了该 reminder_type 的所有启用渠道发送通知（失败静默）。
+
+    ``digest_mode='daily'`` 的渠道不在这里发送：它们由 scheduler_worker 的
+    ``notification_digest_job`` 在用户设定的 ``digest_time`` 汇总发送。若不过滤，
+    每日摘要渠道会在事件产生时立刻收到推送，到点后 ``_dispatch_digest`` 又找不到
+    待发项，摘要既提前又为空。过滤用 ``!= 'daily'`` 而非 ``== 'immediate'``，
+    这样历史上写入其他值（或未知值）的渠道仍按即时送达处理，不会因为一个拼写错误
+    而静默失联。
+    """
     locale = _resolve_locale(db, reminder.family_id)
     channels = (
         db.query(NotificationChannel)
@@ -511,6 +519,7 @@ def _dispatch_notifications(
         .filter(
             NotificationChannel.family_id == reminder.family_id,
             NotificationChannel.is_enabled,
+            NotificationChannel.digest_mode != "daily",
             NotificationSubscription.reminder_type == reminder.reminder_type,
         )
         .all()
@@ -740,6 +749,11 @@ def _retry_failed_notifications(db: Session) -> None:
             .filter(
                 NotificationChannel.family_id == reminder.family_id,
                 NotificationChannel.is_enabled,
+                # Keep this in sync with _dispatch_notifications: digest channels
+                # are delivered by the digest job, so they must not count as
+                # "still pending" here — otherwise every reminder run re-enters
+                # dispatch forever for a family whose only channel is a digest.
+                NotificationChannel.digest_mode != "daily",
                 NotificationSubscription.reminder_type == reminder.reminder_type,
             )
             .all()
@@ -768,11 +782,24 @@ async def _dispatch_digest(db: Session, channel: NotificationChannel) -> None:
         .all()
     }
 
+    # Digest must respect the channel's own subscriptions — sending a maturity
+    # subscriber a batch of chore reminders would be noise, and is now the
+    # only delivery path for digest channels.
+    subscribed_types = {
+        row.reminder_type
+        for row in db.query(NotificationSubscription)
+        .filter_by(channel_id=channel.id)
+        .all()
+    }
+    if not subscribed_types:
+        return
+
     pending_reminders = (
         db.query(Reminder)
         .filter(
             Reminder.family_id == channel.family_id,
             Reminder.status == "active",
+            Reminder.reminder_type.in_(subscribed_types),
             ~Reminder.id.in_(sent_reminder_ids),
         )
         .all()
