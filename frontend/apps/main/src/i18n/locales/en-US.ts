@@ -2944,7 +2944,6 @@ Keep the tone warm, like a chat between family members.`,
     testSuccess: 'Test message sent',
     testFailed: 'Test failed',
     testFailedWithReason: 'Test failed: {reason}',
-    saveBeforeTest: 'Please save the channel before testing',
     // Delivery history
     deliveryHistory: 'Delivery History',
     deliveryHistoryEmpty: 'No delivery records',

@@ -498,11 +498,11 @@ async function runChannelTest(
 }
 
 async function sendTest() {
-  if (!editingChannel.value) {
-    showToast(t('reminders.saveBeforeTest'))
-    return
-  }
-  await runChannelTest(editingChannel.value.id, 'toast')
+  // The test endpoint exercises *persisted* credentials, so save the form
+  // first; otherwise the user would test values they never saved.
+  const target = await saveChannel()
+  if (!target) return
+  await runChannelTest(target.id, 'toast')
 }
 
 function onLargePurchaseLinkClick() {

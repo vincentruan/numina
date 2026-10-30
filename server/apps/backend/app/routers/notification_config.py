@@ -92,7 +92,14 @@ def get_feature_status(
         ),
         EventAvailability(
             event_type="large_purchase",
-            status="ready" if threshold_configured else "needs_config",
+            # check_on_asset_write needs BOTH a threshold and a subscribed
+            # channel before it dispatches; either half missing means the
+            # event cannot fire.
+            status=(
+                "ready"
+                if threshold_configured and subscribing_channels
+                else "needs_config"
+            ),
         ),
     ]
     # Every remaining registry event has no data prerequisite, so it is always

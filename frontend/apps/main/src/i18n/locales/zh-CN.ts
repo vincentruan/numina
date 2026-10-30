@@ -3215,7 +3215,6 @@ export default {
     testSuccess: '测试消息已发送',
     testFailed: '测试失败',
     testFailedWithReason: '测试失败：{reason}',
-    saveBeforeTest: '请先保存渠道后再测试',
     // Delivery history
     deliveryHistory: '投递记录',
     deliveryHistoryEmpty: '暂无投递记录',

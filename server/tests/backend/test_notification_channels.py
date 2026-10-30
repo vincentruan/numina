@@ -360,17 +360,73 @@ def test_event_availability_ignores_expired_dates(client, auth_headers, db):
     assert avail["expiring_soon"] == "no_data"
 
 
-def test_event_availability_large_purchase_with_threshold(client, auth_headers):
-    """Configuring a threshold makes large_purchase ready."""
+def test_event_availability_large_purchase_needs_both_halves(client, auth_headers):
+    """Threshold alone is not enough; dispatch also needs a subscribed channel."""
     client.put(
         "/api/v1/notification-config",
         headers=auth_headers,
         json={"large_purchase_threshold_fixed": 5000},
     )
-    resp = client.get("/api/v1/notification-config/status", headers=auth_headers)
-    data = resp.json()["data"]
-    avail = {e["event_type"]: e["status"] for e in data["event_availability"]}
-    assert avail["large_purchase"] == "ready"
+
+    def status_of() -> str:
+        resp = client.get("/api/v1/notification-config/status", headers=auth_headers)
+        avail = {
+            e["event_type"]: e["status"]
+            for e in resp.json()["data"]["event_availability"]
+        }
+        return avail["large_purchase"]
+
+    assert status_of() == "needs_config"
+
+    # Adding a subscribed, enabled channel completes the other half.
+    client.post(
+        "/api/v1/notification-channels",
+        headers=auth_headers,
+        json={
+            "channel_type": "telegram",
+            "name": "LP Subscriber",
+            "config": {"bot_token": "t", "chat_id": "1"},
+            "is_enabled": True,
+            "subscriptions": ["large_purchase"],
+        },
+    )
+    assert status_of() == "ready"
+
+
+def test_digest_time_rejects_malformed_value(client, auth_headers):
+    """A malformed digest_time would silently never fire, so the API rejects it."""
+    for bad in ("8:00", "25:00", "21:60", "abc", ""):
+        resp = client.post(
+            "/api/v1/notification-channels",
+            headers=auth_headers,
+            json={
+                "channel_type": "telegram",
+                "name": "Bad Time",
+                "config": {"bot_token": "t", "chat_id": "1"},
+                "is_enabled": True,
+                "subscriptions": [],
+                "digest_mode": "daily",
+                "digest_time": bad,
+            },
+        )
+        assert resp.status_code == 422, bad
+
+    # A well-formed time is accepted.
+    ok = client.post(
+        "/api/v1/notification-channels",
+        headers=auth_headers,
+        json={
+            "channel_type": "telegram",
+            "name": "Good Time",
+            "config": {"bot_token": "t", "chat_id": "1"},
+            "is_enabled": True,
+            "subscriptions": [],
+            "digest_mode": "daily",
+            "digest_time": "08:30",
+        },
+    )
+    assert ok.status_code == 201
+    assert ok.json()["data"]["digest_time"] == "08:30"
 
 
 def test_event_availability_covers_every_registry_event(client, auth_headers):
