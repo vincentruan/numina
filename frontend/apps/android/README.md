@@ -90,7 +90,7 @@ press within two seconds exits the app — a stray press can't drop you out of a
 long-lived session.
 
 Handled through `OnBackPressedDispatcher` rather than `onBackPressed()`, because
-predictive back (default for `targetSdk` 34+) bypasses the legacy callback.
+predictive back (default for `targetSdk` 35+) bypasses the legacy callback.
 
 ## Deep Links
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   getServerUrl,
@@ -10,21 +10,26 @@ import {
 
 const router = useRouter()
 
-const currentUrl = ref('')
+const currentUrl = ref<string | null>(null)
 const advancedMode = ref(false)
 const cleared = ref(false)
 
+let clearedTimer: ReturnType<typeof setTimeout> | undefined
+
 onMounted(async () => {
-  const saved = await getServerUrl()
-  currentUrl.value = saved || '(not configured)'
-  advancedMode.value = await isAdvancedMode()
+  const [saved, advanced] = await Promise.all([getServerUrl(), isAdvancedMode()])
+  currentUrl.value = saved
+  advancedMode.value = advanced
 })
+
+onUnmounted(() => clearTimeout(clearedTimer))
 
 async function handleClear() {
   await clearServerUrl()
-  currentUrl.value = '(not configured)'
+  currentUrl.value = null
   cleared.value = true
-  setTimeout(() => { cleared.value = false }, 2000)
+  clearTimeout(clearedTimer)
+  clearedTimer = setTimeout(() => { cleared.value = false }, 2000)
 }
 
 async function toggleAdvanced() {
@@ -47,7 +52,7 @@ function goBack() {
     <div class="settings-content">
       <div class="setting-card">
         <h3>Server Address</h3>
-        <p class="current-value">{{ currentUrl }}</p>
+        <p class="current-value">{{ currentUrl ?? '(not configured)' }}</p>
         <button class="action-btn" @click="handleClear">
           {{ cleared ? '✅ Cleared' : 'Clear & Reconfigure' }}
         </button>

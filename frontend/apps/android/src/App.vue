@@ -1,23 +1,16 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { getServerUrl, validateServer } from '@/utils/server-config'
-
-const router = useRouter()
 
 onMounted(async () => {
   const savedUrl = await getServerUrl()
   if (savedUrl) {
-    // Validate the saved URL before navigating
+    // Skip the round-trip when unreachable: the setup page lets the user fix it.
     const valid = await validateServer(savedUrl)
     if (valid) {
-      // Navigate the WebView to the remote Numina H5
       window.location.href = savedUrl
-      return
     }
-    // Saved URL is unreachable — fall through to setup page
   }
-  // No saved URL or invalid — show setup page
 })
 </script>
 

@@ -4,61 +4,46 @@ import android.content.SharedPreferences;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.webkit.WebView;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
 
+import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
 
-/**
- * Numina Android Shell — thin Capacitor WebView wrapper.
- *
- * <p>On first launch the Capacitor WebView shows the local setup page (server
- * URL configuration). After setup it navigates to the remote Numina H5. From
- * that point on the WebView acts as a browser window: the Android back button
- * walks WebView history, and asks for confirmation before exiting when there
- * is nothing left to go back to.
- *
- * <p>Deep links ({@code numina://open/<path>}) are resolved natively. The route
- * is held until the WebView reports its first page load, so a cold start can
- * finish configuring and loading before the hop.
- */
+/** Numina Android Shell — thin Capacitor WebView wrapper. */
 public class MainActivity extends BridgeActivity {
 
-    /** SharedPreferences file and key written by @capacitor/preferences. */
+    /** @capacitor/preferences writes to the "CapacitorStorage" group. */
     private static final String PREFS_GROUP = "CapacitorStorage";
     private static final String SERVER_URL_KEY = "numina_server_url";
 
     private final BackExitGuard backExitGuard = new BackExitGuard();
+    private final WebViewListener pageLoadListener = new WebViewListener() {
+        @Override
+        public void onPageLoaded(WebView webView) {
+            drainPendingRoute();
+        }
+    };
 
-    /** Route from a deep link that arrived before the WebView was ready. */
     private String pendingRoute;
-
-    /** Set once the WebView has loaded a page and can accept navigation. */
-    private boolean webViewReady;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Registered on the builder, not the Bridge: BridgeActivity.load() creates
+        // the Bridge inside super.onCreate() and the first page load can land
+        // immediately, so a listener added after super would miss it and strand a
+        // cold-start deep link. Builder listeners are copied in at create().
+        bridgeBuilder.addWebViewListener(pageLoadListener);
+
         super.onCreate(savedInstanceState);
 
-        // BridgeActivity.onCreate() already forwarded the launch intent to
-        // onNewIntent(), so the deep link (if any) is captured by then. If the
-        // WebView is not ready yet it stays queued until onPageLoaded fires.
-        if (getBridge() != null) {
-            getBridge().addWebViewListener(new WebViewListener() {
-                @Override
-                public void onPageLoaded(WebView webView) {
-                    webViewReady = true;
-                    drainPendingRoute();
-                }
-            });
-        }
-
-        // Predictive back (default for targetSdk 34+) routes back presses
-        // through the dispatcher instead of onBackPressed(), so registering
-        // here is what keeps the WebView history and exit prompt working.
+        // Predictive back (default for targetSdk 35+) routes back presses through
+        // the dispatcher instead of onBackPressed(), so registering here is what
+        // keeps the WebView history and exit prompt working.
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
@@ -74,7 +59,6 @@ public class MainActivity extends BridgeActivity {
         handleDeepLink(intent);
     }
 
-    /** Resolves a launch/resume intent's deep link into a queued or immediate navigation. */
     private void handleDeepLink(Intent intent) {
         if (intent == null) return;
         Uri data = intent.getData();
@@ -87,37 +71,36 @@ public class MainActivity extends BridgeActivity {
         drainPendingRoute();
     }
 
-    /** Navigates to the queued deep link once a server URL and a loaded WebView exist. */
     private void drainPendingRoute() {
-        if (pendingRoute == null || !webViewReady) return;
+        if (pendingRoute == null) return;
 
-        WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+        WebView webView = webView();
         if (webView == null) return;
 
         String target = DeepLink.targetUrl(readServerUrl(), pendingRoute);
-        if (target == null) {
-            // No server configured yet: keep the route until setup finishes and
-            // the remote H5 loads (which re-triggers this via onPageLoaded).
-            return;
-        }
+        if (target == null) return;
 
         pendingRoute = null;
         backExitGuard.reset();
         webView.loadUrl(target);
     }
 
-    /** Reads the same preference the setup page writes via @capacitor/preferences. */
     private String readServerUrl() {
         SharedPreferences prefs = getSharedPreferences(PREFS_GROUP, MODE_PRIVATE);
-        String value = prefs.getString(SERVER_URL_KEY, null);
-        if (value == null) return null;
-        // Trailing slashes would double up when DeepLink joins the route.
-        return value.replaceAll("/+$", "");
+        return prefs.getString(SERVER_URL_KEY, null);
     }
 
-    /** Back press: walk WebView history, else confirm before exiting. */
+    private WebView webView() {
+        Bridge bridge = getBridge();
+        return bridge == null ? null : bridge.getWebView();
+    }
+
     private void handleBack() {
-        WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+        // OnBackPressedDispatcher consults the most recently added callback first,
+        // so this shadows @capacitor/app's own history-walking callback. That
+        // plugin's back handling is disabled in capacitor.config.ts to keep one
+        // owner of the rule.
+        WebView webView = webView();
 
         if (webView != null && webView.canGoBack()) {
             backExitGuard.reset();
@@ -125,7 +108,10 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
-        if (backExitGuard.onBackPressed(System.currentTimeMillis()) == BackExitGuard.Decision.EXIT) {
+        // Monotonic clock: a wall-clock adjustment must not make the delta negative
+        // and exit the app on what should only be a re-prompt.
+        long now = SystemClock.elapsedRealtime();
+        if (backExitGuard.onBackPressed(now) == BackExitGuard.Decision.EXIT) {
             finish();
             return;
         }

@@ -1,9 +1,7 @@
 apply plugin: 'com.android.application'
 
-// Release signing credentials live outside version control. Copy
-// keystore.properties.example to keystore.properties and fill it in.
-// Without that file the release build still succeeds, signed with the debug
-// key — enough for local installs, not for distribution.
+// Copy keystore.properties.example to keystore.properties to enable signed
+// release builds; without it, the release build still succeeds with debug signing.
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
@@ -40,7 +38,6 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            // Fall back to debug signing when no keystore.properties is present.
             signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
         }
     }

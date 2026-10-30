@@ -46,7 +46,7 @@ public class BackExitGuardTest {
     public void lapseThenPressRearmsPrompt() {
         BackExitGuard guard = new BackExitGuard();
         guard.onBackPressed(1000L);
-        guard.onBackPressed(1000L + TWO_SECONDS + 1); // lapsed, re-armed
+        guard.onBackPressed(1000L + TWO_SECONDS + 1);
         assertEquals(Decision.EXIT, guard.onBackPressed(1000L + TWO_SECONDS + 2));
     }
 
@@ -54,7 +54,7 @@ public class BackExitGuardTest {
     public void thirdPressAfterExitStartsFresh() {
         BackExitGuard guard = new BackExitGuard();
         guard.onBackPressed(1000L);
-        guard.onBackPressed(1500L); // EXIT — disarms
+        guard.onBackPressed(1500L);
         assertEquals(Decision.PROMPT, guard.onBackPressed(1600L));
     }
 
@@ -70,6 +70,14 @@ public class BackExitGuardTest {
     public void nonPositiveClockNeverExits() {
         BackExitGuard guard = new BackExitGuard();
         assertEquals(Decision.PROMPT, guard.onBackPressed(0L));
+        assertEquals(Decision.PROMPT, guard.onBackPressed(0L));
+    }
+
+    @Test
+    public void nonPositiveClockAfterArmedPressDoesNotExit() {
+        BackExitGuard guard = new BackExitGuard();
+        guard.onBackPressed(1000L);
+        // A clock reading of 0 would compute -1000 < window and exit; it must not.
         assertEquals(Decision.PROMPT, guard.onBackPressed(0L));
     }
 }

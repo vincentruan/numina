@@ -9,17 +9,22 @@ import { Preferences } from '@capacitor/preferences'
 const SERVER_URL_KEY = 'numina_server_url'
 const ADVANCED_MODE_KEY = 'numina_advanced_mode'
 
+/** Strip trailing slashes so every stored or compared URL has one canonical form. */
+export function normalizeServerUrl(url: string): string {
+  return url.replace(/\/+$/, '')
+}
+
 /** Read the saved server URL (trimmed, no trailing slash). */
 export async function getServerUrl(): Promise<string | null> {
   const { value } = await Preferences.get({ key: SERVER_URL_KEY })
-  return value ? value.replace(/\/+$/, '') : null
+  return value ? normalizeServerUrl(value) : null
 }
 
 /** Persist the server URL. */
 export async function setServerUrl(url: string): Promise<void> {
   await Preferences.set({
     key: SERVER_URL_KEY,
-    value: url.replace(/\/+$/, ''),
+    value: normalizeServerUrl(url),
   })
 }
 
@@ -44,18 +49,19 @@ export async function setAdvancedMode(enabled: boolean): Promise<void> {
 
 /** Validate that the server URL is reachable by calling /api/health. */
 export async function validateServer(url: string): Promise<boolean> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 8000)
     const resp = await fetch(`${url}/api/health`, {
       signal: controller.signal,
       // Include credentials so cookies from a prior session count as proof of life
       credentials: 'include',
     })
-    clearTimeout(timeout)
     return resp.ok
   } catch {
     return false
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
@@ -78,11 +84,11 @@ export function classifyUrl(raw: string): 'https' | 'http-lan' | 'http-public' |
   if (parsed.protocol !== 'http:') return 'invalid'
 
   const host = parsed.hostname.toLowerCase()
-  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return 'localhost'
+  // WHATWG URL keeps the brackets on IPv6 literals, so "[::1]" is the form to match.
+  if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]') return 'localhost'
   if (
     host.startsWith('192.168.') ||
     host.startsWith('10.') ||
-    host.startsWith('172.') ||
     host.endsWith('.local') ||
     host.endsWith('.lan') ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(host)

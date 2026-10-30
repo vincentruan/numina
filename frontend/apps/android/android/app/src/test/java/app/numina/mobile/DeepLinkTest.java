@@ -10,8 +10,6 @@ import org.junit.Test;
 
 public class DeepLinkTest {
 
-    // ── isDeepLink ──────────────────────────────────────────────────────────
-
     @Test
     public void isDeepLink_acceptsNuminaOpenScheme() {
         assertTrue(DeepLink.isDeepLink(URI.create("numina://open/reminders")));
@@ -36,8 +34,6 @@ public class DeepLinkTest {
     public void isDeepLink_rejectsNull() {
         assertFalse(DeepLink.isDeepLink(null));
     }
-
-    // ── routeFrom ───────────────────────────────────────────────────────────
 
     @Test
     public void routeFrom_extractsPath() {
@@ -85,8 +81,6 @@ public class DeepLinkTest {
     public void routeFrom_returnsNullForNull() {
         assertNull(DeepLink.routeFrom((String) null));
     }
-
-    // ── targetUrl ───────────────────────────────────────────────────────────
 
     @Test
     public void targetUrl_joinsServerAndRoute() {

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import {
   getServerUrl,
   setServerUrl,
@@ -8,23 +7,16 @@ import {
   classifyUrl,
   isAdvancedMode,
   setAdvancedMode,
+  normalizeServerUrl,
 } from '@/utils/server-config'
-
-const router = useRouter()
 
 const serverUrl = ref('')
 const validating = ref(false)
 const connecting = ref(false)
 const error = ref('')
-const success = ref(false)
 const advancedMode = ref(false)
 
 const urlClass = computed(() => classifyUrl(serverUrl.value))
-
-const isHttpWarning = computed(() => {
-  const cls = urlClass.value
-  return cls === 'http-lan' || cls === 'http-public'
-})
 
 const isHttpDanger = computed(() => urlClass.value === 'http-public')
 
@@ -47,15 +39,15 @@ const canConnect = computed(() => {
 })
 
 onMounted(async () => {
-  const saved = await getServerUrl()
+  const [saved, advanced] = await Promise.all([getServerUrl(), isAdvancedMode()])
   if (saved) serverUrl.value = saved
-  advancedMode.value = await isAdvancedMode()
+  advancedMode.value = advanced
 })
 
 async function handleConnect() {
   if (!canConnect.value) return
 
-  const url = serverUrl.value.replace(/\/+$/, '')
+  const url = normalizeServerUrl(serverUrl.value)
   validating.value = true
   error.value = ''
 
@@ -67,9 +59,7 @@ async function handleConnect() {
     return
   }
 
-  // Save the URL and navigate
   connecting.value = true
-  success.value = true
   await setServerUrl(url)
 
   // Brief success feedback, then navigate the WebView to the remote H5
@@ -119,7 +109,7 @@ async function toggleAdvanced() {
         <div v-else-if="urlClass === 'http-public'" class="url-badge badge-danger">🚫 Insecure</div>
       </div>
 
-      <div v-if="isHttpWarning && !advancedMode && urlClass === 'http-lan'" class="warning-box">
+      <div v-if="urlClass === 'http-lan' && !advancedMode" class="warning-box">
         <p>{{ httpWarningText }}</p>
         <button class="link-btn" @click="toggleAdvanced">Enable Advanced Mode to continue →</button>
       </div>
@@ -128,7 +118,7 @@ async function toggleAdvanced() {
         <p>{{ httpWarningText }}</p>
       </div>
 
-      <div v-if="isHttpWarning && advancedMode && urlClass === 'http-lan'" class="info-box">
+      <div v-if="urlClass === 'http-lan' && advancedMode" class="info-box">
         <p>{{ httpWarningText }}</p>
       </div>
 
@@ -136,7 +126,7 @@ async function toggleAdvanced() {
         <p>❌ {{ error }}</p>
       </div>
 
-      <div v-if="success" class="success-box">
+      <div v-if="connecting" class="success-box">
         <p>✅ Connected! Redirecting…</p>
       </div>
 

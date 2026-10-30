@@ -11,6 +11,14 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: true,
   },
+  plugins: {
+    App: {
+      // MainActivity's back callback owns history walking and the exit prompt.
+      // Left enabled, @capacitor/app registers a competing callback and the
+      // winner depends on registration order.
+      disableBackButtonHandler: true,
+    },
+  },
   // The server block is for development only — pointing at a local dev server.
   // Production builds ignore this; the app loads the server URL from Preferences.
   server: {
