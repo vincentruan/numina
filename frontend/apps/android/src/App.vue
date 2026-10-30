@@ -1,18 +1,25 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { getServerUrl, validateServer } from '@/utils/server-config'
+import { getServerUrl, validateServer, classifyUrl, isAdvancedMode } from '@/utils/server-config'
 
 onMounted(async () => {
   const savedUrl = await getServerUrl()
-  if (savedUrl) {
-    // Skip the round-trip when unreachable: the setup page lets the user fix it.
-    const valid = await validateServer(savedUrl)
-    if (valid) {
-      // replace, not href: pushing the shell page into WebView history would
-      // make canGoBack() true after navigating to the remote H5, and the
-      // back-button exit prompt would never be reachable.
-      window.location.replace(savedUrl)
-    }
+  if (!savedUrl) return
+
+  // Re-apply the cleartext gate at launch: a user who saved an http-lan URL
+  // with Advanced Mode ON, then turned the toggle OFF, must not silently keep
+  // auto-connecting over cleartext. Same rule the setup page enforces.
+  const cls = classifyUrl(savedUrl)
+  const advanced = await isAdvancedMode()
+  if (cls === 'http-public') return
+  if (cls === 'http-lan' && !advanced) return
+
+  const valid = await validateServer(savedUrl)
+  if (valid) {
+    // replace, not href: pushing the shell page into WebView history would
+    // make canGoBack() true after navigating to the remote H5, and the
+    // back-button exit prompt would never be reachable.
+    window.location.replace(savedUrl)
   }
 })
 </script>

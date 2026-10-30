@@ -40,7 +40,17 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
+            // Fail closed: assembleRelease without keystore.properties must not
+            // silently produce a debug-signed APK labelled as release. Use
+            // assembleDebug for local installs.
+            if (!keystorePropertiesFile.exists()) {
+                throw new GradleException(
+                    "Release build requires keystore.properties. " +
+                    "Copy keystore.properties.example to keystore.properties and fill it in. " +
+                    "For local installs, use assembleDebug."
+                )
+            }
+            signingConfig signingConfigs.release
         }
     }
 }

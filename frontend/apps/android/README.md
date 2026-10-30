@@ -47,7 +47,7 @@ Install Android command-line tools or Android Studio:
 # Option 2: Command-line tools only
 # Download from https://developer.android.com/studio#command-line-tools-only
 # Then:
-sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 ```
 
 Set environment variables:
@@ -60,7 +60,7 @@ export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin
 
 ### Java
 
-Java 17+ is required. The project uses OpenJDK 25 (installed via Zulu).
+Java 21+ is required. The project uses OpenJDK 25 (installed via Zulu).
 
 ## Server URL Configuration
 
