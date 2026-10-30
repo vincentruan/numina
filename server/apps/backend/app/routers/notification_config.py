@@ -15,6 +15,7 @@ from apps.backend.app.schemas.notification_config import (
     NotificationConfigUpdate,
     NotificationFeatureStatus,
 )
+from apps.backend.app.services.notification.registry import NOTIFICATION_CATEGORIES
 from apps.backend.app.utils.snowflake import next_id
 from packages.db.models.asset import Asset
 from packages.db.models.notification_channel import NotificationChannel
@@ -94,6 +95,16 @@ def get_feature_status(
             status="ready" if threshold_configured else "needs_config",
         ),
     ]
+    # Every remaining registry event has no data prerequisite, so it is always
+    # triggerable. Emitting them keeps the selector's badge map complete; an
+    # absent entry would render as an unexplained blank.
+    covered = {e.event_type for e in event_availability}
+    for category in NOTIFICATION_CATEGORIES.values():
+        for event_type in category["events"]:
+            if event_type not in covered:
+                event_availability.append(
+                    EventAvailability(event_type=event_type, status="ready")
+                )
 
     return NotificationFeatureStatus(
         large_purchase=LargePurchaseStatus(

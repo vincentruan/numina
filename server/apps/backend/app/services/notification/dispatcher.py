@@ -1,5 +1,6 @@
 # backend/app/services/notification/dispatcher.py
 import asyncio
+import binascii
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func
@@ -902,16 +903,23 @@ async def send_test_notification(
         vapid_claims = {"sub": settings.VAPID_SUBJECT}
         delivered = 0
         for sub in subscriptions:
-            result = await asyncio.to_thread(
-                NotificationSender.send_webpush,
-                {
-                    "endpoint": sub.endpoint,
-                    "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
-                },
-                {"title": text, "body": text, "reminder_type": "test"},
-                vapid_private_key,
-                vapid_claims,
-            )
+            try:
+                result = await asyncio.to_thread(
+                    NotificationSender.send_webpush,
+                    {
+                        "endpoint": sub.endpoint,
+                        "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
+                    },
+                    {"title": text, "body": text, "reminder_type": "test"},
+                    vapid_private_key,
+                    vapid_claims,
+                )
+            except (ValueError, UnicodeDecodeError, binascii.Error, TypeError) as exc:
+                # Invalid VAPID key (e.g. the mask placeholder fed as a key,
+                # or a malformed key that Vapid.from_string rejects). Report
+                # rather than let it surface as an HTTP 500.
+                logger.warning("webpush test failed: invalid VAPID key: %s", exc)
+                return False, "VAPID 私钥无效，请重新配置"
             if result == "gone":
                 db.delete(sub)
             elif result:

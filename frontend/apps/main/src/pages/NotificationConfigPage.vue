@@ -138,20 +138,22 @@
           @click="showEventSelector = true"
         />
 
-        <!-- Digest mode toggle -->
-        <van-cell :title="t('reminders.digestMode')" :value="t('reminders.digestModeDesc')">
-          <template #right-icon>
-            <van-switch v-model="form.digestEnabled" size="20px" />
-          </template>
-        </van-cell>
-        <van-field
-          v-if="form.digestEnabled"
-          :model-value="form.digest_time"
-          :label="t('reminders.digestTime')"
-          readonly
-          is-link
-          @click="showTimePicker = true"
-        />
+        <!-- Digest mode toggle — only telegram and feishu can deliver digests -->
+        <template v-if="form.channel_type === 'telegram' || form.channel_type === 'feishu'">
+          <van-cell :title="t('reminders.digestMode')" :value="t('reminders.digestModeDesc')">
+            <template #right-icon>
+              <van-switch v-model="form.digestEnabled" size="20px" />
+            </template>
+          </van-cell>
+          <van-field
+            v-if="form.digestEnabled"
+            :model-value="form.digest_time"
+            :label="t('reminders.digestTime')"
+            readonly
+            is-link
+            @click="showTimePicker = true"
+          />
+        </template>
 
         <!-- Mention config — Telegram / Feishu only -->
         <van-cell
@@ -669,6 +671,10 @@ async function saveChannel({
     })
     const idx = channels.value.findIndex((c) => c.id === editingChannel.value!.id)
     if (idx >= 0) channels.value[idx] = updated
+    // Keep the onboarding card in sync if this edit is the channel it tracks.
+    if (newChannel.value?.id === updated.id) {
+      newChannel.value = updated
+    }
     savedChannel = updated
   } else {
     const created = await notificationChannelsApi.create({

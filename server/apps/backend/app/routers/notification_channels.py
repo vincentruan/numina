@@ -140,13 +140,18 @@ def create_channel(
 ):
     if req.channel_type not in VALID_CHANNEL_TYPES:
         raise AppError(ErrorCode.VALIDATION_ERROR)
+    # email / webpush cannot deliver digests today — pin them to immediate so a
+    # mis-sent request cannot produce failed ReminderNotifications.
+    digest_mode = getattr(req, "digest_mode", "immediate")
+    if req.channel_type in ("email", "webpush"):
+        digest_mode = "immediate"
     channel = NotificationChannel(
         id=next_id(),
         family_id=user.family_id,
         channel_type=req.channel_type,
         name=req.name,
         is_enabled=req.is_enabled if req.is_enabled is not None else True,
-        digest_mode=getattr(req, "digest_mode", "immediate"),
+        digest_mode=digest_mode,
         digest_time=getattr(req, "digest_time", "21:00"),
     )
     db.add(channel)
@@ -227,8 +232,13 @@ def update_channel(
                         id=next_id(), channel_id=channel.id, reminder_type=rtype
                     )
                 )
-    if req.digest_mode is not None:
-        channel.digest_mode = req.digest_mode
+    # email / webpush cannot deliver digests today — silently pin them to immediate
+    # so a stale value from the frontend cannot produce failed ReminderNotifications.
+    digest_mode = req.digest_mode
+    if digest_mode is not None and channel.channel_type in ("email", "webpush"):
+        digest_mode = "immediate"
+    if digest_mode is not None:
+        channel.digest_mode = digest_mode
     if req.digest_time is not None:
         channel.digest_time = req.digest_time
     db.commit()

@@ -371,3 +371,33 @@ def test_event_availability_large_purchase_with_threshold(client, auth_headers):
     data = resp.json()["data"]
     avail = {e["event_type"]: e["status"] for e in data["event_availability"]}
     assert avail["large_purchase"] == "ready"
+
+
+def test_event_availability_covers_every_registry_event(client, auth_headers):
+    """Every registry event must carry a badge entry; a missing one renders blank."""
+    from apps.backend.app.services.notification.registry import NOTIFICATION_CATEGORIES
+
+    registry_types = {
+        t for cat in NOTIFICATION_CATEGORIES.values() for t in cat["events"]
+    }
+    resp = client.get("/api/v1/notification-config/status", headers=auth_headers)
+    returned = {e["event_type"] for e in resp.json()["data"]["event_availability"]}
+    assert registry_types == returned
+
+
+def test_email_digest_pinned_to_immediate(client, auth_headers):
+    """email cannot deliver digests, so the stored mode must not be 'daily'."""
+    resp = client.post(
+        "/api/v1/notification-channels",
+        headers=auth_headers,
+        json={
+            "channel_type": "email",
+            "name": "Mail",
+            "config": {"smtp_host": "smtp.example.com", "to": "a@b.com"},
+            "is_enabled": True,
+            "subscriptions": [],
+            "digest_mode": "daily",
+        },
+    )
+    assert resp.status_code == 201
+    assert resp.json()["data"]["digest_mode"] == "immediate"

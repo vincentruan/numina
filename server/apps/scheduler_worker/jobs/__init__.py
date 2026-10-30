@@ -411,9 +411,18 @@ async def notification_digest_job() -> None:
         )
 
         now = datetime.now()
+        # Only telegram / feishu can deliver digests today. The UI and create/
+        # update endpoints pin email and webpush channels to `immediate`, but
+        # a pre-existing stale row would otherwise cause every pending reminder
+        # to get a failed ReminderNotification row (the cascade the reliability
+        # reviewer flagged).
         candidates = (
             db.query(NotificationChannel)
-            .filter_by(digest_mode="daily", is_enabled=True)
+            .filter(
+                NotificationChannel.digest_mode == "daily",
+                NotificationChannel.is_enabled == True,  # noqa: E712
+                NotificationChannel.channel_type.in_(("telegram", "feishu")),
+            )
             .all()
         )
         due = [c for c in candidates if _in_digest_window(c.digest_time, now)]
