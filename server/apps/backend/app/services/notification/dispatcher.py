@@ -913,6 +913,7 @@ async def send_test_notification(
                     {"title": text, "body": text, "reminder_type": "test"},
                     vapid_private_key,
                     vapid_claims,
+                    timeout=5,
                 )
             except (ValueError, UnicodeDecodeError, binascii.Error, TypeError) as exc:
                 # Invalid VAPID key (e.g. the mask placeholder fed as a key,
