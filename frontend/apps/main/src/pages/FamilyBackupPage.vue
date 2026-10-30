@@ -1,24 +1,24 @@
 <template>
   <div class="family-backup-page">
-    <van-nav-bar title="备份与恢复" left-arrow @click-left="$router.back()" />
+    <van-nav-bar :title="t('backup.title')" left-arrow @click-left="$router.back()" />
 
     <van-pull-refresh v-model="refreshing" @refresh="load">
       <!-- Status banner -->
       <van-cell-group inset class="section">
-        <van-cell title="最近一次备份">
+        <van-cell :title="t('backup.lastBackup')">
           <template #label>
             <template v-if="latest">
               <div>
                 {{ formatDate(latest.backup_date) }}
                 <van-tag :type="latest.status === 'success' ? 'success' : 'danger'">
-                  {{ latest.status === 'success' ? '成功' : '失败' }}
+                  {{ latest.status === 'success' ? t('backup.statusSuccess') : t('backup.statusFailed') }}
                 </van-tag>
               </div>
-              <div class="muted">{{ latest.trigger_type === 'scheduled' ? '自动备份' : '手动备份' }}</div>
+              <div class="muted">{{ latest.trigger_type === 'scheduled' ? t('backup.triggerScheduled') : t('backup.triggerManual') }}</div>
             </template>
             <template v-else>
-              <div class="muted">暂无备份记录</div>
-              <div class="muted">点击下方按钮创建第一个备份</div>
+              <div class="muted">{{ t('backup.noRecords') }}</div>
+              <div class="muted">{{ t('backup.noRecordsHint') }}</div>
             </template>
           </template>
         </van-cell>
@@ -32,15 +32,15 @@
           :loading="triggering"
           @click="onTrigger"
         >
-          手动备份
+          {{ t('backup.manualBackup') }}
         </van-button>
       </van-cell-group>
 
       <!-- Backup list -->
       <van-cell-group inset class="section">
-        <van-empty v-if="!loading && backups.length === 0" description="暂无备份记录">
+        <van-empty v-if="!loading && backups.length === 0" :description="t('backup.noRecords')">
           <van-button type="primary" size="small" :loading="triggering" @click="onTrigger">
-            创建第一个备份
+            {{ t('backup.createFirst') }}
           </van-button>
         </van-empty>
 
@@ -49,7 +49,7 @@
             v-for="backup in backups"
             :key="backup.backup_run_id || backup.file_path"
             :title="formatDate(backup.backup_date)"
-            :label="`${formatBytes(backup.file_size)} · ${backup.trigger_type === 'scheduled' ? '自动' : '手动'}`"
+            :label="`${formatBytes(backup.file_size)} · ${backup.trigger_type === 'scheduled' ? t('backup.triggerScheduled') : t('backup.triggerManual')}`"
           >
             <template #right-icon>
               <van-button
@@ -60,9 +60,9 @@
                 :loading="restoringId === backup.backup_run_id"
                 @click="onPreview(backup)"
               >
-                恢复
+                {{ t('backup.restore') }}
               </van-button>
-              <van-tag v-else type="default">失败</van-tag>
+              <van-tag v-else type="default">{{ t('backup.statusFailed') }}</van-tag>
             </template>
           </van-cell>
         </template>
@@ -72,39 +72,39 @@
     <!-- Restore confirmation dialog -->
     <van-dialog
       v-model:show="showConfirm"
-      title="确认恢复"
+      :title="t('backup.confirmTitle')"
       :before-close="onConfirmClose"
       :show-cancel-button="true"
-      :confirm-button-text="confirmEnabled ? '恢复' : '请先输入家庭名称'"
+      :confirm-button-text="confirmEnabled ? t('backup.confirmButton') : t('backup.confirmHint')"
       :confirm-button-color="confirmEnabled ? '#1989fa' : '#c8c9cc'"
     >
-      <div class="confirm-body" v-if="preview">
-        <van-cell title="备份日期" :value="formatDate(preview.backup_date)" />
-        <van-cell title="备份版本" :value="preview.export_version" />
+      <div v-if="preview" class="confirm-body">
+        <van-cell :title="t('backup.backupDate')" :value="formatDate(preview.backup_date)" />
+        <van-cell :title="t('backup.backupVersion')" :value="preview.export_version" />
 
         <div class="preview-section">
-          <div class="section-title">将被替换的数据</div>
+          <div class="section-title">{{ t('backup.willReplace') }}</div>
           <div v-for="(count, table) in preview.delete" :key="table" class="preview-row">
-            {{ tableName(table) }}: {{ count }} 条
+            {{ tableName(table) }}: {{ t('backup.recordCount', { count }) }}
           </div>
         </div>
 
         <div class="preview-section">
-          <div class="section-title">将从备份恢复的数据</div>
+          <div class="section-title">{{ t('backup.willRestore') }}</div>
           <div v-for="(count, table) in preview.insert" :key="table" class="preview-row">
-            {{ tableName(table) }}: {{ count }} 条
+            {{ tableName(table) }}: {{ t('backup.recordCount', { count }) }}
           </div>
         </div>
 
         <div class="warning">
           <van-icon name="warning-o" />
-          此操作不可撤销，会替换当前所有家庭数据。
+          {{ t('backup.irreversibleWarning') }}
         </div>
 
         <van-field
           v-model="confirmInput"
-          :label="`请输入「${familyName}」以确认`"
-          placeholder="家庭名称"
+          :label="t('backup.typeToConfirm', { name: familyName })"
+          :placeholder="t('backup.familyNamePlaceholder')"
           class="confirm-input"
         />
       </div>
@@ -113,7 +113,7 @@
     <!-- Restore progress -->
     <van-dialog
       v-model:show="showProgress"
-      title="正在恢复"
+      :title="t('backup.progressingTitle')"
       :show-confirm-button="restoreDone"
       :show-cancel-button="!restoreDone"
     >
@@ -128,11 +128,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { showToast, showFailToast, showSuccessToast } from 'vant'
+import { useI18n } from 'vue-i18n'
+import { showFailToast, showSuccessToast } from 'vant'
 import {
   executeRestore,
   listBackups,
   previewRestore,
+  getRestoreProgress,
   restoreFiles,
   triggerBackup,
   type BackupRun,
@@ -140,6 +142,7 @@ import {
 } from '@/api/backup'
 import { useFamilyStore } from '@/stores/family'
 
+const { t } = useI18n()
 const familyStore = useFamilyStore()
 
 const refreshing = ref(false)
@@ -166,37 +169,39 @@ const restoringId = ref<string | null>(null)
 
 const latest = computed(() => backups.value[0] ?? null)
 
-const TABLE_NAMES: Record<string, string> = {
-  assets: '资产',
-  liabilities: '负债',
-  categories: '分类',
-  tags: '标签',
-  wishes: '心愿',
-  chores: '家务',
-  coin_transactions: '金币记录',
-  milestones: '里程碑',
-  rental_contracts: '租房合同',
-  asset_snapshots: '资产快照',
-  trips: '行程',
-  itinerary_items: '行程项目',
-  expense_entries: '支出',
-  expense_categories: '支出分类',
-  cached_files: '缓存文件',
-  file_remote_locations: '远程文件',
-  storage_backends: '存储后端',
-  learning_progress: '学习进度',
-  learning_stats: '学习统计',
-  learning_sessions: '学习会话',
-  notification_channels: '通知渠道',
-  notification_configs: '通知配置',
-  reminders: '提醒',
-  reminder_notifications: '提醒通知',
-  ai_provider_configs: 'AI 配置',
-  users: '用户',
+// Table keys come from the backend payload; map each to its i18n key.
+const TABLE_I18N: Record<string, string> = {
+  users: 'users',
+  assets: 'assets',
+  liabilities: 'liabilities',
+  categories: 'categories',
+  tags: 'tags',
+  wishes: 'wishes',
+  chores: 'chores',
+  coin_transactions: 'coinTransactions',
+  milestones: 'milestones',
+  rental_contracts: 'rentalContracts',
+  asset_snapshots: 'assetSnapshots',
+  trips: 'trips',
+  itinerary_items: 'itineraryItems',
+  expense_entries: 'expenseEntries',
+  expense_categories: 'expenseCategories',
+  cached_files: 'cachedFiles',
+  file_remote_locations: 'fileRemoteLocations',
+  storage_backends: 'storageBackends',
+  learning_progress: 'learningProgress',
+  learning_stats: 'learningStats',
+  learning_sessions: 'learningSessions',
+  notification_channels: 'notificationChannels',
+  notification_configs: 'notificationConfigs',
+  reminders: 'reminders',
+  reminder_notifications: 'reminderNotifications',
+  ai_provider_configs: 'aiProviderConfigs',
 }
 
 function tableName(key: string): string {
-  return TABLE_NAMES[key] ?? key
+  const i18nKey = TABLE_I18N[key]
+  return i18nKey ? t(`backup.table.${i18nKey}`) : key
 }
 
 function formatDate(ymd: string): string {
@@ -205,7 +210,7 @@ function formatDate(ymd: string): string {
 }
 
 function formatBytes(bytes: number | null): string {
-  if (bytes === null || bytes === undefined) return '未知大小'
+  if (bytes === null || bytes === undefined) return t('backup.unknownSize')
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -215,9 +220,9 @@ async function load() {
   loading.value = true
   try {
     const res = await listBackups()
-    backups.value = (res as any)?.items ?? []
+    backups.value = res.data?.items ?? []
   } catch {
-    showFailToast('加载备份列表失败')
+    showFailToast(t('backup.loadFailed'))
   } finally {
     loading.value = false
     refreshing.value = false
@@ -228,10 +233,13 @@ async function onTrigger() {
   triggering.value = true
   try {
     await triggerBackup()
-    showSuccessToast('备份完成')
+    showSuccessToast(t('backup.backupSuccess'))
     await load()
-  } catch (e: any) {
-    showFailToast(e?.response?.data?.message ?? '备份失败')
+  } catch (e: unknown) {
+    showFailToast(
+      (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        t('backup.backupFailed'),
+    )
   } finally {
     triggering.value = false
   }
@@ -240,12 +248,17 @@ async function onTrigger() {
 async function onPreview(backup: BackupRun) {
   restoringId.value = backup.backup_run_id
   try {
-    preview.value = (await previewRestore({ backup_run_id: backup.backup_run_id! })) as any
+    if (!backup.backup_run_id) return
+    const previewRes = await previewRestore({ backup_run_id: backup.backup_run_id })
+    preview.value = previewRes.data
     pendingBackup.value = backup
     confirmInput.value = ''
     showConfirm.value = true
-  } catch (e: any) {
-    showFailToast(e?.response?.data?.message ?? '预览备份失败')
+  } catch (e: unknown) {
+    showFailToast(
+      (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        t('backup.previewFailed'),
+    )
   } finally {
     restoringId.value = null
   }
@@ -263,32 +276,34 @@ async function onConfirmClose(action: string, done: () => void): Promise<boolean
   showConfirm.value = false
   showProgress.value = true
   restoreDone.value = false
-  restoreMessage.value = '正在恢复数据...'
+  restoreMessage.value = t('backup.restoringData')
   let result: boolean
   try {
-    await executeRestore({ backup_run_id: pendingBackup.value?.backup_run_id! })
-    restoreMessage.value = '数据已恢复，正在恢复文件（如有）...'
+    const runId = pendingBackup.value?.backup_run_id
+    if (!runId) throw new Error('missing backup_run_id')
+    await executeRestore({ backup_run_id: runId })
+    restoreMessage.value = t('backup.restoringFiles')
     try {
-      const task = (await restoreFiles()) as { task_id?: string }
-      if (task?.task_id) {
-        await pollProgress(task.task_id)
+      const taskRes = await restoreFiles()
+      if (taskRes.data?.task_id) {
+        await pollProgress(taskRes.data.task_id)
         result = true
       } else {
         restoreDone.value = true
-        restoreMessage.value = '数据恢复成功'
-        showSuccessToast('恢复成功')
+        restoreMessage.value = t('backup.restoreSuccess')
+        showSuccessToast(t('backup.restoreSuccess'))
         await load()
         result = true
       }
     } catch {
       restoreDone.value = true
-      restoreMessage.value = '数据已恢复（文件恢复未开始）'
+      restoreMessage.value = t('backup.restoreDataOnly')
       await load()
       result = true
     }
   } catch (e: unknown) {
     restoreDone.value = true
-    restoreMessage.value = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '恢复失败'
+    restoreMessage.value = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? t('backup.restoreFailed')
     showFailToast(restoreMessage.value)
     result = false
   } finally {
@@ -302,18 +317,19 @@ async function pollProgress(taskId: string) {
   for (let i = 0; i < 120; i += 1) {
     await new Promise((r) => setTimeout(r, 1000))
     try {
-      const body = (await (await import('@/api/backup')).getRestoreProgress(taskId)) as any
+      const progressRes = await getRestoreProgress(taskId)
+      const body = progressRes.data
       if (body.status === 'running') {
-        restoreMessage.value = `恢复文件中 ${body.files_completed}/${body.files_total}`
+        restoreMessage.value = t('backup.restoringFilesProgress', { done: body.files_completed, total: body.files_total })
         continue
       }
       if (body.status === 'completed') {
-        restoreMessage.value = '数据和文件均已恢复'
-        showSuccessToast('恢复成功')
+        restoreMessage.value = t('backup.restoreFilesDone')
+        showSuccessToast(t('backup.restoreSuccess'))
       } else if (body.status === 'partial_success') {
-        restoreMessage.value = `数据已恢复，${body.files_failed} 个文件失败`
+        restoreMessage.value = t('backup.restoreFilesPartial', { failed: body.files_failed })
       } else {
-        restoreMessage.value = '数据已恢复，但文件恢复失败'
+        restoreMessage.value = t('backup.restoreFilesFailed')
       }
       restoreDone.value = true
       await load()
@@ -323,7 +339,7 @@ async function pollProgress(taskId: string) {
     }
   }
   restoreDone.value = true
-  restoreMessage.value = '恢复超时，数据已提交'
+  restoreMessage.value = t('backup.restoreTimeout')
 }
 
 onMounted(load)
