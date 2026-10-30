@@ -707,16 +707,7 @@ async function saveAndTest() {
   // Keep the sheet open so the inline result banner is actually visible.
   const target = await saveChannel({ keepSheetOpen: true })
   if (!target) return
-  testSending.value = true
-  testResult.value = null
-  try {
-    const result = await notificationChannelsApi.testChannel(target.id)
-    testResult.value = result
-  } catch {
-    testResult.value = { success: false, error: t('reminders.testFailed') }
-  } finally {
-    testSending.value = false
-  }
+  await runChannelTest(target.id, 'inline')
 }
 
 async function sendTestForOnboarding() {

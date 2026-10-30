@@ -410,6 +410,9 @@ async def notification_digest_job() -> None:
             NotificationChannel,  # noqa: PLC0415
         )
 
+        # Digest times are server-local (not UTC). Ensure the server timezone
+        # matches user expectations, or convert digest_time to UTC before comparison.
+        # The _in_digest_window function uses the same convention.
         now = datetime.now()
         # Only telegram / feishu can deliver digests today. The UI and create/
         # update endpoints pin email and webpush channels to `immediate`, but

@@ -1,5 +1,6 @@
 # backend/app/routers/notification_channels.py
 from fastapi import APIRouter, Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
@@ -83,16 +84,23 @@ def _latest_deliveries(
     """Return the newest ReminderNotification row per channel, in one query."""
     if not channel_ids:
         return {}
+    # Use GROUP BY + MAX(id) subquery to fetch only the latest row per channel
+    # instead of loading all rows and filtering in Python.
+    subq = (
+        db.query(
+            ReminderNotification.channel_id,
+            func.max(ReminderNotification.id).label("max_id"),
+        )
+        .filter(ReminderNotification.channel_id.in_(channel_ids))
+        .group_by(ReminderNotification.channel_id)
+        .subquery()
+    )
     rows = (
         db.query(ReminderNotification)
-        .filter(ReminderNotification.channel_id.in_(channel_ids))
-        .order_by(ReminderNotification.created_at.desc())
+        .join(subq, ReminderNotification.id == subq.c.max_id)
         .all()
     )
-    latest: dict[int, ReminderNotification] = {}
-    for row in rows:
-        latest.setdefault(row.channel_id, row)
-    return latest
+    return {row.channel_id: row for row in rows}
 
 
 def _to_response(

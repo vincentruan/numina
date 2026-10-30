@@ -925,7 +925,11 @@ async def send_test_notification(
                 db.delete(sub)
             elif result:
                 delivered += 1
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         if delivered:
             return True, None
         return False, "所有推送订阅均已失效或发送失败"

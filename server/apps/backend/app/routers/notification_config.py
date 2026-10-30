@@ -57,6 +57,8 @@ def get_feature_status(
     # Check data availability for event-selector badges. Dates already in the
     # past can never fire (rules.check_expiring_soon / check_maturity bail on
     # days_left < 0), so they must not count toward "ready".
+    # NOTE: uses server local date (not UTC). The digest_time convention is
+    # also server-local; see scheduler_worker/jobs/__init__.py:_in_digest_window.
     today = date.today()
     has_expiring = (
         db.query(func.count(Asset.id))
