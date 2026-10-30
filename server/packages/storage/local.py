@@ -67,26 +67,31 @@ class LocalStorageBackend(StorageBackend):
         return file_path.read_bytes()
 
     async def list(self, prefix: str) -> list[dict]:
-        """List files under prefix, with size and mtime."""
-        base = (self._upload_dir / "uploads").resolve()
-        target = (base / prefix).resolve()
-        if not str(target).startswith(str(base)):
-            raise FileNotFoundError(f"路径越界，拒绝列举: {prefix}")
-        if not target.is_dir():
-            return []
+        """List files under prefix, with size and mtime.
 
+        Files written without a family/user id land under an ``images/``
+        segment (the legacy layout ``save()`` still uses), so both locations
+        are searched for the same logical prefix.
+        """
+        base = (self._upload_dir / "uploads").resolve()
         entries: list[dict] = []
-        for path in sorted(target.rglob("*")):
-            if not path.is_file():
+        for candidate in (prefix, f"images/{prefix}"):
+            target = (base / candidate).resolve()
+            if not str(target).startswith(str(base)):
+                raise FileNotFoundError(f"路径越界，拒绝列举: {prefix}")
+            if not target.is_dir():
                 continue
-            stat = path.stat()
-            entries.append(
-                {
-                    "path": str(path.relative_to(base)),
-                    "size": stat.st_size,
-                    "last_modified": stat.st_mtime,
-                }
-            )
+            for path in sorted(target.rglob("*")):
+                if not path.is_file():
+                    continue
+                stat = path.stat()
+                entries.append(
+                    {
+                        "path": str(path.relative_to(base)),
+                        "size": stat.st_size,
+                        "last_modified": stat.st_mtime,
+                    }
+                )
         return entries
 
     def get_url(self, remote_path: str) -> str:

@@ -1,16 +1,24 @@
+import asyncio
+import uuid
 from datetime import date
+from pathlib import Path
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.deps import require_adult
+from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.database import get_db
+from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.category import Category
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.tag import Tag
 from apps.backend.app.models.user import User
+from packages.core.logging import get_logger
+from packages.db.session import SessionLocal
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/import", tags=["import"])
 
@@ -146,3 +154,186 @@ def _parse_date(val: str | None) -> date | None:
         return date.fromisoformat(val)
     except (ValueError, TypeError):
         return None
+
+
+# ── Family backup / restore ───────────────────────────────────────────────────
+#
+# Backup and restore are owner-only: restore replaces every record the family
+# owns, and a backup contains the family's encrypted credential blobs. That is
+# the same sensitivity as transferring ownership, not ordinary member work.
+
+_backup_tasks: dict[str, dict] = {}
+
+
+class RestoreRequest(BaseModel):
+    backup_run_id: str | None = None
+    backup_date: str | None = None
+
+
+class BackupRequest(BaseModel):
+    pass
+
+
+@router.post("/backup")
+async def create_family_backup(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_owner),
+):
+    """Trigger an immediate backup and return its location."""
+    from packages.domain.backup.orchestrator import create_backup
+
+    try:
+        run, _ = await create_backup(db, user.family_id, trigger_type="manual")
+    except Exception as exc:
+        raise AppError(
+            ErrorCode.BACKUP_FAILED, details={"reason": str(exc)}
+        ) from exc
+    db.commit()
+    return {
+        "backup_run_id": str(run.id),
+        "backup_date": run.backup_date,
+        "file_path": run.file_path,
+        "file_size": run.file_size,
+    }
+
+
+@router.get("/backups")
+def list_family_backups(
+    limit: int = 30,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_owner),
+):
+    """List this family's backups, most recent first."""
+    from packages.domain.backup.orchestrator import list_backups
+
+    items = list_backups(db, user.family_id, limit=limit, offset=offset)
+    return {"items": items}
+
+
+@router.post("/restore")
+async def restore_family_data(
+    req: RestoreRequest,
+    dry_run: bool = False,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_owner),
+):
+    """Preview or perform a full replacement of this family's data."""
+    from packages.domain.backup.orchestrator import load_backup, resolve_backup_path
+    from packages.domain.backup.service import import_family_data, preview_restore
+
+    try:
+        remote_path = resolve_backup_path(db, user.family_id, req.backup_run_id)
+        payload = await load_backup(
+            db, user.family_id, remote_path=remote_path, backup_date=req.backup_date
+        )
+    except FileNotFoundError as exc:
+        raise AppError(ErrorCode.BACKUP_NOT_FOUND, details={"reason": str(exc)}) from exc
+    except ValueError as exc:
+        raise AppError(ErrorCode.BACKUP_INVALID, details={"reason": str(exc)}) from exc
+
+    if dry_run:
+        return preview_restore(db, user.family_id, payload)
+
+    try:
+        stats = import_family_data(db, user.family_id, user.id, payload)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise AppError(ErrorCode.BACKUP_INVALID, details={"reason": str(exc)}) from exc
+    return {"detail": "恢复成功", "stats": stats}
+
+
+@router.post("/restore-files")
+async def restore_family_files(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_owner),
+):
+    """Start re-downloading this family's synced files."""
+    from packages.domain.backup.orchestrator import resolve_backend
+
+    backend = resolve_backend(db, user.family_id)
+    if backend is None:
+        raise AppError(ErrorCode.BACKUP_INVALID, details={"reason": "没有启用的存储后端"})
+
+    task_id = _new_task_id()
+    _backup_tasks[task_id] = {
+        "status": "running",
+        "files_completed": 0,
+        "files_total": 0,
+        "files_failed": 0,
+        "failed_files": [],
+    }
+    asyncio.create_task(_restore_files_worker(task_id, user.family_id))
+    return {"task_id": task_id}
+
+
+@router.get("/restore-files/{task_id}")
+def get_restore_files_progress(
+    task_id: str,
+    user: User = Depends(require_owner),
+):
+    task = _backup_tasks.get(task_id)
+    if task is None:
+        raise AppError(ErrorCode.NOT_FOUND, details={"task_id": task_id})
+    return task
+
+
+def _new_task_id() -> str:
+    return uuid.uuid4().hex
+
+
+async def _restore_files_worker(task_id: str, family_id: int) -> None:
+    """Re-download each synced remote file into the local upload directory."""
+    from packages.db.models.cached_file import CachedFile
+    from packages.db.models.file_remote_location import FileRemoteLocation
+    from packages.domain.backup.orchestrator import resolve_backend
+    from packages.storage.base import StorageError
+
+    task = _backup_tasks[task_id]
+    db = SessionLocal()
+    try:
+        backend = resolve_backend(db, family_id)
+        if backend is None:
+            task["status"] = "failed"
+            return
+        file_ids = [
+            f.id for f in db.query(CachedFile).filter(CachedFile.family_id == family_id).all()
+        ]
+        locations = (
+            db.query(FileRemoteLocation)
+            .filter(FileRemoteLocation.file_id.in_(file_ids))
+            .filter(FileRemoteLocation.sync_status == "synced")
+            .all()
+        )
+        task["files_total"] = len(locations)
+        for loc in locations:
+            existing = (
+                db.query(CachedFile)
+                .filter(CachedFile.id == loc.file_id)
+                .one_or_none()
+            )
+            if existing is None:
+                task["files_failed"] += 1
+                task["failed_files"].append(loc.remote_path)
+                continue
+            try:
+                content = await backend.load(loc.remote_path)
+                target = Path(existing.local_path)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+                task["files_completed"] += 1
+            except (StorageError, FileNotFoundError, OSError):
+                task["files_failed"] += 1
+                task["failed_files"].append(loc.remote_path)
+        if task["files_failed"] and task["files_completed"]:
+            task["status"] = "partial_success"
+        elif task["files_failed"]:
+            task["status"] = "failed"
+        else:
+            task["status"] = "completed"
+    except Exception:
+        logger.exception("文件恢复任务失败: task_id=%s", task_id)
+        task["status"] = "failed"
+    finally:
+        db.close()

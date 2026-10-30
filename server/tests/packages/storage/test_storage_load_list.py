@@ -273,3 +273,18 @@ class TestWebDAVList:
             assert await backend.list("backups/none") == []
         finally:
             await backend._client.aclose()
+
+
+class TestLocalBackupLayout:
+    """Backups written without a user id land under the legacy images/ segment."""
+
+    async def test_list_finds_backup_written_by_save(self, tmp_path):
+        backend = LocalStorageBackend(str(tmp_path))
+        path = await backend.save(
+            b"backup", "numina_backup_1.json", "backups/20261030/120000", family_id="1"
+        )
+
+        listed = await backend.list("backups/20261030")
+
+        assert [e["path"] for e in listed] == [path]
+        assert await backend.load(path) == b"backup"

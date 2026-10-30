@@ -50,7 +50,9 @@ def member(packages_db, family):
 
 @pytest.fixture()
 def category(packages_db, family):
-    cat = Category(id=910002, family_id=FAMILY_ID, name="自定义", icon="📦", asset_type="physical")
+    cat = Category(
+        id=910002, family_id=FAMILY_ID, name="自定义", icon="📦", asset_type="physical"
+    )
     packages_db.add(cat)
     packages_db.flush()
     return cat
@@ -115,7 +117,10 @@ class TestPayloadEnvelope:
         payload = export_family_data(packages_db, FAMILY_ID)
 
         # Must round-trip without custom encoders — this is what gets uploaded.
-        assert json.loads(json.dumps(payload, ensure_ascii=False))["assets"][0]["name"] == "沙发"
+        assert (
+            json.loads(json.dumps(payload, ensure_ascii=False))["assets"][0]["name"]
+            == "沙发"
+        )
 
 
 class TestIdPrecision:
@@ -159,8 +164,20 @@ class TestSectionContents:
     def test_system_categories_are_excluded(self, packages_db, family):
         packages_db.add_all(
             [
-                Category(id=910001, family_id=None, name="系统分类", icon="📦", asset_type="physical"),
-                Category(id=910002, family_id=FAMILY_ID, name="自定义", icon="📦", asset_type="physical"),
+                Category(
+                    id=910001,
+                    family_id=None,
+                    name="系统分类",
+                    icon="📦",
+                    asset_type="physical",
+                ),
+                Category(
+                    id=910002,
+                    family_id=FAMILY_ID,
+                    name="自定义",
+                    icon="📦",
+                    asset_type="physical",
+                ),
             ]
         )
         packages_db.flush()
@@ -189,7 +206,12 @@ class TestSectionContents:
 
     def test_wishes_are_exported(self, packages_db, family, member):
         packages_db.add(
-            Wish(family_id=FAMILY_ID, user_id=member.id, name="旅行", expected_price=Decimal("5000"))
+            Wish(
+                family_id=FAMILY_ID,
+                user_id=member.id,
+                name="旅行",
+                expected_price=Decimal("5000"),
+            )
         )
         packages_db.flush()
 
@@ -201,7 +223,14 @@ class TestSectionContents:
         packages_db.add_all(
             [
                 Family(id=990001, name="别人家", created_by=900002),
-                Asset(id=920001, family_id=990001, user_id=member.id, name="别人的", asset_type="physical", category_id=category.id),
+                Asset(
+                    id=920001,
+                    family_id=990001,
+                    user_id=member.id,
+                    name="别人的",
+                    asset_type="physical",
+                    category_id=category.id,
+                ),
             ]
         )
         packages_db.flush()

@@ -595,3 +595,129 @@ def travel_transition_job() -> None:
         logger.exception("Travel transition job failed")
     finally:
         db.close()
+
+
+# ── Job 12: Family data backup ────────────────────────────────────────────────
+
+
+async def family_backup_job() -> None:
+    """Back up every family that has an active storage backend.
+
+    One family's failure never stops the others: a revoked token for family A
+    must not cost family B its backup. Failures are recorded per family so a
+    streak is visible to the operator rather than buried in logs.
+    """
+    from packages.db.models.storage_backend import (
+        StorageBackend as StorageBackendModel,
+    )
+    from packages.domain.backup.orchestrator import create_backup
+
+    db = SessionLocal()
+    try:
+        families = [
+            row.family_id
+            for row in db.query(StorageBackendModel)
+            .filter(StorageBackendModel.is_active.is_(True))
+            .all()
+        ]
+        if not families:
+            logger.debug("家庭备份: 没有启用的存储后端，跳过")
+            return
+
+        for family_id in families:
+            try:
+                if _already_backed_up_today(db, family_id):
+                    logger.info("家庭备份跳过（今日已完成）: family_id=%s", family_id)
+                    continue
+                run, payload = await create_backup(
+                    db, family_id, trigger_type="scheduled"
+                )
+                db.commit()
+                logger.info(
+                    "家庭备份完成: family_id=%s path=%s size=%s",
+                    family_id,
+                    run.file_path,
+                    run.file_size,
+                )
+                await _prune_old_backups(db, family_id)
+            except Exception as exc:
+                db.rollback()
+                logger.error(
+                    "家庭备份失败: family_id=%s error=%s", family_id, exc, exc_info=True
+                )
+                _report_failure_streak(db, family_id)
+    except Exception:
+        logger.exception("家庭备份任务异常")
+    finally:
+        db.close()
+
+
+async def _prune_old_backups(db, family_id: int) -> None:
+    """Delete dated backup directories beyond the retention count."""
+    from packages.core.settings import settings
+    from packages.domain.backup.orchestrator import BACKUP_ROOT, resolve_backend
+
+    try:
+        backend = resolve_backend(db, family_id)
+        if backend is None:
+            return
+        entries = await backend.list(BACKUP_ROOT)
+        days = sorted({
+            e["path"].rstrip("/").rsplit("/", 1)[-1]
+            for e in entries
+            if e.get("path")
+        })
+        excess = days[: max(0, len(days) - settings.BACKUP_RETENTION_COUNT)]
+        for day in excess:
+            await backend.delete(f"{BACKUP_ROOT}/{day}")
+            logger.info("清理旧备份: family_id=%s day=%s", family_id, day)
+    except Exception:
+        # Pruning is housekeeping; never let it fail a backup that succeeded.
+        logger.warning("清理旧备份失败: family_id=%s", family_id, exc_info=True)
+
+
+def _report_failure_streak(db, family_id: int) -> None:
+    """Escalate a family that has failed repeatedly to CRITICAL."""
+    from packages.db.models.backup_run import BackupRun
+
+    latest = (
+        db.query(BackupRun)
+        .filter(BackupRun.family_id == family_id)
+        .order_by(BackupRun.created_at.desc())
+        .first()
+    )
+    if latest is None or latest.status != "failed":
+        return
+    if latest.consecutive_failures >= 3:
+        logger.critical(
+            "家庭备份连续失败 %s 次: family_id=%s last_error=%s — "
+            "请检查存储后端令牌是否有效、仓库是否可写",
+            latest.consecutive_failures,
+            family_id,
+            latest.error_message,
+        )
+
+
+def _already_backed_up_today(db, family_id: int) -> bool:
+    """True when a scheduled backup already succeeded for today.
+
+    A cron job with coalesce still re-fires after a restart on the same day, so
+    the run itself decides whether today is already covered. Manual backups do
+    not count: they are an extra snapshot, not a substitute for the daily one.
+    """
+    from datetime import UTC, datetime
+
+    from packages.db.models.backup_run import BackupRun
+
+    today = datetime.now(UTC).strftime("%Y%m%d")
+    existing = (
+        db.query(BackupRun)
+        .filter(
+            BackupRun.family_id == family_id,
+            BackupRun.backup_date == today,
+            BackupRun.trigger_type == "scheduled",
+            BackupRun.status == "success",
+        )
+        .first()
+    )
+    return existing is not None

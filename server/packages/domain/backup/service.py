@@ -267,6 +267,8 @@ def _reminder_notifications(db: Session, family_id: int) -> list[dict]:
 def _asset(asset: Asset) -> dict[str, Any]:
     item = _serialize(asset, _ASSET_FIELDS)
     item["tag_names"] = [t.name for t in asset.tags] if asset.tags else []
+    item["category_name"] = asset.category.name if asset.category else None
+    item["category_asset_type"] = asset.category.asset_type if asset.category else None
     return item
 
 
@@ -803,8 +805,8 @@ def import_family_data(
 
     # Assets carry tag_names; resolve them against tag_map.
     for row in payload.get("assets", []):
-        row["category_id"] = category_map.get(
-            str(row.get("category_id", "")), row.get("category_id")
+        row["category_id"] = _resolve_category_id(
+            db, family_id, row, category_map
         )
         resolved_tag_names = [
             t for t in (row.pop("tag_names", None) or []) if t in tag_map
@@ -949,9 +951,15 @@ def validate_backup_data_with_session(
         str(row.id)
         for row in db.query(Category).filter(Category.family_id.is_(None)).all()
     }
-    asset_refs = payload.get("assets", [])
+    system_natural_keys = {
+        (row.name, row.asset_type)
+        for row in db.query(Category).filter(Category.family_id.is_(None)).all()
+    }
     errors: list[str] = []
-    for row in asset_refs:
+    for row in payload.get("assets", []):
+        natural = (row.get("category_name"), row.get("category_asset_type"))
+        if natural[0] is not None and natural in system_natural_keys:
+            continue
         cat_id = row.get("category_id")
         if cat_id is None:
             continue
@@ -1119,6 +1127,35 @@ def _remap_categories(
             if cat_id is not None:
                 payload_to_inserted[str(cat_id)] = str(cat_id)
     return payload_to_inserted
+
+
+def _resolve_category_id(
+    db: Session, family_id: int, row: dict, category_map: dict[str, str]
+) -> Any:
+    """Pick the category this asset should point at in the restored database.
+
+    Preference order: the natural key carried in the payload (stable across a
+    rebuilt database), then the payload id remapped through the categories that
+    were just inserted, then the raw id for a system row that survived.
+    """
+    name = row.get("category_name")
+    asset_type = row.get("category_asset_type")
+    if name is not None:
+        match = (
+            db.query(Category)
+            .filter(
+                Category.name == name,
+                Category.asset_type == asset_type,
+                (Category.family_id == family_id) | (Category.family_id.is_(None)),
+            )
+            .first()
+        )
+        if match is not None:
+            return str(match.id)
+    raw = row.get("category_id")
+    if raw is None:
+        return None
+    return category_map.get(str(raw), raw)
 
 
 def _remap_tags(

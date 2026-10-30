@@ -438,3 +438,66 @@ class TestVersionHandling:
             import_family_data(packages_db, FAMILY_ID, USER_ID, orphan)
 
         assert packages_db.query(Asset).filter_by(family_id=FAMILY_ID).count() == 1
+
+
+class TestRebuiltDatabase:
+    """A backup must restore into a database that seeded fresh system IDs.
+
+    System categories are seeded without explicit IDs, so a rebuilt volume gives
+    them new snowflake IDs. If restore trusted the backup's category_id, the
+    family's only backup would be rejected exactly when it is needed.
+    """
+
+    def test_asset_pointing_at_rebuilt_system_category_still_restores(
+        self, packages_db, family, member
+    ):
+        # The backup was taken when the system category had id 111.
+        backup = {
+            "export_version": "2.0",
+            "categories": [],
+            "assets": [
+                {
+                    "id": "700001",
+                    "user_id": str(USER_ID),
+                    "family_id": str(FAMILY_ID),
+                    "category_id": "111",
+                    "category_name": "现金",
+                    "category_asset_type": "financial",
+                    "name": "备用金",
+                    "asset_type": "financial",
+                }
+            ],
+        }
+
+        # The rebuilt database seeded that category with a different id.
+        rebuilt = Category(
+            id=999001, family_id=None, name="现金", icon="💵",
+            asset_type="financial", is_system=True,
+        )
+        packages_db.add(rebuilt)
+        packages_db.flush()
+
+        stats = import_family_data(packages_db, FAMILY_ID, USER_ID, backup)
+
+        assert stats["assets"] == 1
+        restored = packages_db.query(Asset).filter_by(family_id=FAMILY_ID).one()
+        assert restored.category_id == rebuilt.id
+
+    def test_export_carries_the_natural_key(self, packages_db, family, member, category):
+        packages_db.add(
+            Asset(
+                id=700002,
+                family_id=FAMILY_ID,
+                user_id=member.id,
+                category_id=category.id,
+                name="冰箱",
+                asset_type="physical",
+            )
+        )
+        packages_db.flush()
+
+        payload = export_family_data(packages_db, FAMILY_ID)
+
+        exported = payload["assets"][0]
+        assert exported["category_name"] == "家电"
+        assert exported["category_asset_type"] == "physical"

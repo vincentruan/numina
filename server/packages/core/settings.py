@@ -81,6 +81,8 @@ class Settings(BaseSettings):
     WORKSPACE_ROOT: str = "./data/workspaces"
     FILE_SYNC_INTERVAL_MINUTES: int = 15
     FILE_SYNC_FAILED_RECOVERY_HOURS: int = 24  # Re-queue exhausted failures after this many hours
+    BACKUP_HOUR: int = 2  # Local hour of the daily family backup
+    BACKUP_RETENTION_COUNT: int = 7  # How many dated backups to keep remotely
     STORAGE_ENCRYPTION_KEY: str = ""
 
     # Chat session storage configuration
