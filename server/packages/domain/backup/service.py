@@ -816,7 +816,8 @@ def import_family_data(
         asset.family_id = (
             int(asset.family_id) if asset.family_id is not None else family_id
         )
-        asset.category_id = int(asset.category_id) if asset.category_id else None
+        # Assignment is type-checker-unfriendly on this Column but is the honest form.
+        asset.category_id = int(asset.category_id) if asset.category_id else None  # type: ignore[assignment]
         _coerce_asset(asset)
         if resolved_tag_names:
             asset.tags = _tag_objects(db, resolved_tag_names, tag_map)

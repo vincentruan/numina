@@ -152,7 +152,8 @@ async def load_backup(
         remote_path = await _newest_backup_path(backend, family_id, backup_date)
 
     raw = await backend.load(remote_path)
-    return json.loads(raw)
+    parsed: dict[str, Any] = json.loads(raw)
+    return parsed
 
 
 async def _newest_backup_path(
@@ -192,7 +193,7 @@ def list_backups(
         run.file_path: run
         for run in db.query(BackupRun).filter(BackupRun.family_id == family_id).all()
     }
-    rows = [
+    rows: list[dict[str, Any]] = [
         {
             "backup_date": run.backup_date,
             "file_path": run.file_path,
@@ -209,7 +210,7 @@ def list_backups(
         .all()
     ]
     for row in rows:
-        run = recorded.get(row["file_path"])
+        run = recorded.get(str(row["file_path"]))
         row["backup_run_id"] = str(run.id) if run else None
     return rows
 
