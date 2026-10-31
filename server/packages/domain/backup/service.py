@@ -13,7 +13,7 @@ definition. Two rules govern everything here:
 from __future__ import annotations
 
 import contextlib
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any
 
@@ -283,13 +283,13 @@ def _coerce(name: str, value: Any) -> Any:
         return str(value)
     if isinstance(value, Decimal):
         return str(value)
-    if isinstance(value, (date, datetime)):
+    if isinstance(value, (date, datetime, time)):
         return value.isoformat()
     return value
 
 
 def _decoerce(name: str, value: Any) -> Any:
-    """Turn JSON strings back into ORM-friendly date/datetime values."""
+    """Turn JSON strings back into ORM-friendly date/datetime/time values."""
     if value is None:
         return None
     if (name.endswith("_date") or name.endswith("_at")) and isinstance(value, str):
@@ -298,6 +298,9 @@ def _decoerce(name: str, value: Any) -> Any:
                 return parser(value)
             except ValueError:
                 continue
+    if name.endswith("_time") and isinstance(value, str):
+        with contextlib.suppress(ValueError):
+            return time.fromisoformat(value)
     return value
 
 
@@ -805,9 +808,7 @@ def import_family_data(
 
     # Assets carry tag_names; resolve them against tag_map.
     for row in payload.get("assets", []):
-        row["category_id"] = _resolve_category_id(
-            db, family_id, row, category_map
-        )
+        row["category_id"] = _resolve_category_id(db, family_id, row, category_map)
         resolved_tag_names = [
             t for t in (row.pop("tag_names", None) or []) if t in tag_map
         ]
