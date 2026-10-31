@@ -57,6 +57,43 @@ class LocalStorageBackend(StorageBackend):
         except FileNotFoundError:
             logger.warning("本地文件不存在，跳过删除: %s", file_path)
 
+    async def load(self, remote_path: str) -> bytes:
+        """Read a file back from disk. Raises FileNotFoundError if absent or unsafe."""
+        file_path = (self._upload_dir / "uploads" / remote_path).resolve()
+        if not str(file_path).startswith(str(self._upload_dir.resolve())):
+            raise FileNotFoundError(f"路径越界，拒绝读取: {remote_path}")
+        if not file_path.is_file():
+            raise FileNotFoundError(f"本地文件不存在: {remote_path}")
+        return file_path.read_bytes()
+
+    async def list(self, prefix: str) -> list[dict]:
+        """List files under prefix, with size and mtime.
+
+        Files written without a family/user id land under an ``images/``
+        segment (the legacy layout ``save()`` still uses), so both locations
+        are searched for the same logical prefix.
+        """
+        base = (self._upload_dir / "uploads").resolve()
+        entries: list[dict] = []
+        for candidate in (prefix, f"images/{prefix}"):
+            target = (base / candidate).resolve()
+            if not str(target).startswith(str(base)):
+                raise FileNotFoundError(f"路径越界，拒绝列举: {prefix}")
+            if not target.is_dir():
+                continue
+            for path in sorted(target.rglob("*")):
+                if not path.is_file():
+                    continue
+                stat = path.stat()
+                entries.append(
+                    {
+                        "path": str(path.relative_to(base)),
+                        "size": stat.st_size,
+                        "last_modified": stat.st_mtime,
+                    }
+                )
+        return entries
+
     def get_url(self, remote_path: str) -> str:
         """Return root-relative URL served by the StaticFiles mount."""
         return f"/uploads/{remote_path}"

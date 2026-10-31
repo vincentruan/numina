@@ -10,6 +10,7 @@ from packages.storage.base import (
     StorageConflictError,
     StorageConnectionError,
     StorageError,
+    StorageFileSizeError,
     StorageRateLimitError,
 )
 
@@ -24,6 +25,7 @@ class TestErrorHierarchy:
             StorageConflictError,
             StorageConnectionError,
             StorageAuthError,
+            StorageFileSizeError,
         ],
     )
     def test_concrete_errors_subclass_storage_error(self, exc_cls):
@@ -67,6 +69,12 @@ class _DummyBackend(StorageBackend):
     async def delete(self, remote_path):
         return None
 
+    async def load(self, remote_path):
+        return b""
+
+    async def list(self, prefix):
+        return []
+
     def get_url(self, remote_path):
         return f"/{remote_path}"
 
@@ -93,3 +101,26 @@ class TestStorageBackendInterface:
 
         with pytest.raises(TypeError):
             _Incomplete()  # type: ignore[abstract]
+
+
+class TestStorageFileSizeError:
+    """StorageFileSizeError carries the offending size and the backend's limit."""
+
+    def test_defaults(self):
+        err = StorageFileSizeError()
+        assert str(err) == "File too large"
+        assert err.file_size == 0
+        assert err.max_size == 0
+
+    def test_carries_sizes(self):
+        err = StorageFileSizeError("too big", file_size=2_000_000, max_size=768_000)
+        assert err.file_size == 2_000_000
+        assert err.max_size == 768_000
+
+    def test_catchable_as_storage_error(self):
+        with pytest.raises(StorageError):
+            raise StorageFileSizeError("nope", file_size=1, max_size=0)
+
+    def test_distinct_from_sibling_errors(self):
+        assert not issubclass(StorageFileSizeError, StorageConflictError)
+        assert not issubclass(StorageFileSizeError, StorageAuthError)

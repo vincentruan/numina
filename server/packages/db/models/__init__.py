@@ -1,5 +1,6 @@
 from packages.db.models.asset import Asset, asset_tags
 from packages.db.models.asset_snapshot import AssetSnapshot
+from packages.db.models.backup_run import BackupRun
 from packages.db.models.cached_file import CachedFile
 from packages.db.models.category import Category
 from packages.db.models.child_economy.chore import ChoreInstance, ChoreTemplate
@@ -52,6 +53,7 @@ from packages.db.models.wish import Wish
 __all__ = [
     "Asset",
     "AssetSnapshot",
+    "BackupRun",
     "CachedFile",
     "Category",
     "ChoreInstance",

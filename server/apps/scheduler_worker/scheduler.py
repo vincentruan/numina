@@ -20,6 +20,7 @@ def setup_all_jobs() -> None:
         audit_log_purge_job,
         auto_report_job,
         device_session_cleanup_job,
+        family_backup_job,
         fetch_rates_job,
         file_sync_job,
         literacy_report_weekly_job,
@@ -195,3 +196,22 @@ def setup_all_jobs() -> None:
         coalesce=True,
     )
     logger.info("行程状态自动转换任务已配置（每日 06:00）")
+
+    # Job 12: Family data backup — daily at 02:30
+    #
+    # A cron trigger rather than an interval: APScheduler keeps jobs in memory,
+    # so an interval trigger's first fire is one full interval after startup and
+    # any redeploy restarts that countdown. A backup that needs 24h of uptime to
+    # ever run is a backup that never runs.
+    scheduler.add_job(
+        family_backup_job,
+        trigger="cron",
+        hour=settings.BACKUP_HOUR,
+        minute=30,
+        id="family_backup",
+        name="family_backup_job",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("家庭数据备份任务已配置（每日 %s:30）", settings.BACKUP_HOUR)

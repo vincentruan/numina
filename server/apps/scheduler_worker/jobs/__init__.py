@@ -7,7 +7,7 @@ No module-level app.* imports — lazy imports inside job bodies only.
 
 import asyncio
 import random
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from packages.core.logging import get_logger
@@ -15,6 +15,15 @@ from packages.core.settings import settings
 from packages.db.session import SessionLocal
 
 logger = get_logger(__name__)
+
+# Retry budget for transient failures. A file that fails this many times is marked
+# "failed" and only re-queued by the auto-recovery sweep below.
+_MAX_SYNC_RETRIES = 3
+
+# Sentinel retry_count for failures that can never succeed on retry (e.g. the file
+# exceeds the backend's hard size limit). The auto-recovery sweep deliberately
+# skips these so they are not retried forever every recovery window.
+_PERMANENT_FAILURE_RETRY = 999
 
 
 # ── Job 1: Exchange rate fetch ────────────────────────────────────────────────
@@ -39,6 +48,45 @@ def fetch_rates_job() -> None:
 # ── Job 2: File sync ──────────────────────────────────────────────────────────
 
 
+def _requeue_stale_failures(db, backend_id: int) -> int:
+    """Re-queue transient sync failures that exhausted their retry budget.
+
+    A file that failed three times is marked ``failed`` and, without this sweep,
+    stays failed forever until a user manually calls POST /family/storage/sync.
+    That means a transient outage (token rotation, network blip, temporary rate
+    limit) permanently strands files with no operator-visible path forward.
+
+    After ``FILE_SYNC_FAILED_RECOVERY_HOURS`` the row returns to ``pending`` with
+    a fresh retry budget. Two classes of row are deliberately excluded:
+
+    - ``retry_count >= _PERMANENT_FAILURE_RETRY``: failures that can never
+      succeed on retry (file larger than the backend's hard limit). Re-queueing
+      them would loop forever and burn API quota.
+    - Rows updated more recently than the cutoff: they may still be settling.
+
+    Returns the number of rows re-queued.
+    """
+    from packages.db.models.file_remote_location import FileRemoteLocation
+
+    cutoff = datetime.now(UTC) - timedelta(hours=settings.FILE_SYNC_FAILED_RECOVERY_HOURS)
+    recovered = (
+        db.query(FileRemoteLocation)
+        .filter_by(backend_id=backend_id)
+        .filter(FileRemoteLocation.sync_status == "failed")
+        .filter(FileRemoteLocation.retry_count >= _MAX_SYNC_RETRIES)
+        .filter(FileRemoteLocation.retry_count < _PERMANENT_FAILURE_RETRY)
+        .filter(FileRemoteLocation.updated_at < cutoff)
+        .update(
+            {
+                FileRemoteLocation.sync_status: "pending",
+                FileRemoteLocation.retry_count: 0,
+            },
+            synchronize_session="fetch",
+        )
+    )
+    return int(recovered or 0)
+
+
 async def file_sync_job() -> None:
     """Sync pending file_remote_locations to each family's remote backend."""
     from packages.db.models.cached_file import CachedFile
@@ -48,7 +96,11 @@ async def file_sync_job() -> None:
     from packages.db.models.storage_backend import (
         StorageBackend as StorageBackendModel,
     )
-    from packages.storage.base import StorageError
+    from packages.storage.base import (
+        StorageError,
+        StorageFileSizeError,
+        StorageRateLimitError,
+    )
     from packages.storage.config_crypto import decrypt_config
     from packages.storage.factory import get_backend_for_type
 
@@ -58,12 +110,30 @@ async def file_sync_job() -> None:
         if not active_backends:
             return
 
+        # Path diagnostics: log the resolved upload dir once per run so that a
+        # container path mismatch is immediately visible in the logs.
+        upload_dir = Path(settings.UPLOAD_DIR).resolve()
+        logger.info(
+            "文件同步开始: %s 个活动后端, UPLOAD_DIR=%s (exists=%s)",
+            len(active_backends),
+            upload_dir,
+            upload_dir.exists(),
+        )
+
         for backend_row in active_backends:
             try:
                 config = decrypt_config(backend_row.config)
                 if config is None:
-                    logger.warning(
-                        f"无法解密存储后端配置 (family_id={backend_row.family_id})，跳过"
+                    # CRITICAL, not WARNING: every file for this family is blocked
+                    # until the encryption key is fixed. Previously this silently
+                    # skipped and left files pending forever.
+                    logger.critical(
+                        "存储后端配置解密失败 (family_id=%s, backend_id=%s, type=%s)。"
+                        "该家庭的所有文件同步将停滞 — 请检查 STORAGE_ENCRYPTION_KEY / "
+                        "SECRET_KEY 是否与加密时一致。",
+                        backend_row.family_id,
+                        backend_row.id,
+                        backend_row.backend_type,
                     )
                     continue
 
@@ -75,11 +145,20 @@ async def file_sync_job() -> None:
                 )
                 continue
 
+            recovered = _requeue_stale_failures(db, backend_row.id)
+            if recovered:
+                db.commit()
+                logger.info(
+                    "文件同步自动恢复: %s 个失败文件重新入队 (family_id=%s)",
+                    recovered,
+                    backend_row.family_id,
+                )
+
             pending = (
                 db.query(FileRemoteLocation)
                 .filter_by(backend_id=backend_row.id)
                 .filter(FileRemoteLocation.sync_status.in_(["pending", "failed"]))
-                .filter(FileRemoteLocation.retry_count < 3)
+                .filter(FileRemoteLocation.retry_count < _MAX_SYNC_RETRIES)
                 .limit(50)
                 .all()
             )
@@ -94,8 +173,8 @@ async def file_sync_job() -> None:
                 for cf in db.query(CachedFile).filter(CachedFile.id.in_(file_ids)).all()
             }
 
-            upload_dir = Path(settings.UPLOAD_DIR).resolve()
             any_synced = False
+            path_mismatch_count = 0
 
             for loc in pending:
                 cached_file = cached_files.get(loc.file_id)
@@ -108,13 +187,16 @@ async def file_sync_job() -> None:
                 # Guard against path traversal: local_path must resolve within UPLOAD_DIR
                 resolved_path = Path(cached_file.local_path).resolve()
                 if not resolved_path.is_relative_to(upload_dir):
+                    path_mismatch_count += 1
                     loc.sync_status = "failed"
                     loc.last_error = f"路径越界，拒绝访问: {cached_file.local_path}"
                     db.commit()
                     logger.warning(
-                        "文件同步路径越界: %s -> %s",
+                        "文件同步路径越界: file_id=%s local_path=%s UPLOAD_DIR=%s "
+                        "(backend 与 scheduler_worker 容器的卷挂载可能不一致)",
                         cached_file.id,
                         cached_file.local_path,
+                        upload_dir,
                     )
                     continue
 
@@ -132,36 +214,71 @@ async def file_sync_job() -> None:
                     loc.remote_path = remote_path
                     loc.remote_url = backend.get_url(remote_path)
                     loc.synced_at = datetime.now(UTC)
+                    loc.last_error = None
+                    loc.retry_count = 0
                     any_synced = True
                     db.commit()
+                except StorageRateLimitError as e:
+                    # A rate limit is not the file's fault — do NOT consume a retry.
+                    # Stop this backend's batch and wait for the reset window.
+                    loc.last_error = f"触发速率限制: {e}"
+                    db.commit()
+                    logger.warning(
+                        "存储后端速率限制 (family_id=%s, reset_at=%s)，本轮停止同步该后端",
+                        backend_row.family_id,
+                        e.reset_at,
+                    )
+                    break
+                except StorageFileSizeError as e:
+                    # Permanent failure: retrying a too-large file will never succeed,
+                    # so mark it failed immediately without burning the retry budget.
+                    loc.sync_status = "failed"
+                    loc.retry_count = _PERMANENT_FAILURE_RETRY
+                    loc.last_error = str(e)
+                    db.commit()
+                    logger.error(
+                        "文件超过后端大小限制，已标记失败: file_id=%s size=%s max=%s",
+                        cached_file.id,
+                        e.file_size,
+                        e.max_size,
+                    )
                 except TimeoutError:
                     loc.retry_count += 1
                     loc.last_error = "上传超时 (30s)"
-                    if loc.retry_count >= 3:
+                    if loc.retry_count >= _MAX_SYNC_RETRIES:
                         loc.sync_status = "failed"
                     db.commit()
                     logger.warning("文件同步超时: %s", cached_file.id)
                 except FileNotFoundError:
                     loc.retry_count += 1
                     loc.last_error = f"本地文件不存在: {cached_file.local_path}"
-                    if loc.retry_count >= 3:
+                    if loc.retry_count >= _MAX_SYNC_RETRIES:
                         loc.sync_status = "failed"
                     db.commit()
                     logger.warning("文件同步本地文件不存在: %s", cached_file.id)
                 except StorageError as e:
                     loc.retry_count += 1
                     loc.last_error = str(e)
-                    if loc.retry_count >= 3:
+                    if loc.retry_count >= _MAX_SYNC_RETRIES:
                         loc.sync_status = "failed"
                     db.commit()
                     logger.warning("文件同步失败: %s", cached_file.id, exc_info=True)
                 except Exception as e:
                     loc.retry_count += 1
                     loc.last_error = str(e)
-                    if loc.retry_count >= 3:
+                    if loc.retry_count >= _MAX_SYNC_RETRIES:
                         loc.sync_status = "failed"
                     db.commit()
                     logger.exception("文件同步异常: %s", cached_file.id)
+
+            if path_mismatch_count:
+                logger.error(
+                    "文件同步路径越界 %s 个 (family_id=%s, UPLOAD_DIR=%s) — "
+                    "检查 scheduler_worker 与 backend 容器的卷挂载是否一致",
+                    path_mismatch_count,
+                    backend_row.family_id,
+                    upload_dir,
+                )
 
             if any_synced:
                 backend_row.last_synced_at = datetime.now(UTC)
@@ -478,3 +595,129 @@ def travel_transition_job() -> None:
         logger.exception("Travel transition job failed")
     finally:
         db.close()
+
+
+# ── Job 12: Family data backup ────────────────────────────────────────────────
+
+
+async def family_backup_job() -> None:
+    """Back up every family that has an active storage backend.
+
+    One family's failure never stops the others: a revoked token for family A
+    must not cost family B its backup. Failures are recorded per family so a
+    streak is visible to the operator rather than buried in logs.
+    """
+    from packages.db.models.storage_backend import (
+        StorageBackend as StorageBackendModel,
+    )
+    from packages.domain.backup.orchestrator import create_backup
+
+    db = SessionLocal()
+    try:
+        families = [
+            row.family_id
+            for row in db.query(StorageBackendModel)
+            .filter(StorageBackendModel.is_active.is_(True))
+            .all()
+        ]
+        if not families:
+            logger.debug("家庭备份: 没有启用的存储后端，跳过")
+            return
+
+        for family_id in families:
+            try:
+                if _already_backed_up_today(db, family_id):
+                    logger.info("家庭备份跳过（今日已完成）: family_id=%s", family_id)
+                    continue
+                run, payload = await create_backup(
+                    db, family_id, trigger_type="scheduled"
+                )
+                db.commit()
+                logger.info(
+                    "家庭备份完成: family_id=%s path=%s size=%s",
+                    family_id,
+                    run.file_path,
+                    run.file_size,
+                )
+                await _prune_old_backups(db, family_id)
+            except Exception as exc:
+                db.rollback()
+                logger.error(
+                    "家庭备份失败: family_id=%s error=%s", family_id, exc, exc_info=True
+                )
+                _report_failure_streak(db, family_id)
+    except Exception:
+        logger.exception("家庭备份任务异常")
+    finally:
+        db.close()
+
+
+async def _prune_old_backups(db, family_id: int) -> None:
+    """Delete dated backup directories beyond the retention count."""
+    from packages.core.settings import settings
+    from packages.domain.backup.orchestrator import BACKUP_ROOT, resolve_backend
+
+    try:
+        backend = resolve_backend(db, family_id)
+        if backend is None:
+            return
+        entries = await backend.list(BACKUP_ROOT)
+        days = sorted({
+            e["path"].rstrip("/").rsplit("/", 1)[-1]
+            for e in entries
+            if e.get("path")
+        })
+        excess = days[: max(0, len(days) - settings.BACKUP_RETENTION_COUNT)]
+        for day in excess:
+            await backend.delete(f"{BACKUP_ROOT}/{day}")
+            logger.info("清理旧备份: family_id=%s day=%s", family_id, day)
+    except Exception:
+        # Pruning is housekeeping; never let it fail a backup that succeeded.
+        logger.warning("清理旧备份失败: family_id=%s", family_id, exc_info=True)
+
+
+def _report_failure_streak(db, family_id: int) -> None:
+    """Escalate a family that has failed repeatedly to CRITICAL."""
+    from packages.db.models.backup_run import BackupRun
+
+    latest = (
+        db.query(BackupRun)
+        .filter(BackupRun.family_id == family_id)
+        .order_by(BackupRun.created_at.desc())
+        .first()
+    )
+    if latest is None or latest.status != "failed":
+        return
+    if latest.consecutive_failures >= 3:
+        logger.critical(
+            "家庭备份连续失败 %s 次: family_id=%s last_error=%s — "
+            "请检查存储后端令牌是否有效、仓库是否可写",
+            latest.consecutive_failures,
+            family_id,
+            latest.error_message,
+        )
+
+
+def _already_backed_up_today(db, family_id: int) -> bool:
+    """True when a scheduled backup already succeeded for today.
+
+    A cron job with coalesce still re-fires after a restart on the same day, so
+    the run itself decides whether today is already covered. Manual backups do
+    not count: they are an extra snapshot, not a substitute for the daily one.
+    """
+    from datetime import UTC, datetime
+
+    from packages.db.models.backup_run import BackupRun
+
+    today = datetime.now(UTC).strftime("%Y%m%d")
+    existing = (
+        db.query(BackupRun)
+        .filter(
+            BackupRun.family_id == family_id,
+            BackupRun.backup_date == today,
+            BackupRun.trigger_type == "scheduled",
+            BackupRun.status == "success",
+        )
+        .first()
+    )
+    return existing is not None
