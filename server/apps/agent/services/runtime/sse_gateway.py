@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
+from collections import defaultdict, deque
 from typing import Any
 
 from deerflow.runtime import (
@@ -76,6 +78,49 @@ def normalize_stream_modes(raw: list[str] | str | None) -> list[str]:
     if isinstance(raw, str):
         return [raw]
     return raw if raw else ["values", "messages-tuple"]
+
+
+# ---------------------------------------------------------------------------
+# Per-family rate limiting (Security Rule #8)
+# ---------------------------------------------------------------------------
+
+# Sliding-window rate limiter: tracks per-family run start timestamps.
+# Limits concurrent run *starts* per family (not concurrent active runs —
+# that's the global Semaphore(DEERFLOW_CONCURRENCY) job).
+# Default: 20 run starts per family per 60 seconds.
+_RATE_LIMIT_WINDOW = 60.0  # seconds
+_RATE_LIMIT_MAX_RUNS = 20  # max run starts per window per family
+_run_start_times: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _check_family_rate_limit(family_id: str) -> None:
+    """Raise 429 if the family exceeded the run-start rate limit.
+
+    Sliding window: prune timestamps older than _RATE_LIMIT_WINDOW, then
+    count remaining. If at or above _RATE_LIMIT_MAX_RUNS, reject.
+
+    This is process-local only — multi-worker deployments need Redis-backed
+    rate limiting (future enhancement). Single-instance is the common Numina
+    deployment mode.
+    """
+    now = time.monotonic()
+    q = _run_start_times[family_id]
+    # Prune old entries
+    cutoff = now - _RATE_LIMIT_WINDOW
+    while q and q[0] < cutoff:
+        q.popleft()
+    if len(q) >= _RATE_LIMIT_MAX_RUNS:
+        logger.warning(
+            "[rate_limit] family=%s exceeded %d runs/%ds — rejecting",
+            family_id,
+            _RATE_LIMIT_MAX_RUNS,
+            _RATE_LIMIT_WINDOW,
+        )
+        raise HTTPException(
+            status_code=429,
+            detail="请求过于频繁，请稍后再试",
+        )
+    q.append(now)
 
 
 # ---------------------------------------------------------------------------
@@ -368,6 +413,10 @@ async def start_run(
                 status_code=404,
                 detail=f"Thread {thread_id} not found for this family",
             )
+
+        # T9: Per-family rate limiting (Security Rule #8).
+        # Sliding window — 20 run starts per family per 60s.
+        _check_family_rate_limit(family_id)
 
     disconnect = (
         DisconnectMode.cancel

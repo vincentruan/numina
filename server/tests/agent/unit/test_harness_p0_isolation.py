@@ -224,3 +224,59 @@ class TestDanglingToolCallAlwaysOn:
         # Middleware can be instantiated (no config required)
         instance = DanglingToolCallMiddleware()
         assert instance is not None
+
+
+# ---------------------------------------------------------------------------
+# T9: Per-family rate limiting
+# ---------------------------------------------------------------------------
+
+
+class TestPerFamilyRateLimit:
+    """T9: _check_family_rate_limit enforces sliding-window rate limit."""
+
+    def test_allows_under_limit(self):
+        """Requests under the limit are allowed."""
+        from apps.agent.services.runtime.sse_gateway import (
+            _RATE_LIMIT_MAX_RUNS,
+            _check_family_rate_limit,
+            _run_start_times,
+        )
+
+        _run_start_times.clear()
+        # Should not raise for requests under limit
+        for _ in range(_RATE_LIMIT_MAX_RUNS - 1):
+            _check_family_rate_limit("family-ok")
+
+    def test_rejects_over_limit(self):
+        """Requests exceeding the limit get 429."""
+        from fastapi import HTTPException
+
+        from apps.agent.services.runtime.sse_gateway import (
+            _RATE_LIMIT_MAX_RUNS,
+            _check_family_rate_limit,
+            _run_start_times,
+        )
+
+        _run_start_times.clear()
+        # Fill up to the limit
+        for _ in range(_RATE_LIMIT_MAX_RUNS):
+            _check_family_rate_limit("family-limited")
+        # Next one should be rejected
+        with pytest.raises(HTTPException) as exc_info:
+            _check_family_rate_limit("family-limited")
+        assert exc_info.value.status_code == 429
+
+    def test_isolation_between_families(self):
+        """Rate limit is per-family — one family's usage doesn't affect another."""
+        from apps.agent.services.runtime.sse_gateway import (
+            _RATE_LIMIT_MAX_RUNS,
+            _check_family_rate_limit,
+            _run_start_times,
+        )
+
+        _run_start_times.clear()
+        # Fill family A to the limit
+        for _ in range(_RATE_LIMIT_MAX_RUNS):
+            _check_family_rate_limit("family-a")
+        # Family B should still be allowed
+        _check_family_rate_limit("family-b")  # Should not raise
