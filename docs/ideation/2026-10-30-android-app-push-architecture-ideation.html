@@ -1,0 +1,1774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ideation: Android App + Push Architecture</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --text: #1a1a2e;
+    --text-secondary: #555;
+    --accent: #4361ee;
+    --accent-soft: #eef1ff;
+    --success: #2d6a4f;
+    --success-soft: #e8f5e9;
+    --warn: #b45309;
+    --warn-soft: #fef3c7;
+    --danger: #be123c;
+    --danger-soft: #ffe4e6;
+    --border: #e2e8f0;
+    --radius: 8px;
+    --code-bg: #f1f5f9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0a0a1a;
+      --surface: #12122a;
+      --text: #e8e8f0;
+      --text-secondary: #a0a0b0;
+      --accent: #7c8aff;
+      --accent-soft: #1a1a3e;
+      --success: #4ade80;
+      --success-soft: #0a2a1a;
+      --warn: #fbbf24;
+      --warn-soft: #2a2010;
+      --danger: #f87171;
+      --danger-soft: #2a0a0a;
+      --border: #2a2a4a;
+      --code-bg: #1a1a2e;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    font-size: 15px;
+  }
+  .container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+  header {
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.25rem;
+  }
+  h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem; }
+  h2 {
+    font-size: 1.3rem; font-weight: 700;
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 1.05rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 0.95rem; font-weight: 600; margin: 1rem 0 0.4rem; }
+  .meta {
+    display: flex; gap: 1.5rem; flex-wrap: wrap;
+    font-size: 0.85rem; color: var(--text-secondary);
+  }
+  section { margin-bottom: 2rem; }
+  .prose { max-width: 80ch; }
+  .prose p { margin-bottom: 0.75rem; }
+  p { margin-bottom: 0.75rem; }
+  ul, ol { margin-bottom: 0.75rem; padding-left: 1.5rem; }
+  li { margin-bottom: 0.3rem; }
+  code {
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.88em;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 1rem;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+    line-height: 1.5;
+  }
+  pre code { background: none; padding: 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+    font-size: 0.88rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+  }
+  th {
+    background: var(--accent-soft);
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .callout {
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+  }
+  .callout-info { background: var(--accent-soft); border-left: 3px solid var(--accent); }
+  .callout-warn { background: var(--warn-soft); border-left: 3px solid var(--warn); }
+  .callout-danger { background: var(--danger-soft); border-left: 3px solid var(--danger); }
+  .callout-success { background: var(--success-soft); border-left: 3px solid var(--success); }
+  .callout strong { display: block; margin-bottom: 0.25rem; }
+  .tag {
+    display: inline-block;
+    padding: 0.1em 0.5em;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .tag-green { background: var(--success-soft); color: var(--success); }
+  .tag-red { background: var(--danger-soft); color: var(--danger); }
+  .tag-yellow { background: var(--warn-soft); color: var(--warn); }
+  .tag-blue { background: var(--accent-soft); color: var(--accent); }
+  .score { font-weight: 700; color: var(--accent); }
+  .mermaid {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    font-family: 'SF Mono', monospace;
+    font-size: 0.82rem;
+    white-space: pre;
+    line-height: 1.4;
+  }
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    margin-bottom: 2rem;
+  }
+  .toc h3 { margin-top: 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
+  .toc ol { font-size: 0.88rem; }
+  .toc li { margin-bottom: 0.15rem; }
+  .toc a { color: var(--text); text-decoration: none; }
+  .toc a:hover { color: var(--accent); }
+  .phase-box {
+    background: var(--surface);
+    border: 2px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .phase-box h3 { margin-top: 0; color: var(--accent); }
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div class="eyebrow">Architecture Ideation</div>
+  <h1>Android App + Push Notification Architecture</h1>
+  <div class="meta">
+    <span>Date: 2026-10-30</span>
+    <span>Mode: Repo-grounded</span>
+    <span>Focus: Phase 1 Android + Phase 2 Push</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#s1">Current State Audit</a></li>
+    <li><a href="#s2">Important Findings</a></li>
+    <li><a href="#s3">Android Architecture Options</a></li>
+    <li><a href="#s4">Recommendation</a></li>
+    <li><a href="#s5">Phase 1 Architecture</a></li>
+    <li><a href="#s6">Phase 2 Push Architecture</a></li>
+    <li><a href="#s7">Architecture Diagram</a></li>
+    <li><a href="#s8">Push Sequence Diagrams</a></li>
+    <li><a href="#s9">Database / API Changes</a></li>
+    <li><a href="#s10">Existing Code Reuse</a></li>
+    <li><a href="#s11">Privacy &amp; Self-hosting Impact</a></li>
+    <li><a href="#s12">Risks / Unknowns</a></li>
+    <li><a href="#s13">Phase 1 Prototype</a></li>
+    <li><a href="#s14">Phase 2 Prototype</a></li>
+    <li><a href="#s15">Implementation Backlog</a></li>
+    <li><a href="#s16">Go / No-Go Gates</a></li>
+    <li><a href="#s17">Things I Would NOT Do</a></li>
+  </ol>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s1">1. Current State Audit</h2>
+
+<h3>1.1 Frontend PWA Implementation</h3>
+
+<table>
+  <tr><th>Component</th><th>File</th><th>Status</th><th>Detail</th></tr>
+  <tr>
+    <td>Main VitePWA</td>
+    <td><code>frontend/apps/main/vite.config.ts</code></td>
+    <td><span class="tag tag-green">✅ Working</span></td>
+    <td><code>injectManifest</code>, <code>autoUpdate</code>, <code>standalone</code> display, 5 MiB cache limit</td>
+  </tr>
+  <tr>
+    <td>Child VitePWA</td>
+    <td><code>frontend/apps/child/vite.config.ts</code></td>
+    <td><span class="tag tag-green">✅ Working</span></td>
+    <td><code>injectManifest</code>, <code>prompt</code> update, scope <code>/child/</code></td>
+  </tr>
+  <tr>
+    <td>Main SW push</td>
+    <td><code>frontend/apps/main/src/sw.ts</code> L48-75</td>
+    <td><span class="tag tag-green">✅ Working</span></td>
+    <td>Listens <code>push</code>, parses JSON, shows notification with icon/badge/tag/navigateTo</td>
+  </tr>
+  <tr>
+    <td>Child SW push</td>
+    <td><code>frontend/apps/child/src/sw.ts</code> L48-74</td>
+    <td><span class="tag tag-green">✅ Working</span></td>
+    <td>Same pattern, child-specific icons and defaults</td>
+  </tr>
+  <tr>
+    <td>Main notificationclick</td>
+    <td><code>sw.ts</code> L77-96</td>
+    <td><span class="tag tag-red">⚠️ BUG</span></td>
+    <td><strong>focus() only — does NOT navigate to <code>navigateTo</code> URL</strong></td>
+  </tr>
+  <tr>
+    <td>Child notificationclick</td>
+    <td><code>sw.ts</code> L76-93</td>
+    <td><span class="tag tag-red">⚠️ BUG</span></td>
+    <td>Same bug — focus without navigation</td>
+  </tr>
+  <tr>
+    <td>Push subscription composable</td>
+    <td><code>frontend/apps/main/src/composables/usePushSubscription.ts</code></td>
+    <td><span class="tag tag-green">✅ Working</span></td>
+    <td>Full lifecycle: VAPID fetch → permission → subscribe → send to backend → unsubscribe</td>
+  </tr>
+  <tr>
+    <td>Child push subscription</td>
+    <td><code>frontend/apps/child/src/composables/usePushSubscription.ts</code></td>
+    <td><span class="tag tag-red">⚠️ DEAD CODE</span></td>
+    <td>Composable exists (identical to main, sends <code>app_type: 'child'</code>) but <strong>never imported/called by any component</strong> — same in main app</td>
+  </tr>
+  <tr>
+    <td>pushsubscriptionchange</td>
+    <td>—</td>
+    <td><span class="tag tag-red">❌ Missing</span></td>
+    <td>Neither SW handles subscription rotation</td>
+  </tr>
+</table>
+
+<div class="callout callout-danger">
+  <strong>CRITICAL: usePushSubscription is dead code in both apps!</strong>
+  The composable is fully implemented in both <code>main</code> and <code>child</code> apps, but no page or component ever imports or calls it. Push subscription registration will never fire. Additionally, the <code>notificationclick</code> handler focuses existing windows but never navigates to the <code>navigateTo</code> URL. These are the two P0 bugs that must be fixed before any push notification can work end-to-end.
+</div>
+
+<h3>1.2 Backend Notification Infrastructure</h3>
+
+<table>
+  <tr><th>Component</th><th>File</th><th>Status</th></tr>
+  <tr>
+    <td>PushSubscription model</td>
+    <td><code>server/packages/db/models/push_subscription.py</code></td>
+    <td><span class="tag tag-green">✅ Complete</span> — user_id, family_id, endpoint, p256dh, auth, user_agent, app_type</td>
+  </tr>
+  <tr>
+    <td>NotificationChannel model</td>
+    <td><code>server/packages/db/models/notification_channel.py</code></td>
+    <td><span class="tag tag-green">✅ Complete</span> — channel_type (telegram/email/feishu/webpush), digest_mode</td>
+  </tr>
+  <tr>
+    <td>NotificationSubscription</td>
+    <td><code>server/packages/db/models/notification_subscription.py</code></td>
+    <td><span class="tag tag-green">✅ Complete</span> — channel_id + reminder_type binding</td>
+  </tr>
+  <tr>
+    <td>ReminderNotification</td>
+    <td><code>server/packages/db/models/reminder_notification.py</code></td>
+    <td><span class="tag tag-green">✅ Complete</span> — delivery tracking per channel</td>
+  </tr>
+  <tr>
+    <td>Subscribe API</td>
+    <td><code>routers/notification_push.py</code></td>
+    <td><span class="tag tag-green">✅ Complete</span> — POST/DELETE /notifications/push/subscribe + GET vapid-public-key</td>
+  </tr>
+  <tr>
+    <td>Event registry</td>
+    <td><code>services/notification/registry.py</code></td>
+    <td><span class="tag tag-green">✅ Complete</span> — 6 categories, 16 event types with severity/trigger</td>
+  </tr>
+  <tr>
+    <td>Dispatcher</td>
+    <td><code>services/notification/dispatcher.py</code></td>
+    <td><span class="tag tag-green">✅ Complete</span> — ensure_reminder + multi-channel dispatch + retry</td>
+  </tr>
+  <tr>
+    <td>WebPush sender</td>
+    <td><code>services/notification/sender.py</code></td>
+    <td><span class="tag tag-green">✅ Complete</span> — pywebpush with 410 "gone" cleanup</td>
+  </tr>
+  <tr>
+    <td>VAPID config</td>
+    <td><code>packages/core/settings.py</code> L100-103</td>
+    <td><span class="tag tag-green">✅ Present</span> — VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT</td>
+  </tr>
+  <tr>
+    <td>Scheduler reminder job</td>
+    <td><code>scheduler_worker/scheduler.py</code> L116-121</td>
+    <td><span class="tag tag-green">✅ Working</span> — daily 09:20</td>
+  </tr>
+  <tr>
+    <td>Scheduler digest job</td>
+    <td><code>scheduler.py</code> L171-178</td>
+    <td><span class="tag tag-green">✅ Working</span> — daily 21:00</td>
+  </tr>
+  <tr>
+    <td>Notification templates</td>
+    <td><code>services/notification/templates/zh-CN/*.json</code></td>
+    <td><span class="tag tag-green">✅ Present</span> — webpush_title/webpush_body per reminder_type</td>
+  </tr>
+</table>
+
+<h3>1.3 What's Missing</h3>
+
+<div class="callout callout-danger">
+  <strong>notificationclick Bug (P0)</strong>
+  Both main and child SWs focus an existing window but never navigate to the <code>navigateTo</code> URL. When a user clicks a push notification and the browser is already open, they see the current page — not the intended destination.
+</div>
+
+<ul>
+  <li><strong>usePushSubscription never consumed (P0)</strong> — composable exists in both apps but no page/component imports it. Push registration never fires.</li>
+  <li><strong>pushsubscriptionchange</strong> — no SW handler for subscription rotation</li>
+  <li><strong>Logout cleanup</strong> — logout doesn't automatically unsubscribe push</li>
+  <li><strong>Per-event-type preference UI</strong> — <code>NotificationConfigPage</code> exists for Telegram/Email/Feishu channels but has no per-user push toggle for individual event types</li>
+  <li><strong>Quiet hours</strong> — no timezone-aware delivery window</li>
+  <li><strong>Push tests</strong> — backend has 7 tests in <code>tests/backend/test_web_push.py</code> ✅, but no E2E tests for the full push flow</li>
+  <li><strong>Android native push</strong> — zero infrastructure</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s2">2. Important Findings</h2>
+
+<div class="callout callout-warn">
+  <strong>Finding 1: Web Push is ~85% complete, not starting from zero</strong>
+  The backend notification domain is mature: 6 categories, 16 event types, 4 channels (telegram/email/feishu/webpush), multi-device subscription, retry with 410 cleanup, and scheduler integration. Phase 2 is completing and extending existing infrastructure — not building from scratch.
+</div>
+
+<div class="callout callout-warn">
+  <strong>Finding 2: Prior Sept 2026 ideation already rejected full uni-app migration</strong>
+  The prior ideation (53 days ago) evaluated 7 approaches and concluded: full uni-app migration costs 2-3 months for 3,621 Vant references + 546 browser API call sites, with uv-ui covering only ~70% of Vant. The recommended path was PWA + Capacitor. This new request revisits the same decision space with an emphasis on <em>uni-app shell + web-view</em> — a much thinner approach than full migration.
+</div>
+
+<div class="callout callout-warn">
+  <strong>Finding 3: uni-app web-view is NOT the same as full uni-app migration</strong>
+  The user's proposed approach (thin uni-app shell + web-view loading existing H5) is fundamentally different from the full migration rejected in Sept. It keeps all Vue/Vant/ECharts code running in WebView, using uni-app only as an Android packaging shell. This avoids the 3,621 Vant reference problem entirely.
+</div>
+
+<div class="callout callout-info">
+  <strong>Finding 4: Existing notification domain model is well-structured for extension</strong>
+  The current <code>NotificationChannel</code> + <code>NotificationSubscription</code> + <code>ReminderNotification</code> model supports channel-agnostic dispatch. Adding a new "android_push" channel type follows the existing pattern without restructuring.
+</div>
+
+<div class="callout callout-info">
+  <strong>Finding 5: Self-hosted deployment is the primary constraint</strong>
+  Numina deploys via Docker Compose on user-controlled infrastructure. Any solution requiring mandatory third-party cloud services (uniCloud, FCM-only) conflicts with the privacy-first positioning. Native push must be optional and replaceable.
+</div>
+
+<div class="callout callout-danger">
+  <strong>Finding 6: PWA push is dead code — usePushSubscription never called</strong>
+  The composable is fully implemented in both main and child apps, but no component ever imports or invokes it. Push subscription will never register until a Settings page or App.vue entry point calls it. This means the entire backend push infrastructure (VAPID, pywebpush, dispatcher, scheduler) is built and tested, but no real user has ever received a push notification from Numina.
+</div>
+
+<div class="callout callout-info">
+  <strong>Finding 7: Backend push has tests + push_service.py for real-time notifications</strong>
+  <code>tests/backend/test_web_push.py</code> has 7 test cases covering subscription CRUD and send logic. <code>services/notification/push_service.py</code> has <code>send_family_interaction_push()</code> that bypasses the reminder system for real-time notifications. The backend is ready — it's the frontend trigger that's missing.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s3">3. Android Architecture Options</h2>
+
+<h3>Decision Matrix</h3>
+
+<table>
+  <tr>
+    <th>Dimension</th>
+    <th>A. Capacitor Shell</th>
+    <th>B. uni-app Shell + web-view</th>
+    <th>C. Full uni-app Migration</th>
+    <th>D. TWA / PWA</th>
+  </tr>
+  <tr>
+    <td><strong>1. Code reuse</strong></td>
+    <td class="score">10/10</td>
+    <td class="score">9/10</td>
+    <td>2/10</td>
+    <td class="score">10/10</td>
+  </tr>
+  <tr>
+    <td><strong>2. First release speed</strong></td>
+    <td class="score">1-2 weeks</td>
+    <td>2-3 weeks</td>
+    <td>2-3 months</td>
+    <td class="score">1-3 days</td>
+  </tr>
+  <tr>
+    <td><strong>3. Vant/ECharts/Vue Router/Pinia compat</strong></td>
+    <td class="score">100% — runs in WebView</td>
+    <td class="score">100% — runs in web-view</td>
+    <td>~70% — uv-ui gap</td>
+    <td class="score">100% — is the H5</td>
+  </tr>
+  <tr>
+    <td><strong>4. File upload/camera/download/WebAuthn/SSE</strong></td>
+    <td class="score">Native via plugins + WebView</td>
+    <td>Native via uni APIs + web-view bridge</td>
+    <td>Native but needs reimplementation</td>
+    <td>Limited — browser only</td>
+  </tr>
+  <tr>
+    <td><strong>5. Native Push</strong></td>
+    <td class="score">FCM via plugin</td>
+    <td class="score">uni-push 2.0 (multi-vendor)</td>
+    <td class="score">uni-push 2.0</td>
+    <td>Web Push only (no background on iOS)</td>
+  </tr>
+  <tr>
+    <td><strong>6. Deep link</strong></td>
+    <td class="score">Intent filters + JS bridge</td>
+    <td class="score">Uni links + JS bridge</td>
+    <td class="score">Uni links</td>
+    <td>Web intent (limited)</td>
+  </tr>
+  <tr>
+    <td><strong>7. Self-hosted compat</strong></td>
+    <td class="score">100% — just loads URL</td>
+    <td class="score">100% — just loads URL</td>
+    <td>Partial — needs API rewrite</td>
+    <td class="score">100% — is the URL</td>
+  </tr>
+  <tr>
+    <td><strong>8. HTTPS / LAN HTTP</strong></td>
+    <td>WebView allows cleartext opt-in</td>
+    <td>web-view allows cleartext opt-in</td>
+    <td>N/A (native UI)</td>
+    <td class="tag tag-red">Requires HTTPS for SW/Push</td>
+  </tr>
+  <tr>
+    <td><strong>9. CN push delivery rate</strong></td>
+    <td>Poor — FCM blocked in CN</td>
+    <td class="score">Excellent — vendor channels</td>
+    <td class="score">Excellent — vendor channels</td>
+    <td>N/A</td>
+  </tr>
+  <tr>
+    <td><strong>10. Play Store / APK distribution</strong></td>
+    <td class="score">Both</td>
+    <td class="score">Both</td>
+    <td class="score">Both</td>
+    <td>Play Store only (TWA)</td>
+  </tr>
+  <tr>
+    <td><strong>11. Long-term maintenance</strong></td>
+    <td class="score">Low — thin shell</td>
+    <td>Moderate — uni-app SDK updates</td>
+    <td class="tag tag-red">Very High — dual codebase</td>
+    <td class="score">Very Low</td>
+  </tr>
+  <tr>
+    <td><strong>12. iOS extension cost</strong></td>
+    <td class="score">Low — same Capacitor project</td>
+    <td class="score">Low — uni-app is cross-platform</td>
+    <td>Very High</td>
+    <td class="score">Free — same PWA</td>
+  </tr>
+  <tr>
+    <td><strong>13. Privacy-first impact</strong></td>
+    <td class="score">Minimal — no cloud dependency</td>
+    <td>Moderate — uni-push requires DCloud/个推</td>
+    <td>Moderate — same</td>
+    <td class="score">Zero — standard Web</td>
+  </tr>
+</table>
+
+<h3>Option Analysis</h3>
+
+<h4>A. Capacitor Shell (Recommended Primary)</h4>
+<p>Capacitor wraps the existing H5 in a native Android WebView. It's the thinnest possible shell: ~10MB runtime, zero changes to existing Vue/Vant code, Cookie-based auth works transparently, and it supports native plugins for push (FCM), file access, and deep links.</p>
+<ul>
+  <li><strong>Killer advantage:</strong> Zero business code changes. The same H5 runs in Capacitor WebView exactly as in Chrome.</li>
+  <li><strong>Killer disadvantage:</strong> FCM doesn't work in China. For CN push, you'd need a custom plugin or fallback.</li>
+</ul>
+
+<h4>B. uni-app Shell + web-view (Recommended if CN Push is critical)</h4>
+<p>A thin uni-app project that does NOT rewrite any UI — it just loads the existing Numina H5 in a <code>&lt;web-view&gt;</code> component. The uni-app layer provides: Android packaging, uni-push 2.0 (multi-vendor CN push), and a JS bridge for native capabilities.</p>
+<ul>
+  <li><strong>Killer advantage:</strong> uni-push 2.0 gives excellent CN delivery via Huawei/Xiaomi/OPPO/vivo vendor channels — something no other option achieves.</li>
+  <li><strong>Killer disadvantage:</strong> uni-push 2.0 requires uniCloud function as relay → data flows through DCloud/个推 third-party servers. This is the <strong>primary privacy concern</strong>.</li>
+  <li><strong>Key risk:</strong> web-view has subtle behavioral differences from Chrome (Cookie handling, file upload, back button, SSE streaming). Each needs testing.</li>
+</ul>
+
+<h4>C. Full uni-app Migration</h4>
+<p>Rewriting the entire frontend in uni-app. This was comprehensively evaluated and rejected in the Sept 2026 ideation: 3,621 Vant references, 546 browser API calls, uv-ui ~70% coverage, ECharts→ucharts migration, WebAuthn has no equivalent.</p>
+<div class="callout callout-danger">
+  <strong>Not recommended.</strong> 2-3 months of work for marginal benefit. The use case (family asset dashboard) does not need deep native UI.
+</div>
+
+<h4>D. TWA / PWA</h4>
+<p>Trusted Web Activity wraps the PWA for Play Store listing. Or just rely on "Add to Home Screen" PWA install.</p>
+<ul>
+  <li><strong>Killer advantage:</strong> Near-zero effort. PWA already works.</li>
+  <li><strong>Killer disadvantage:</strong> No background push on iOS (iOS 16.4+ supports it but with severe limitations). No CN push at all. No control over WebView behavior. Cannot work on LAN HTTP (SW requires HTTPS).</li>
+</ul>
+
+<!-- ═════════════════════════════════════════════════════════════ -->
+<h2 id="s4">4. Recommendation</h2>
+
+<div class="phase-box">
+  <h3>Primary Recommendation: Capacitor Shell (Option A)</h3>
+  <p><strong>For Phase 1:</strong> Use Capacitor to wrap the existing Numina H5 as an Android App. This gives you:</p>
+  <ul>
+    <li>A real installable APK with zero business code changes</li>
+    <li>Cookie-based auth works transparently</li>
+    <li>Native file picker, camera, download via Capacitor plugins</li>
+    <li>Intent filter deep links</li>
+    <li>~1-2 weeks to first APK</li>
+    <li>Zero third-party cloud dependency</li>
+  </ul>
+  <p><strong>For Phase 2 push:</strong> Keep existing Web Push (VAPID) for PWA. Add Capacitor FCM plugin for overseas Android users. For CN users, the PWA Web Push path remains the primary notification channel (works on Android Chrome, Samsung Internet, etc.).</p>
+  <p><strong>Privacy impact:</strong> Minimal. Capacitor adds a native runtime layer but introduces no mandatory cloud dependency. FCM is optional and can be disabled.</p>
+</div>
+
+<div class="phase-box" style="border-color: var(--warn);">
+  <h3>Fallback / Alternative: uni-app Shell + web-view (Option B)</h3>
+  <p><strong>Choose this ONLY if CN Android push delivery is a hard requirement.</strong></p>
+  <p>uni-push 2.0 is the only realistic way to achieve reliable push delivery on Chinese Android devices (Huawei/Xiaomi/OPPO/vivo/荣耀). No other option provides vendor-channel integration without building individual SDK integrations.</p>
+  <p><strong>But you must accept:</strong></p>
+  <ul>
+    <li>Push metadata flows through DCloud/个推 servers (see §11 Privacy Analysis)</li>
+    <li>uni-push requires a uniCloud function as relay — even though your business server is self-hosted</li>
+    <li>The native push path becomes: FastAPI → HTTP → uniCloud → 个推 → vendor channel → device</li>
+    <li>This must be an <strong>opt-in feature</strong>, not a default</li>
+  </ul>
+</div>
+
+<p><strong>Why not uni-app shell as primary?</strong></p>
+<ol>
+  <li><strong>Privacy-first conflict:</strong> uni-push's mandatory uniCloud relay contradicts Numina's self-hosted positioning. Capacitor's FCM is at least <em>optional</em> and Google-only.</li>
+  <li><strong>WebView behavioral risk:</strong> uni-app's web-view has known quirks with SSE streaming, Cookie SameSite handling, and file upload that need prototype validation. Capacitor's WebView is closer to stock Chrome.</li>
+  <li><strong>Community/ecosystem:</strong> Capacitor has a larger ecosystem, better documentation, and more active maintenance for the "thin shell" use case.</li>
+  <li><strong>CN push reality:</strong> Even with uni-push, users on self-hosted instances behind LAN HTTP won't receive push (no network reachability). The push problem for self-hosted Numina is more about server reachability than push provider choice.</li>
+</ol>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s5">5. Phase 1 Architecture — Capacitor Android Shell</h2>
+
+<h3>5.1 Project Structure</h3>
+<pre><code>frontend/apps/android/          # New Capacitor app
+├── android/                    # Native Android project (generated)
+├── src/
+│   ├── index.html              # Minimal shell — setup page or WebView host
+│   ├── setup/                  # Server URL configuration page (native Vue)
+│   ├── bridge/                 # JS bridge protocol
+│   │   ├── index.ts            # Bridge registry
+│   │   ├── types.ts            # Message types
+│   │   └── handlers.ts         # Native ↔ H5 message handlers
+│   └── main.ts                 # Shell app entry
+├── capacitor.config.ts
+├── package.json
+└── vite.config.ts</code></pre>
+
+<h3>5.2 Server URL Configuration</h3>
+
+<p><strong>First launch flow:</strong></p>
+<ol>
+  <li>App opens → shows Server URL setup page (native Vue, not WebView)</li>
+  <li>User enters URL: <code>https://numina.example.com</code> or <code>http://192.168.1.100:80</code></li>
+  <li>App validates: GET <code>/api/health</code> → checks response</li>
+  <li>URL saved to <code>SharedPreferences</code> via Capacitor Preferences plugin</li>
+  <li>WebView loads <code>{serverUrl}/</code></li>
+</ol>
+
+<p><strong>Multi-instance support:</strong> One APK can connect to any self-hosted instance. The server URL is per-installation, not per-user. Different users on different instances get different configurations. This is a feature, not a limitation — it matches Numina's self-hosted model.</p>
+
+<h3>5.3 HTTPS Policy</h3>
+
+<table>
+  <tr><th>Scenario</th><th>Policy</th><th>Rationale</th></tr>
+  <tr>
+    <td>Production (public domain)</td>
+    <td><span class="tag tag-green">HTTPS required</span></td>
+    <td>Cookie security, PWA, Web Push all require it</td>
+  </tr>
+  <tr>
+    <td>LAN HTTP (192.168.x.x / .local)</td>
+    <td><span class="tag tag-yellow">Allowed with warning</span></td>
+    <td>Self-hosted families on home network. Show "Advanced mode" toggle + security warning</td>
+  </tr>
+  <tr>
+    <td>Self-signed cert</td>
+    <td><span class="tag tag-yellow">Allowed with explicit trust</span></td>
+    <td>Android WebView needs <code>WebViewClient.onReceivedSslError</code> override — prompt user once, store fingerprint</td>
+  </tr>
+</table>
+
+<div class="callout callout-warn">
+  <strong>Android cleartext HTTP:</strong> Android 9+ blocks cleartext by default. The Capacitor shell must set <code>android:usesCleartextTraffic="true"</code> in AndroidManifest.xml. This is acceptable for a self-hosted app but should be gated behind an "Advanced mode" setting that the user explicitly enables.
+</div>
+
+<h3>5.4 Auth / Cookie Handling</h3>
+
+<p>Capacitor's WebView shares the same Cookie jar as the native Android app. Numina's existing httpOnly Cookie JWT auth works transparently — no changes needed.</p>
+<ul>
+  <li>Same-origin Cookies: automatic when WebView loads the server URL</li>
+  <li>Cross-origin: Capacitor's server URL is the origin, so Cookies are same-origin</li>
+  <li>Cookie persistence: Android WebView persists Cookies across app restarts</li>
+  <li>Logout: calling the existing <code>/auth/logout</code> endpoint clears the Cookie as usual</li>
+</ul>
+
+<h3>5.5 WebView Loading Strategy</h3>
+
+<p><strong>Single WebView approach:</strong> One <code>&lt;web-view&gt;</code> loads the server root URL. Navigation between main and child happens via URL:</p>
+<ul>
+  <li>Main app: <code>{serverUrl}/</code></li>
+  <li>Child app: <code>{serverUrl}/child/</code></li>
+</ul>
+
+<p><strong>One APK or two?</strong> <strong>One APK.</strong> A single Android app with a role-based entry point. After login, the app detects the user's role (owner/parent/child) and loads the appropriate H5 path. This matches Numina's existing role-based access control.</p>
+
+<h3>5.6 Android Back Button ↔ Vue Router</h3>
+
+<p>The Capacitor shell registers a back button handler that:</p>
+<ol>
+  <li>Sends a <code>goBack</code> message to the H5 via JS bridge</li>
+  <li>H5 calls <code>router.back()</code></li>
+  <li>If <code>router.currentRoute</code> is at the root (tab bar home), the bridge responds "at root"</li>
+  <li>Capacitor calls <code>App.exitApp()</code> or shows "press back again to exit" toast</li>
+</ol>
+
+<h3>5.7 JS Bridge Protocol</h3>
+
+<pre><code>// H5 → Native
+interface BridgeRequest {
+  id: string           // UUID for response matching
+  method: string       // 'getFile' | 'takePhoto' | 'download' | 'getDeviceInfo' | 'navigate'
+  params: Record&lt;string, unknown&gt;
+}
+
+// Native → H5
+interface BridgeResponse {
+  id: string
+  result?: unknown
+  error?: { code: string; message: string }
+}
+
+// Native → H5 (unsolicited)
+interface NativeEvent {
+  type: 'pushClick' | 'networkChange' | 'appResume'
+  data: unknown
+}</code></pre>
+
+<h3>5.8 File Upload / Camera / Download</h3>
+
+<table>
+  <tr><th>Capability</th><th>H5 alone</th><th>With Capacitor bridge</th></tr>
+  <tr>
+    <td>File picker</td>
+    <td>Works via <code>&lt;input type="file"&gt;</code></td>
+    <td>Same — WebView handles it natively</td>
+  </tr>
+  <tr>
+    <td>Camera capture</td>
+    <td>Works via <code>capture</code> attribute</td>
+    <td>Enhanced: can use Capacitor Camera plugin for better UX</td>
+  </tr>
+  <tr>
+    <td>File download</td>
+    <td>Limited — browser download manager</td>
+    <td>Enhanced: Capacitor Filesystem plugin for controlled downloads</td>
+  </tr>
+  <tr>
+    <td>WebAuthn / Passkey</td>
+    <td>Works on Chrome, limited on WebView</td>
+    <td>Android WebView supports WebAuthn from Android 7+ with Play Services</td>
+  </tr>
+  <tr>
+    <td>SSE streaming</td>
+    <td>Works</td>
+    <td>Works — WebView EventSource is Chrome-based</td>
+  </tr>
+</table>
+
+<h3>5.9 Deep Link</h3>
+
+<p><strong>Android Intent filter:</strong></p>
+<pre><code>&lt;intent-filter&gt;
+  &lt;action android:name="android.intent.action.VIEW" /&gt;
+  &lt;category android:name="android.intent.category.DEFAULT" /&gt;
+  &lt;data android:scheme="numina" android:host="open" /&gt;
+&lt;/intent-filter&gt;
+&lt;!-- Also handle HTTPS deep links if domain is configured --&gt;
+&lt;intent-filter android:autoVerify="true"&gt;
+  &lt;action android:name="android.intent.action.VIEW" /&gt;
+  &lt;data android:scheme="https" android:host="numina.app" android:pathPrefix="/go" /&gt;
+&lt;/intent-filter&gt;</code></pre>
+
+<p><strong>Deep link format:</strong> <code>numina://open/reminders</code>, <code>numina://open/ai/chat/thread_123</code></p>
+<p>The native handler extracts the path and sends it to the H5 via bridge → Vue Router navigates.</p>
+
+<h3>5.10 Version Mismatch Handling</h3>
+
+<p>The shell should NOT cache any business HTML/JS/CSS. Everything loads from the server. The only "local" content is the setup page and bridge code. This eliminates version mismatch for business logic.</p>
+<p><strong>Bridge protocol version:</strong> The shell exposes a <code>bridgeVersion</code> via JS. The H5 can check it and degrade gracefully if the shell is too old for a requested feature.</p>
+
+<h3>5.11 Offline / Network Error UX</h3>
+
+<p>When the WebView can't reach the server:</p>
+<ol>
+  <li>Capacitor detects network error via <code>WebViewClient.onReceivedError</code></li>
+  <li>Show a native error page with: "Cannot connect to {serverUrl}" + retry button</li>
+  <li>If server URL is unreachable, offer "Change server URL" option</li>
+  <li>No local cache of business pages — the app is a thin client</li>
+</ol>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s6">6. Phase 2 Push Architecture</h2>
+
+<h3>6.1 Dual-Channel Architecture</h3>
+
+<pre><code>                  ┌──────────────────────────┐
+                  │   Notification Domain     │
+                  │  (server/packages/        │
+                  │   notification/)          │
+                  └─────────┬────────────────┘
+                            │
+                  ┌─────────▼────────────────┐
+                  │   NotificationDispatcher  │
+                  │   (existing pattern)      │
+                  └─────────┬────────────────┘
+                       ╱         ╲
+            ┌─────────▼──┐    ┌──▼─────────────┐
+            │ WebPush     │    │ NativePush      │
+            │ Provider    │    │ Provider        │
+            │ (existing)  │    │ (new, optional) │
+            └──────┬──────┘    └──────┬──────────┘
+                   │                   │
+            pywebpush/VAPID     Capacitor FCM plugin
+            (standard Web)      OR uni-push 2.0
+                   │                   │
+            ┌──────▼──────┐    ┌──────▼──────────┐
+            │ PWA Service  │    │ Android App      │
+            │ Worker       │    │ (native notif)   │
+            │ + Browser    │    │                  │
+            └─────────────┘    └──────────────────┘</code></pre>
+
+<p><strong>Key principle:</strong> PWA continues using standard Web Push (VAPID). Android app uses native push. They share the same NotificationEvent domain but have independent delivery providers. Never force PWA through a native push channel, and never force Android through Web Push.</p>
+
+<h3>6.2 Native Push Provider Options</h3>
+
+<table>
+  <tr><th>Provider</th><th>CN Delivery</th><th>Overseas Delivery</th><th>Privacy Impact</th><th>Self-hosted Compat</th></tr>
+  <tr>
+    <td><strong>FCM (Capacitor)</strong></td>
+    <td><span class="tag tag-red">Blocked</span></td>
+    <td><span class="tag tag-green">Excellent</span></td>
+    <td>Low — Google only</td>
+    <td><span class="tag tag-green">Server sends to FCM API</span></td>
+  </tr>
+  <tr>
+    <td><strong>uni-push 2.0</strong></td>
+    <td><span class="tag tag-green">Excellent</span></td>
+    <td><span class="tag tag-yellow">OK</span></td>
+    <td><span class="tag tag-red">High — DCloud/个推 relay</span></td>
+    <td><span class="tag tag-red">Requires uniCloud function</span></td>
+  </tr>
+  <tr>
+    <td><strong>UnifiedPush</strong></td>
+    <td><span class="tag tag-red">No CN support</span></td>
+    <td><span class="tag tag-yellow">Limited</span></td>
+    <td><span class="tag tag-green">Self-hosted distributor</span></td>
+    <td><span class="tag tag-green">Fully self-hosted</span></td>
+  </tr>
+  <tr>
+    <td><strong>Gotify / ntfy</strong></td>
+    <td><span class="tag tag-yellow">Self-hosted</span></td>
+    <td><span class="tag tag-yellow">Self-hosted</span></td>
+    <td><span class="tag tag-green">Fully self-hosted</span></td>
+    <td><span class="tag tag-green">Fully self-hosted</span></td>
+  </tr>
+</table>
+
+<h3>6.3 Recommended Push Strategy</h3>
+
+<div class="callout callout-success">
+  <strong>Phase 2a: Complete PWA Web Push (existing infrastructure, ~1 week)</strong>
+  Fix the notificationclick bug, add child app subscription, add pushsubscriptionchange handler, add preference UI. This alone gives reliable push for all Android Chrome + desktop browser users.
+</div>
+
+<div class="callout callout-info">
+  <strong>Phase 2b: Add FCM for Capacitor Android (optional, ~2 weeks)</strong>
+  For users who install the Capacitor Android app AND want background push. FCM works for overseas users. CN users behind GFW won't receive FCM — they fall back to PWA Web Push (which works on Android Chrome regardless of GFW, because it uses standard HTTPS).
+</div>
+
+<div class="callout callout-warn">
+  <strong>Phase 2c (Deferred): uni-push 2.0 only if CN native push is a hard requirement</strong>
+  This introduces DCloud/个推 dependency. Make it a configurable provider, not a default. See §11 for full privacy analysis.
+</div>
+
+<h3>6.4 Privacy-First Notification Design</h3>
+
+<p><strong>Default privacy level: Opaque</strong></p>
+<pre><code>// Push payload — what travels through third-party servers
+{
+  "title": "Numina",
+  "body": "You have a new notification",
+  "navigate_to": "/reminders",
+  "reminder_type": "expiring_soon",
+  "privacy_level": "opaque"    // ← default
+}
+
+// After app opens (authenticated), fetch real content:
+GET /api/v1/reminders/{id}  →  "你的招行信用卡还有 ¥37,821.24 未还"</code></pre>
+
+<table>
+  <tr><th>Privacy Level</th><th>Lock Screen Shows</th><th>Use Case</th></tr>
+  <tr>
+    <td><code>opaque</code> (default)</td>
+    <td>"Numina has a new notification"</td>
+    <td>All financial, asset, liability notifications</td>
+  </tr>
+  <tr>
+    <td><code>category</code></td>
+    <td>"还款提醒" (type only, no amounts)</td>
+    <td>When user opts in to see category</td>
+  </tr>
+  <tr>
+    <td><code>full</code></td>
+    <td>"招行信用卡 ¥37,821.24 未还"</td>
+    <td>Only for non-sensitive types: chore_completed, learning_approved</td>
+  </tr>
+</table>
+
+<h3>6.5 Push Scenario Classification</h3>
+
+<table>
+  <tr><th>Event</th><th>Category</th><th>Urgency</th><th>Default On?</th><th>Lock Screen Detail</th><th>Quiet Hours?</th></tr>
+  <tr>
+    <td>expiring_soon / maturity</td>
+    <td>reminder</td>
+    <td>Normal</td>
+    <td>✅ Yes</td>
+    <td>Opaque</td>
+    <td>Yes — deliver at 09:00</td>
+  </tr>
+  <tr>
+    <td>large_purchase</td>
+    <td>transactional</td>
+    <td>High</td>
+    <td>✅ Yes</td>
+    <td>Category only</td>
+    <td>No — immediate</td>
+  </tr>
+  <tr>
+    <td>ai_report_complete</td>
+    <td>ai_job</td>
+    <td>Low</td>
+    <td>✅ Yes</td>
+    <td>Opaque</td>
+    <td>Yes — batch to 09:00/21:00</td>
+  </tr>
+  <tr>
+    <td>chore_completed</td>
+    <td>family_action</td>
+    <td>Low</td>
+    <td>✅ Yes</td>
+    <td>Full (non-sensitive)</td>
+    <td>No</td>
+  </tr>
+  <tr>
+    <td>learning_streak_3_failures</td>
+    <td>learning</td>
+    <td>Normal</td>
+    <td>✅ Yes</td>
+    <td>Category only</td>
+    <td>Yes</td>
+  </tr>
+  <tr>
+    <td>mcp_anomaly_detected</td>
+    <td>security</td>
+    <td>High</td>
+    <td>✅ Yes</td>
+    <td>Category only</td>
+    <td>No — immediate</td>
+  </tr>
+  <tr>
+    <td>rental_contract_expiry</td>
+    <td>reminder</td>
+    <td>Normal</td>
+    <td>✅ Yes</td>
+    <td>Opaque</td>
+    <td>Yes — deliver at 09:00</td>
+  </tr>
+  <tr>
+    <td>loan_repayment_due</td>
+    <td>reminder</td>
+    <td>High</td>
+    <td>✅ Yes</td>
+    <td>Category only</td>
+    <td>Yes — deliver at 09:00</td>
+  </tr>
+  <tr>
+    <td>import_complete / import_failed</td>
+    <td>transactional</td>
+    <td>Normal</td>
+    <td>✅ Yes</td>
+    <td>Opaque</td>
+    <td>No</td>
+  </tr>
+</table>
+
+<p><strong>Marketing push: permanently disabled.</strong> No marketing category in the registry, no marketing channel type.</p>
+
+<h3>6.6 Dedup / Collapse Strategy</h3>
+
+<ul>
+  <li><strong>Tag/collapse:</strong> Same reminder_type + family_id → same notification tag → Android auto-collapses</li>
+  <li><strong>Idempotency:</strong> <code>ensure_reminder()</code> already deduplicates by (family_id, reminder_type, asset_id, status=active)</li>
+  <li><strong>Rate limiting:</strong> <code>check_reminder_dedup()</code> provides 1-hour dedup window for AI task notifications</li>
+  <li><strong>Retry with backoff:</strong> <code>_retry_failed_notifications()</code> retries up to 3 times via scheduler</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s7">7. Architecture Diagram</h2>
+
+<div class="mermaid">
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              Numina Notification Architecture                    │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐               │
+│  │                     Self-hosted Server                       │               │
+│  │                                                              │               │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌───────────────────┐ │               │
+│  │  │  Backend      │  │  Scheduler   │  │  Notification      │ │               │
+│  │  │  (FastAPI)    │  │  Worker      │  │  Domain            │ │               │
+│  │  │              │  │  (APScheduler)│  │                    │ │               │
+│  │  │  /subscribe  │  │              │  │  ┌──────────────┐ │ │               │
+│  │  │  /unsubscribe│  │  reminder_job│  │  │ EventRegistry │ │ │               │
+│  │  │  /config     │◄─┤  digest_job  │──┤  │ Dispatcher   │ │ │               │
+│  │  │              │  │              │  │  │ Sender        │ │ │               │
+│  │  └──────┬───────┘  └──────────────┘  │  └──────────────┘ │ │               │
+│  │         │                             └───────────────────┘ │               │
+│  │         │  ┌─────────────────────────────────────────────┐  │               │
+│  │         │  │              Push Providers                   │  │               │
+│  │         │  │                                              │  │               │
+│  │         ├──┤  WebPushProvider (VAPID/pywebpush)           │  │               │
+│  │         │  │    → PWA Service Worker (browser)            │  │               │
+│  │         │  │                                              │  │               │
+│  │         ├──┤  FCMProvider (optional, Capacitor)           │  │               │
+│  │         │  │    → Android FCM → Capacitor App             │  │               │
+│  │         │  │                                              │  │               │
+│  │         ├──┤  NativePushProvider (optional, future)       │  │               │
+│  │         │  │    → uni-push / UnifiedPush / ntfy           │  │               │
+│  │         │  └─────────────────────────────────────────────┘  │               │
+│  │         │                             │                      │               │
+│  │  ┌──────▼─────────────────────────────▼──────────────────┐  │               │
+│  │  │           PostgreSQL                                   │  │               │
+│  │  │  push_subscriptions │ notification_channels            │  │               │
+│  │  │  notification_subs  │ reminder_notifications           │  │               │
+│  │  │  reminders          │ notification_config              │  │               │
+│  │  └────────────────────────────────────────────────────────┘  │               │
+│  └─────────────────────────────────────────────────────────────┘               │
+│                                                                                 │
+│  ┌─────────────────────┐   ┌─────────────────────┐   ┌───────────────────┐    │
+│  │   PWA Browser        │   │  Capacitor Android   │   │  Future: iOS      │    │
+│  │                      │   │                      │   │                   │    │
+│  │  Service Worker      │   │  WebView (H5)        │   │  Capacitor or     │    │
+│  │  ↓ push event        │   │  ↓ JS bridge          │   │  native SwiftUI   │    │
+│  │  showNotification()  │   │  Native notification  │   │                   │    │
+│  │  ↓ notificationclick │   │  ↓ notificationclick  │   │                   │    │
+│  │  focus + navigate    │   │  Deep link → WebView  │   │                   │    │
+│  └─────────────────────┘   └─────────────────────┘   └───────────────────┘    │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s8">8. Push Sequence Diagrams</h2>
+
+<h3>8.1 PWA Subscribe + Push</h3>
+<div class="mermaid">
+Browser                    Backend                    Push Service
+  │                           │                            │
+  │──GET /vapid-public-key───►│                            │
+  │◄──{public_key}────────────│                            │
+  │                           │                            │
+  │──Notification.requestPermission()                      │
+  │   → granted              │                            │
+  │                           │                            │
+  │──pushManager.subscribe───│────────────────────────────►│
+  │   {endpoint, p256dh, auth}                             │
+  │                           │                            │
+  │──POST /push/subscribe────►│                            │
+  │   {endpoint, p256dh, auth,│                            │
+  │    user_agent, app_type}  │                            │
+  │                           │──INSERT push_subscriptions──│
+  │◄──200 {id, endpoint}──────│                            │
+  │                           │                            │
+  │    ... time passes ...    │                            │
+  │                           │                            │
+  │                           │◄──reminder event───────────│
+  │                           │  (scheduler or realtime)   │
+  │                           │                            │
+  │                           │──webpush(subscription, data)►│
+  │                           │  {title, body, navigate_to} │
+  │                           │                            │──►push
+  │◄──push event──────────────│────────────────────────────│
+  │  SW: showNotification()  │                            │
+  │                           │                            │
+  │  User clicks notification │                            │
+  │  SW: focus/openWindow    │                            │
+  │  + postMessage(navigateTo)                            │
+  │  App: router.push(path)  │                            │
+</div>
+
+<h3>8.2 Android FCM Register + Push</h3>
+<div class="mermaid">
+Android App          Capacitor Plugin      FCM Server        Backend
+  │                       │                   │                │
+  │──FCM.getToken()──────►│                   │                │
+  │◄──fcm_token───────────│                   │                │
+  │                       │                   │                │
+  │──POST /push/register──│──────────────────────────────────►│
+  │  {platform:"android", │                   │                │
+  │   provider:"fcm",     │                   │                │
+  │   token:fcm_token,    │                   │                │
+  │   installation_id}    │                   │                │
+  │                       │                   │                │
+  │                       │                   │   INSERT device│
+  │                       │                   │   _registration│
+  │◄──200 {id}────────────│───────────────────────────────────│
+  │                       │                   │                │
+  │    ... reminder event ...                │                │
+  │                       │                   │                │
+  │                       │   FCM send────────│◄──────────────│
+  │                       │   {title:"Numina",│                │
+  │                       │    body:"opaque", │                │
+  │                       │    data:{navigate}}                │
+  │                       │                   │                │
+  │◄──onPushMessage───────│◄──────────────────│                │
+  │  Native notification  │                   │                │
+  │                       │                   │                │
+  │  User taps            │                   │                │
+  │  → Bridge: navigate   │                   │                │
+  │  → WebView load path  │                   │                │
+</div>
+
+<h3>8.3 Notification Click → Deep Link</h3>
+<div class="mermaid">
+System         Android App          JS Bridge           Vue Router
+  │                │                    │                   │
+  │  User taps     │                    │                   │
+  │  notification  │                    │                   │
+  │───────────────►│                    │                   │
+  │                │                    │                   │
+  │                │  Extract navigateTo│                   │
+  │                │  from notification │                   │
+  │                │  data payload      │                   │
+  │                │                    │                   │
+  │                │  If app was killed:│                   │
+  │                │  1. Start WebView  │                   │
+  │                │  2. Load serverUrl │                   │
+  │                │  3. Wait for H5    │                   │
+  │                │     ready signal   │                   │
+  │                │                    │                   │
+  │                │──postMessage──────►│                   │
+  │                │  {type:"navigate", │                   │
+  │                │   path:"/reminders"}                   │
+  │                │                    │──router.push()───►│
+  │                │                    │                   │
+  │                │  If app was        │                   │
+  │                │  backgrounded:     │                   │
+  │                │──postMessage──────►│                   │
+  │                │                    │──router.push()───►│
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s9">9. Database / API Changes</h2>
+
+<h3>9.1 New Table: <code>device_registrations</code></h3>
+
+<p>For Android native push (Phase 2b). Extends the existing model to support non-WebPush endpoints.</p>
+
+<pre><code>CREATE TABLE device_registrations (
+  id              BIGINT PRIMARY KEY,       -- snowflake
+  user_id         BIGINT NOT NULL,
+  family_id       BIGINT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+  installation_id VARCHAR(100) NOT NULL,     -- unique per app install
+  platform        VARCHAR(20) NOT NULL,      -- 'android' | 'ios' | 'pwa'
+  provider        VARCHAR(20) NOT NULL,      -- 'fcm' | 'unipush' | 'webpush' | 'ntfy'
+
+  -- Provider-specific token data (JSONB for flexibility)
+  token_data      JSONB NOT NULL,
+  -- webpush: {"endpoint": "...", "p256dh": "...", "auth": "..."}
+  -- fcm:       {"fcm_token": "..."}
+  -- unipush:   {"cid": "..."}
+
+  device_name     VARCHAR(200),
+  app_version     VARCHAR(50),
+  os_version      VARCHAR(50),
+  privacy_level   VARCHAR(20) DEFAULT 'opaque',  -- opaque | category | full
+
+  enabled         BOOLEAN DEFAULT true,
+  last_seen_at    TIMESTAMPTZ,
+  revoked_at      TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT now(),
+  updated_at      TIMESTAMPTZ DEFAULT now(),
+
+  UNIQUE(user_id, installation_id)
+);</code></pre>
+
+<h3>9.2 New Table: <code>notification_events</code></h3>
+
+<p>Audit log of all notification dispatches. Enables delivery tracking, read/click analytics.</p>
+
+<pre><code>CREATE TABLE notification_events (
+  id              BIGINT PRIMARY KEY,       -- snowflake
+  family_id       BIGINT NOT NULL REFERENCES families(id),
+  reminder_id     BIGINT,                   -- nullable (some events aren't reminder-driven)
+  event_type      VARCHAR(50) NOT NULL,     -- 'expiring_soon', 'chore_completed', etc.
+  category        VARCHAR(30) NOT NULL,     -- 'reminder', 'ai_job', 'security', etc.
+
+  -- Delivery tracking
+  status          VARCHAR(20) DEFAULT 'pending',  -- pending | sent | delivered | read | failed
+  priority        VARCHAR(10) DEFAULT 'normal',   -- low | normal | high | urgent
+
+  -- Privacy
+  privacy_level   VARCHAR(20) DEFAULT 'opaque',
+
+  -- Payload (server-side, for in-app notification center)
+  title           VARCHAR(200),
+  body            TEXT,
+  navigate_to     VARCHAR(500),
+  extra_data      JSONB,
+
+  -- Dedup
+  idempotency_key VARCHAR(100),            -- unique per event instance
+
+  created_at      TIMESTAMPTZ DEFAULT now(),
+  delivered_at    TIMESTAMPTZ,
+  read_at         TIMESTAMPTZ,
+
+  UNIQUE(idempotency_key)
+);</code></pre>
+
+<h3>9.3 New Table: <code>notification_deliveries</code></h3>
+
+<p>Per-device delivery tracking. One notification_event → multiple deliveries (one per device).</p>
+
+<pre><code>CREATE TABLE notification_deliveries (
+  id                    BIGINT PRIMARY KEY,
+  notification_event_id BIGINT NOT NULL REFERENCES notification_events(id) ON DELETE CASCADE,
+  device_registration_id BIGINT NOT NULL REFERENCES device_registrations(id) ON DELETE CASCADE,
+
+  status          VARCHAR(20) DEFAULT 'pending',  -- pending | sent | delivered | clicked | failed
+  provider_msg_id VARCHAR(200),                    -- FCM message_id, WebPush response, etc.
+  retry_count     INT DEFAULT 0,
+  last_error      TEXT,
+
+  created_at      TIMESTAMPTZ DEFAULT now(),
+  sent_at         TIMESTAMPTZ,
+  clicked_at      TIMESTAMPTZ,
+
+  UNIQUE(notification_event_id, device_registration_id)
+);</code></pre>
+
+<h3>9.4 API Draft</h3>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Purpose</th><th>Phase</th></tr>
+  <tr>
+    <td>POST</td>
+    <td><code>/api/v1/devices/register</code></td>
+    <td>Register device installation (Android/PWA)</td>
+    <td>2b</td>
+  </tr>
+  <tr>
+    <td>DELETE</td>
+    <td><code>/api/v1/devices/{installation_id}</code></td>
+    <td>Unregister device</td>
+    <td>2b</td>
+  </tr>
+  <tr>
+    <td>PUT</td>
+    <td><code>/api/v1/devices/{installation_id}/token</code></td>
+    <td>Update push token (rotation)</td>
+    <td>2b</td>
+  </tr>
+  <tr>
+    <td>GET</td>
+    <td><code>/api/v1/notifications</code></td>
+    <td>Notification inbox (existing)</td>
+    <td>existing</td>
+  </tr>
+  <tr>
+    <td>POST</td>
+    <td><code>/api/v1/notifications/{id}/read</code></td>
+    <td>Mark as read (for click tracking)</td>
+    <td>2a</td>
+  </tr>
+  <tr>
+    <td>GET</td>
+    <td><code>/api/v1/notification-preferences</code></td>
+    <td>Per-event-type preferences</td>
+    <td>2a</td>
+  </tr>
+  <tr>
+    <td>PUT</td>
+    <td><code>/api/v1/notification-preferences</code></td>
+    <td>Update preferences</td>
+    <td>2a</td>
+  </tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s10">10. Existing Code Reuse</h2>
+
+<table>
+  <tr><th>File/Area</th><th>Action</th><th>Detail</th></tr>
+  <tr><td><code>frontend/apps/main/</code> (entire app)</td><td><span class="tag tag-green">Keep</span></td><td>No changes needed for Phase 1</td></tr>
+  <tr><td><code>frontend/apps/child/</code> (entire app)</td><td><span class="tag tag-green">Keep</span></td><td>No changes needed for Phase 1</td></tr>
+  <tr><td><code>sw.ts</code> (both apps)</td><td><span class="tag tag-yellow">Fix</span></td><td>notificationclick: add postMessage navigation (Phase 2a)</td></tr>
+  <tr><td><code>usePushSubscription.ts</code></td><td><span class="tag tag-green">Keep</span></td><td>Works as-is for PWA. Phase 2a: add pushsubscriptionchange</td></tr>
+  <tr><td><code>notification/dispatcher.py</code></td><td><span class="tag tag-yellow">Extend</span></td><td>Add device_registration dispatch path alongside existing webpush</td></tr>
+  <tr><td><code>notification/sender.py</code></td><td><span class="tag tag-yellow">Extend</span></td><td>Add <code>send_fcm()</code> static method</td></tr>
+  <tr><td><code>notification/registry.py</code></td><td><span class="tag tag-green">Keep</span></td><td>Already well-structured, add new event types as needed</td></tr>
+  <tr><td><code>push_subscription</code> model</td><td><span class="tag tag-yellow">Migrate</span></td><td>Merge into device_registrations or keep as PWA-specific</td></tr>
+  <tr><td><code>notification_channels</code> router</td><td><span class="tag tag-green">Keep</span></td><td>Existing channel CRUD works for telegram/email/feishu</td></tr>
+  <tr><td><code>notification_push</code> router</td><td><span class="tag tag-yellow">Extend</span></td><td>Add device registration endpoints</td></tr>
+  <tr><td><code>scheduler_worker</code></td><td><span class="tag tag-green">Keep</span></td><td>Existing reminder_job and digest_job continue working</td></tr>
+  <tr><td><code>frontend/apps/android/</code></td><td><span class="tag tag-blue">NEW</span></td><td>Capacitor shell app</td></tr>
+  <tr><td><code>server/packages/notification/</code></td><td><span class="tag tag-blue">NEW</span></td><td>Extract notification domain to shared package (optional refactor)</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s11">11. Privacy &amp; Self-hosting Impact</h2>
+
+<h3>11.1 uni-push 2.0 Privacy Analysis</h3>
+
+<div class="callout callout-danger">
+  <strong>uni-push 2.0 data flow:</strong>
+</div>
+
+<pre><code>FastAPI (self-hosted)
+  → HTTP POST to uniCloud function (DCloud cloud, hosted in China)
+    → Contains: notification title, body, target CID, app_id
+    → DCloud server processes the request
+      → Forwards to 个推 (GeTui) push service
+        → 个推 routes to vendor channel (Huawei/Xiaomi/OPPO/vivo)
+          → Device receives notification</code></pre>
+
+<p><strong>What leaves self-hosted environment:</strong></p>
+<ul>
+  <li>Notification title and body text (even with "opaque" privacy, the <em>type</em> of notification is visible)</li>
+  <li>Target device CID (client ID)</li>
+  <li>App ID (identifies your app)</li>
+  <li>Timestamp of each push</li>
+  <li>User's approximate push frequency pattern</li>
+</ul>
+
+<p><strong>What does NOT leave:</strong></p>
+<ul>
+  <li>Asset amounts, balances, financial data (if opaque privacy level is used)</li>
+  <li>User credentials</li>
+  <li>Family data, member names</li>
+</ul>
+
+<p><strong>Privacy policy impact:</strong> Must disclose that push notifications are routed through DCloud/个推, with metadata about notification type and timing. Users who want zero third-party dependency must use PWA Web Push (which goes through the browser's push service — Google for Chrome, Mozilla for Firefox, etc. — but that's an inherent Web property, not a Numina choice).</p>
+
+<h3>11.2 FCM Privacy Analysis</h3>
+
+<p>FCM has a simpler data path:</p>
+<pre><code>FastAPI → HTTPS POST to fcm.googleapis.com → Google FCM → Device</code></pre>
+<ul>
+  <li>Google sees: notification payload, target device token, timestamp</li>
+  <li>Google does NOT see: server IP (it's a standard API call)</li>
+  <li>For opaque notifications, Google only sees "Numina sent a notification" — no financial data</li>
+  <li><strong>Blocked in China</strong> — not accessible behind GFW</li>
+</ul>
+
+<h3>11.3 Web Push Privacy Analysis</h3>
+
+<p>Web Push (VAPID) data path:</p>
+<pre><code>FastAPI → HTTPS POST to push service (e.g., updates.push.mozilla.org, fcm.googleapis.com for Chrome) → Device SW</code></pre>
+<ul>
+  <li>Push service sees: encrypted payload (only the device SW can decrypt with p256dh/auth keys)</li>
+  <li>VAPID ensures only your server can push to your subscribers</li>
+  <li>Push service sees metadata: endpoint URL, timing, payload size</li>
+  <li>This is inherent to Web Push standard — not specific to Numina</li>
+  <li><strong>Works everywhere HTTPS works</strong> — including China (no GFW issue)</li>
+</ul>
+
+<h3>11.4 Recommendation</h3>
+
+<ol>
+  <li><strong>Default: Web Push only.</strong> Zero third-party dependency beyond the browser vendor's push service (which is unavoidable for any web app).</li>
+  <li><strong>Optional FCM:</strong> For Capacitor Android users who want more reliable background push. Can be disabled in settings.</li>
+  <li><strong>Deferred uni-push:</strong> Only if CN native push delivery is proven to be a critical user need. Make it a configurable provider, opt-in per installation.</li>
+  <li><strong>Always opaque by default.</strong> No financial data in push payloads regardless of provider.</li>
+</ol>
+
+<h3>11.5 HTTPS / Self-hosted Requirements</h3>
+
+<table>
+  <tr><th>Scenario</th><th>PWA Push</th><th>Android App</th><th>Solution</th></tr>
+  <tr>
+    <td>Public HTTPS domain</td>
+    <td><span class="tag tag-green">✅ Works</span></td>
+    <td><span class="tag tag-green">✅ Works</span></td>
+    <td>Let's Encrypt / Cloudflare</td>
+  </tr>
+  <tr>
+    <td>LAN HTTP (192.168.x.x)</td>
+    <td><span class="tag tag-red">❌ No SW</span></td>
+    <td><span class="tag tag-yellow">⚠️ WebView works with cleartext opt-in</span></td>
+    <td>Push requires HTTPS. Add reverse proxy + self-signed cert or Tailscale HTTPS</td>
+  </tr>
+  <tr>
+    <td>Self-signed cert</td>
+    <td><span class="tag tag-red">❌ SW blocked</span></td>
+    <td><span class="tag tag-yellow">⚠️ Works with trust override</span></td>
+    <td>Use mkcert for local CA, or Tailscale</td>
+  </tr>
+  <tr>
+    <td>localhost</td>
+    <td><span class="tag tag-green">✅ Works</span> (secure context exception)</td>
+    <td>N/A</td>
+    <td>Dev only</td>
+  </tr>
+</table>
+
+<div class="callout callout-warn">
+  <strong>Policy recommendation:</strong> Production mobile access = HTTPS required. For LAN deployments, document Tailscale HTTPS or local CA setup as the recommended path. Do NOT globally enable cleartext HTTP in the production app — gate it behind an "Advanced mode" toggle with security warnings.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s12">12. Risks / Unknowns</h2>
+
+<table>
+  <tr><th>#</th><th>Risk/Unknown</th><th>Needs Prototype?</th><th>Mitigation</th></tr>
+  <tr>
+    <td>R1</td>
+    <td>Capacitor WebView SSE streaming stability for AI chat</td>
+    <td><span class="tag tag-yellow">Yes</span></td>
+    <td>Test with 10-minute SSE session in Capacitor debug APK</td>
+  </tr>
+  <tr>
+    <td>R2</td>
+    <td>Capacitor WebView Cookie SameSite handling across requests</td>
+    <td><span class="tag tag-yellow">Yes</span></td>
+    <td>Test login → auth → API call flow in debug APK</td>
+  </tr>
+  <tr>
+    <td>R3</td>
+    <td>Android WebView file upload (multipart) for PDF import</td>
+    <td><span class="tag tag-yellow">Yes</span></td>
+    <td>Test existing /api/v1/upload flow in Capacitor</td>
+  </tr>
+  <tr>
+    <td>R4</td>
+    <td>uni-app web-view Cookie forwarding behavior</td>
+    <td><span class="tag tag-yellow">If choosing Option B</span></td>
+    <td>Test with uni-app HBuilderX debug build</td>
+  </tr>
+  <tr>
+    <td>R5</td>
+    <td>uni-push 2.0 without uniCloud — is it possible?</td>
+    <td><span class="tag tag-yellow">Research</span></td>
+    <td>Check uni-push 2.0 docs for self-hosted relay option</td>
+  </tr>
+  <tr>
+    <td>R6</td>
+    <td>Web Push on iOS Safari (supported since 16.4 but with limitations)</td>
+    <td>No</td>
+    <td>Known: requires "Add to Home Screen", background push limited. Accept limitation.</td>
+  </tr>
+  <tr>
+    <td>R7</td>
+    <td>Google Play policy on WebView-only apps</td>
+    <td><span class="tag tag-yellow">Research</span></td>
+    <td>Google has rejected "thin wrapper" apps in the past. May need to distribute as APK only.</td>
+  </tr>
+  <tr>
+    <td>R8</td>
+    <td>Capacitor vs uni-app long-term maintenance burden</td>
+    <td>No</td>
+    <td>Capacitor is more standard and has broader community support</td>
+  </tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s13">13. Phase 1 Prototype</h2>
+
+<h3>Slice 1: Capacitor Shell Loads Real Numina (2 days)</h3>
+
+<ol>
+  <li>Create <code>frontend/apps/android/</code> with Capacitor init</li>
+  <li>Native Vue setup page: server URL input + health check + save to Preferences</li>
+  <li>WebView loads <code>{serverUrl}/</code> after setup</li>
+  <li>Build debug APK</li>
+  <li>Test: login → dashboard → asset CRUD → AI chat SSE → file upload</li>
+</ol>
+
+<p><strong>Acceptance:</strong> All core flows work in Capacitor WebView as well as in Chrome.</p>
+
+<h3>Slice 2: JS Bridge + Deep Link (2 days)</h3>
+
+<ol>
+  <li>Implement bridge protocol: H5 ↔ Native message passing</li>
+  <li>Android back button → bridge goBack → router.back()</li>
+  <li>Intent filter for <code>numina://open/reminders</code></li>
+  <li>Deep link handler: extract path → bridge → Vue Router navigate</li>
+  <li>Test: tap deep link → app opens → navigates to /reminders</li>
+</ol>
+
+<p><strong>Acceptance:</strong> Deep link from killed state opens app and navigates correctly. Back button works like browser back.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s14">14. Phase 2 Prototype</h2>
+
+<h3>Slice 1: Fix PWA Push + Complete Child Subscription (3 days)</h3>
+
+<ol>
+  <li>Fix notificationclick bug in both SWs: postMessage navigation</li>
+  <li>Add pushsubscriptionchange handler</li>
+  <li>Create child app usePushSubscription composable</li>
+  <li>Add notification preference API + UI</li>
+  <li>Test: send push from scheduler → click notification → app navigates to correct page</li>
+</ol>
+
+<p><strong>Acceptance:</strong> PWA push works end-to-end on both main and child apps. Notification click navigates correctly even when browser is already open.</p>
+
+<h3>Slice 2: FCM Push to Capacitor Android (5 days)</h3>
+
+<ol>
+  <li>Add <code>@capacitor/push-notifications</code> plugin</li>
+  <li>Native: register FCM token → send to backend <code>/devices/register</code></li>
+  <li>Backend: add FCMProvider to notification dispatcher</li>
+  <li>Test: trigger reminder → FCM push → Android shows native notification</li>
+  <li>Test: tap notification → app opens → navigates to correct page</li>
+  <li>Test: app killed → push arrives → tap → cold start → navigate</li>
+</ol>
+
+<p><strong>Acceptance:</strong> A single backend NotificationEvent dispatches to both PWA (Web Push) and Android (FCM) simultaneously. Both receive the notification. Both navigate correctly on click.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s15">15. Implementation Backlog</h2>
+
+<h3>Phase 1 — Android Access</h3>
+
+<table>
+  <tr><th>ID</th><th>Task</th><th>Scope</th><th>Dependency</th><th>Acceptance</th><th>Test</th></tr>
+  <tr>
+    <td>P1-1</td>
+    <td>Capacitor project init</td>
+    <td><code>frontend/apps/android/</code></td>
+    <td>None</td>
+    <td>Debug APK builds, installs, shows setup page</td>
+    <td>Manual install on Android device</td>
+  </tr>
+  <tr>
+    <td>P1-2</td>
+    <td>Server URL setup page</td>
+    <td><code>android/src/setup/</code></td>
+    <td>P1-1</td>
+    <td>User can enter URL, validate, save</td>
+    <td>Test with real Numina server</td>
+  </tr>
+  <tr>
+    <td>P1-3</td>
+    <td>WebView host + Cookie handling</td>
+    <td><code>android/src/</code></td>
+    <td>P1-2</td>
+    <td>Login persists across app restarts</td>
+    <td>Login → kill app → reopen → still logged in</td>
+  </tr>
+  <tr>
+    <td>P1-4</td>
+    <td>JS bridge protocol</td>
+    <td><code>android/src/bridge/</code></td>
+    <td>P1-3</td>
+    <td>H5 ↔ Native bidirectional messaging works</td>
+    <td>Unit test bridge encode/decode</td>
+  </tr>
+  <tr>
+    <td>P1-5</td>
+    <td>Android back button handling</td>
+    <td><code>android/src/</code></td>
+    <td>P1-4</td>
+    <td>Back navigates H5, exits at root</td>
+    <td>Test deep navigation → back → back → exit</td>
+  </tr>
+  <tr>
+    <td>P1-6</td>
+    <td>Deep link intent filter + handler</td>
+    <td><code>android/src/</code> + AndroidManifest</td>
+    <td>P1-4</td>
+    <td><code>numina://open/reminders</code> opens app + navigates</td>
+    <td>adb shell am start with deep link intent</td>
+  </tr>
+  <tr>
+    <td>P1-7</td>
+    <td>Cleartext HTTP advanced mode</td>
+    <td><code>android/src/setup/</code></td>
+    <td>P1-2</td>
+    <td>LAN HTTP works with explicit user opt-in</td>
+    <td>Test with http://192.168.x.x</td>
+  </tr>
+  <tr>
+    <td>P1-8</td>
+    <td>Release APK build pipeline</td>
+    <td><code>android/</code></td>
+    <td>P1-1 to P1-7</td>
+    <td>Signed release APK builds</td>
+    <td>Install on 3 different Android devices</td>
+  </tr>
+</table>
+
+<h3>Phase 2a — PWA Push Completion</h3>
+
+<table>
+  <tr><th>ID</th><th>Task</th><th>Scope</th><th>Dependency</th><th>Acceptance</th><th>Test</th></tr>
+  <tr>
+    <td>P2a-1</td>
+    <td>Fix notificationclick navigation bug</td>
+    <td><code>main/src/sw.ts</code> + <code>child/src/sw.ts</code></td>
+    <td>None</td>
+    <td>Click notification → app navigates to correct page (even with existing window)</td>
+    <td>Manual: push → click → verify navigation</td>
+  </tr>
+  <tr>
+    <td>P2a-2</td>
+    <td>Add pushsubscriptionchange handler</td>
+    <td>Both SWs</td>
+    <td>None</td>
+    <td>Subscription rotation re-registers automatically</td>
+    <td>Expire subscription → verify re-register</td>
+  </tr>
+  <tr>
+    <td>P2a-3</td>
+    <td><strong>Wire up usePushSubscription</strong> (dead code fix)</td>
+    <td><code>main/src/App.vue</code> + <code>child/src/App.vue</code> or Settings page</td>
+    <td>P2a-1</td>
+    <td>Push subscription auto-registers on app load (both apps)</td>
+    <td>Integration test: verify subscription created in backend after permission grant</td>
+  </tr>
+  <tr>
+    <td>P2a-4</td>
+    <td>Notification preference API</td>
+    <td><code>routers/notification_preferences.py</code></td>
+    <td>None</td>
+    <td>GET/PUT per-event-type preferences</td>
+    <td>pytest</td>
+  </tr>
+  <tr>
+    <td>P2a-5</td>
+    <td>Notification preference UI</td>
+    <td><code>main/src/pages/settings/</code></td>
+    <td>P2a-4</td>
+    <td>User can toggle individual event types</td>
+    <td>E2E test</td>
+  </tr>
+  <tr>
+    <td>P2a-6</td>
+    <td>Logout push cleanup</td>
+    <td><code>auth/logout</code> flow</td>
+    <td>None</td>
+    <td>Logout removes push subscription from backend</td>
+    <td>pytest + manual verify</td>
+  </tr>
+  <tr>
+    <td>P2a-7</td>
+    <td>Quiet hours support</td>
+    <td><code>dispatcher.py</code> + settings</td>
+    <td>P2a-4</td>
+    <td>Non-urgent notifications held until quiet hours end</td>
+    <td>pytest with time-machine</td>
+  </tr>
+</table>
+
+<h3>Phase 2b — Android Native Push (FCM)</h3>
+
+<table>
+  <tr><th>ID</th><th>Task</th><th>Scope</th><th>Dependency</th><th>Acceptance</th><th>Test</th></tr>
+  <tr>
+    <td>P2b-1</td>
+    <td>Device registration model + migration</td>
+    <td><code>packages/db/models/</code> + alembic</td>
+    <td>None</td>
+    <td>device_registrations table exists</td>
+    <td>pytest + alembic upgrade head</td>
+  </tr>
+  <tr>
+    <td>P2b-2</td>
+    <td>Device registration API</td>
+    <td><code>routers/devices.py</code></td>
+    <td>P2b-1</td>
+    <td>POST/DELETE/PUT device registration</td>
+    <td>pytest</td>
+  </tr>
+  <tr>
+    <td>P2b-3</td>
+    <td>FCMProvider implementation</td>
+    <td><code>services/notification/providers/fcm.py</code></td>
+    <td>None</td>
+    <td>Can send FCM push given a token</td>
+    <td>pytest with mock FCM</td>
+  </tr>
+  <tr>
+    <td>P2b-4</td>
+    <td>Capacitor push plugin integration</td>
+    <td><code>android/src/</code></td>
+    <td>P1-3, P2b-2</td>
+    <td>App registers FCM token on launch</td>
+    <td>Manual on device</td>
+  </tr>
+  <tr>
+    <td>P2b-5</td>
+    <td>Notification click → deep link → navigate</td>
+    <td><code>android/src/bridge/</code></td>
+    <td>P2b-4, P1-6</td>
+    <td>Tap notification → app opens → navigates</td>
+    <td>Test all 3 states: foreground/background/killed</td>
+  </tr>
+  <tr>
+    <td>P2b-6</td>
+    <td>Dual dispatch: WebPush + FCM</td>
+    <td><code>dispatcher.py</code></td>
+    <td>P2b-3</td>
+    <td>Single reminder dispatches to all registered devices</td>
+    <td>pytest + manual verify on PWA + Android</td>
+  </tr>
+  <tr>
+    <td>P2b-7</td>
+    <td>Invalid token cleanup (404/gone)</td>
+    <td><code>providers/fcm.py</code></td>
+    <td>P2b-3</td>
+    <td>Invalid FCM tokens auto-disabled</td>
+    <td>pytest with mock 404 response</td>
+  </tr>
+  <tr>
+    <td>P2b-8</td>
+    <td>Privacy level enforcement</td>
+    <td><code>dispatcher.py</code> + templates</td>
+    <td>P2b-3</td>
+    <td>Push payload respects per-device privacy_level</td>
+    <td>pytest: verify opaque payload has no financial data</td>
+  </tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s16">16. Go / No-Go Gates</h2>
+
+<h3>Phase 1 Go Criteria</h3>
+
+<div class="callout callout-success">
+  <strong>Phase 1 ships when ALL of these hold:</strong>
+  <ul>
+    <li>✅ Debug APK installs and launches on Android 10+ device</li>
+    <li>✅ User can configure server URL and load real Numina H5</li>
+    <li>✅ Login + Cookie persistence works across app restart</li>
+    <li>✅ All core flows work: dashboard, asset CRUD, AI chat SSE, file upload, child app</li>
+    <li>✅ Android back button works correctly with Vue Router</li>
+    <li>✅ Deep link navigates to correct page</li>
+    <li>✅ LAN HTTP works in advanced mode</li>
+  </ul>
+</div>
+
+<h3>Phase 2 Go Criteria</h3>
+
+<div class="callout callout-success">
+  <strong>Phase 2a ships when ALL of these hold:</strong>
+  <ul>
+    <li>✅ notificationclick navigates correctly (bug fixed)</li>
+    <li>✅ Both main and child apps can subscribe to push</li>
+    <li>✅ Scheduler-triggered reminder delivers push to browser (even when tab is closed)</li>
+    <li>✅ Invalid subscriptions auto-cleaned on 410</li>
+    <li>✅ User can toggle individual notification preferences</li>
+  </ul>
+</div>
+
+<div class="callout callout-success">
+  <strong>Phase 2b ships when ALL of these hold:</strong>
+  <ul>
+    <li>✅ FCM push arrives on Android device in all 3 states (foreground/background/killed)</li>
+    <li>✅ Tap notification → correct deep link navigation</li>
+    <li>✅ Single reminder dispatches to both PWA and Android simultaneously</li>
+    <li>✅ Push payload contains no financial data at default "opaque" privacy level</li>
+    <li>✅ FCM can be disabled per-installation (opt-in)</li>
+    <li>✅ Invalid FCM tokens auto-cleaned</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s17">17. Things I Would NOT Do</h2>
+
+<h3>🚫 Do Not Rewrite Existing Frontend in uni-app</h3>
+<p>The Sept 2026 ideation already concluded this: 3,621 Vant references, 546 browser APIs, 2-3 months of work for marginal benefit. The thin-shell approach (Capacitor or uni-app web-view) correctly avoids this trap.</p>
+
+<h3>🚫 Do Not Force PWA Through uni-push WebSocket</h3>
+<p>The existing Web Push (VAPID) implementation is standards-based, works globally, and has zero third-party dependency. Replacing it with uni-push WebSocket would: (a) break all existing PWA users, (b) introduce DCloud dependency for web users, (c) solve a problem that doesn't exist. Keep PWA on Web Push.</p>
+
+<h3>🚫 Do Not Make uni-push / DCloud a Default Dependency</h3>
+<p>uni-push 2.0 requires uniCloud function relay → data flows through DCloud/个推. This contradicts Numina's privacy-first positioning. If used at all, it must be: (a) opt-in per installation, (b) behind a clear privacy disclosure, (c) replaceable via provider abstraction.</p>
+
+<h3>🚫 Do Not Build a Parallel Notification System</h3>
+<p>The existing notification domain (registry → dispatcher → sender → channels) is well-architected. Don't build a separate "push system" — extend the existing one with new providers (FCM, etc.) that plug into the same dispatch flow.</p>
+
+<h3>🚫 Do Not Enable Cleartext HTTP Globally</h3>
+<p>Android 9+ blocks cleartext by default for good reason. For self-hosted LAN scenarios, gate it behind "Advanced mode" with explicit user opt-in. Don't weaken security for all users to accommodate edge cases.</p>
+
+<h3>🚫 Do Not Put Financial Data in Push Payloads</h3>
+<p>Lock screen notifications are visible to anyone near the phone. Default privacy level = opaque. "Your Numina has a new notification" — never "Your credit card has ¥37,821.24 unpaid." Detailed content loads only after authentication inside the app.</p>
+
+<h3>🚫 Do Not Add a Message Queue (Yet)</h3>
+<p>The existing scheduler worker + APScheduler + retry pattern handles notification dispatch well. Don't introduce RabbitMQ/Kafka/Celery for push delivery unless volume demands it (it doesn't for family-scale usage). Redis Streams already handles cross-process events.</p>
+
+<h3>🚫 Do Not Support iOS in Phase 1</h3>
+<p>Capacitor supports iOS, but the setup is different (Xcode, Apple Developer account). Phase 1 focuses on Android. iOS can be added in a future phase with minimal additional work since the Capacitor shell is cross-platform.</p>
+
+<h3>🚫 Do Not Migrate Existing push_subscriptions Table Yet</h3>
+<p>The existing <code>push_subscriptions</code> table works for PWA. Don't merge it into <code>device_registrations</code> as part of Phase 1. Keep it stable. The migration can happen in Phase 2b when device registration is needed for FCM.</p>
+
+<h3>🚫 Do Not Use TWA as the Primary Android Strategy</h3>
+<p>TWA requires Digital Asset Links verification (domain ownership) and only works for Play Store distribution. It provides no native capabilities. For self-hosted Numina where users deploy on different domains, TWA's domain verification becomes a per-deployment burden. Capacitor shell is strictly more flexible.</p>
+
+<footer>
+  <p><strong>Summary:</strong> Use Capacitor as a thin Android shell (Phase 1, ~2 weeks). Complete existing PWA Web Push (Phase 2a, ~1 week). Add optional FCM for Capacitor Android (Phase 2b, ~2 weeks). Keep uni-push as a deferred, opt-in option only if CN native push is proven critical. Maintain privacy-first by defaulting to opaque push payloads and zero mandatory third-party dependencies.</p>
+  <p>Generated 2026-10-30 · Compound Engineering ideation · Repo-grounded</p>
+</footer>
+
+</div>
+</body>
+</html>

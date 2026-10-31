@@ -614,23 +614,21 @@ def _send_webpush_sync(
     db: Session,
     locale: str = "zh-CN",
 ) -> None:
-    """Send Web Push notifications to all subscriptions in the family."""
-    # R11 (large_purchase) should only notify main app subscriptions, not child
-    if reminder.reminder_type == "large_purchase":
-        subscriptions = (
-            db.query(PushSubscription)
-            .filter(
-                PushSubscription.family_id == reminder.family_id,
-                PushSubscription.app_type == "main",
-            )
-            .all()
+    """Send Web Push notifications to main-app subscriptions in the family.
+
+    Child devices are excluded for every reminder type: webpush payloads carry
+    parent-oriented data (asset names, amounts) and the child app is a
+    role-restricted view that must never see it. Family-interaction pushes
+    (send_family_interaction_push) apply the same filter independently.
+    """
+    subscriptions = (
+        db.query(PushSubscription)
+        .filter(
+            PushSubscription.family_id == reminder.family_id,
+            PushSubscription.app_type == "main",
         )
-    else:
-        subscriptions = (
-            db.query(PushSubscription)
-            .filter(PushSubscription.family_id == reminder.family_id)
-            .all()
-        )
+        .all()
+    )
     if not subscriptions:
         return
 

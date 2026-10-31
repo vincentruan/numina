@@ -121,8 +121,8 @@ cp android/keystore.properties.example android/keystore.properties
 cd android && ./gradlew assembleRelease
 ```
 
-Without that file the release build still completes, signed with the debug key —
-fine for local installs, not for distribution.
+Without that file `assembleRelease` fails with an explanatory Gradle error;
+use `./gradlew assembleDebug` for local installs.
 
 ## Project Structure
 

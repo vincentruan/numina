@@ -34,7 +34,7 @@ Repository layout — two workspaces plus supporting trees:
 ```
 numina/
 ├── server/               # uv workspace — apps (backend, agent, scheduler_worker) + packages
-├── frontend/             # pnpm workspace — apps (main, child) + packages
+├── frontend/             # pnpm workspace — apps (main, child, android) + packages
 └── site/  tests/  docs/  # marketing site · E2E/visual tests · architecture, specs, solutions
 ```
 
@@ -111,6 +111,7 @@ Verification is scoped to the module you changed. Run the commands its `AGENTS.m
 |------|---------------------|
 | Python apps + packages | [`server/AGENTS.md`](./server/AGENTS.md) §Quality Commands |
 | Frontend | [`frontend/AGENTS.md`](./frontend/AGENTS.md) §Commands |
+| Android shell | [`frontend/apps/android/AGENTS.md`](./frontend/apps/android/AGENTS.md) §Commands |
 | E2E / visual regression | [`tests/AGENTS.md`](./tests/AGENTS.md) §Commands |
 
 Test locations: Python backend → `server/tests/backend/`, E2E/visual → `tests/e2e/` (specs) and `tests/visual/` (screenshots). New E2E specs go in `tests/e2e/`, shell runners in `tests/e2e/scripts/`.

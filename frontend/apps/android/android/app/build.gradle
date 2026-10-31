@@ -1,7 +1,8 @@
 apply plugin: 'com.android.application'
 
 // Copy keystore.properties.example to keystore.properties to enable signed
-// release builds; without it, the release build still succeeds with debug signing.
+// release builds; without it, assembleRelease fails closed. Use assembleDebug
+// for local installs.
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {

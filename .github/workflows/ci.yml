@@ -135,7 +135,9 @@ jobs:
         run: pnpm run typecheck && pnpm run test:run
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Job 3b: Android Shell — typecheck only (no unit tests yet)
+  # Job 3b: Android Shell — web typecheck only.
+  # Native JUnit suites (BackExitGuardTest, DeepLinkTest) are not run in CI
+  # yet; see frontend/apps/android/AGENTS.md for local verification.
   # ──────────────────────────────────────────────────────────────────────────
   android-shell:
     name: Android Shell (typecheck)
