@@ -422,6 +422,11 @@ const router = createRouter({
           component: () => import('@/pages/FamilyStorageBackendPage.vue'),
         },
         {
+          path: 'settings/family/backup',
+          name: 'FamilyBackup',
+          component: () => import('@/pages/FamilyBackupPage.vue'),
+        },
+        {
           path: 'settings/user/config',
           name: 'UserConfig',
           component: () => import('@/pages/UserConfigPage.vue'),

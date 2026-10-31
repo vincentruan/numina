@@ -163,7 +163,6 @@ function getMasteryStylesheet() {
         color: '#ffffff',
         'text-wrap': 'ellipsis' as const,
         'text-max-width': '60px',
-        cursor: 'pointer' as const,
         'active-bg-color': 'rgba(0,0,0,0.1)',
         'active-bg-size': '20px',
         'active-bg-opacity': 0.2,
@@ -292,8 +291,14 @@ function buildElements() {
     }
   }
 
-  // Edges from dependencies
+  // Edges from dependencies.
+  // Only keep edges whose endpoints both became nodes above — the dependency
+  // API returns every edge for the subject, including topics the child has no
+  // progress row for (and therefore no node). Cytoscape throws on edges with a
+  // nonexistent source/target, so unresolved edges are dropped here.
+  const nodeIds = new Set(subjectItems.map((item) => item.topic.id))
   for (const edge of edges.value) {
+    if (!nodeIds.has(edge.prerequisite_id) || !nodeIds.has(edge.topic_id)) continue
     elements.push({
       data: {
         id: `${edge.prerequisite_id}->${edge.topic_id}`,

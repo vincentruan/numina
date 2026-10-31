@@ -19,7 +19,7 @@ def _gen_rounding(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="math.estimation.rounding",
+        topic_key="mt_QaYfeVL-0C",
         age_group="low",
     )
 
@@ -37,6 +37,6 @@ def _gen_approx_calc(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="understand",
-        topic_key="math.estimation.approximate_calc",
+        topic_key="mt_Yw27nweoTj",
         age_group="low",
     )

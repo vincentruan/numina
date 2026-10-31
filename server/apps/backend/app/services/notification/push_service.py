@@ -23,8 +23,10 @@ def send_family_interaction_push(
 ) -> None:
     """Send a push notification for family interaction events.
 
-    Sends to ALL push subscriptions in the family (both main and child apps).
-    Failures are silently ignored so they never block the caller's request.
+    Sends to main-app subscriptions only — family interaction pushes are
+    parent-oriented (e.g. "X completed a chore"), so child devices are
+    excluded. Failures are silently ignored so they never block the caller's
+    request.
     """
     try:
         from apps.backend.app.services.notification.sender import NotificationSender
@@ -35,9 +37,14 @@ def send_family_interaction_push(
             logger.debug("VAPID private key not configured, skipping push")
             return
 
+        # Family interaction pushes are parent-oriented (e.g. "X completed a
+        # chore 快去看看吧!"). Children must not receive them on their devices.
         subscriptions = (
             db.query(PushSubscription)
-            .filter(PushSubscription.family_id == family_id)
+            .filter(
+                PushSubscription.family_id == family_id,
+                PushSubscription.app_type == "main",
+            )
             .all()
         )
         if not subscriptions:

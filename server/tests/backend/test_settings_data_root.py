@@ -34,6 +34,11 @@ def _resolve(p: str) -> str:
     return str(Path(p).resolve())
 
 
+def _join(root: str, *parts: str) -> str:
+    """Join path parts in an OS-native way (tests run on Windows and POSIX)."""
+    return os.path.join(root, *parts)
+
+
 class TestDataRootExpansion:
     def test_default_data_root_expands_tilde(self):
         s = _make_settings()
@@ -48,22 +53,22 @@ class TestDataRootExpansion:
 class TestDerivedPaths:
     def test_upload_dir_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
-        expected = _resolve("/tmp/test-numina") + "/workspaces"
+        expected = _join(_resolve("/tmp/test-numina"), "workspaces")
         assert expected == s.UPLOAD_DIR
 
     def test_workspace_root_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
-        expected = _resolve("/tmp/test-numina") + "/workspaces"
+        expected = _join(_resolve("/tmp/test-numina"), "workspaces")
         assert expected == s.WORKSPACE_ROOT
 
     def test_chat_dir_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
-        expected = _resolve("/tmp/test-numina") + "/workspaces"
+        expected = _join(_resolve("/tmp/test-numina"), "workspaces")
         assert expected == s.CHAT_DIR
 
     def test_log_dir_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
-        expected = _resolve("/tmp/test-numina") + "/logs"
+        expected = _join(_resolve("/tmp/test-numina"), "logs")
         assert expected == s.LOG_DIR
 
     def test_database_url_derived_from_data_root(self):

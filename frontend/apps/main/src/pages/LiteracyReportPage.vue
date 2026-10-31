@@ -2,6 +2,18 @@
   <div class="literacy-report-page">
     <PageHeader :title="t('literacyReport.title')" back-to="/baby" />
 
+    <!-- Child selector mounts eagerly so van-tabs registers before van-tab
+         children arrive. If it were inside v-else (after data), van-tabs +
+         van-tab would mount in the same patch and Vant's registration push
+         would leave the nav as empty comments — same class of defect as
+         BabyLearningPage's child switcher. ChildSelector itself hides via
+         its own `v-if="children.length > 1"`, so mounting empty is safe. -->
+    <ChildSelector
+      :children="children"
+      :selected-child-id="selectedChildId"
+      @update:selected-child-id="onChildChange"
+    />
+
     <!-- Loading skeleton -->
     <van-skeleton v-if="loading" :rows="6" animated class="page-skeleton" />
 
@@ -20,12 +32,6 @@
 
     <!-- Main content -->
     <template v-else>
-      <ChildSelector
-        :children="children"
-        :selected-child-id="selectedChildId"
-        @update:selected-child-id="onChildChange"
-      />
-
       <!-- Week navigation -->
       <div v-if="history.length > 0" class="week-nav">
         <van-button

@@ -54,6 +54,7 @@ export default defineConfig({
   // CORE_ERROR_CODES_EXTEND_POINT). Remove once rolldown fixes this.
   optimizeDeps: {
     exclude: ['vue-i18n', '@intlify/core-base', '@intlify/shared'],
+    include: ['cytoscape', 'cytoscape-dagre'],
   },
   server: {
     port: 5174,

@@ -171,11 +171,16 @@ class NotificationSender:
         data: dict,
         vapid_private_key: str,
         vapid_claims: dict,
+        timeout: float = 10,
     ) -> bool | str:
         """Send a Web Push notification.
 
         Returns True on success, False on failure, or "gone" if the
         subscription is no longer valid (HTTP 410) and should be removed.
+
+        ``timeout`` bounds the underlying HTTP request in seconds. pywebpush
+        defaults to 10000s, which lets one unreachable endpoint pin a worker
+        thread for hours — always pass an explicit value.
         """
         from pywebpush import WebPushException, webpush
 
@@ -185,6 +190,7 @@ class NotificationSender:
                 data=json.dumps(data),
                 vapid_private_key=vapid_private_key,
                 vapid_claims=vapid_claims,
+                timeout=timeout,
             )
             return True
         except WebPushException as exc:

@@ -13,10 +13,12 @@ export interface NotificationEventCategory {
   events: NotificationEvent[]
 }
 
+export type NotificationChannelType = 'telegram' | 'email' | 'feishu' | 'webpush'
+
 export interface NotificationChannelResponse {
   id: string
   family_id: string
-  channel_type: 'telegram' | 'email' | 'feishu'
+  channel_type: NotificationChannelType
   name: string
   is_enabled: boolean
   config: Record<string, string | number | Record<string, string>>
@@ -25,10 +27,12 @@ export interface NotificationChannelResponse {
   digest_time: string
   created_at: string
   updated_at: string
+  last_delivery_status: 'sent' | 'failed' | null
+  last_delivery_at: string | null
 }
 
 export interface NotificationChannelCreate {
-  channel_type: 'telegram' | 'email' | 'feishu'
+  channel_type: NotificationChannelType
   name: string
   config: Record<string, string | number | Record<string, string>>
   is_enabled: boolean
@@ -52,6 +56,36 @@ export interface NotificationConfig {
   large_purchase_threshold_fixed: number | null
   large_purchase_threshold_multiplier: number | null
   updated_at: string
+}
+
+export interface LargePurchaseStatus {
+  threshold_configured: boolean
+  subscribing_channel_count: number
+  subscribing_channel_names: string[]
+}
+
+export interface EventAvailability {
+  event_type: string
+  status: 'ready' | 'needs_config' | 'no_data'
+}
+
+export interface NotificationFeatureStatus {
+  large_purchase: LargePurchaseStatus
+  event_availability: EventAvailability[]
+}
+
+export interface ChannelTestResult {
+  success: boolean
+  error: string | null
+}
+
+export interface DeliveryRecord {
+  id: string
+  reminder_id: string
+  reminder_type: string
+  reminder_title: string
+  status: 'sent' | 'failed'
+  created_at: string
 }
 
 export const notificationChannelsApi = {
@@ -80,5 +114,16 @@ export const notificationChannelsApi = {
   },
   getEvents(): Promise<NotificationEventCategory[]> {
     return http.get<NotificationEventCategory[]>('/notification-channels/events').then((r) => r.data)
+  },
+  getFeatureStatus(): Promise<NotificationFeatureStatus> {
+    return http.get<NotificationFeatureStatus>('/notification-config/status').then((r) => r.data)
+  },
+  testChannel(id: string): Promise<ChannelTestResult> {
+    return http.post<ChannelTestResult>(`/notification-channels/${id}/test`).then((r) => r.data)
+  },
+  getDeliveryHistory(id: string, limit = 20): Promise<DeliveryRecord[]> {
+    return http
+      .get<DeliveryRecord[]>(`/notification-channels/${id}/delivery-history`, { params: { limit } })
+      .then((r) => r.data)
   },
 }

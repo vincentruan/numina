@@ -24,7 +24,7 @@ def _gen_unit_conversion(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="math.measurement.unit_conversion",
+        topic_key="mt_tpT9brpI6D",
         age_group="low",
     )
 
@@ -42,7 +42,7 @@ def _gen_perimeter(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="math.measurement.perimeter_rectangle",
+        topic_key="mt_WtcFrxGOgw",
         age_group="low",
         solution={"steps": [f"周长 = 2×(长+宽) = 2×({length}+{w}) = {answer}"]},
     )
@@ -61,6 +61,6 @@ def _gen_area(params: dict) -> GeneratedQuestion:
         question_type="calculation",
         difficulty=2,
         bloom_level="apply",
-        topic_key="math.measurement.area_rectangle",
+        topic_key="mt_y1n0Zwhoca",
         age_group="low",
     )

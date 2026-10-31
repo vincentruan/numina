@@ -305,8 +305,14 @@ onMounted(async () => {
 
 // R10/KTD4: re-fetch recommendation path when page re-activates from
 // KeepAlive cache (e.g. after returning from practice).
-onActivated(() => {
-  refreshRecommendations()
+// Also re-fetch the progress index so ClusterMap can detect frontier changes
+// (new topic became the recommendation after practice updated mastery).
+onActivated(async () => {
+  // Drop per-subject caches so the progress re-fetch pulls fresh topic detail.
+  loadedSubjects.value = new Set()
+  inflightSubjects.clear()
+  topicMap.value = new Map()
+  await Promise.all([load(), refreshRecommendations()])
 })
 </script>
 

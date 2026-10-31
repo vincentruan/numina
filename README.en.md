@@ -45,8 +45,9 @@ Numina is a fully self-hosted family asset visualization and management system. 
 - **Financial Literacy** — Scenario learning, badge system, AI literacy weekly reports (behavioral evidence + family activity suggestions)
 - **AI Learning OS** — Children's learning system built on the os-taxonomy knowledge graph, covering 1,590 topics across 8 subjects (math, science, English, etc.)
   - **Knowledge Map** — Subject and domain-organized knowledge graph with prerequisite/dependent relationships
+  - **Cluster Map** — Subject-level bird's-eye view with Cytoscape.js interactive graph, cross-subject bridge inference (auto-discovers connections via keyword overlap), animated path recommendation highlighting
   - **AI Tutoring** — DeerFlow-powered streaming AI tutor with Chinese-first dialogue, interactive assessment, and safety-filtered output
-  - **Adaptive Practice** — Programmatic question bank (math: 4 categories, 24 templates — arithmetic, fractions, geometry, word problems) with intelligent question selection that auto-adjusts difficulty based on mastery
+  - **Adaptive Practice** — Standardized question bank (math: 4 categories, 24 templates — arithmetic, fractions, geometry, word problems) with intelligent question selection that auto-adjusts difficulty based on mastery
   - **Mastery Tracking** — 7-level state machine (locked → available → learning → assessing → mastered → review) + Bayesian Knowledge Tracing (BKT) + enhanced SM-2 spaced repetition (adaptive ease_factor)
   - **Learning Paths & Growth** — Parent-assigned tasks auto-sorted by prerequisites, XP/level system (🌱 Seed → 🌟 Master) with milestone rewards; children can also explore freely with age-difficulty warnings
   - **Explainable Progress** — Multi-dimensional mastery analysis, learning trends, weak-point diagnosis, and progress attribution
@@ -167,6 +168,7 @@ numina/
 │       ├── math/               # @numina/math — business computation functions
 │       └── shared/             # @numina/shared — SSE parsing and shared utilities
 ├── tests/                      # E2E / visual regression tests
+├── site/                       # Marketing website
 ├── docs/                       # Project documentation
 ├── docker-compose.yml          # Development / default deployment
 ├── docker-compose.production.yml  # Production deployment (GHCR images)

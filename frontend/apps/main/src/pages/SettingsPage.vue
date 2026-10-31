@@ -111,6 +111,13 @@
           <SvgIcon name="cloud-upload" :size="16" class="cell-icon" />
         </template>
       </van-cell>
+      <van-cell
+        v-if="authStore.user?.role === 'owner'"
+        title="备份与恢复"
+        icon="exchange"
+        is-link
+        to="/settings/family/backup"
+      />
     </van-cell-group>
 
     <!-- 账户安全 -->

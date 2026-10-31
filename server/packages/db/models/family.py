@@ -36,6 +36,11 @@ class Family(Base):
     categories = relationship("Category", back_populates="family")
     tags = relationship("Tag", back_populates="family")
     snapshots = relationship("AssetSnapshot", back_populates="family")
+    backup_runs = relationship(
+        "BackupRun",
+        back_populates="family",
+        cascade="all, delete-orphan",
+    )
     storage_backend = relationship(
         "StorageBackend",
         back_populates="family",

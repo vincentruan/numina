@@ -2,7 +2,10 @@
 
 from sqlalchemy.orm import Session
 
+from apps.backend.app.core.logging_config import get_logger
 from packages.db.models.expense_category import ExpenseCategory
+
+logger = get_logger(__name__)
 
 SYSTEM_EXPENSE_CATEGORIES: list[dict] = [
     {"name": "餐饮", "icon": "shop-o", "sort_order": 1},
@@ -33,3 +36,4 @@ def bootstrap_expense_categories(db: Session) -> None:
             )
             db.add(cat)
     db.commit()
+    logger.info("已初始化 %s 个支出分类", len(SYSTEM_EXPENSE_CATEGORIES))

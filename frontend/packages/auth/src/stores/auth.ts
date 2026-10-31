@@ -21,6 +21,32 @@ import { getUser, setUser, clearAuth, getAuthGeneration } from '../utils/storage
 
 export { configureAuthHttp }
 
+/**
+ * Best-effort removal of this device's Web Push subscription.
+ *
+ * Lives here (not in the app composable) because the push endpoint is keyed by
+ * the session cookie: once logout clears it, the call can no longer match the
+ * row. Must run before the cookie is gone — i.e. inline in logout(), after the
+ * /auth/logout call but while the request still carries the session.
+ *
+ * Failures are swallowed: a stale subscription is harmless (the server drops it
+ * on the first 410), and logout must never fail because of push cleanup.
+ */
+async function revokePushSubscription(): Promise<void> {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.serviceWorker) return
+    const registration = await navigator.serviceWorker.ready
+    const subscription = await registration.pushManager.getSubscription()
+    if (!subscription) return
+    await getHttp().delete('/notifications/push/subscribe', {
+      params: { endpoint: subscription.endpoint },
+    })
+    await subscription.unsubscribe()
+  } catch {
+    // Push cleanup is best-effort and must not block logout.
+  }
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(getUser() as User | null)
   const showTrustPrompt = ref(false)
@@ -90,6 +116,10 @@ export const useAuthStore = defineStore('auth', () => {
     }
     user.value = null
     clearAuth()
+    // Drop the Web Push subscription with the session — the server deletes the
+    // row, so a signed-out device stops receiving family notifications even if
+    // the browser keeps the endpoint alive.
+    await revokePushSubscription()
     // Clear SW caches to prevent data leakage on shared devices
     if ('caches' in window) {
       const cacheNames = await caches.keys()

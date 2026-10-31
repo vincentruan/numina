@@ -10,10 +10,9 @@ from sqlalchemy.orm import Session, joinedload
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.models.asset import Asset
-from apps.backend.app.models.category import Category
 from apps.backend.app.models.liability import Liability
-from apps.backend.app.models.tag import Tag
 from apps.backend.app.models.user import User
+from packages.domain.backup.service import export_family_data
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -136,94 +135,7 @@ def export_all_json(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    family_id = user.family_id
-
-    assets = (
-        db.query(Asset)
-        .options(joinedload(Asset.tags))
-        .filter(Asset.family_id == family_id)
-        .all()
-    )
-    liabilities = db.query(Liability).filter(Liability.family_id == family_id).all()
-    categories = (
-        db.query(Category)
-        .filter((Category.family_id == family_id) | (Category.family_id.is_(None)))
-        .all()
-    )
-    tags = db.query(Tag).filter(Tag.family_id == family_id).all()
-
-    def _serialize_date(v):
-        if isinstance(v, date):
-            return v.isoformat()
-        return v
-
-    data = {
-        "export_version": "1.0",
-        "export_date": date.today().isoformat(),
-        "assets": [
-            {
-                "name": a.name,
-                "asset_type": a.asset_type,
-                "category_id": a.category_id,
-                "purchase_price": str(a.purchase_price)
-                if a.purchase_price is not None
-                else None,
-                "current_value": str(a.current_value)
-                if a.current_value is not None
-                else None,
-                "currency": a.currency,
-                "purchase_date": _serialize_date(a.purchase_date),
-                "status": a.status,
-                "location": a.location,
-                "institution": a.institution,
-                "interest_rate": a.interest_rate,
-                "maturity_date": _serialize_date(a.maturity_date),
-                "expected_lifespan_days": a.expected_lifespan_days,
-                "annual_maintenance_cost": str(a.annual_maintenance_cost)
-                if a.annual_maintenance_cost is not None
-                else None,
-                "usage_frequency": a.usage_frequency,
-                "notes": a.notes,
-                "is_archived": a.is_archived,
-                "tag_names": [t.name for t in a.tags] if a.tags else [],
-            }
-            for a in assets
-        ],
-        "liabilities": [
-            {
-                "name": liab.name,
-                "category": liab.category,
-                "original_amount": str(liab.original_amount)
-                if liab.original_amount is not None
-                else None,
-                "remaining_amount": str(liab.remaining_amount)
-                if liab.remaining_amount is not None
-                else None,
-                "monthly_payment": str(liab.monthly_payment)
-                if liab.monthly_payment is not None
-                else None,
-                "interest_rate": liab.interest_rate,
-                "start_date": _serialize_date(liab.start_date),
-                "end_date": _serialize_date(liab.end_date),
-                "institution": liab.institution,
-                "notes": liab.notes,
-                "is_active": liab.is_active,
-            }
-            for liab in liabilities
-        ],
-        "categories": [
-            {
-                "name": c.name,
-                "icon": c.icon,
-                "color": c.color,
-                "asset_type": c.asset_type,
-                "is_system": c.family_id is None,
-            }
-            for c in categories
-            if c.family_id is not None  # Only export custom categories
-        ],
-        "tags": [{"name": t.name, "color": t.color} for t in tags],
-    }
+    data = export_family_data(db, user.family_id)
 
     content = json.dumps(data, ensure_ascii=False, indent=2)
     today = date.today().isoformat()

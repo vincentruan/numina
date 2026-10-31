@@ -26,6 +26,15 @@ class StorageAuthError(StorageError):
     """Raised when authentication to a remote backend fails (401/403)."""
 
 
+class StorageFileSizeError(StorageError):
+    """Raised when a file exceeds the backend's maximum supported size."""
+
+    def __init__(self, message: str = "File too large", file_size: int = 0, max_size: int = 0):
+        super().__init__(message)
+        self.file_size = file_size
+        self.max_size = max_size
+
+
 class StorageBackend(ABC):
     """Abstract interface for file storage backends."""
 
@@ -40,6 +49,24 @@ class StorageBackend(ABC):
     @abstractmethod
     async def delete(self, remote_path: str) -> None:
         """Delete a file at the given remote_path."""
+
+    @abstractmethod
+    async def load(self, remote_path: str) -> bytes:
+        """Read and return the content at remote_path.
+
+        Raises FileNotFoundError when the file does not exist, so callers can
+        tell "no such backup" apart from a transport or auth failure.
+        """
+
+    @abstractmethod
+    async def list(self, prefix: str) -> list[dict]:
+        """List entries under prefix.
+
+        Returns dicts with ``path``, ``size``, and ``last_modified``. A missing
+        prefix yields an empty list rather than an error. This is what lets a
+        backup be discovered from remote storage alone, after the database that
+        recorded it is gone.
+        """
 
     @abstractmethod
     def get_url(self, remote_path: str) -> str:

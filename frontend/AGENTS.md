@@ -8,7 +8,8 @@ Frontend pnpm workspace. Inherits root [`AGENTS.md`](../AGENTS.md) project-level
 frontend/
 ├── apps/
 │   ├── main/      # Adult H5 app (localhost:5173)
-│   └── child/     # Child H5 app (localhost:5174)
+│   ├── child/     # Child H5 app (localhost:5174)
+│   └── android/   # Capacitor WebView shell (localhost:5175)
 ├── packages/
 │   ├── auth/      # @numina/auth — auth stores, components, axios wiring
 │   ├── math/      # @numina/math — pure business-logic functions

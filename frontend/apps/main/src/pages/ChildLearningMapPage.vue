@@ -12,6 +12,14 @@
         <template v-else>
           <!-- DNA Graph Visualization -->
           <DnaGraph2D :items="mapItems" :loading="loading" />
+
+          <!-- Continent overlay: mastery depth + practice suggestions (U7) -->
+          <div class="continent-overlay-section">
+            <ParentContinentOverlay
+              :items="mapItems"
+              :territories="territories"
+            />
+          </div>
         </template>
       </van-pull-refresh>
     </template>
@@ -37,6 +45,7 @@ import http from '@/api'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import DnaGraph2D from '@/components/learning/DnaGraph2D.vue'
+import ParentContinentOverlay from '@/components/learning/ParentContinentOverlay.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -59,6 +68,21 @@ const mapItems = computed(() =>
       topic: topicMap.value.get(p.topic_id)!,
     })),
 )
+
+// Territory data for ParentContinentOverlay: group items by domain
+const territories = computed(() => {
+  const groups = new Map<string, typeof mapItems.value>()
+  for (const item of mapItems.value) {
+    const domain = item.topic.domain || '__other__'
+    if (!groups.has(domain)) groups.set(domain, [])
+    groups.get(domain)!.push(item)
+  }
+  return [...groups.entries()].map(([domain, items]) => ({
+    domain,
+    items,
+    masteredCount: items.filter((i) => i.mastery_level === 'mastered').length,
+  }))
+})
 
 async function load() {
   loading.value = true
@@ -121,5 +145,9 @@ onMounted(async () => {
 .child-learning-map-page {
   min-height: 100vh;
   padding-bottom: 20px;
+}
+
+.continent-overlay-section {
+  margin: 16px;
 }
 </style>

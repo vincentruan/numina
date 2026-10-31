@@ -56,7 +56,7 @@ class TestDeerFlowConfigFiles:
     def test_base_config_valid_yaml(self):
         import yaml
         path = os.path.join(self._config_dir(), "base/config.yaml")
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         assert "sandbox" in data
         assert data["sandbox"]["allow_host_bash"] is False
@@ -64,7 +64,7 @@ class TestDeerFlowConfigFiles:
     def test_prod_config_has_allowlist(self):
         import yaml
         path = os.path.join(self._config_dir(), "prod/config.yaml")
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         assert "memory" in data
         assert "allowed_fact_categories" in data["memory"]
@@ -73,6 +73,6 @@ class TestDeerFlowConfigFiles:
     def test_prod_config_sandbox_bash_disabled(self):
         import yaml
         path = os.path.join(self._config_dir(), "prod/config.yaml")
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         assert data["sandbox"]["allow_host_bash"] is False

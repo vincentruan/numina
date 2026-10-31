@@ -18,7 +18,9 @@
 
 <script setup lang="ts">
 import { computed, watch, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { showSuccessToast } from 'vant'
+import { usePushSubscription } from '@/composables/usePushSubscription'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useI18n } from 'vue-i18n'
@@ -29,6 +31,23 @@ import { refreshTokenIfNeeded } from '@/api'
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const { locale, t } = useI18n()
+const router = useRouter()
+
+// Sync this browser's Web Push subscription to the backend when permission is
+// already granted. Never prompts — the opt-in UI is a separate concern.
+usePushSubscription()
+
+// A push notification click focuses this window and posts the target route
+// (see sw.ts `notificationclick`) so we route in-app instead of reloading.
+function onServiceWorkerMessage(event: MessageEvent) {
+  const data: unknown = event.data
+  if (typeof data !== 'object' || data === null) return
+  const { type, url } = data as { type?: unknown; url?: unknown }
+  if (type !== 'push-navigate' || typeof url !== 'string') return
+  router.push(url).catch(() => {
+    // Navigation may be rejected (duplicate target or guard redirect) — non-fatal.
+  })
+}
 
 // Proactive token refresh — keep the access cookie alive while the tab is
 // visible. The access token TTL is 15 min; refreshing every 12 min leaves a
@@ -114,6 +133,9 @@ onMounted(() => {
   // expired while the tab was in the background (timer is suspended by browsers).
   document.addEventListener('visibilitychange', onVisibilityChange)
 
+  // Receive in-app navigation requests from the service worker (push clicks).
+  navigator.serviceWorker?.addEventListener('message', onServiceWorkerMessage)
+
   // Load family data for agent API calls (X-Family-Id header)
   // Must wait for fetchMe() to confirm the session is valid — otherwise these
   // requests fire before the 401-interceptor has a chance to refresh the token,
@@ -142,6 +164,7 @@ onMounted(() => {
 onUnmounted(() => {
   stopProactiveRefresh()
   document.removeEventListener('visibilitychange', onVisibilityChange)
+  navigator.serviceWorker?.removeEventListener('message', onServiceWorkerMessage)
   if (mediaQuery) {
     mediaQuery.removeEventListener('change', handleSystemThemeChange)
   }

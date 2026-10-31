@@ -49,3 +49,29 @@ export function getDaysUntilPayment(startDate: string | null | undefined): numbe
   const diffMs = next.getTime() - today.getTime()
   return Math.round(diffMs / (1000 * 60 * 60 * 24))
 }
+
+/**
+ * Normalize a stored ``HH:MM`` value to the two-digit form the API accepts.
+ *
+ * The backend validates ``digest_time`` with ``^([01]\d|2[0-3]):[0-5]\d$``, but
+ * rows written before that check existed can hold unpadded values like
+ * ``"8:00"``. Every save echoes this field back verbatim, so an untouched
+ * legacy value would make the whole update fail validation — the channel
+ * could not even be renamed. Normalize on read so the dirty value is repaired
+ * on the next save instead of blocking it.
+ *
+ * Anything unparseable falls back to ``fallback`` rather than throwing: the
+ * field is a scheduling hint, not user data worth surfacing an error for.
+ */
+export function normalizeDigestTime(
+  value: string | null | undefined,
+  fallback = '21:00'
+): string {
+  if (!value) return fallback
+  const match = /^\s*(\d{1,2}):(\d{1,2})\s*$/.exec(value)
+  if (!match) return fallback
+  const hour = Number(match[1])
+  const minute = Number(match[2])
+  if (hour > 23 || minute > 59) return fallback
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}

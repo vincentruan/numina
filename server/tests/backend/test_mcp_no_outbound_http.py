@@ -26,7 +26,7 @@ _FORBIDDEN_IMPORTS = {"httpx", "aiohttp", "apps.agent", "core.backend_client"}
 class TestStaticImportGuard:
     @pytest.mark.parametrize("filepath", _MCP_FILES)
     def test_no_http_library_imports(self, filepath):
-        source = (_SERVER_ROOT / filepath).read_text()
+        source = (_SERVER_ROOT / filepath).read_text(encoding="utf-8")
         tree = ast.parse(source)
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):

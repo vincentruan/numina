@@ -2,8 +2,11 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from apps.backend.app.utils.snowflake import next_id
 from packages.db.models.push_subscription import PushSubscription
+from tests.backend.conftest import child_login_two_phase
 
 # ── Model tests ──────────────────────────────────────────────────────────────
 
@@ -225,3 +228,138 @@ def test_push_subscription_family_isolation(client, auth_headers, second_user_he
         },
     )
     assert resp2.status_code == 200
+
+
+# ── Child subscription endpoint tests ──────────────────────────────────────
+
+CHILD_PASSWORD = "ChildPass1"
+CHILD_PIN = ["🐱", "🌟", "🎈", "🐶"]
+
+
+@pytest.fixture
+def child_user_and_headers(client, auth_headers):
+    resp = client.post(
+        "/api/v1/family/children",
+        headers=auth_headers,
+        json={
+            "username": "pushchild",
+            "password": CHILD_PASSWORD,
+            "display_name": "Push Child",
+            "avatar_color": "#FF5733",
+            "pin": CHILD_PIN,
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    token = child_login_two_phase(client, "pushchild", CHILD_PASSWORD, CHILD_PIN)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_child_can_subscribe_and_is_forced_to_child_app_type(client, child_user_and_headers):
+    """Child sessions may subscribe, but the server forces app_type='child'.
+
+    If a child client submitted app_type='main', it would end up on the
+    parent-scoped subscription list and receive adult-oriented push — a
+    privacy regression we must never allow.
+    """
+    payload = {
+        "endpoint": "https://fcm.googleapis.com/fcm/send/child_test",
+        "p256dh": "child_key",
+        "auth": "child_auth",
+        "app_type": "main",  # client asks for main
+    }
+    resp = client.post(
+        "/api/v1/notifications/push/subscribe",
+        headers=child_user_and_headers,
+        json=payload,
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["app_type"] == "child"  # server-enforced
+
+
+def test_child_subscribe_unknown_app_type_still_forced_to_child(client, child_user_and_headers):
+    """Unknown app_type from a child is also forced to 'child'."""
+    payload = {
+        "endpoint": "https://fcm.googleapis.com/fcm/send/child_unknown",
+        "p256dh": "k", "auth": "a",
+        "app_type": "desktop",  # not in {main, child}
+    }
+    resp = client.post(
+        "/api/v1/notifications/push/subscribe",
+        headers=child_user_and_headers,
+        json=payload,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"]["app_type"] == "child"
+
+
+def test_adult_subscribe_preserves_main_when_explicit(client, auth_headers):
+    """Adults with app_type='main' get 'main' — no unintended downgrade."""
+    payload = {
+        "endpoint": "https://fcm.googleapis.com/fcm/send/adult_main_test",
+        "p256dh": "k", "auth": "a",
+        "app_type": "main",
+    }
+    resp = client.post(
+        "/api/v1/notifications/push/subscribe",
+        headers=auth_headers,
+        json=payload,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"]["app_type"] == "main"
+
+
+def test_family_interaction_push_excludes_child_subscriptions(db, test_family, test_user):
+    """send_family_interaction_push must NOT notify child devices.
+
+    Regression guard for the app_type='main' filter at push_service.py:44.
+    If that filter is removed, child subscriptions (which share the same
+    family_id) would receive parent-oriented push like "X completed a chore".
+    """
+    from apps.backend.app.services.notification.push_service import (
+        send_family_interaction_push,
+    )
+
+    # Seed one main-app subscription (parent) and one child-app subscription.
+    main_sub = PushSubscription(
+        id=next_id(),
+        user_id=test_user.id,
+        family_id=test_family.id,
+        endpoint="https://fcm.googleapis.com/fcm/send/parent_endpoint",
+        p256dh="parent_key",
+        auth="parent_auth",
+        app_type="main",
+    )
+    child_sub = PushSubscription(
+        id=next_id(),
+        user_id=test_user.id,
+        family_id=test_family.id,
+        endpoint="https://fcm.googleapis.com/fcm/send/child_endpoint",
+        p256dh="child_key",
+        auth="child_auth",
+        app_type="child",
+    )
+    db.add(main_sub)
+    db.add(child_sub)
+    db.commit()
+
+    notified_endpoints: list[str] = []
+
+    def fake_send(subscription_info, notification_data, vapid_private_key, vapid_claims):
+        notified_endpoints.append(subscription_info["endpoint"])
+        return "sent"
+
+    with patch(
+        "apps.backend.app.services.notification.sender.NotificationSender.send_webpush",
+        side_effect=fake_send,
+    ), patch(
+        "packages.core.settings.settings"
+    ) as mock_settings:
+        mock_settings.VAPID_PRIVATE_KEY = "test-key"
+        mock_settings.VAPID_SUBJECT = "test-subject"
+        send_family_interaction_push(
+            db, test_family.id, "Test", "Body"
+        )
+
+    assert "https://fcm.googleapis.com/fcm/send/parent_endpoint" in notified_endpoints
+    assert "https://fcm.googleapis.com/fcm/send/child_endpoint" not in notified_endpoints
