@@ -718,3 +718,31 @@ class TestMCPServersInjection:
         with open(path, encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
         assert "mcp_servers" not in cfg
+
+
+class TestSummarizationInjection:
+    """T6: _inject_summarization enables DeerFlow native auto-compaction."""
+
+    def test_summarization_enabled_when_memory_enabled(self):
+        """Chat path (memory_enabled=True) gets summarization config."""
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+            _inject_summarization,
+        )
+
+        config: dict = {}
+        _inject_summarization(config, memory_enabled=True)
+
+        assert config["summarization"]["enabled"] is True
+        assert config["summarization"]["trigger"] == {"type": "fraction", "value": 0.8}
+        assert config["summarization"]["keep"] == {"type": "messages", "value": 20}
+
+    def test_summarization_skipped_when_memory_disabled(self):
+        """Fixed-flow agents (memory_enabled=False) skip summarization."""
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+            _inject_summarization,
+        )
+
+        config: dict = {}
+        _inject_summarization(config, memory_enabled=False)
+
+        assert "summarization" not in config
