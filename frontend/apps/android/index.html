@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Numina</title>
+    <style>
+      /* FOUC-prevention baseline — matches App.vue global styles.
+         Only body background/color to prevent white flash before Vue mounts.
+         The full reset and variables load with App.vue. */
+      body {
+        margin: 0;
+        background: #f5f5ff;
+        color: #1a1a2e;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #0a0a1a; color: #e8e8f0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
