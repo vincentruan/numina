@@ -66,12 +66,16 @@ def normalize_stream_modes(raw: list[str] | str | None) -> list[str]:
     """Normalize the stream_mode parameter to a list.
 
     Default matches what ``useStream`` expects: values + messages-tuple.
+    The frontend (useThreadChat.ts) sends ``['messages-tuple', 'values', 'custom']``
+    which overrides this default, but the default must include ``messages-tuple``
+    so that any caller relying on the default still receives AI text chunks
+    (not just state snapshots).
     """
     if raw is None:
-        return ["values"]
+        return ["values", "messages-tuple"]
     if isinstance(raw, str):
         return [raw]
-    return raw if raw else ["values"]
+    return raw if raw else ["values", "messages-tuple"]
 
 
 # ---------------------------------------------------------------------------
@@ -346,6 +350,24 @@ async def start_run(
         and app != "learning-tutor"
     ):
         raise _app_rejected_error(status_code=400, app=app, reason="未知的 app 值")
+
+    # T1: Cross-tenant isolation — verify the thread belongs to the requesting
+    # family before creating a run. Defense-in-depth: the backend session table
+    # already scopes by family_id, and the frontend can only discover thread_ids
+    # via family-scoped endpoints. But the checkpointer itself doesn't verify
+    # family_id ownership, so a caller who obtains a valid thread_id from
+    # another family could read/write conversation state.
+    # Skip for internal callers (backend triggers already verified ownership).
+    if not internal:
+        from apps.agent.services.session_store import AiSessionRepository
+
+        repo = AiSessionRepository(family_id)
+        session = await repo.get_session(thread_id)
+        if session is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Thread {thread_id} not found for this family",
+            )
 
     disconnect = (
         DisconnectMode.cancel
