@@ -1,3 +1,4 @@
+import { readSSEStream } from '@numina/shared'
 import type { ThreadSession } from '@/types/ai-chat/session'
 import { Client } from '@langchain/langgraph-sdk'
 import { useFamilyStore } from '@/stores/family'
@@ -27,6 +28,177 @@ export function getClient(): Client {
     defaultHeaders: { 'X-Family-Id': familyId },
     onRequest: (_url, init) => ({ ...init, credentials: 'include' }),
   })
+}
+
+/**
+ * One SSE frame in the LangGraph Platform wire format, as consumed by
+ * `useThreadChat`. Mirrors the chunk shape the LangGraph SDK used to yield
+ * from `client.runs.stream()`.
+ */
+export interface ChatStreamChunk {
+  event: string
+  data?: unknown
+}
+
+export interface ChatStreamOptions {
+  threadId: string
+  /** Run input; `null` resumes from the checkpoint without re-sending the user message. */
+  input: Record<string, unknown> | null
+  /** LangGraph stream modes (e.g. `['messages-tuple', 'values', 'custom']`). */
+  streamMode: string[]
+  /** Optional `config.configurable` execution-mode overrides. */
+  configurable?: Record<string, unknown>
+  signal?: AbortSignal
+  /**
+   * Latest SSE event id from a previous attempt. Sent as the `Last-Event-ID`
+   * header so the backend replays buffered events the client missed instead
+   * of the client silently losing them.
+   */
+  lastEventId?: string
+  /**
+   * Called for each SSE `id:` field so the caller can persist the latest one
+   * and supply it as `lastEventId` on the next attempt.
+   */
+  onEventId?: (eventId: string) => void
+}
+
+/**
+ * Stream a chat run as parsed SSE frames.
+ *
+ * Replaces `client.runs.stream()` for the chat path because the LangGraph SDK
+ * does not expose a way to send the `Last-Event-ID` header, which is what the
+ * backend's `StreamBridge` uses to replay events missed during a disconnect.
+ *
+ * Yields the same `{ event, data }` shape the SDK produced, so the caller's
+ * frame handling is unchanged. `error` frames are yielded (not thrown) exactly
+ * as the SDK did — the caller decides whether to retry.
+ *
+ * The promise rejects on request/network failure so the caller's retry loop
+ * sees a real error; `AbortError` propagates for user cancellation.
+ */
+export async function* streamChatRun(
+  options: ChatStreamOptions,
+): AsyncGenerator<ChatStreamChunk, void, undefined> {
+  const authStore = useAuthStore()
+  const familyStore = useFamilyStore()
+  const familyId = familyStore.family?.id || authStore.user?.family_id
+  if (!familyId) {
+    throw new Error('Family not loaded - cannot make agent API calls')
+  }
+
+  const body: Record<string, unknown> = {
+    input: options.input,
+    stream_mode: options.streamMode,
+  }
+  if (options.configurable && Object.keys(options.configurable).length > 0) {
+    body.config = { configurable: options.configurable }
+  }
+
+  const headers: Record<string, string> = {
+    Accept: 'text/event-stream',
+    'Content-Type': 'application/json',
+    'X-Family-Id': familyId,
+  }
+  if (options.lastEventId) {
+    headers['Last-Event-ID'] = options.lastEventId
+  }
+
+  const base = typeof window !== 'undefined' ? window.location.origin : ''
+  // Internal controller so this generator can release the connection when the
+  // consumer breaks out early (gap recovery, error retry, user cancel) instead
+  // of leaving the fetch body draining in the background.
+  const controller = new AbortController()
+  const outerSignal = options.signal
+  if (outerSignal) {
+    if (outerSignal.aborted) controller.abort()
+    else outerSignal.addEventListener('abort', () => controller.abort(), { once: true })
+  }
+
+  const res = await fetch(`${base}/api/threads/${options.threadId}/runs/stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    credentials: 'include',
+    signal: controller.signal,
+  })
+
+  if (!res.ok) {
+    throw new Error(`stream.request_failed:${res.status}`)
+  }
+  if (!res.body) {
+    throw new Error('stream.unavailable')
+  }
+
+  // Bridge readSSEStream's callback dispatch onto an async generator so the
+  // consumer keeps the `for await (const chunk of stream)` shape it had with
+  // the SDK — including its `break`/`throw` control flow.
+  const queue: ChatStreamChunk[] = []
+  let done = false
+  let failure: unknown = null
+  let resolveNext: (() => void) | null = null
+
+  const wake = () => {
+    const resolve = resolveNext
+    resolveNext = null
+    resolve?.()
+  }
+
+  const readerDone = readSSEStream(res, {
+    onMetadata: data => {
+      queue.push({ event: 'metadata', data })
+      wake()
+    },
+    onMessage: (event, data) => {
+      queue.push({ event, data })
+      wake()
+    },
+    onCustom: data => {
+      queue.push({ event: 'custom', data })
+      wake()
+    },
+    onError: data => {
+      queue.push({ event: 'error', data })
+      wake()
+    },
+    onGap: data => {
+      queue.push({ event: 'gap', data })
+      wake()
+    },
+    onEnd: data => {
+      queue.push({ event: 'end', data })
+      wake()
+    },
+    onEventId: eventId => {
+      options.onEventId?.(eventId)
+    },
+  })
+    .catch(err => {
+      failure = err
+    })
+    .finally(() => {
+      done = true
+      wake()
+    })
+
+  try {
+    while (true) {
+      if (queue.length > 0) {
+        yield queue.shift() as ChatStreamChunk
+        continue
+      }
+      if (done) break
+      await new Promise<void>(resolve => {
+        resolveNext = resolve
+      })
+    }
+    // Surface a read failure that ended the stream without a clean close.
+    if (failure) throw failure
+  } finally {
+    // Consumer broke out early (gap recovery / error / user cancel) or the
+    // loop finished: aborting releases the reader and closes the connection.
+    controller.abort()
+    void readerDone
+  }
 }
 
 export interface ThreadSearchParams {

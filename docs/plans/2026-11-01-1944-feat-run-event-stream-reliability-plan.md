@@ -27,16 +27,18 @@ execution: code
 | U2 — Worker event emission hooks | ✅ **COMPLETE** | 5 integration tests pass |
 | U3 — Event query API endpoint | ✅ **COMPLETE** | 7 integration tests pass |
 | U3b — T13 reattach endpoint | ✅ **COMPLETE** | 4 integration tests pass (bonus, not in original scope) |
-| U4 — Frontend Last-Event-ID reconnection | ⬜ **NOT STARTED** | — |
-| U5 — Frontend integration tests | ⬜ **NOT STARTED** | — |
+| U4 — Frontend Last-Event-ID reconnection | ✅ **COMPLETE** | 1340 main + 369 child tests pass |
+| U5 — Frontend integration tests | ✅ **COMPLETE** | 11 reconnection tests pass |
 
-**Backend total: 26/26 tests passing.**
+**Backend 26/26 and frontend 1709/1709 tests passing.**
 
 ### Implementation notes (from completed work)
 
 - **U2 simplification:** Instead of wrapping `bridge.publish()` calls directly, event recording was placed at the natural semantic points: `run.start`/`run.end` in `worker.py:run_agent()` (the try/finally block), and `llm.ai.response`/`llm.tool.result` in `run_pipeline.py:_StreamForwarder` (the existing SSE frame forwarding loop). All calls are best-effort (wrapped in `try/except` with `pass` or `warning` log) so event recording failures never break the run.
 - **U3b bonus:** The reattach endpoint (`GET /threads/{thread_id}/runs/{run_id}/stream`) was added as part of T13 — it was not in the original brainstorm but is needed for the frontend `Last-Event-ID` reconnection to work. It attaches to an existing run's Redis buffer without creating a new run, with cross-tenant isolation checks.
 - **Lifespan not modified:** The plan mentioned modifying `lifespan.py` to instantiate the event store, but the implementation uses a lazy singleton (`_get_event_store()` in `run_event_store.py`) instead, avoiding import-time config access. No lifespan changes were needed.
+- **KTD2 correction — `readSSEStream` needed extending.** The plan assumed the shared reader already surfaced SSE `id:` fields; it did not (only `ai-tasks.ts`'s bespoke parser did). `readSSEStream` gained an optional `onEventId` handler and now routes `messages-tuple` (the chat wire event name) to `onMessage`. Both additions are backward-compatible — the six other consumers are unaffected and their tests pass.
+- **U4 avoids a 360-line rewrite.** Rather than converting the chat composable's `for await` loop to callbacks (its `break`/`throw` control flow encodes the T7 gap-recovery and retry semantics), a new `streamChatRun` async generator in `api/ai-chat.ts` bridges `readSSEStream` callbacks into a queue, so the loop body is untouched and only the chunk source changed.
 
 ### Pending lint fixes (backend, before commit)
 

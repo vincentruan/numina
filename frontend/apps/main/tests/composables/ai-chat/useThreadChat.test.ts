@@ -10,6 +10,7 @@ vi.mock('@/api/ai-chat', () => ({
   getClient: vi.fn(),
   createThread: vi.fn(),
   deleteThread: vi.fn(),
+  streamChatRun: vi.fn(),
 }))
 
 // Mock the sessions API module (used by feedback hydration/submit)
@@ -22,7 +23,7 @@ vi.mock('@/stores/family', () => ({
   useFamilyStore: () => ({ family: { id: 'fam-1' } }),
 }))
 
-import { getClient, createThread } from '@/api/ai-chat'
+import { getClient, createThread, streamChatRun } from '@/api/ai-chat'
 
 function makeMockStream(events: Array<{ event: string; data?: unknown }>) {
   return {
@@ -34,6 +35,20 @@ function makeMockStream(events: Array<{ event: string; data?: unknown }>) {
   }
 }
 
+/**
+ * Point streamChatRun at the supplied frames.
+ *
+ * The composable no longer streams through `client.runs.stream` (the LangGraph
+ * SDK cannot send a Last-Event-ID header), so these tests drive the same
+ * per-test mock stream through `streamChatRun` instead.
+ */
+function useMockStream(events: Array<{ event: string; data?: unknown }>) {
+  // A fresh generator per call: retry tests invoke the stream more than once,
+  // and an async generator can only be iterated a single time.
+  vi.mocked(streamChatRun).mockImplementation(() => makeMockStream(events) as never)
+  return makeMockStream(events)
+}
+
 describe('useThreadChat — U1 SSE extensions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -41,10 +56,12 @@ describe('useThreadChat — U1 SSE extensions', () => {
   })
 
   it('parses custom tool_call event into planningSteps', async () => {
-    const mockStream = makeMockStream([
+    const mockEvents = [
       { event: 'custom', data: { type: 'tool_call', tool_call_id: 'tc-1', tool_name: 'web_search', args: { query: 'test' } } },
       { event: 'end', data: null },
-    ])
+    ]
+    const mockStream = makeMockStream(mockEvents)
+    useMockStream(mockEvents)
     vi.mocked(getClient).mockReturnValue({
       runs: { stream: () => mockStream, cancel: vi.fn() },
     } as never)
@@ -58,11 +75,13 @@ describe('useThreadChat — U1 SSE extensions', () => {
   })
 
   it('parses custom suggestions event into suggestions ref', async () => {
-    const mockStream = makeMockStream([
+    const mockEvents = [
       { event: 'messages-tuple', data: { type: 'ai', content: 'Hello!', id: 'ai-1' } },
       { event: 'custom', data: { type: 'suggestions', suggestions: ['Q1', 'Q2', 'Q3'] } },
       { event: 'end', data: null },
-    ])
+    ]
+    const mockStream = makeMockStream(mockEvents)
+    useMockStream(mockEvents)
     vi.mocked(getClient).mockReturnValue({
       runs: { stream: () => mockStream, cancel: vi.fn() },
     } as never)
@@ -78,10 +97,12 @@ describe('useThreadChat — U1 SSE extensions', () => {
   })
 
   it('captures metadata run_id', async () => {
-    const mockStream = makeMockStream([
+    const mockEvents = [
       { event: 'metadata', data: { run_id: 'run-abc' } },
       { event: 'end', data: null },
-    ])
+    ]
+    const mockStream = makeMockStream(mockEvents)
+    useMockStream(mockEvents)
     vi.mocked(getClient).mockReturnValue({
       runs: { stream: () => mockStream, cancel: vi.fn() },
     } as never)
@@ -96,10 +117,12 @@ describe('useThreadChat — U1 SSE extensions', () => {
     // runs.cancel is async in the SDK — the mock must return a Promise so
     // cancelStream's .catch(() => {}) chaining does not blow up.
     const cancelMock = vi.fn().mockResolvedValue(undefined)
-    const mockStream = makeMockStream([
+    const mockEvents = [
       { event: 'metadata', data: { run_id: 'run-xyz' } },
       { event: 'end', data: null },
-    ])
+    ]
+    const mockStream = makeMockStream(mockEvents)
+    useMockStream(mockEvents)
     vi.mocked(getClient).mockReturnValue({
       runs: { stream: () => mockStream, cancel: cancelMock },
     } as never)
@@ -115,7 +138,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
   })
 
   it('extracts usage_metadata from values events', async () => {
-    const mockStream = makeMockStream([
+    const mockEvents = [
       {
         event: 'values',
         data: {
@@ -128,7 +151,9 @@ describe('useThreadChat — U1 SSE extensions', () => {
         },
       },
       { event: 'end', data: null },
-    ])
+    ]
+    const mockStream = makeMockStream(mockEvents)
+    useMockStream(mockEvents)
     vi.mocked(getClient).mockReturnValue({
       runs: { stream: () => mockStream, cancel: vi.fn() },
     } as never)
@@ -149,12 +174,9 @@ describe('useThreadChat — U1 SSE extensions', () => {
       { event: 'end', data: null },
     ])
     let callCount = 0
-    vi.mocked(getClient).mockReturnValue({
-      runs: {
-        stream: () => (++callCount === 1 ? mockStream1 : mockStream2),
-        cancel: vi.fn(),
-      },
-    } as never)
+    vi.mocked(streamChatRun).mockImplementation(
+      () => (++callCount === 1 ? mockStream1 : mockStream2) as never,
+    )
 
     const chat = useThreadChat()
     await chat.sendMessage('hello', { threadId: 'thread-1' })
@@ -167,22 +189,17 @@ describe('useThreadChat — U1 SSE extensions', () => {
   it('retries on stream error and succeeds', async () => {
     vi.useFakeTimers()
     let callCount = 0
-    vi.mocked(getClient).mockReturnValue({
-      runs: {
-        stream: () => {
-          callCount++
-          if (callCount === 1) {
-            return {
-              async *[Symbol.asyncIterator]() {
-                throw new Error('Network error')
-              },
-            }
-          }
-          return makeMockStream([{ event: 'end', data: null }])
-        },
-        cancel: vi.fn(),
-      },
-    } as never)
+    vi.mocked(streamChatRun).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        return {
+          async *[Symbol.asyncIterator](): AsyncGenerator<{ event: string; data?: unknown }> {
+            throw new Error('Network error')
+          },
+        } as never
+      }
+      return makeMockStream([{ event: 'end', data: null }]) as never
+    })
 
     const chat = useThreadChat()
     const promise = chat.sendMessage('hello', { threadId: 'thread-1' })
@@ -212,24 +229,19 @@ describe('useThreadChat — U1 SSE extensions', () => {
     vi.useFakeTimers()
     const streamCalls: Array<{ input: unknown }> = []
     let callCount = 0
-    vi.mocked(getClient).mockReturnValue({
-      runs: {
-        stream: (_threadId: string, _agent: string, opts: { input?: unknown }) => {
-          callCount++
-          streamCalls.push({ input: opts?.input ?? null })
-          if (callCount === 1) {
-            // First attempt: stream an AI greeting, then error mid-stream.
-            return makeMockStream([
-              { event: 'messages-tuple', data: { type: 'ai', id: 'ai-1', content: '你好，我是数鸣。' } },
-              { event: 'error', data: { message: 'upstream error' } },
-            ])
-          }
-          // Retry succeeds.
-          return makeMockStream([{ event: 'end', data: { status: 'complete' } }])
-        },
-        cancel: vi.fn(),
-      },
-    } as never)
+    vi.mocked(streamChatRun).mockImplementation((opts: { input?: unknown }) => {
+      callCount++
+      streamCalls.push({ input: opts?.input ?? null })
+      if (callCount === 1) {
+        // First attempt: stream an AI greeting, then error mid-stream.
+        return makeMockStream([
+          { event: 'messages-tuple', data: { type: 'ai', id: 'ai-1', content: '你好，我是数鸣。' } },
+          { event: 'error', data: { message: 'upstream error' } },
+        ]) as never
+      }
+      // Retry succeeds.
+      return makeMockStream([{ event: 'end', data: { status: 'complete' } }]) as never
+    })
 
     const chat = useThreadChat()
     const promise = chat.sendMessage('帮我看看家庭财务近况', { threadId: 'thread-1' })
@@ -249,16 +261,14 @@ describe('useThreadChat — U1 SSE extensions', () => {
 
   it('sets error after 3 consecutive failures', async () => {
     vi.useFakeTimers()
-    vi.mocked(getClient).mockReturnValue({
-      runs: {
-        stream: () => ({
-          async *[Symbol.asyncIterator]() {
+    vi.mocked(streamChatRun).mockImplementation(
+      () =>
+        ({
+          async *[Symbol.asyncIterator](): AsyncGenerator<{ event: string; data?: unknown }> {
             throw new Error('Network error')
           },
-        }),
-        cancel: vi.fn(),
-      },
-    } as never)
+        }) as never,
+    )
 
     const chat = useThreadChat()
     const promise = chat.sendMessage('hello', { threadId: 'thread-1' })
@@ -285,7 +295,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     // and replays it via values events. The optimistic message (with the user's
     // original text) is authoritative — the wrapper must not produce a duplicate
     // human bubble showing raw JSON.
-    const mockStream = makeMockStream([
+    const mockEvents = [
       {
         event: 'values',
         data: {
@@ -296,7 +306,9 @@ describe('useThreadChat — U1 SSE extensions', () => {
         },
       },
       { event: 'end', data: null },
-    ])
+    ]
+    const mockStream = makeMockStream(mockEvents)
+    useMockStream(mockEvents)
     vi.mocked(getClient).mockReturnValue({
       runs: { stream: () => mockStream, cancel: vi.fn() },
     } as never)
@@ -311,10 +323,12 @@ describe('useThreadChat — U1 SSE extensions', () => {
   })
 
   it('transitions optimistic user message sendStatus from sending to sent', async () => {
-    const mockStream = makeMockStream([
+    const mockEvents = [
       { event: 'metadata', data: { run_id: 'run-1' } },
       { event: 'end', data: null },
-    ])
+    ]
+    const mockStream = makeMockStream(mockEvents)
+    useMockStream(mockEvents)
     vi.mocked(getClient).mockReturnValue({
       runs: { stream: () => mockStream, cancel: vi.fn() },
     } as never)
@@ -360,12 +374,14 @@ describe('useThreadChat — U1 SSE extensions', () => {
     // otherwise earlier ones stay phase='answering' and their StreamingIndicator
     // (three-dot animation) never stops. This also breaks the next turn's
     // hasPriorProgress check, leaving the follow-up user bubble on "发送中".
-    const mockStream = makeMockStream([
+    const mockEvents = [
       { event: 'metadata', data: { run_id: 'run-1' } },
       { event: 'messages', data: { type: 'ai', id: 'ai-toolcall', content: '', tool_calls: [{ id: 'tc-1', name: 'search', args: {} }] } },
       { event: 'messages', data: { type: 'ai', id: 'ai-reply', content: 'Final answer' } },
       { event: 'end', data: null },
-    ])
+    ]
+    const mockStream = makeMockStream(mockEvents)
+    useMockStream(mockEvents)
     vi.mocked(getClient).mockReturnValue({
       runs: { stream: () => mockStream, cancel: vi.fn() },
     } as never)
@@ -389,26 +405,22 @@ describe('useThreadChat — U1 SSE extensions', () => {
     const chat = useThreadChat()
 
     // Turn 1: multiple AI messages, all should be marked done by end
-    const mockStream1 = makeMockStream([
+    const mockEvents1 = [
       { event: 'metadata', data: { run_id: 'run-1' } },
       { event: 'messages', data: { type: 'ai', id: 'ai-toolcall', content: '', tool_calls: [{ id: 'tc-1', name: 'search', args: {} }] } },
       { event: 'messages', data: { type: 'ai', id: 'ai-reply', content: 'Answer 1' } },
       { event: 'end', data: null },
-    ])
-    vi.mocked(getClient).mockReturnValue({
-      runs: { stream: () => mockStream1, cancel: vi.fn() },
-    } as never)
+    ]
+    useMockStream(mockEvents1)
     await chat.sendMessage('first', { threadId: 'thread-1' })
 
     // Turn 2: follow-up on the same thread
-    const mockStream2 = makeMockStream([
+    const mockEvents2 = [
       { event: 'metadata', data: { run_id: 'run-2' } },
       { event: 'messages', data: { type: 'ai', id: 'ai-reply-2', content: 'Answer 2' } },
       { event: 'end', data: null },
-    ])
-    vi.mocked(getClient).mockReturnValue({
-      runs: { stream: () => mockStream2, cancel: vi.fn() },
-    } as never)
+    ]
+    useMockStream(mockEvents2)
     await chat.sendMessage('second', { threadId: 'thread-1' })
 
     // The follow-up user message must transition to 'sent', not stay 'sending'
