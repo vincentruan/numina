@@ -9,6 +9,7 @@ Replaces the no-op session_journal stub for structured event recording.
 
 from __future__ import annotations
 
+import re
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,6 +20,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from packages.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Defense-in-depth: family_id comes from the JWT `fid` claim (server-issued
+# snowflake ID), so it is trusted in practice. But the value becomes a
+# filename, so a forged token with separators could escape the base directory.
+# Snowflake IDs are numeric; allow alphanumeric + `_` / `-` for flexibility.
+_FAMILY_ID_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 
 class RunEvent(BaseModel):
@@ -46,7 +53,15 @@ class RunEventStore:
         self._lock = threading.Lock()
 
     def _file_for_family(self, family_id: str) -> Path:
-        """Resolve the JSONL file path for a family_id."""
+        """Resolve the JSONL file path for a family_id.
+
+        Raises ``ValueError`` when the family_id contains characters that could
+        escape the base directory (defense-in-depth: the caller should always
+        supply a server-issued snowflake ID, but the filename boundary is a
+        trust boundary of its own).
+        """
+        if not _FAMILY_ID_RE.match(family_id):
+            raise ValueError(f"Invalid family_id: {family_id!r}")
         return self._base_dir / f"{family_id}.jsonl"
 
     def record(self, event: RunEvent) -> None:

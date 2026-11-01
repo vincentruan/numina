@@ -102,6 +102,13 @@ class TestRunEventStore:
         )
         assert ev.event_type == "run.start"
 
+    def test_family_id_path_traversal_rejected(self, store: RunEventStore) -> None:
+        """Defense-in-depth: family_id with separators must not escape the base dir."""
+        with pytest.raises(ValueError, match="Invalid family_id"):
+            store.record_raw("run.start", "r1", "t1", "../evil")
+        with pytest.raises(ValueError, match="Invalid family_id"):
+            store.query_by_family("../../etc/passwd")
+
     def test_malformed_line_skipped(self, store: RunEventStore, tmp_path: Path) -> None:
         # Write a malformed line directly
         f = tmp_path / "run_events" / "family-1.jsonl"
