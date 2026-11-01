@@ -182,6 +182,47 @@ def _inject_pii_redaction(config: dict[str, Any]) -> None:
     }
 
 
+def _inject_guardrail(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+) -> None:
+    """Inject tool execution guardrail config (in-place).
+
+    Enables DeerFlow's GuardrailMiddleware with Numina's guardrail provider.
+    The provider checks each tool call against per-family allow/deny lists.
+
+    Configuration source: ai_config["guardrails"] (optional). If not present
+    or guardrails.enabled=False, no injection occurs (middleware stays off).
+
+    Design (KTD1 — two-layer safety):
+    - PolicyGuard: pre-dispatch gate (checks skill/capability before LLM call)
+    - NuminaGuardrailProvider: tool execution gate (during LLM run, per-tool)
+    Both are active simultaneously for defense-in-depth.
+
+    Fail-closed behavior: on provider errors, tool calls are denied by default.
+    Set fail_closed=False to allow on error (not recommended for production).
+    """
+    guardrails_cfg = ai_config.get("guardrails")
+    if not guardrails_cfg or not guardrails_cfg.get("enabled", False):
+        return
+
+    config["guardrails"] = {
+        "enabled": True,
+        "provider": {
+            "use": "apps.agent.services.deerflow_adapter.numina_guardrail_provider:NuminaGuardrailProvider",
+        },
+        "fail_closed": guardrails_cfg.get("fail_closed", True),
+        "allowlist": guardrails_cfg.get("allowlist", []),
+        "denylist": guardrails_cfg.get("denylist", []),
+    }
+    logger.debug(
+        "[deerflow_config] guardrail injected: fail_closed=%s allowlist=%s denylist=%s",
+        guardrails_cfg.get("fail_closed", True),
+        guardrails_cfg.get("allowlist", []),
+        guardrails_cfg.get("denylist", []),
+    )
+
+
 def _inject_summarization(config: dict[str, Any], memory_enabled: bool) -> None:
     """Inject automatic conversation summarization config (in-place).
 
@@ -572,6 +613,7 @@ def _generate_temp_config(
     _inject_mcp(config, mcp_servers)
     _inject_token_budget(config)
     _inject_pii_redaction(config)
+    _inject_guardrail(config, ai_config)
     _inject_summarization(config, memory_enabled)
     web_search_mcp = ai_config.get("web_search_mcp_servers", [])
     _inject_web_search(config, ai_config, mcp_servers, web_search_mcp)
