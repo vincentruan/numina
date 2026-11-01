@@ -1324,9 +1324,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // drop (decide success by whether we got substantial content). Reset to
     // false at the top of each attempt so a prior iteration's `end` doesn't leak.
     let streamEnded: boolean
+    // T7: Gap recovery tracking — max 5 consecutive auto-recoveries per DeerFlow protocol.
+    let gapRecoveries = 0
+    let gapDetected = false
 
     while (!streamSucceeded && retryCount <= SSE_MAX_RETRIES) {
       streamEnded = false
+      gapDetected = false
       if (retryCount > 0) {
         // Exponential backoff with jitter to avoid thundering herd on backend
         // recovery (#24). Jitter is bounded to [85%, 100%] of the base delay so
@@ -1416,7 +1420,10 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           inputMessage.additional_kwargs = mergedKwargs
         }
         const stream = client.runs.stream(currentThreadId as string, 'agent', {
-          input: hasPriorProgress ? null : { messages: [inputMessage] },
+          // T7: After gap recovery, resume from checkpoint (input:null) instead
+          // of re-sending the user message. hasPriorProgress also uses null for
+          // the same reason (already sent in a prior attempt).
+          input: (hasPriorProgress || gapRecoveries > 0) ? null : { messages: [inputMessage] },
           signal: abortController.signal,
           // #17: drop 'events' — the active backend never emits an 'events' frame
           // and there is no handler branch for it; requesting it advertises an
@@ -1600,6 +1607,44 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               // DeerFlow task_tool emits these events for subagent progress
               handleTaskEvent({ ...customData, type: customData.type })
             }
+          } else if (chunk.event === 'gap') {
+            // T7: Gap recovery — the backend's retained buffer was truncated
+            // (e.g., slow client / weak network). The stream closes after the
+            // gap frame. Discard transient state, reload from checkpoint, and
+            // let the retry loop reconnect with input:null (checkpoint resume).
+            // Per DeerFlow STREAMING.md: max 5 consecutive recoveries.
+            gapRecoveries++
+            if (gapRecoveries > 5) {
+              console.error('[useThreadChat] gap recovery limit exceeded (5)')
+              finalizeAllInProgress()
+              streamSucceeded = true
+              break
+            }
+            const gapData = chunk.data as { checkpoint_id?: string } | undefined
+            console.warn(
+              `[useThreadChat] gap #${gapRecoveries} — reloading from checkpoint`,
+              gapData?.checkpoint_id,
+            )
+            // Reset transient planning state
+            planningSteps.value = []
+            suggestions.value = []
+            // Reload messages from checkpoint
+            if (currentThreadId) {
+              try {
+                const client = getClient()
+                const state = await client.threads.getState(currentThreadId)
+                const values = state.values as { messages?: SerializedMessage[] } | undefined
+                if (values?.messages) {
+                  messages.value = values.messages.map(serializedToChatMessage)
+                }
+              } catch (err) {
+                console.error('[useThreadChat] gap recovery reload failed:', err)
+              }
+            }
+            // Mark gap detected so the post-loop logic reconnects instead of
+            // treating the stream-closure as a content-complete response.
+            gapDetected = true
+            break
           } else if (chunk.event === 'end') {
             streamEnded = true
             // worker.py publishes an `end` data frame `{"status": ...}` before
@@ -1719,7 +1764,10 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         // sets streamSucceeded directly above; this only covers the dropped-
         // connection-after-content case. Truncated/empty content falls through
         // to retry.
-        if (!streamSucceeded && streamEnded === false) {
+        // T7: When gapDetected, skip content-complete detection — the stream
+        // closed because of a gap, not because the response finished. Let the
+        // retry loop reconnect with input:null to resume from checkpoint.
+        if (!streamSucceeded && streamEnded === false && !gapDetected) {
           const lastAi = [...messages.value].reverse().find(m => m.type === 'ai')
           if (lastAi && lastAi.content.trim().length > 0) {
             // Use the same finalization helper as the `end` event path to avoid
