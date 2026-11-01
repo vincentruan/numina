@@ -182,6 +182,31 @@ def _inject_pii_redaction(config: dict[str, Any]) -> None:
     }
 
 
+def _inject_summarization(config: dict[str, Any], memory_enabled: bool) -> None:
+    """Inject automatic conversation summarization config (in-place).
+
+    Enables DeerFlow's native ``SummarizationMiddleware`` for the chat path
+    (``memory_enabled=True``). Fixed-flow agents (asset-report, import-parse,
+    etc.) pass ``memory_enabled=False`` and skip this — they are stateless
+    single-run paths that should not accumulate or compact history.
+
+    Trigger: 80% of model's max input tokens (fraction-based).
+    Keep: last 20 messages after summarization (DeerFlow default).
+
+    The middleware is auto-instantiated by ``build_middlewares`` when
+    ``summarization.enabled=True`` — no manual ``custom_middlewares`` mount
+    needed (which would trigger class-name dedup AssertionError).
+    """
+    if not memory_enabled:
+        return
+
+    config["summarization"] = {
+        "enabled": True,
+        "trigger": {"type": "fraction", "value": 0.8},
+        "keep": {"type": "messages", "value": 20},
+    }
+
+
 def _inject_web_search(
     config: dict[str, Any],
     ai_config: dict[str, Any],
@@ -547,6 +572,7 @@ def _generate_temp_config(
     _inject_mcp(config, mcp_servers)
     _inject_token_budget(config)
     _inject_pii_redaction(config)
+    _inject_summarization(config, memory_enabled)
     web_search_mcp = ai_config.get("web_search_mcp_servers", [])
     _inject_web_search(config, ai_config, mcp_servers, web_search_mcp)
 
