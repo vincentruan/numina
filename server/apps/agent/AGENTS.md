@@ -35,6 +35,7 @@ services/deerflow_adapter/
 ├── memory_config_bridge.py # bridges DeerMem memory config per family
 ├── original_user_content_context.py  # ContextVar preserving original user content through middleware
 ├── sync_tool_patch.py      # monkey-patches DeerFlow harness: sync wrapping, ContextVar propagation, MCP proxy, active-skill tool filter
+├── numina_guardrail_provider.py # NuminaGuardrailProvider — tool execution allow/deny lists for GuardrailMiddleware
 ├── patched_dashscope.py    # DashScope/Qwen reasoning_content capture (upstream per-vendor pattern)
 ├── patched_anthropic.py    # Anthropic thinking block capture (upstream _extract_text drops thinking blocks)
 ├── patched_reasoning_chat.py # [DEPRECATED] replaced by patched_dashscope.py + upstream per-vendor classes
@@ -56,8 +57,11 @@ All protective middlewares are in the upstream default chain or config-driven. *
 | `SafetyFinishReasonMiddleware` | `safety_finish_reason.enabled` (default: true) | Lead agent chain |
 | `TokenBudgetMiddleware` | `token_budget.enabled` (Numina injects) | Lead agent chain |
 | `PiiRedactionMiddleware` | `pii_redaction.enabled` (Numina injects) | Model-call outer wrapper |
+| `GuardrailMiddleware` | `guardrails.enabled` (Numina injects) | Tool execution |
 
 **Two-layer PII** (KTD1): Upstream `PiiRedactionMiddleware` handles free-text in user messages + tool results (agent graph). Numina `PIIRedactor` handles structured `FamilyContext` (pre-dispatch). Both active simultaneously.
+
+**Two-layer safety** (KTD1): `PolicyGuard` is a pre-dispatch gate (checks skill/capability before LLM call). `NuminaGuardrailProvider` (via `GuardrailMiddleware`) is a tool execution gate (checks individual tool calls during LLM run). Both active simultaneously for defense-in-depth.
 
 ## Runtime & Dispatch (the v2 `stream_run` path)
 
