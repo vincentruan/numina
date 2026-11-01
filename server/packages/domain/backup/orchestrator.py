@@ -9,7 +9,7 @@ one cannot drift apart.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -28,6 +28,13 @@ logger = get_logger(__name__)
 BACKUP_ROOT = "backups"
 
 
+def _json_default(obj: Any) -> Any:
+    """Fallback serializer for types that ``json.dumps`` cannot handle."""
+    if isinstance(obj, (date, datetime, time)):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
 def backup_path(family_id: int, when: datetime | None = None) -> str:
     """Build the remote path for a backup taken at ``when``.
 
@@ -44,7 +51,9 @@ def resolve_backend(db: Session, family_id: int) -> StorageBackendABC | None:
     """Return the family's active storage backend, or None if it has none."""
     row = (
         db.query(StorageBackend)
-        .filter(StorageBackend.family_id == family_id, StorageBackend.is_active.is_(True))
+        .filter(
+            StorageBackend.family_id == family_id, StorageBackend.is_active.is_(True)
+        )
         .first()
     )
     if row is None:
@@ -71,7 +80,7 @@ async def create_backup(
     """
     moment = when or datetime.now(UTC)
     payload = export_family_data(db, family_id)
-    body = json.dumps(payload, ensure_ascii=False).encode()
+    body = json.dumps(payload, ensure_ascii=False, default=_json_default).encode()
     path = backup_path(family_id, moment)
 
     run = BackupRun(
@@ -134,7 +143,11 @@ def _current_failure_streak(db: Session, family_id: int) -> int:
 
 
 async def load_backup(
-    db: Session, family_id: int, *, remote_path: str | None = None, backup_date: str | None = None
+    db: Session,
+    family_id: int,
+    *,
+    remote_path: str | None = None,
+    backup_date: str | None = None,
 ) -> dict[str, Any]:
     """Fetch and parse a backup from remote storage.
 
@@ -171,7 +184,10 @@ async def _newest_backup_path(
             continue
         for child in await backend.list(path):
             child_path = child.get("path", "")
-            if child_path.endswith(".json") and f"numina_backup_{family_id}.json" in child_path:
+            if (
+                child_path.endswith(".json")
+                and f"numina_backup_{family_id}.json" in child_path
+            ):
                 candidates.append((path, child_path))
 
     if not candidates:
