@@ -66,7 +66,7 @@ async def test_get_child_literacy_profile_returns_children(mock_db):
     with sl_patch as mock_sl, gu_patch as mock_gu:
         mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
         mock_sl.return_value.__exit__ = MagicMock(return_value=False)
-        mock_gu.return_value = MagicMock(id="u1", family_id="100")
+        mock_gu.return_value = MagicMock(id="u1", family_id="100", role="owner")
 
         with patch(
             "apps.backend.app.services.literacy_report._get_age_group",
@@ -101,7 +101,7 @@ async def test_get_child_literacy_profile_no_children(mock_db):
     with sl_patch as mock_sl, gu_patch as mock_gu:
         mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
         mock_sl.return_value.__exit__ = MagicMock(return_value=False)
-        mock_gu.return_value = MagicMock(id="u1", family_id="100")
+        mock_gu.return_value = MagicMock(id="u1", family_id="100", role="owner")
 
         result = await session.call_tool("get_child_literacy_profile", {})
 
@@ -141,7 +141,7 @@ async def test_get_literacy_weekly_data_returns_signals_and_trend(mock_db):
     with sl_patch as mock_sl, gu_patch as mock_gu:
         mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
         mock_sl.return_value.__exit__ = MagicMock(return_value=False)
-        mock_gu.return_value = MagicMock(id="u1", family_id="100")
+        mock_gu.return_value = MagicMock(id="u1", family_id="100", role="owner")
 
         with patch(
             "apps.backend.app.services.literacy_report._aggregate_signals",
@@ -180,7 +180,7 @@ async def test_get_literacy_weekly_data_rejects_child_from_other_family(mock_db)
     with sl_patch as mock_sl, gu_patch as mock_gu:
         mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
         mock_sl.return_value.__exit__ = MagicMock(return_value=False)
-        mock_gu.return_value = MagicMock(id="u1", family_id="100")
+        mock_gu.return_value = MagicMock(id="u1", family_id="100", role="owner")
 
         result = await session.call_tool(
             "get_literacy_weekly_data",
