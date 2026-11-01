@@ -43,6 +43,9 @@ The base Pydantic response model every API response schema inherits from. At JSO
 
 ## MCP external access
 
+### Caller-bound principal
+The security invariant that MCP session identity (`family_id`, `caller_user_id`, `caller_role`) is frozen in `MCPSession.__slots__` at SSE handshake and read exclusively from `self` during tool execution — never from tool arguments, message content, or any caller-controllable source. Enforced at three layers: SSE handshake validates the caller before session creation (403 on unknown, inactive, cross-family, or child), protocol-layer `list_tools()` filters by `caller_role ∈ allowed_roles`, and `call_tool()` re-validates the caller via `_get_caller_user()` on every invocation including re-reading `user.role` for stale-session detection. Replaces the earlier `_get_owner_user` pattern that silently fell back to the family owner when the caller could not be resolved (the confused-deputy vulnerability).
+
 ### Synthetic service user
 A virtual User row (`role='external_token'`) created per family to represent external MCP callers within the existing MCPSession caller-binding contract. External MCP clients (Claude Desktop, custom agents) have no real user account; the synthetic user provides a `caller_user_id` that `_get_caller_user()` can resolve, preserving the session invariant that caller identity is frozen at construction. Must be excluded from family member list queries, rejected by the login endpoint, and included in `_VALID_ROLES` for MCP tool filtering. Created atomically alongside the family's first MCP API Token.
 

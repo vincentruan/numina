@@ -96,6 +96,8 @@ depth: deep
 
 ### D7. caller_role 缓存生命期 = SSE 连接寿命 (Q3 答案)
 
+> **⚠️ SUPERSEDED** — D7 已被 `docs/plans/2026-11-01-1858-feat-mcp-caller-bound-principal-t10-plan.md` 的 D1 取代。新决策：`call_tool()` 每次调用时从 DB 重读 `user.role`（per-call re-validation），不再缓存于 `_caller_role`。`_caller_role` slot 仍冻结在构造函数中作为 session identity，但 role check 使用新鲜值。理由：`_get_caller_user()` 已为每次 call_tool 开 DB session，重读 role 不增加新连接模式；防止 role 变更后的权限错配。
+
 **决策**：`caller_role` 在 `MCPSession.__init__` 一次查询 `User.role` 后冻结到 `_caller_role` slot；SSE 连接寿命内不重查 DB。前端在 owner transfer 后强制 refresh chat 入口。
 
 **理由**：transfer 是低频操作，影响窗口分钟级；显式 caller 校验比 per-call DB 查询更经济；接受窗口的 trade-off 在 origin §6 Q3 + Risks 已论证。
