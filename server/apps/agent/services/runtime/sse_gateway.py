@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
+from collections import defaultdict, deque
 from typing import Any
 
 from deerflow.runtime import (
@@ -66,12 +68,59 @@ def normalize_stream_modes(raw: list[str] | str | None) -> list[str]:
     """Normalize the stream_mode parameter to a list.
 
     Default matches what ``useStream`` expects: values + messages-tuple.
+    The frontend (useThreadChat.ts) sends ``['messages-tuple', 'values', 'custom']``
+    which overrides this default, but the default must include ``messages-tuple``
+    so that any caller relying on the default still receives AI text chunks
+    (not just state snapshots).
     """
     if raw is None:
-        return ["values"]
+        return ["values", "messages-tuple"]
     if isinstance(raw, str):
         return [raw]
-    return raw if raw else ["values"]
+    return raw if raw else ["values", "messages-tuple"]
+
+
+# ---------------------------------------------------------------------------
+# Per-family rate limiting (Security Rule #8)
+# ---------------------------------------------------------------------------
+
+# Sliding-window rate limiter: tracks per-family run start timestamps.
+# Limits concurrent run *starts* per family (not concurrent active runs —
+# that's the global Semaphore(DEERFLOW_CONCURRENCY) job).
+# Default: 20 run starts per family per 60 seconds.
+_RATE_LIMIT_WINDOW = 60.0  # seconds
+_RATE_LIMIT_MAX_RUNS = 20  # max run starts per window per family
+_run_start_times: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _check_family_rate_limit(family_id: str) -> None:
+    """Raise 429 if the family exceeded the run-start rate limit.
+
+    Sliding window: prune timestamps older than _RATE_LIMIT_WINDOW, then
+    count remaining. If at or above _RATE_LIMIT_MAX_RUNS, reject.
+
+    This is process-local only — multi-worker deployments need Redis-backed
+    rate limiting (future enhancement). Single-instance is the common Numina
+    deployment mode.
+    """
+    now = time.monotonic()
+    q = _run_start_times[family_id]
+    # Prune old entries
+    cutoff = now - _RATE_LIMIT_WINDOW
+    while q and q[0] < cutoff:
+        q.popleft()
+    if len(q) >= _RATE_LIMIT_MAX_RUNS:
+        logger.warning(
+            "[rate_limit] family=%s exceeded %d runs/%ds — rejecting",
+            family_id,
+            _RATE_LIMIT_MAX_RUNS,
+            _RATE_LIMIT_WINDOW,
+        )
+        raise HTTPException(
+            status_code=429,
+            detail="请求过于频繁，请稍后再试",
+        )
+    q.append(now)
 
 
 # ---------------------------------------------------------------------------
@@ -346,6 +395,28 @@ async def start_run(
         and app != "learning-tutor"
     ):
         raise _app_rejected_error(status_code=400, app=app, reason="未知的 app 值")
+
+    # T1: Cross-tenant isolation — verify the thread belongs to the requesting
+    # family before creating a run. Defense-in-depth: the backend session table
+    # already scopes by family_id, and the frontend can only discover thread_ids
+    # via family-scoped endpoints. But the checkpointer itself doesn't verify
+    # family_id ownership, so a caller who obtains a valid thread_id from
+    # another family could read/write conversation state.
+    # Skip for internal callers (backend triggers already verified ownership).
+    if not internal:
+        from apps.agent.services.session_store import AiSessionRepository
+
+        repo = AiSessionRepository(family_id)
+        session = await repo.get_session(thread_id)
+        if session is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Thread {thread_id} not found for this family",
+            )
+
+        # T9: Per-family rate limiting (Security Rule #8).
+        # Sliding window — 20 run starts per family per 60s.
+        _check_family_rate_limit(family_id)
 
     disconnect = (
         DisconnectMode.cancel
