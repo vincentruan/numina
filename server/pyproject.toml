@@ -118,8 +118,12 @@ dev = [
 [tool.uv.workspace]
 members = []
 
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
 [tool.uv.sources]
-deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness", rev = "712a11c0" }
+deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness", rev = "8a3a309d" }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
