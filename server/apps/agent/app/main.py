@@ -20,6 +20,7 @@ from apps.agent.core.logging import setup_logging
 from apps.agent.routers import import_parse as import_parse_router
 from apps.agent.routers import input_polish as input_polish_router
 from apps.agent.routers import model_test as model_test_router
+from apps.agent.routers import run_events as run_events_router
 from apps.agent.routers import runs_stream as runs_stream_router
 from apps.agent.routers import suggest as suggest_router
 from apps.agent.routers import threads as threads_router
@@ -309,6 +310,7 @@ app.include_router(model_test_router.router)
 app.include_router(threads_router.router)
 app.include_router(runs_stream_router.router)
 app.include_router(translate_router.router)
+app.include_router(run_events_router.router)
 
 
 @app.get("/health")
