@@ -355,14 +355,14 @@ KTD3. **Event emission: hook into `bridge.publish` calls in worker.py.** The wor
 - [x] Reattach endpoint `GET /threads/{tid}/runs/{rid}/stream` for Last-Event-ID replay
 - [x] 26 backend tests passing (10 unit + 16 integration)
 
-### Frontend — ⬜ REMAINING
-- [ ] `useThreadChat.ts` tracks `Last-Event-ID` and sends it on reconnect
-- [ ] SSE processing switched to `readSSEStream` (from SDK `client.runs.stream()`)
-- [ ] Gap recovery fallback to T7 checkpoint when Redis buffer is truncated
-- [ ] Frontend integration tests for reconnection and gap recovery
-- [ ] No regressions in existing chat tests
+### Frontend — ✅ COMPLETE
+- [x] `useThreadChat.ts` tracks `Last-Event-ID` and sends it on reconnect
+- [x] SSE processing switched off the SDK to `readSSEStream` (via `streamChatRun`)
+- [x] Gap recovery falls back to T7 checkpoint when the buffer is truncated
+- [x] Reconnection tests cover id capture, header on retry, frame mapping, no-loss
+- [x] No regressions — 1340 main + 369 child tests pass
 
 ### Overall
-- [ ] Product Contract preserved — all R-IDs, F-IDs, AE-IDs addressed
-- [ ] Code follows project conventions (ruff, mypy, pnpm lint/typecheck pass)
-- [ ] Cleanup: no dead-end or experimental code left in the diff
+- [x] Product Contract preserved — all R-IDs, F-IDs, AE-IDs addressed
+- [x] `ruff check`, `mypy`, `vue-tsc`, and `pnpm lint` report no issues in the changed files (mypy's 31 errors are pre-existing in transitively-imported modules)
+- [x] Cleanup: no dead-end or experimental code left in the diff
