@@ -325,68 +325,124 @@ class MCPSession:
 
         _t0 = time.perf_counter()
         meta = get_tool(name)
-        # Role check: external_token with allow_write bypasses the role filter
-        _role_allowed = (
-            self._caller_role in meta.allowed_roles
-            if meta
-            else False
-        )
-        _write_bypass = (
-            meta is not None
-            and self._caller_role == "external_token"
-            and self._allow_write
-        )
-        if not meta or (not _role_allowed and not _write_bypass):
-            logger.warning(
-                "[mcp_session] permission_denied family=%s caller_user_id=%s caller_role=%s attempted_tool=%s",
-                self._family_id,
-                self._caller_user_id,
-                self._caller_role,
-                name,
-            )
-            return [
-                TextContent(
-                    type="text",
-                    text=json.dumps(
-                        {
-                            "error": "permission_denied",
-                            "retryable": False,
-                            "reason": "该工具对当前角色不可用",
-                        },
-                        ensure_ascii=False,
-                    ),
-                )
-            ]
 
-        # Per-tool whitelist gate for external_token callers
-        if (
-            self._caller_role == "external_token"
-            and self._allowed_tools is not None
-            and name not in self._allowed_tools
-        ):
-            logger.warning(
-                "[mcp_session] permission_denied family=%s caller_user_id=%s caller_role=%s attempted_tool=%s (not in allowed_tools)",
-                self._family_id,
-                self._caller_user_id,
-                self._caller_role,
-                name,
-            )
-            return [
-                TextContent(
-                    type="text",
-                    text=json.dumps(
-                        {
-                            "error": "permission_denied",
-                            "retryable": False,
-                            "reason": "该工具未对外部客户端开放",
-                        },
-                        ensure_ascii=False,
-                    ),
-                )
-            ]
-
+        # Re-validate caller on every tool call (fresh role + active check from DB)
         with SessionLocal() as db:
-            user = _get_caller_user(self._family_id, self._caller_user_id, db)
+            try:
+                user = _get_caller_user(self._family_id, self._caller_user_id, db)
+            except RuntimeError:
+                logger.warning(
+                    "[mcp_session] permission_denied family=%s caller_user_id=%s caller_role=%s tool=%s (caller_invalid)",
+                    self._family_id,
+                    self._caller_user_id,
+                    self._caller_role,
+                    name,
+                )
+                if self._audit_callback is not None:
+                    with contextlib.suppress(Exception):
+                        self._audit_callback(
+                            event_type="tool_call",
+                            tool_name=name,
+                            status="permission_denied",
+                            duration_ms=round((time.perf_counter() - _t0) * 1000),
+                            args_digest=arguments,
+                            error_code="caller_invalid",
+                        )
+                return [
+                    TextContent(
+                        type="text",
+                        text=json.dumps(
+                            {
+                                "error": "permission_denied",
+                                "retryable": False,
+                                "reason": "调用者身份无效",
+                            },
+                            ensure_ascii=False,
+                        ),
+                    )
+                ]
+
+            # Role check using fresh user.role (not cached self._caller_role)
+            # external_token with allow_write bypasses the role filter
+            _role_allowed = (
+                user.role in meta.allowed_roles
+                if meta
+                else False
+            )
+            _write_bypass = (
+                meta is not None
+                and user.role == "external_token"
+                and self._allow_write
+            )
+            if not meta or (not _role_allowed and not _write_bypass):
+                logger.warning(
+                    "[mcp_session] permission_denied family=%s caller_user_id=%s caller_role=%s attempted_tool=%s",
+                    self._family_id,
+                    self._caller_user_id,
+                    user.role,
+                    name,
+                )
+                if self._audit_callback is not None:
+                    with contextlib.suppress(Exception):
+                        self._audit_callback(
+                            event_type="tool_call",
+                            tool_name=name,
+                            status="permission_denied",
+                            duration_ms=round((time.perf_counter() - _t0) * 1000),
+                            args_digest=arguments,
+                            error_code="role_not_allowed",
+                        )
+                return [
+                    TextContent(
+                        type="text",
+                        text=json.dumps(
+                            {
+                                "error": "permission_denied",
+                                "retryable": False,
+                                "reason": "该工具对当前角色不可用",
+                            },
+                            ensure_ascii=False,
+                        ),
+                    )
+                ]
+
+            # Per-tool whitelist gate for external_token callers
+            if (
+                user.role == "external_token"
+                and self._allowed_tools is not None
+                and name not in self._allowed_tools
+            ):
+                logger.warning(
+                    "[mcp_session] permission_denied family=%s caller_user_id=%s caller_role=%s attempted_tool=%s (not in allowed_tools)",
+                    self._family_id,
+                    self._caller_user_id,
+                    user.role,
+                    name,
+                )
+                if self._audit_callback is not None:
+                    with contextlib.suppress(Exception):
+                        self._audit_callback(
+                            event_type="tool_call",
+                            tool_name=name,
+                            status="permission_denied",
+                            duration_ms=round((time.perf_counter() - _t0) * 1000),
+                            args_digest=arguments,
+                            error_code="not_in_allowed_tools",
+                        )
+                return [
+                    TextContent(
+                        type="text",
+                        text=json.dumps(
+                            {
+                                "error": "permission_denied",
+                                "retryable": False,
+                                "reason": "该工具未对外部客户端开放",
+                            },
+                            ensure_ascii=False,
+                        ),
+                    )
+                ]
+
             try:
                 if name == "get_family_overview":
                     data: Any = dashboard_service.get_overview(db, user)

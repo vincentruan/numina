@@ -1,6 +1,6 @@
 """Tests for MCP SSE handshake caller validation."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -145,6 +145,7 @@ class TestSSEHandshakeCallerValidation:
                         caller_user_id="u1",
                         caller_role="member",
                         thread_id=None,
+                        audit_callback=ANY,
                     )
 
     def test_owner_caller_passes(self, client, valid_token):
@@ -172,4 +173,5 @@ class TestSSEHandshakeCallerValidation:
                         caller_user_id="u1",
                         caller_role="owner",
                         thread_id=None,
+                        audit_callback=ANY,
                     )
