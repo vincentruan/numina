@@ -9,11 +9,10 @@ trigger_phrases: []
 
 # allowed-tools includes web search tools, MCP family data tools, AND native
 # sandbox file tools (write_file / read_file / str_replace / present_files).
-# Without the file tools, filter_tools_by_skill_allowed_tools (sync_tool_patch.py)
+# Without the file tools, _apply_active_skill_tool_filter (sync_tool_patch.py)
 # strips them when chat-search is the active skill — the LLM then gets
 # "write_file is not a valid tool" even though the base config registers it.
-# read_file also lives in ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES so it survives
-# either way, but declaring it explicitly keeps the skill self-documenting.
+# Explicit declaration keeps the skill self-documenting.
 allowed-tools:
   - web_search
   - web_fetch

@@ -11,9 +11,9 @@ trigger_phrases: []
 # allowed-tools restricts this skill to its declared MCP data tools (base names,
 # as MultiServerMCPClient applies tool_name_prefix=False in sync_tool_patch.py)
 # plus DeerFlow native sandbox file tools.
-# Enforced at runtime by filter_tools_by_skill_allowed_tools (full-name exact
-# match, deerflow/skills/tool_policy.py:65) — a prefixed declaration would never
-# match and silently filter out every business tool.
+# Enforced at runtime by _apply_active_skill_tool_filter (sync_tool_patch.py) —
+# full-name exact match against Skill.allowed_tools. A prefixed declaration
+# would never match and silently filter out every business tool.
 allowed-tools:
   - get_family_overview
   - get_assets
