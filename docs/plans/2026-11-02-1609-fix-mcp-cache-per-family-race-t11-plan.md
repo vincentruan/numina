@@ -43,7 +43,7 @@ Additionally, `reset_mcp_tools_cache()` is redundant because `get_cached_mcp_too
 - **D1. Per-family signature tracking.** Replace `_last_reset_state` (single tuple) with `_per_family_reset_state: dict[str, tuple | None]` keyed by `extensions_path`. Each family's config change is tracked independently. Governs R1, R2.
 - **D2. Drop `reset_mcp_tools_cache()`.** Don't tear down the MCP tools cache eagerly. Let `get_cached_mcp_tools()` detect staleness via `_is_cache_stale()` (which reads the ContextVar-resolved path) and handle re-initialization under its own `_init_lock`. This eliminates the "briefly empty" window. Governs R3, R4.
 - **D3. Keep `reset_extensions_config()` on config change.** `ExtensionsConfig` has a singleton cache (`_extensions_config` global) that must be cleared when the config changes for a family, so `initialize_mcp_tools()` picks up the new MCP server list. Governs R5.
-- **D4. Family switches still trigger re-init.** When the active family changes, `get_cached_mcp_tools()._is_cache_stale()` detects the different config path and re-initializes. This is unavoidable without per-family MCP caching (which requires DeerFlow changes — out of scope). The key improvement is no more "briefly empty" window and no more alternating-reset thrashing for same-family repeated requests.
+- **D4. Service-level concurrency, not user behavior.** A user account belongs to exactly one family (many-to-one). "Family switch" refers to the shared agent process handling requests from different families in rapid succession — not a single user switching families. When the active family changes at the service level, `get_cached_mcp_tools()._is_cache_stale()` detects the different config path and re-initializes. This is unavoidable without per-family MCP caching (which requires DeerFlow changes — out of scope). **For individual users, this fix means zero resets for their requests** — they always hit the per-family cache. The "family switch" re-init only affects service-level metrics under high concurrency from many families.
 
 ### Requirements
 
@@ -61,11 +61,12 @@ Additionally, `reset_mcp_tools_cache()` is redundant because `get_cached_mcp_too
   - `get_cached_mcp_tools()`: `_is_cache_stale()` → path matches `_config_path`, sig matches → cache hit. No re-init.
   - **Result:** Zero resets, zero re-inits, instant tool availability.
 
-- **F2. Family switch (A → B).**
+- **F2. Service-level family interleaving (agent process handles A then B).**
+  - This is NOT a user switching families — it's the shared agent process serving different families concurrently.
   - Worker calls `_maybe_reset_mcp_cache(path_B)`.
   - Per-family tracking: `path_B` not in `state` (or sig differs) → `reset_extensions_config()` → update `state[path_B]`.
   - `get_cached_mcp_tools()`: `_is_cache_stale()` → path differs from `_config_path` → re-init under `_init_lock`. MCP sessions torn down and rebuilt for family B.
-  - **Result:** One `reset_extensions_config()` + one re-init (unavoidable). No "briefly empty" because `get_cached_mcp_tools()` waits for re-init under lock before returning.
+  - **Result:** One `reset_extensions_config()` + one re-init (unavoidable for the global singleton). No "briefly empty" because `get_cached_mcp_tools()` waits for re-init under lock before returning. **This re-init is transparent to end users** — each family's request completes correctly; only service-level MCP session reuse is affected.
 
 - **F3. Concurrent same-family requests.**
   - Thread 1 and Thread 2 both call `_maybe_reset_mcp_cache(path_A)` with same config.
@@ -74,7 +75,7 @@ Additionally, `reset_mcp_tools_cache()` is redundant because `get_cached_mcp_too
 
 ### Scope Boundaries
 
-- **No per-family MCP caching.** DeerFlow's MCP tools cache remains a global singleton. Per-family MCP caching would require upstream changes to DeerFlow. This fix minimizes unnecessary resets; family switches still re-init.
+- **No per-family MCP caching.** DeerFlow's MCP tools cache remains a global singleton. Per-family MCP caching would require upstream changes to DeerFlow. This fix minimizes unnecessary resets; service-level family interleaving still triggers re-init, but this is transparent to individual users — each user belongs to one family, so their requests always hit the per-family tracking cache (zero resets).
 - **No harness upgrade.** Approach A (upgrading the harness rev) is deferred. The per-family tracking approach is self-contained and doesn't depend on upstream changes.
 - **`_maybe_reset_mcp_cache` is not removed.** It still serves a purpose: clearing the `ExtensionsConfig` singleton when a family's config changes. Without it, the singleton could serve stale MCP server configs.
 

@@ -130,11 +130,17 @@ def _get_semaphore() -> asyncio.Semaphore:
 # (each family saw the other's state as "changed"). Per-family tracking
 # ensures same-family repeated requests skip the reset entirely.
 #
-# Note: DeerFlow's MCP tools cache is still a global singleton — family
-# switches (A→B) still trigger re-initialization via get_cached_mcp_tools()'s
-# staleness check. We no longer call reset_mcp_tools_cache() eagerly, which
-# eliminates the "briefly empty tool list" window caused by tearing down
-# MCP sessions before re-initialization.
+# User model context: A user belongs to exactly one family (many-to-one).
+# For individual users, their requests always hit the per-family cache →
+# zero resets. The "family interleaving" scenario is service-level only —
+# the shared agent process handles different families concurrently, but
+# this is transparent to end users.
+#
+# Note: DeerFlow's MCP tools cache is still a global singleton — service-
+# level family interleaving still triggers re-initialization via
+# get_cached_mcp_tools()'s staleness check. We no longer call
+# reset_mcp_tools_cache() eagerly, which eliminates the "briefly empty
+# tool list" window caused by tearing down MCP sessions before re-init.
 _per_family_reset_state: dict[str, tuple | None] = {}
 
 
