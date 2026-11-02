@@ -108,6 +108,17 @@ subagents:
   max_concurrent: 3
   timeout_seconds: 900
 
+# 子代理并发限制（T15 — 防止 subagent 爆炸）
+subagent_limit:
+  enabled: false
+  max_concurrent: 3
+
+# 工具执行进度跟踪（T17 — ACTIVE → WARNED → BLOCKED 状态机）
+tool_progress:
+  enabled: false
+  warn_threshold_seconds: 30.0
+  hard_stop_threshold_seconds: 120.0
+
 # 流式超时
 stream:
   timeout_seconds: 120

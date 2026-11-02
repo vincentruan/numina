@@ -248,6 +248,66 @@ def _inject_summarization(config: dict[str, Any], memory_enabled: bool) -> None:
     }
 
 
+def _inject_subagent_limit(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+) -> None:
+    """Inject subagent concurrency limit config (in-place).
+
+    Enables ``SubagentLimitMiddleware`` when ``subagent_limit.enabled=True``.
+    The middleware caps concurrent subagent tasks per family, preventing
+    runaway task spawning.
+
+    Configuration source: ``ai_config["subagent_limit"]`` (optional).
+    When absent or ``enabled=False``, no injection occurs.
+    """
+    cfg = ai_config.get("subagent_limit")
+    if not cfg or not cfg.get("enabled", False):
+        return
+
+    from apps.agent.app.config import settings
+
+    config["subagent_limit"] = {
+        "enabled": True,
+        "max_concurrent": cfg.get(
+            "max_concurrent", settings.SUBAGENT_MAX_CONCURRENT
+        ),
+    }
+    logger.debug(
+        "[deerflow_config] subagent_limit injected: max_concurrent=%s",
+        config["subagent_limit"]["max_concurrent"],
+    )
+
+
+def _inject_tool_progress(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+) -> None:
+    """Inject tool execution progress tracking config (in-place).
+
+    Enables ``ToolProgressMiddleware`` when ``tool_progress.enabled=True``.
+    The middleware tracks tool execution duration through ACTIVE → WARNED →
+    BLOCKED states, emitting progress events for frontend display.
+
+    Configuration source: ``ai_config["tool_progress"]`` (optional).
+    When absent or ``enabled=False``, no injection occurs.
+    """
+    cfg = ai_config.get("tool_progress")
+    if not cfg or not cfg.get("enabled", False):
+        return
+
+    config["tool_progress"] = {
+        "enabled": True,
+        "warn_threshold_seconds": cfg.get("warn_threshold_seconds", 30.0),
+        "hard_stop_threshold_seconds": cfg.get("hard_stop_threshold_seconds", 120.0),
+    }
+    logger.debug(
+        "[deerflow_config] tool_progress injected: warn=%.1fs hard_stop=%.1fs",
+        config["tool_progress"]["warn_threshold_seconds"],
+        config["tool_progress"]["hard_stop_threshold_seconds"],
+    )
+
+
 def _inject_web_search(
     config: dict[str, Any],
     ai_config: dict[str, Any],
@@ -615,6 +675,8 @@ def _generate_temp_config(
     _inject_pii_redaction(config)
     _inject_guardrail(config, ai_config)
     _inject_summarization(config, memory_enabled)
+    _inject_subagent_limit(config, ai_config)
+    _inject_tool_progress(config, ai_config)
     web_search_mcp = ai_config.get("web_search_mcp_servers", [])
     _inject_web_search(config, ai_config, mcp_servers, web_search_mcp)
 
