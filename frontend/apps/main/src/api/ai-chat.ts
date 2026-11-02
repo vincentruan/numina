@@ -196,8 +196,11 @@ export async function* streamChatRun(
   } finally {
     // Consumer broke out early (gap recovery / error / user cancel) or the
     // loop finished: aborting releases the reader and closes the connection.
+    // The readerDone promise resolves once readSSEStream's finally releases
+    // its reader lock; await it (suppressing any AbortError) so the cleanup
+    // chain is explicit rather than floating as an unobserved promise.
     controller.abort()
-    void readerDone
+    await readerDone.catch(() => {})
   }
 }
 
