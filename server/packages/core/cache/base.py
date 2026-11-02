@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -71,7 +72,7 @@ class Cache(ABC):
         ...
 
     @abstractmethod
-    async def smembers(self, key: str) -> set[str]:
+    async def smembers(self, key: str) -> builtins.set[str]:
         """Return all members of the set at *key*."""
         ...
 

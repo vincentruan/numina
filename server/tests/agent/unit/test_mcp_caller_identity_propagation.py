@@ -176,11 +176,17 @@ class TestCallToolRoleReValidation:
 
     @pytest.mark.asyncio
     async def test_call_tool_uses_fresh_role_from_db(self):
-        """call_tool() uses user.role from _get_caller_user for role check, not self._caller_role."""
+        """call_tool() uses user.role from _get_caller_user for role check, not self._caller_role.
+
+        Uses child→owner: child is denied from all tools, owner is allowed.
+        If the code uses cached role (child), the call is denied.
+        If the code uses fresh role (owner), the call succeeds.
+        This definitively proves the fresh role is used.
+        """
         from apps.backend.app.services.mcp_session import MCPSession
 
-        # Session created with "member" role
-        session = MCPSession("100", "u1", "member")
+        # Session created with "child" role (denied from all tools)
+        session = MCPSession("100", "u1", "child")
         with (
             patch("apps.backend.app.services.mcp_session.SessionLocal") as mock_sl,
             patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_get,
@@ -189,14 +195,49 @@ class TestCallToolRoleReValidation:
             mock_db = MagicMock()
             mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
             mock_sl.return_value.__exit__ = MagicMock(return_value=False)
-            # But DB returns "owner" role (role changed mid-session)
+            # DB returns "owner" role (role changed mid-session)
             mock_get.return_value = MagicMock(id="u1", family_id="100", role="owner")
             mock_overview.return_value = {"net_worth": 100}
 
             result = await session.call_tool("get_family_overview", {})
             # Tool should succeed because fresh role is "owner" (has access)
+            # If cached role "child" were used, this would be permission_denied
             assert len(result) == 1
             assert "net_worth" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_role_downgrade_denied_with_audit(self):
+        """Role downgrade (owner→child) triggers permission_denied with audit callback.
+
+        Session created with "owner" role, DB returns "child" (denied from all tools).
+        If the code uses cached role (owner), the call would succeed.
+        If the code uses fresh role (child), the call is denied.
+        """
+        from apps.backend.app.services.mcp_session import MCPSession
+
+        audit_cb = MagicMock()
+        session = MCPSession("100", "u1", "owner", audit_callback=audit_cb)
+        with (
+            patch("apps.backend.app.services.mcp_session.SessionLocal") as mock_sl,
+            patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_get,
+        ):
+            mock_db = MagicMock()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            # DB returns "child" role — child is not in any tool's allowed_roles
+            mock_get.return_value = MagicMock(id="u1", family_id="100", role="child")
+
+            result = await session.call_tool("get_family_overview", {})
+
+            # Should return permission_denied because fresh role is "child"
+            assert len(result) == 1
+            assert "permission_denied" in result[0].text
+
+            # Audit callback should fire with permission_denied + role_not_allowed
+            audit_cb.assert_called_once()
+            cb_kwargs = audit_cb.call_args.kwargs
+            assert cb_kwargs["status"] == "permission_denied"
+            assert cb_kwargs["error_code"] == "role_not_allowed"
 
     @pytest.mark.asyncio
     async def test_deactivated_user_returns_permission_denied_with_audit(self):
@@ -226,3 +267,46 @@ class TestCallToolRoleReValidation:
             cb_kwargs = audit_cb.call_args.kwargs
             assert cb_kwargs["status"] == "permission_denied"
             assert cb_kwargs["error_code"] == "caller_invalid"
+
+
+class TestNotInAllowedToolsAudit:
+    """Verify audit callback fires on the not_in_allowed_tools whitelist gate."""
+
+    @pytest.mark.asyncio
+    async def test_not_in_allowed_tools_fires_audit_callback(self):
+        """external_token caller with restricted _allowed_tools triggers audit on whitelist miss.
+
+        `get_family_overview` permits the `external_token` role in the tool
+        registry, so the call passes the role gate and reaches the per-tool
+        whitelist gate — where it is not listed.
+        """
+        from apps.backend.app.services.mcp_session import MCPSession
+
+        audit_cb = MagicMock()
+        session = MCPSession(
+            "100", "u1", "external_token",
+            allowed_tools=["some_other_tool"],
+            audit_callback=audit_cb,
+        )
+        with (
+            patch("apps.backend.app.services.mcp_session.SessionLocal") as mock_sl,
+            patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_get,
+        ):
+            mock_db = MagicMock()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            mock_get.return_value = MagicMock(
+                id="u1", family_id="100", role="external_token",
+            )
+
+            result = await session.call_tool("get_family_overview", {})
+
+            # Should return permission_denied
+            assert len(result) == 1
+            assert "permission_denied" in result[0].text
+
+            # Audit callback should fire with not_in_allowed_tools
+            audit_cb.assert_called_once()
+            cb_kwargs = audit_cb.call_args.kwargs
+            assert cb_kwargs["status"] == "permission_denied"
+            assert cb_kwargs["error_code"] == "not_in_allowed_tools"

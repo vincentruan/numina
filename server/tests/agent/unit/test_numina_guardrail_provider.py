@@ -77,6 +77,48 @@ class TestNuminaGuardrailProvider:
         assert result.allowed is False
 
 
+class TestContextPassthrough:
+    """Tests for U2: guardrail context pass-through (caller_user_id, caller_role)."""
+
+    def test_check_tool_call_with_context_dict(self) -> None:
+        """check_tool_call with context dict returns valid GuardrailDecision without error."""
+        provider = NuminaGuardrailProvider()
+        context = {"caller_user_id": "u1", "caller_role": "member", "family_id": "100"}
+        result = provider.check_tool_call("get_assets", context=context)
+        assert result.allowed is True
+
+    def test_check_tool_call_with_context_none_backward_compat(self) -> None:
+        """check_tool_call with context=None still works (backward compat)."""
+        provider = NuminaGuardrailProvider()
+        result = provider.check_tool_call("get_assets", context=None)
+        assert result.allowed is True
+
+    def test_check_tool_call_with_tool_args_preserved(self) -> None:
+        """check_tool_call with tool_args does not raise (tool_args no longer deleted)."""
+        provider = NuminaGuardrailProvider()
+        result = provider.check_tool_call(
+            "get_assets",
+            tool_args={"category": "bank"},
+            context={"caller_user_id": "u1", "caller_role": "member"},
+        )
+        assert result.allowed is True
+
+    def test_check_internal_receives_context(self) -> None:
+        """_check_internal receives the context dict when passed through check_tool_call."""
+        provider = NuminaGuardrailProvider()
+        context = {"caller_user_id": "u1", "caller_role": "member"}
+
+        # _check_internal should accept context without error
+        result = provider._check_internal("get_assets", context=context)
+        assert result.allowed is True
+
+    def test_check_internal_context_none(self) -> None:
+        """_check_internal works with context=None (backward compat)."""
+        provider = NuminaGuardrailProvider()
+        result = provider._check_internal("get_assets", context=None)
+        assert result.allowed is True
+
+
 class TestFailClosedBehavior:
     """Tests for fail-closed/fail-open error handling."""
 

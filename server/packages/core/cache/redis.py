@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import builtins
 import json
-from typing import Any
+from collections.abc import Awaitable
+from typing import Any, cast
 
 import redis.asyncio as aioredis
 
@@ -47,7 +49,7 @@ class RedisCache(Cache):
         await self._client.delete(self._key(key))
 
     async def get_ttl(self, key: str) -> int | None:
-        ttl = await self._client.ttl(self._key(key))
+        ttl = await cast(Awaitable[int], self._client.ttl(self._key(key)))
         if ttl < 0:  # -1 = no TTL, -2 = key missing
             return None
         return ttl
@@ -61,40 +63,40 @@ class RedisCache(Cache):
             # INCRBY then atomically increments. If the key already exists, SET NX
             # is a no-op and the existing TTL is preserved (not reset).
             await self._client.set(rk, 0, ex=ttl, nx=True)
-        return await self._client.incrby(rk, amount)
+        return await cast(Awaitable[int], self._client.incrby(rk, amount))
 
     # --- Set ---
 
     async def sadd(self, key: str, *members: str, ttl: int | None = None) -> int:
         rk = self._key(key)
-        added = await self._client.sadd(rk, *members)
+        added = await cast(Awaitable[int], self._client.sadd(rk, *members))
         if ttl is not None:
             await self._client.expire(rk, ttl)
         return added
 
     async def sismember(self, key: str, member: str) -> bool:
-        return bool(await self._client.sismember(self._key(key), member))
+        return bool(await cast(Awaitable[int], self._client.sismember(self._key(key), member)))
 
-    async def smembers(self, key: str) -> set[str]:
-        result = await self._client.smembers(self._key(key))
+    async def smembers(self, key: str) -> builtins.set[str]:
+        result = await cast(Awaitable[builtins.set[str]], self._client.smembers(self._key(key)))
         return set(result) if result else set()
 
     async def srem(self, key: str, *members: str) -> int:
-        return await self._client.srem(self._key(key), *members)
+        return await cast(Awaitable[int], self._client.srem(self._key(key), *members))
 
     # --- List ---
 
     async def lpush(self, key: str, value: Any, *, ttl: int | None = None) -> int:
         rk = self._key(key)
         serialized = json.dumps(value)
-        length = await self._client.lpush(rk, serialized)
+        length = await cast(Awaitable[int], self._client.lpush(rk, serialized))
         if ttl is not None:
             await self._client.expire(rk, ttl)
         return length
 
     async def lrange(self, key: str, start: int, stop: int) -> list:
         rk = self._key(key)
-        raw = await self._client.lrange(rk, start, stop)
+        raw = await cast(Awaitable[list[str]], self._client.lrange(rk, start, stop))
         result = []
         for item in raw:
             try:
@@ -104,7 +106,7 @@ class RedisCache(Cache):
         return result
 
     async def ltrim(self, key: str, start: int, stop: int) -> None:
-        await self._client.ltrim(self._key(key), start, stop)
+        await cast(Awaitable[Any], self._client.ltrim(self._key(key), start, stop))
 
     # --- Key Management ---
 

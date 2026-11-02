@@ -14,7 +14,8 @@ Manages the lifecycle of:
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from collections.abc import Awaitable
+from typing import Any, cast
 
 from deerflow.runtime import RunManager, StreamBridge
 from fastapi import FastAPI, HTTPException, Request
@@ -152,8 +153,8 @@ async def get_stream_bridge(request: Request) -> StreamBridge:
             from redis.asyncio import Redis as AsyncRedis
 
             client = AsyncRedis.from_url(redis_url, decode_responses=True)
-            await client.ping()
-            await client.aclose()
+            await cast(Awaitable[Any], client.ping())
+            await cast(Awaitable[Any], client.aclose())
         except Exception as e:
             logger.exception("Redis unavailable for StreamBridge")
             raise HTTPException(
