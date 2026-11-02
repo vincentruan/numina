@@ -4,8 +4,8 @@
 # models 列表由 family_adapter_cache._generate_temp_config 动态注入，
 # 根据家庭的 ai_provider/ai_model_id/api_key 生成正确的 LangChain 类路径。
 
-# DeerFlow upstream config version (v2.1.0 = config_version 50)
-config_version: 50
+# DeerFlow upstream config version (v2.2.0 = config_version 62)
+config_version: 62
 
 # 检查点（对话状态持久化）
 checkpointer:
