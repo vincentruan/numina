@@ -1,6 +1,7 @@
 """PII 脱敏服务：统一入口，结构化数据 + 自由文本双路径。"""
 
 import re
+from typing import cast
 
 from apps.agent.core.desensitize import (
     desensitize_assets,
@@ -52,13 +53,13 @@ def _redact_bank_cards(text: str) -> tuple[str, list[str]]:
     log: list[str] = []
 
     def _replace_if_card(match: re.Match) -> str:
-        num = match.group()
+        num: str = match.group()
         if _luhn_check(num):
             log.append("free_text:银行卡号")
             return _REDACTED
         return num  # snowflake ID or other numeric — keep
 
-    text = _BANK_CARD_PATTERN.sub(_replace_if_card, text)
+    text = cast(str, _BANK_CARD_PATTERN.sub(_replace_if_card, text))
     return text, log
 
 

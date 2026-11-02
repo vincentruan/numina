@@ -57,7 +57,7 @@ class TestDynamicZeroOutboundHTTP:
     @pytest.fixture(autouse=True)
     def mock_caller_user(self):
         with patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_get:
-            mock_get.return_value = MagicMock(id="u1", family_id="100")
+            mock_get.return_value = MagicMock(id="u1", family_id="100", role="member")
             yield
 
     @pytest.fixture(autouse=True)
@@ -104,8 +104,11 @@ class TestDynamicZeroOutboundHTTP:
     async def test_permission_denied_path_zero_outbound_http(self, session):
         """Role check failure path also has zero outbound HTTP."""
         child_session = MCPSession("100", "u1", "child")
-        with patch("httpx.AsyncClient.send", side_effect=AssertionError("outbound HTTP!")), \
+        with patch(
+            "apps.backend.app.services.mcp_session._get_caller_user"
+        ) as mock_get, patch("httpx.AsyncClient.send", side_effect=AssertionError("outbound HTTP!")), \
              patch("httpx.Client.send", side_effect=AssertionError("outbound HTTP!")):
+            mock_get.return_value = MagicMock(id="u1", family_id="100", role="child")
             result = await child_session.call_tool("get_family_overview", {})
             assert "permission_denied" in result[0].text
 

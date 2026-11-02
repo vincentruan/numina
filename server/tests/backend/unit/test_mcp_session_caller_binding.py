@@ -116,7 +116,9 @@ class TestAuditLog:
             with patch(
                 "apps.backend.app.services.mcp_session._get_caller_user"
             ) as mock_get:
-                mock_get.return_value = MagicMock(id="u1", family_id="100")
+                mock_get.return_value = MagicMock(
+                    id="u1", family_id="100", role="member"
+                )
                 with patch(
                     "apps.backend.app.services.dashboard.get_overview"
                 ) as mock_overview:

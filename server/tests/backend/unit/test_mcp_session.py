@@ -71,7 +71,7 @@ async def test_get_family_overview_uses_bound_family_id(mock_db):
         with patch(
             "apps.backend.app.services.mcp_session._get_caller_user"
         ) as mock_user:
-            mock_user.return_value = MagicMock(id="u1", family_id="100")
+            mock_user.return_value = MagicMock(id="u1", family_id="100", role="member")
             with patch(
                 "apps.backend.app.services.dashboard.get_overview"
             ) as mock_get_overview:
@@ -89,7 +89,11 @@ async def test_child_role_cannot_use_batch_write_tools():
     tools = await session.list_tools()
     assert all(not t.name.startswith("import_") for t in tools)
     # And a direct call is rejected with permission_denied at the enforcement layer.
-    result = await session.call_tool("import_assets_batch", {"items": []})
+    with patch(
+        "apps.backend.app.services.mcp_session._get_caller_user"
+    ) as mock_get:
+        mock_get.return_value = MagicMock(id="u1", family_id="100", role="child")
+        result = await session.call_tool("import_assets_batch", {"items": []})
     payload = json.loads(result[0].text)
     assert payload["error"] == "permission_denied"
 
@@ -111,7 +115,7 @@ async def test_import_assets_batch_skips_unknown_category(mock_db):
         with patch(
             "apps.backend.app.services.mcp_session._get_caller_user"
         ) as mock_user:
-            mock_user.return_value = MagicMock(id="u1", family_id="100")
+            mock_user.return_value = MagicMock(id="u1", family_id="100", role="member")
             result = await session.call_tool(
                 "import_assets_batch",
                 {
@@ -151,7 +155,7 @@ async def test_import_credit_cards_batch_applies_category_override(mock_db):
         with patch(
             "apps.backend.app.services.mcp_session._get_caller_user"
         ) as mock_user:
-            mock_user.return_value = MagicMock(id="u1", family_id="100")
+            mock_user.return_value = MagicMock(id="u1", family_id="100", role="member")
             with patch(
                 "apps.backend.app.services.liability.create_liability",
                 side_effect=_fake_create_liability,

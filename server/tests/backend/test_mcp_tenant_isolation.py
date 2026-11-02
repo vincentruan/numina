@@ -20,7 +20,7 @@ async def test_family_a_session_only_sees_own_data():
         mock_session_local.return_value.__exit__ = MagicMock(return_value=False)
 
         with patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_user:
-            mock_user.return_value = MagicMock(id="u1", family_id="100")
+            mock_user.return_value = MagicMock(id="u1", family_id="100", role="member")
 
             with patch("apps.backend.app.services.dashboard.get_overview") as mock_overview:
                 mock_overview.return_value = {"net_worth": 500000, "family_id": "100"}
@@ -43,7 +43,7 @@ async def test_two_families_get_isolated_data():
         mock_session_local.return_value.__exit__ = MagicMock(return_value=False)
 
         with patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_user:
-            mock_user.side_effect = lambda fid, uid, db: MagicMock(id=uid, family_id=fid)
+            mock_user.side_effect = lambda fid, uid, db: MagicMock(id=uid, family_id=fid, role="member")
 
             with patch("apps.backend.app.services.dashboard.get_overview") as mock_overview:
                 def fake_overview(db, user):
@@ -72,7 +72,7 @@ async def test_llm_cannot_escalate_via_family_id_arg():
         mock_session_local.return_value.__exit__ = MagicMock(return_value=False)
 
         with patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_user:
-            mock_user.return_value = MagicMock(id="u1", family_id="100")
+            mock_user.return_value = MagicMock(id="u1", family_id="100", role="member")
 
             with patch("apps.backend.app.services.asset.list_assets_for_family") as mock_list:
                 mock_list.return_value = [{"id": "a1", "name": "car"}]

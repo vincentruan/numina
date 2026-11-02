@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import time
 from typing import Any
 
@@ -95,7 +96,7 @@ class MemoryCache(Cache):
             return False
         return member in s
 
-    async def smembers(self, key: str) -> set[str]:
+    async def smembers(self, key: str) -> builtins.set[str]:
         if self._is_expired(key):
             return set()
         s = self._sets.get(key)

@@ -108,15 +108,19 @@ class NuminaGuardrailProvider:
         Args:
             tool_name: Name of the tool being called
             tool_args: Tool arguments (reserved for future arg-level checks)
-            context: Execution context (family_id, thread_id, etc.)
+            context: Execution context (family_id, caller_user_id, caller_role, etc.)
 
         Returns:
             GuardrailDecision with allowed=True/False and reason
         """
-        del tool_args  # unused — reserved for future argument-level checks
-        del context  # unused — reserved for future context-aware checks
+        if context:
+            logger.debug(
+                "[guardrail] context: caller_user_id=%s caller_role=%s",
+                context.get("caller_user_id"),
+                context.get("caller_role"),
+            )
         try:
-            return self._check_internal(tool_name)
+            return self._check_internal(tool_name, context=context)
         except Exception as e:
             # Fail-closed: deny on error (default)
             # Fail-open: allow on error (explicit opt-in)
@@ -138,7 +142,7 @@ class NuminaGuardrailProvider:
                 )
                 return GuardrailDecision(allowed=True, reason="")
 
-    def _check_internal(self, tool_name: str) -> GuardrailDecision:
+    def _check_internal(self, tool_name: str, context: dict[str, Any] | None = None) -> GuardrailDecision:
         """Internal check logic — pure function, no exception handling.
 
         Priority order:
