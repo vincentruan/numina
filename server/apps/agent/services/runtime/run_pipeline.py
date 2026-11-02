@@ -16,6 +16,7 @@ Deletion test: removing this module would force every runner to re-implement
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from collections.abc import Callable
 from typing import Any
@@ -37,6 +38,7 @@ from apps.agent.services.message_classifier import (
 )
 from apps.agent.services.orchestrator import _select_stream_run_provider
 from apps.agent.services.pii_redactor import pii_redactor
+from apps.agent.services.run_event_store import _get_event_store
 from packages.core.logging import get_logger
 
 from .gc import schedule_run_cleanup
@@ -883,6 +885,15 @@ class RunPipeline:
                     content = data.get("content")
                     if content:
                         self.ai_response_parts.append(content)
+                        # T12: Record LLM AI response event.
+                        with contextlib.suppress(Exception):
+                            _get_event_store().record_raw(
+                                "llm.ai.response",
+                                run_id=self.run_id,
+                                thread_id=self.thread_id,
+                                family_id=self.family_id,
+                                data={"content_preview": content[:200]},
+                            )
                     tool_calls = data.get("tool_calls")
                     if tool_calls:
                         for tc in extract_tool_calls(data):
@@ -922,6 +933,19 @@ class RunPipeline:
                                 "content": content,
                             },
                         )
+                        # T12: Record LLM tool result event.
+                        with contextlib.suppress(Exception):
+                            _get_event_store().record_raw(
+                                "llm.tool.result",
+                                run_id=self.run_id,
+                                thread_id=self.thread_id,
+                                family_id=self.family_id,
+                                data={
+                                    "tool_call_id": tool_call_id,
+                                    "tool_name": tool_name,
+                                    "content_preview": (content[:200] if isinstance(content, str) else ""),
+                                },
+                            )
                 else:
                     await self.bridge.publish(self.run_id, sse_type, data)
             else:

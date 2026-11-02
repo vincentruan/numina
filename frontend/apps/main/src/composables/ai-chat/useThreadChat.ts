@@ -10,6 +10,7 @@ import {
   getThreadGoal,
   setThreadGoal,
   clearThreadGoal,
+  streamChatRun,
 } from '@/api/ai-chat'
 import type { GoalState } from '@/api/ai-chat'
 import { submitMessageFeedback, getSessionFeedback } from '@/api/sessions'
@@ -37,12 +38,6 @@ function genId(prefix: string): string {
     ? crypto.randomUUID()
     : nanoid()
   return `${prefix}-${uuid}`
-}
-
-/** A single chunk yielded by client.runs.stream() in legacy SSE mode. */
-interface StreamChunk {
-  event: string
-  data?: unknown
 }
 
 /** DeerFlow messages-tuple event data shape (AI text chunk). */
@@ -1327,6 +1322,9 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // T7: Gap recovery tracking — max 5 consecutive auto-recoveries per DeerFlow protocol.
     let gapRecoveries = 0
     let gapDetected = false
+    // Latest SSE `id:` seen this turn, sent as `Last-Event-ID` on retry so the
+    // backend replays buffered events that arrived while we were disconnected.
+    let lastEventId = ''
 
     while (!streamSucceeded && retryCount <= SSE_MAX_RETRIES) {
       streamEnded = false
@@ -1354,8 +1352,6 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       }, STREAM_TIMEOUT_MS)
 
       try {
-        const client = getClient()
-
         // Idempotent retry (#2): if we have already streamed content in a prior
         // attempt (partial progress observed server-side), do NOT re-send the
         // user message — that would append a duplicate and re-execute tools.
@@ -1419,7 +1415,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         if (Object.keys(mergedKwargs).length > 0) {
           inputMessage.additional_kwargs = mergedKwargs
         }
-        const stream = client.runs.stream(currentThreadId as string, 'agent', {
+        const stream = streamChatRun({
+          threadId: currentThreadId as string,
           // T7: After gap recovery, resume from checkpoint (input:null) instead
           // of re-sending the user message. hasPriorProgress also uses null for
           // the same reason (already sent in a prior attempt).
@@ -1429,7 +1426,14 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           // and there is no handler branch for it; requesting it advertises an
           // unfulfilled contract.
           streamMode: ['messages-tuple', 'values', 'custom'],
-          ...(Object.keys(configurable).length > 0 ? { config: { configurable } } : {}),
+          configurable,
+          // Reconnect replay: send the last SSE id we saw so the backend resumes
+          // from the buffered event after it instead of dropping the frames that
+          // arrived while we were disconnected.
+          lastEventId: lastEventId || undefined,
+          onEventId: (id) => {
+            lastEventId = id
+          },
         })
 
         // Always mark the current turn's user message as 'sent' once the stream
@@ -1448,7 +1452,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           planningSteps.value = []
         }
 
-        for await (const chunk of stream as AsyncIterable<StreamChunk>) {
+        for await (const chunk of stream) {
           if (chunk.event === 'metadata' && chunk.data) {
             const metaData = chunk.data as { run_id?: string }
             if (metaData.run_id) {

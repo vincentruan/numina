@@ -24,6 +24,7 @@ from typing import Any
 from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 
 from apps.agent.core.backend_client import BackendClient
+from apps.agent.services.run_event_store import _get_event_store
 from packages.core import get_path_manager
 from packages.core.logging import get_logger
 
@@ -356,11 +357,24 @@ async def run_agent(
             _heartbeat_loop(task_id, family_id, stop_event=heartbeat_stop)
         )
 
+    # T12: Emit run.start event for structured event persistence.
+    try:
+        _get_event_store().record_raw(
+            "run.start",
+            run_id=record.run_id,
+            thread_id=thread_id,
+            family_id=family_id,
+            data={"app": record.metadata.get("app", "numina") if record.metadata else "numina"},
+        )
+    except Exception:
+        logger.warning("[run_agent] failed to record run.start event", exc_info=True)
+
     # Resolved-3 blocker A reset (P0, ce-code-review 2026-07-19): the family_id
     # + extensions_config_path ContextVars are coroutine-scoped and would leak
     # into a subsequent run if this coroutine is reused (shared worker task /
     # executor thread). Mirror the active-skill reset pattern: set above, reset
     # in a finally that wraps all dispatch branches + any exception path.
+    run_status = "success"
     try:
         app = record.metadata.get("app", "numina") if record.metadata else "numina"
 
@@ -418,7 +432,19 @@ async def run_agent(
             await bridge.publish(record.run_id, "end", {"status": "error"})
         except Exception:
             logger.exception("[run_agent] failed to publish error frame")
+        run_status = "error"
     finally:
+        # T12: Emit run.end event for structured event persistence.
+        try:
+            _get_event_store().record_raw(
+                "run.end",
+                run_id=record.run_id,
+                thread_id=thread_id,
+                family_id=family_id,
+                data={"status": run_status},
+            )
+        except Exception:
+            logger.warning("[run_agent] failed to record run.end event", exc_info=True)
         # U12: Stop the heartbeat loop and await it (best-effort).
         if heartbeat_stop is not None:
             heartbeat_stop.set()

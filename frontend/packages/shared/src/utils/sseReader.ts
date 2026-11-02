@@ -18,7 +18,7 @@
  * are required; the rest are optional.
  */
 export interface SSEStreamHandlers {
-  /** messages / values frames (LangGraph wire format). */
+  /** messages / values / messages-tuple frames (LangGraph wire format). */
   onMessage: (event: string, data: unknown) => void
   /** custom frames (skill results, reasoning deltas, tool events). */
   onCustom: (data: unknown) => void
@@ -33,6 +33,15 @@ export interface SSEStreamHandlers {
   onMetadata?: (data: unknown) => void
   /** gap frames (stream replay cursor beyond retained buffer).  Default: no-op. */
   onGap?: (data: unknown) => void
+  /**
+   * SSE ``id:`` field, invoked each time a frame's ``id:`` line is parsed.
+   * The value is the stream's persistent "last event ID" — send it as the
+   * ``Last-Event-ID`` header on reconnect to replay what was missed.
+   * Per the SSE spec the id line is processed in wire order; the Numina
+   * backend emits ``event:`` -> ``data:`` -> ``id:``, so this fires after
+   * the frame's data has been dispatched.  Default: no-op.
+   */
+  onEventId?: (eventId: string) => void
 }
 
 /**
@@ -89,6 +98,15 @@ export async function readSSEStream(
           currentEvent = line.slice(6).trim()
           continue
         }
+        if (line.startsWith('id:')) {
+          // Wire order: the backend emits event -> data -> id, so this runs
+          // after the frame's data was dispatched. The SSE spec makes the id
+          // persistent across frames; surface every one so a reconnect can
+          // resume from the latest frame rather than replaying from an earlier one.
+          const id = line.slice(3).trim()
+          if (id) handlers.onEventId?.(id)
+          continue
+        }
         if (!line.startsWith('data:')) continue
         const dataStr = line.slice(5).trim()
         // Skip empty lines, [DONE] sentinels, and null sentinels.
@@ -114,6 +132,7 @@ export async function readSSEStream(
               handlers.onMetadata?.(data)
               break
             case 'messages':
+            case 'messages-tuple':
             case 'values':
               handlers.onMessage(event, data)
               break

@@ -18,6 +18,7 @@ vi.mock('@/api/ai-chat', () => ({
   createThread: vi.fn(),
   deleteThread: vi.fn(),
   compactThread: vi.fn(),
+  streamChatRun: vi.fn(),
 }))
 
 // Mock the sessions API module (used by feedback hydration/submit)
@@ -39,9 +40,9 @@ describe('useThreadChat - clarification artifact extraction', () => {
   })
 
   /**
-   * Helper: build a fake SSE stream (AsyncIterable<StreamChunk>) and feed it
-   * through the composable's sendMessage path. We mock getClient().runs.stream
-   * to yield the supplied chunks, then inspect messages after the stream ends.
+   * Helper: build a fake SSE stream (AsyncIterable<ChatStreamChunk>) and feed
+   * it through the composable's sendMessage path. We mock streamChatRun to
+   * yield the supplied chunks, then inspect messages after the stream ends.
    */
   async function runWithChunks(
     chunks: Array<{ event: string; data?: unknown }>,
@@ -54,11 +55,9 @@ describe('useThreadChat - clarification artifact extraction', () => {
       },
     }
 
-    const mockRunsStream = vi.fn().mockReturnValue(mockStream)
-    const { getClient } = await import('@/api/ai-chat')
-    vi.mocked(getClient).mockReturnValue({
-      runs: { stream: mockRunsStream },
-    } as unknown as ReturnType<typeof getClient>)
+    const mockStreamChatRun = vi.fn().mockReturnValue(mockStream)
+    const { streamChatRun } = await import('@/api/ai-chat')
+    vi.mocked(streamChatRun).mockImplementation(mockStreamChatRun)
 
     const { useThreadChat } = await import('../useThreadChat')
     const chat = useThreadChat()
