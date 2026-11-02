@@ -1,6 +1,6 @@
 """Runtime compatibility patches for the pinned DeerFlow harness.
 
-The pinned ``deerflow-harness`` (rev ``6556d09d``, version 2.1.0) upstream-fixed
+The pinned ``deerflow-harness`` (rev ``b3f23326``, harness v2.2.0) upstream-fixed
 several bugs this module used to patch. The following overrides were therefore
 removed as strictly weaker duplicates:
 
@@ -24,6 +24,14 @@ What remains here is functionality the upstream harness does NOT provide:
    ``ClarificationMiddleware`` (always last in ``build_middlewares``), which
    intercepts the tool call and emits a ``human_input`` artifact - no numina
    override needed.
+
+   NOTE: upstream v2.2.0 removed ``filter_tools_by_skill_allowed_tools``
+   and ``ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES`` (the tool-policy module was
+   replaced by GuardrailMiddleware-based enforcement). Numina still filters
+   at ``get_available_tools`` time so the LLM never sees disallowed tools
+   (reducing prompt size and confused tool calls), with GuardrailMiddleware
+   as defence-in-depth. The filter is now implemented inline using
+   ``Skill.allowed_tools`` directly.
 2. (Removed) ``_apply_subagent_contextvar_patch`` — confirmed redundant after
    thorough investigation (2026-08-07). DeerFlow 6556d09d's
    ``_submit_to_isolated_loop_in_context`` wraps
@@ -258,6 +266,21 @@ def _apply_original_user_content_patch() -> None:
     )
 
 
+# Tools that remain visible to the LLM regardless of the active skill's
+# allowed-tools declaration. Upstream v2.2.0 removed the
+# ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES constant (tool-policy module replaced
+# by GuardrailMiddleware-based enforcement). Numina keeps a small inline
+# always-available set so DeerFlow builtins that the skill frontmatter does
+# not (and need not) enumerate — currently ``task`` for subagent delegation —
+# are not silently stripped. Everything else is gated by the skill's
+# allowed-tools; GuardrailMiddleware provides defence-in-depth at call time.
+_NUMINA_ALWAYS_AVAILABLE_TOOLS: frozenset[str] = frozenset(
+    {
+        "task",  # subagent delegation (builtin; enabled per-family via config)
+    }
+)
+
+
 def _apply_active_skill_tool_filter(tools):
     """Filter tools to the active skill's allowed-tools whitelist.
 
@@ -265,9 +288,14 @@ def _apply_active_skill_tool_filter(tools):
     trigger-based feature dispatch, which loads tools via ``enable_tools``) →
     return tools unchanged (legacy allow-all). Active skill with no
     allowed-tools declaration (``allowed_tools is None``) → the filter returns
-    all tools (``allowed_tool_names_for_skills`` returns None for undeclared
-    skills, meaning allow-all). Only skills that declare ``allowed-tools`` (even
+    all tools (allow-all). Only skills that declare ``allowed-tools`` (even
     ``[]``) restrict the tool set.
+
+    Upstream v2.2.0 removed ``filter_tools_by_skill_allowed_tools`` and
+    ``ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES`` (tool-policy module replaced by
+    GuardrailMiddleware). We implement the filter inline: a tool survives
+    when its name is in the active skill's ``allowed_tools`` tuple OR in the
+    Numina always-available set (see ``_NUMINA_ALWAYS_AVAILABLE_TOOLS``).
 
     Security: ``UserScopedSkillStorage`` is used instead of bare
     ``LocalSkillStorage`` so custom skills stored under
@@ -290,27 +318,11 @@ def _apply_active_skill_tool_filter(tools):
         from deerflow.skills.storage.user_scoped_skill_storage import (
             UserScopedSkillStorage,
         )
-        from deerflow.skills.tool_policy import (
-            ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES,
-            filter_tools_by_skill_allowed_tools,
-        )
 
         from apps.agent.services.runtime.sandbox_provider import (
             get_family_sandbox_context,
         )
 
-        # review_skill_package is a DeerFlow built-in that only works inside
-        # DeerFlow's own workspace (requires .skill archives or SKILL.md dirs).
-        # In the numina agent workspace it always fails with ValueError and
-        # causes the LLM to loop retrying — exclude it from the always-available
-        # set so the chat skill never sees it.
-        _numina_always_available = ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES - {
-            "review_skill_package",
-        }
-        # Use UserScopedSkillStorage so custom skills under
-        # users/{family_id}/skills/custom/ are discoverable. Bare
-        # LocalSkillStorage() scans only the builtin directory and fails to
-        # find custom skills — the fallback returns all tools unfiltered.
         family_id = get_family_sandbox_context()
         if not family_id:
             logger.warning(
@@ -328,11 +340,14 @@ def _apply_active_skill_tool_filter(tools):
                 family_id,
             )
             return tools
-        filtered = filter_tools_by_skill_allowed_tools(
-            tools,
-            active_skills,
-            always_allowed_tool_names=_numina_always_available,
-        )
+        active_skill = active_skills[0]
+        # Skill.allowed_tools is ``tuple[str, ...] | None``. None = undeclared →
+        # allow-all. Empty tuple = explicit empty → nothing passes the skill
+        # filter (always-available tools still survive).
+        if active_skill.allowed_tools is None:
+            return tools
+        allowed_names = frozenset(active_skill.allowed_tools) | _NUMINA_ALWAYS_AVAILABLE_TOOLS
+        filtered = [t for t in tools if t.name in allowed_names]
         if len(filtered) < len(tools):
             logger.debug(
                 "[sync_tool_patch] filtered tools %d -> %d for active skill %r",

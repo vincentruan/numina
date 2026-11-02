@@ -926,13 +926,13 @@ wheels = [
 
 [[package]]
 name = "deerflow-extension-api"
-version = "0.2.4"
-source = { git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fextension-api&rev=8a3a309d#8a3a309d1ce8bac8418251be29d4e4297a20c5eb" }
+version = "0.2.9"
+source = { git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fextension-api&rev=b3f23326a545458887f8fd77e2bad3396b0c22d4#b3f23326a545458887f8fd77e2bad3396b0c22d4" }
 
 [[package]]
 name = "deerflow-harness"
-version = "2.1.0"
-source = { git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fharness&rev=8a3a309d#8a3a309d1ce8bac8418251be29d4e4297a20c5eb" }
+version = "2.3.0.dev0"
+source = { git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fharness&rev=b3f23326a545458887f8fd77e2bad3396b0c22d4#b3f23326a545458887f8fd77e2bad3396b0c22d4" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "agent-sandbox" },
@@ -973,6 +973,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "readabilipy" },
+    { name = "regex" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "tavily-python" },
     { name = "tiktoken" },
@@ -2897,7 +2898,7 @@ requires-dist = [
     { name = "bcrypt", marker = "extra == 'backend'", specifier = ">=4.0.0" },
     { name = "cryptography", marker = "extra == 'agent'", specifier = ">=42.0.0" },
     { name = "cryptography", marker = "extra == 'worker'", specifier = ">=44.0.0" },
-    { name = "deerflow-harness", marker = "extra == 'agent'", git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fharness&rev=8a3a309d" },
+    { name = "deerflow-harness", marker = "extra == 'agent'", git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fharness&rev=b3f23326a545458887f8fd77e2bad3396b0c22d4" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "filelock", specifier = ">=3.29.0" },
     { name = "filelock", marker = "extra == 'backend'", specifier = ">=3.13.0" },
