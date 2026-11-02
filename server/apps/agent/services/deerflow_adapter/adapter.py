@@ -118,16 +118,24 @@ def _get_semaphore() -> asyncio.Semaphore:
 
 
 # ---------------------------------------------------------------------------
-# MCP cache optimization (T4) + extensions_config_path resolution (T2)
+# MCP cache optimization (T11: per-family race fix)
 # ---------------------------------------------------------------------------
 
-# Tracks the last-reset state for MCP cache optimization.
-# (extensions_config_path, content_signature) — only reset when changed.
-# Process-global: under concurrent multi-family requests, families with
-# different configs will alternate resets. This is inherent to DeerFlow's
-# global MCP cache singleton. The optimization reduces resets from
-# "every request" to "every config change".
-_last_reset_state: tuple[str | None, tuple | None] | None = None
+# Per-family content-signature tracking for MCP cache reset optimization.
+# Keyed by extensions_config_path; values are the last-seen content signature
+# tuples from DeerFlow's ``_get_config_signature`` (mtime, size, sha256).
+#
+# T11 fix: replaces the former process-global ``_last_reset_state`` tuple
+# which caused alternating resets under concurrent multi-family requests
+# (each family saw the other's state as "changed"). Per-family tracking
+# ensures same-family repeated requests skip the reset entirely.
+#
+# Note: DeerFlow's MCP tools cache is still a global singleton — family
+# switches (A→B) still trigger re-initialization via get_cached_mcp_tools()'s
+# staleness check. We no longer call reset_mcp_tools_cache() eagerly, which
+# eliminates the "briefly empty tool list" window caused by tearing down
+# MCP sessions before re-initialization.
+_per_family_reset_state: dict[str, tuple | None] = {}
 
 
 def _resolve_extensions_config_path(config_path: str | None) -> str | None:
@@ -146,52 +154,37 @@ def _resolve_extensions_config_path(config_path: str | None) -> str | None:
 
 
 def _maybe_reset_mcp_cache(extensions_path: str) -> None:
-    """Reset MCP cache only when the extensions config changed.
+    """Reset MCP extensions config only when a family's config changed.
 
-    Avoids tearing down MCP sessions on every ``_produce()`` entry when the
-    config file is unchanged.  Uses DeerFlow's own content-signature approach
-    (``path``, ``mtime``, ``size``, ``sha256``) — the same mechanism as
-    ``deerflow.mcp.cache._is_cache_stale``.
+    T11: per-family signature tracking replaces the former process-global
+    ``_last_reset_state`` to prevent alternating resets under concurrent
+    multi-family requests.
 
-    Risk: ``_last_reset_state`` is process-global.  Under concurrent
-    multi-family requests with different config paths, two families will
-    alternate resets (each sees the other's state as "changed").  This is
-    inherent to DeerFlow's global singleton — unavoidable without per-family
-    MCP caching.  The optimization still helps repeated requests from the
-    same family (the common case for interactive chat).
+    Only calls ``reset_extensions_config()`` (clears the parsed config
+    singleton). Does NOT call ``reset_mcp_tools_cache()`` — the MCP tools
+    cache lifecycle is managed by ``get_cached_mcp_tools()._is_cache_stale()``
+    which detects config changes via the ContextVar-resolved path
+    (``sync_tool_patch.py:_apply_extensions_config_path_patch``).
     """
-    global _last_reset_state
     try:
         from pathlib import Path
 
+        from deerflow.config.extensions_config import reset_extensions_config
         from deerflow.mcp.cache import _get_config_signature
     except (ImportError, AttributeError):
-        # Signature tracking unavailable — skip optimization, always reset.
-        try:
-            from deerflow.config.extensions_config import reset_extensions_config
-            from deerflow.mcp.cache import reset_mcp_tools_cache
-
-            reset_mcp_tools_cache()
-            reset_extensions_config()
-        except (ImportError, AttributeError):
-            pass
+        # Signature tracking or reset unavailable — skip.
         return
 
     sig = _get_config_signature(Path(extensions_path))
-    current_state: tuple[str | None, tuple | None] = (extensions_path, sig)
 
-    if current_state == _last_reset_state:
-        return  # Config unchanged — skip expensive reset.
+    # Fast path: same family, same config → skip entirely.
+    if _per_family_reset_state.get(extensions_path) == sig:
+        return
 
-    try:
-        from deerflow.config.extensions_config import reset_extensions_config
-        from deerflow.mcp.cache import reset_mcp_tools_cache
-
-        reset_mcp_tools_cache()
-        reset_extensions_config()
-        _last_reset_state = current_state
-    except ImportError:
-        pass
+    # Config changed for this family (or first time) → clear ExtensionsConfig
+    # singleton so initialize_mcp_tools() loads fresh MCP server configs.
+    reset_extensions_config()
+    _per_family_reset_state[extensions_path] = sig
 
 
 class DeerFlowAdapter:
