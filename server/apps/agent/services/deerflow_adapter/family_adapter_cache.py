@@ -308,6 +308,47 @@ def _inject_tool_progress(
     )
 
 
+def _inject_tool_search(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+) -> None:
+    """Inject deferred MCP tool pipeline config (in-place).
+
+    When the family's MCP server count meets or exceeds
+    ``tool_search.mcp_server_threshold`` (default: 3), the DeerFlow harness
+    defers MCP tool schemas — only tool names are bound to the model;
+    full schemas are discovered on demand via the ``tool_search`` builtin.
+
+    Precedence: explicit per-family ``ai_config.tool_search.enabled``
+    overrides the threshold check.  The threshold check only fires when
+    the explicit flag is absent (``None``).
+    """
+    ts_config = config.get("tool_search", {})
+    ai_ts = ai_config.get("tool_search", {})
+
+    threshold = ai_ts.get("mcp_server_threshold") or ts_config.get(
+        "mcp_server_threshold", 3
+    )
+    explicit_enabled = ai_ts.get("enabled")  # None | True | False
+
+    if explicit_enabled is not None:
+        enabled = bool(explicit_enabled)
+    else:
+        mcp_count = len(config.get("mcp_servers") or [])
+        enabled = mcp_count >= threshold
+
+    config.setdefault("tool_search", {})
+    config["tool_search"]["enabled"] = enabled
+    config["tool_search"]["mcp_server_threshold"] = threshold
+
+    logger.debug(
+        "[deerflow_config] tool_search resolved: enabled=%s (mcp_servers=%d, threshold=%d)",
+        enabled,
+        len(config.get("mcp_servers") or []),
+        threshold,
+    )
+
+
 def _build_runtime_middlewares(
     ai_config: dict[str, Any],
     family_id: str,
@@ -741,6 +782,7 @@ def _generate_temp_config(
     _inject_summarization(config, memory_enabled)
     _inject_subagent_limit(config, ai_config)
     _inject_tool_progress(config, ai_config)
+    _inject_tool_search(config, ai_config)
     web_search_mcp = ai_config.get("web_search_mcp_servers", [])
     _inject_web_search(config, ai_config, mcp_servers, web_search_mcp)
 

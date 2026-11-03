@@ -119,6 +119,13 @@ tool_progress:
   warn_threshold_seconds: 30.0
   hard_stop_threshold_seconds: 120.0
 
+# 延迟 MCP 工具 schema 提升（T24 — 条件启用 tool_search）
+# 当 MCP server 数量 >= mcp_server_threshold 时自动启用，
+# 或按家庭 ai_config.tool_search.enabled 显式覆盖。
+tool_search:
+  enabled: false
+  mcp_server_threshold: 3
+
 # 流式超时
 stream:
   timeout_seconds: 120
