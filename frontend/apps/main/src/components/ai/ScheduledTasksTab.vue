@@ -242,9 +242,11 @@ function statusLabel(status: string): string {
 function describeCron(expression: string): string {
   const parts = expression.trim().split(/\s+/)
   if (parts.length !== 5) return expression
-  const [minute, hour, , , dow] = parts
+  const [minute, hour, dom, month, dow] = parts
   const time = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
-  if (hour === '*' || minute === '*') return t('scheduledTasks.freqCustomDesc')
+  if (hour === '*' || minute === '*' || dom !== '*' || month !== '*') {
+    return t('scheduledTasks.freqCustomDesc')
+  }
   if (dow === '*') return t('scheduledTasks.freqDailyAt', { time })
   if (dow === '0' || dow === '7') return t('scheduledTasks.freqWeeklyAt', { time })
   return t('scheduledTasks.freqCustomDesc')
@@ -395,7 +397,9 @@ async function onDelete(task: ScheduledTask) {
 }
 
 onMounted(async () => {
-  await load()
+  if (isOwner) {
+    await load()
+  }
   loading.value = false
 })
 </script>

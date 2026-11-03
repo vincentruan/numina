@@ -1462,6 +1462,7 @@ async def execute_scheduled_task(
 
     Returns execution result (triggered count, skill_id).
     """
+    from packages.db.models.family import Family
     from packages.db.models.scheduled_task import ScheduledTask
 
     task = db.query(ScheduledTask).filter(ScheduledTask.id == payload.task_id).first()
@@ -1472,6 +1473,10 @@ async def execute_scheduled_task(
 
     skill_id = task.skill_id
     family_id = task.family_id
+
+    family = db.query(Family).filter(Family.id == family_id).first()
+    if not family or not family.ai_enabled:
+        raise AppError(ErrorCode.AI_NOT_ENABLED)
 
     owner = (
         db.query(User)
@@ -1514,7 +1519,7 @@ async def _execute_asset_report(db: Session, family_id: int, owner: User) -> int
     )
 
     agent_client = AgentClient(family_id, owner.id, timeout=30.0)
-    await agent_client.post(
+    response = await agent_client.post(
         f"/internal/gateway/runs/asset-report/{session.id}",
         json={
             "family_id": str(family_id),
@@ -1523,6 +1528,11 @@ async def _execute_asset_report(db: Session, family_id: int, owner: User) -> int
             "on_disconnect": "continue",
         },
     )
+    if response.status_code >= 400:
+        raise AppError(
+            ErrorCode.SCHEDULED_TASK_EXECUTE_FAILED,
+            details=f"agent gateway returned {response.status_code}",
+        )
     logger.info("[scheduled-task] triggered asset-report family=%s", family_id)
     return 1
 
@@ -1551,6 +1561,7 @@ async def _execute_literacy_report(db: Session, family_id: int, owner: User) -> 
 
     week_start = _sunday_of(date.today())
     triggered = 0
+    failures = 0
 
     for child in children:
         try:
@@ -1569,6 +1580,8 @@ async def _execute_literacy_report(db: Session, family_id: int, owner: User) -> 
                     child.id,
                     family_id,
                 )
+            else:
+                failures += 1
         except Exception as e:
             logger.warning(
                 "[scheduled-task] literacy-report failed child=%s family=%s err=%s",
@@ -1576,5 +1589,12 @@ async def _execute_literacy_report(db: Session, family_id: int, owner: User) -> 
                 family_id,
                 e,
             )
+            failures += 1
+
+    if triggered == 0 and failures > 0:
+        raise AppError(
+            ErrorCode.SCHEDULED_TASK_EXECUTE_FAILED,
+            details=f"literacy-report: all {failures} child dispatch(es) failed",
+        )
 
     return triggered

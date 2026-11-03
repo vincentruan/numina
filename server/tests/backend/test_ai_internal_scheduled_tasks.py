@@ -34,7 +34,7 @@ def _seed_task(db):
     from apps.backend.app.models.family import Family
     from apps.backend.app.models.user import User
 
-    family = Family(id=1001, name="Test", created_by=2001)
+    family = Family(id=1001, name="Test", created_by=2001, ai_enabled=True)
     db.add(family)
     db.flush()
 
@@ -68,11 +68,14 @@ class TestExecuteScheduledTask:
     def test_valid_asset_report_task_triggers_agent(self, client, _seed_task):
         task = _seed_task["task"]
 
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+
         with patch(
             "apps.backend.app.services.agent_client.AgentClient"
         ) as mock_client_cls:
             mock_client = AsyncMock()
-            mock_client.post = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
             mock_client_cls.return_value = mock_client
 
             response = client.post(
@@ -137,11 +140,14 @@ class TestExecuteScheduledTask:
 
         # Even if the caller tries to inject a different skill_id, the endpoint
         # must read it from the DB row, not the request body.
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+
         with patch(
             "apps.backend.app.services.agent_client.AgentClient"
         ) as mock_client_cls:
             mock_client = AsyncMock()
-            mock_client.post = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
             mock_client_cls.return_value = mock_client
 
             response = client.post(
@@ -155,6 +161,52 @@ class TestExecuteScheduledTask:
         # injected value (finance-coach).
         data = _body(response)
         assert data["skill_id"] == "asset-report"
+
+
+    def test_ai_disabled_family_returns_403(self, client, _seed_task, db):
+        """A family with AI disabled cannot have scheduled tasks dispatched."""
+        from apps.backend.app.models.family import Family
+
+        task = _seed_task["task"]
+        family = db.query(Family).filter(Family.id == 1001).first()
+        family.ai_enabled = False
+        db.commit()
+
+        response = client.post(
+            BASE,
+            headers=_system_headers(),
+            json={"task_id": task.id},
+        )
+
+        assert response.status_code == 403
+
+    def test_agent_gateway_non_2xx_returns_500(self, client, _seed_task):
+        """A gateway 409/5xx must not silently report success to the worker."""
+        from fastapi.testclient import TestClient
+
+        from apps.backend.app.main import app
+
+        task = _seed_task["task"]
+
+        bad_response = AsyncMock()
+        bad_response.status_code = 409
+        bad_response.text = "Conflict: task already running"
+
+        with patch(
+            "apps.backend.app.services.agent_client.AgentClient"
+        ) as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=bad_response)
+            mock_client_cls.return_value = mock_client
+
+            with TestClient(app, raise_server_exceptions=False) as raw_client:
+                response = raw_client.post(
+                    BASE,
+                    headers=_system_headers(),
+                    json={"task_id": task.id},
+                )
+
+        assert response.status_code == 500
 
     def test_agent_failure_returns_500(self, client, _seed_task):
         """A failed agent dispatch must not report success.

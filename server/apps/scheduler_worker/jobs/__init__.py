@@ -869,6 +869,7 @@ async def scheduled_task_poll_job() -> None:
                                 ScheduledTask.last_run_at: datetime.now(UTC),
                                 ScheduledTask.status: ScheduledTaskStatus.SUCCESS,
                                 ScheduledTask.next_run_at: next_run,
+                                ScheduledTask.last_error: None,
                             },
                             synchronize_session=False,
                         )

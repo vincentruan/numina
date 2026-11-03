@@ -80,7 +80,8 @@ class TestCreateScheduledTask:
         assert _body(response)["code"] == "SCHEDULED_TASK_SKILL_INVALID"
 
     @pytest.mark.parametrize(
-        "expression", ["0 9 * *", "not a cron", "0 25 * * *", ""]
+        "expression",
+        ["0 9 * *", "not a cron", "0 25 * * *", "", "0 9 * * * *", "@daily"],
     )
     def test_rejects_invalid_cron(self, client, auth_headers, expression):
         response = client.post(

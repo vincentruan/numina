@@ -15,7 +15,7 @@ from apps.backend.app.schemas.scheduled_task import (
     ScheduledTaskResponse,
     ScheduledTaskUpdate,
 )
-from packages.core.cron import compute_next_run_at
+from packages.core.cron import compute_next_run_at, is_valid_cron
 from packages.db.models.scheduled_task import ScheduledTask, ScheduledTaskStatus
 
 router = APIRouter(prefix="/ai/scheduled-tasks", tags=["ai-scheduled-tasks"])
@@ -29,12 +29,15 @@ def _validate_skill(skill_id: str) -> str:
 
 
 def _next_run_or_reject(cron_expression: str) -> tuple[str, datetime]:
-    """Normalize a cron expression and compute its next run in one parse.
+    """Normalize a cron expression and compute its next run.
 
-    ``compute_next_run_at`` is the single validator: it raises for a malformed
-    expression, so validating separately would parse the same string twice.
+    Enforces the documented 5-field contract with ``is_valid_cron`` first,
+    because ``compute_next_run_at`` (croniter) silently accepts 6-field
+    expressions (with a seconds field) and macros like ``@daily``.
     """
     expression = cron_expression.strip()
+    if not is_valid_cron(expression):
+        raise AppError(ErrorCode.SCHEDULED_TASK_CRON_INVALID)
     try:
         return expression, compute_next_run_at(expression)
     except (ValueError, KeyError, CroniterBadCronError, CroniterBadDateError):
