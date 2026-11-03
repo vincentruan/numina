@@ -55,6 +55,12 @@ async def _read(
     if not thread_id or not isinstance(thread_id, str):
         return _tool_error("thread_id is required")
 
+    if cursor is not None:
+        try:
+            int(cursor)
+        except (ValueError, TypeError):
+            return _tool_error("cursor must be a numeric string from a previous thread_read call")
+
     clamped_limit = max(1, min(int(limit or 20), 50))
     reader = build_conversation_reader(checkpointer, family_id)
     try:
@@ -63,9 +69,11 @@ async def _read(
             cursor=cursor,
             limit=clamped_limit,
         )
-    except Exception as exc:  # noqa: BLE001 — tool boundary
-        logger.warning("thread_read reader failed: thread_id=%s: %s", thread_id, exc)
-        return _tool_error(f"reader_failed: {exc}")
+    except Exception:  # noqa: BLE001 — tool boundary
+        logger.warning(
+            "thread_read reader failed: thread_id=%s", thread_id, exc_info=True
+        )
+        return _tool_error("reader_failed")
 
     return _tool_payload(page)
 

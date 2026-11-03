@@ -130,7 +130,7 @@ async def test_tool_has_expected_name_and_family_binding() -> None:
 
 @pytest.mark.asyncio
 async def test_checkpointer_failure_returns_error_payload() -> None:
-    """Corrupted checkpointer state returns a JSON error payload."""
+    """Corrupted checkpointer state returns a generic JSON error payload."""
 
     class _BrokenCheckpointer:
         async def aget_tuple(self, config):  # noqa: ANN001
@@ -142,3 +142,17 @@ async def test_checkpointer_failure_returns_error_payload() -> None:
     page = json.loads(raw)
 
     assert "error" in page
+    assert "corrupted" not in page["error"]  # exception details must not leak
+
+
+@pytest.mark.asyncio
+async def test_non_numeric_cursor_returns_validation_error() -> None:
+    """Non-numeric cursor returns a clear validation error."""
+    checkpointer = _FakeCheckpointer(_FakeCheckpointTuple(messages=_msgs(1)))
+    tool = build_thread_read_tool(checkpointer, "fam_1")
+
+    raw = await tool.ainvoke({"thread_id": "t1", "cursor": "abc"})
+    page = json.loads(raw)
+
+    assert "error" in page
+    assert "numeric" in page["error"].lower()

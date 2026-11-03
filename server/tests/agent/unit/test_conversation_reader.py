@@ -160,7 +160,7 @@ async def test_tool_and_system_messages_excluded() -> None:
 
 @pytest.mark.asyncio
 async def test_checkpointer_exception_returns_error_payload() -> None:
-    """Corrupted or unreadable checkpoint returns a JSON error payload."""
+    """Corrupted or unreadable checkpoint returns a generic JSON error payload."""
 
     class _BrokenCheckpointer:
         async def aget_tuple(self, config):  # noqa: ANN001
@@ -172,7 +172,7 @@ async def test_checkpointer_exception_returns_error_payload() -> None:
     page = json.loads(raw)
 
     assert "error" in page
-    assert "corrupted" in page["error"]
+    assert "corrupted" not in page["error"]  # exception details must not leak
 
 
 @pytest.mark.asyncio

@@ -96,7 +96,20 @@ class TestSearch:
         assert all("snippet" in r for r in results)
 
     @pytest.mark.asyncio
-    async def test_empty_query_returns_recent(self) -> None:
+    async def test_query_matches_no_sessions(self) -> None:
+        """Query with no matches returns an empty list (plan U5 scenario 3)."""
+        sessions = [
+            _session("t1", title="Budget review"),
+            _session("t2", title="Savings plan"),
+        ]
+        with patch(
+            "apps.agent.core.backend_client.list_sessions",
+            new=AsyncMock(return_value=(sessions, 2)),
+        ):
+            raw = await _search("fam_1", "investment")
+            results = json.loads(raw)
+
+        assert results == []
         sessions = [_session(f"t{i}", title=f"t{i}") for i in range(5)]
         with patch(
             "apps.agent.core.backend_client.list_sessions",

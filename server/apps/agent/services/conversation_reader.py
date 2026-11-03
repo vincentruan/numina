@@ -126,7 +126,7 @@ def build_conversation_reader(
                 idx = message_seq - 1
                 if idx < 0 or idx >= len(raw_messages):
                     return _error(
-                        f"message_seq {message_seq} out of range (0..{len(raw_messages)})"
+                        f"message_seq {message_seq} out of range (1..{len(raw_messages)})"
                     )
                 msg = raw_messages[idx]
                 content = msg.content if isinstance(msg.content, str) else json.dumps(
@@ -151,13 +151,12 @@ def build_conversation_reader(
             page, next_cursor = _paginate_messages(raw_messages, cursor, limit)
             return json.dumps({"messages": page, "next_cursor": next_cursor})
 
-        except Exception as exc:  # noqa: BLE001 — boundary to tool loop
+        except Exception:  # noqa: BLE001 — boundary to tool loop
             logger.exception(
-                "conversation_reader failed: thread_id=%s family_id=%s: %s",
+                "conversation_reader failed: thread_id=%s family_id=%s",
                 thread_id,
                 family_id,
-                exc,
             )
-            return _error(f"Failed to read thread {thread_id}: {exc}")
+            return _error(f"Failed to read thread {thread_id}")
 
     return _read

@@ -63,8 +63,8 @@ async def _search(
             sort_order="desc",
         )
     except Exception as exc:  # noqa: BLE001 — tool boundary
-        logger.warning("thread_search backend failure: %s", exc)
-        return json.dumps({"error": f"backend_unavailable: {exc}"})
+        logger.warning("thread_search backend failure: %s", exc, exc_info=True)
+        return json.dumps({"error": "backend_unavailable"})
 
     query_lower = (query or "").strip().lower()
     matched = [s for s in sessions if _matches_query(s, query_lower)][:clamped]
@@ -99,7 +99,7 @@ def build_thread_search_tool(family_id: str) -> StructuredTool:
             "Search past family conversations by title or recent content. "
             "Returns thread_id, title, snippet, and timestamp for each match. "
             "Use this to discover relevant past sessions, then use "
-            "read_conversation(thread_id) to read one in full. "
-            "Scope: this family only; excludes the current thread."
+            "thread_read(thread_id) to read one in full. "
+            "Scope: this family only."
         ),
     )
