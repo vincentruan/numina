@@ -7,6 +7,11 @@ the frontend can display tool execution health.
 Activation: config-driven via ``tool_progress.enabled: true`` in the per-family
 DeerFlow temp config (injected by ``family_adapter_cache``).
 
+LangGraph integration: extends ``AgentMiddleware`` and implements
+``wrap_tool_call`` to time each tool execution through the LangGraph
+middleware chain.  The existing ``before_tool_call`` / ``after_tool_call``
+methods remain available for direct (non-chain) usage.
+
 Thread safety: ``_tool_states`` is guarded by ``_lock`` (threading.Lock).
 """
 
@@ -14,6 +19,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -187,6 +193,48 @@ class ToolProgressMiddleware:
             )
 
         return event
+
+    # -- LangGraph AgentMiddleware integration ---------------------------------
+
+    def wrap_tool_call(
+        self,
+        request: Any,
+        handler: Callable,
+    ) -> Any:
+        """Track tool execution timing through the LangGraph middleware chain.
+
+        Delegates to ``before_tool_call`` / ``after_tool_call`` for timing.
+        Does NOT block — the upstream ``ToolProgressMiddleware`` handles
+        result-quality blocking; this middleware provides wall-clock timing
+        for frontend display.
+        """
+        tool_call_id = str(request.tool_call.get("id", ""))
+        tool_name = str(request.tool_call.get("name", ""))
+        self.before_tool_call(tool_call_id, tool_name)
+        try:
+            result = handler(request)
+        except Exception:
+            self.after_tool_call(tool_call_id, tool_name, success=False)
+            raise
+        self.after_tool_call(tool_call_id, tool_name, success=True)
+        return result
+
+    async def awrap_tool_call(
+        self,
+        request: Any,
+        handler: Callable,
+    ) -> Any:
+        """Async variant of :meth:`wrap_tool_call`."""
+        tool_call_id = str(request.tool_call.get("id", ""))
+        tool_name = str(request.tool_call.get("name", ""))
+        self.before_tool_call(tool_call_id, tool_name)
+        try:
+            result = await handler(request)
+        except Exception:
+            self.after_tool_call(tool_call_id, tool_name, success=False)
+            raise
+        self.after_tool_call(tool_call_id, tool_name, success=True)
+        return result
 
     # -- Introspection -------------------------------------------------------
 
