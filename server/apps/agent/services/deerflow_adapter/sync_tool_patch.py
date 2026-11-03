@@ -177,6 +177,37 @@ def apply_sync_tool_patches() -> None:
         # allowed-tools declaration (None) → allow-all (no filtering).
         tools = _apply_active_skill_tool_filter(tools)
 
+        # Append Numina's cross-session discovery tools (T25) when family context
+        # is available. Built per-call so each run's family_id binds into the
+        # tool's coroutine; the checkpointer is process-shared.
+        try:
+            from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+                _get_shared_checkpointer,
+            )
+            from apps.agent.services.runtime.sandbox_provider import (
+                get_family_sandbox_context,
+            )
+            from apps.agent.services.runtime.thread_read_tool import (
+                build_thread_read_tool,
+            )
+            from apps.agent.services.runtime.thread_search_tool import (
+                build_thread_search_tool,
+            )
+
+            family_id = get_family_sandbox_context()
+            if family_id:
+                existing_names = {t.name for t in tools}
+                if "thread_search" not in existing_names:
+                    tools.append(build_thread_search_tool(family_id))
+                if "thread_read" not in existing_names:
+                    checkpointer = _get_shared_checkpointer(None)
+                    tools.append(build_thread_read_tool(checkpointer, family_id))
+        except Exception as e:  # noqa: BLE001 — tool-assembly must not break chat
+            logger.warning(
+                "[sync_tool_patch] thread_search/thread_read append failed (continuing without): %s",
+                e,
+            )
+
         return tools
 
     # Replace on BOTH the submodule and the parent package. DeerFlowClient's
@@ -277,6 +308,8 @@ def _apply_original_user_content_patch() -> None:
 _NUMINA_ALWAYS_AVAILABLE_TOOLS: frozenset[str] = frozenset(
     {
         "task",  # subagent delegation (builtin; enabled per-family via config)
+        "thread_search",  # family-wide session discovery (T25)
+        "thread_read",  # cross-thread message reader (T25)
     }
 )
 

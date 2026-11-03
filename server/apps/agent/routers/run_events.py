@@ -61,3 +61,32 @@ async def query_run_events(
         raise HTTPException(status_code=500, detail="事件查询失败") from None
 
     return [e.model_dump() for e in events]
+
+
+@router.get("/verify")
+async def verify_event_chain(
+    family_id: str | None = Query(None, description="Family ID to verify"),
+    run_id: str | None = Query(
+        None, description="Optional run ID; if set, event_count only includes this run"
+    ),
+    token_family: str = Depends(verify_service_token),
+) -> dict[str, Any]:
+    """Verify hash chain integrity for a family's run events.
+
+    T27: Returns verification status and details about any tampered events.
+    The full family file is always traversed to validate the chain; run_id
+    only narrows which events are counted in the result.
+    """
+    # Use the JWT-verified family id for queries, not the raw header.
+    if family_id and family_id != token_family:
+        raise HTTPException(status_code=403, detail="无权验证其他家庭的事件")
+
+    target_family = family_id or token_family
+    store = _get_event_store()
+    try:
+        result = store.verify_events(target_family, run_id=run_id)
+    except Exception:
+        logger.exception("run-events verification failed")
+        raise HTTPException(status_code=500, detail="事件验证失败") from None
+
+    return result
