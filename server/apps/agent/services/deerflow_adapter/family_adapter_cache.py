@@ -308,6 +308,70 @@ def _inject_tool_progress(
     )
 
 
+def _build_runtime_middlewares(
+    ai_config: dict[str, Any],
+    family_id: str,
+    existing_middlewares: list[Any] | None = None,
+) -> list[Any] | None:
+    """Build runtime middlewares from config (T15: SubagentLimit, T17: ToolProgress).
+
+    Reads enabled flags from ``ai_config`` and instantiates middleware classes
+    when enabled. Combines with any existing middlewares passed by the caller.
+
+    Args:
+        ai_config: Family AI configuration with middleware settings.
+        family_id: Family ID for subagent limit scoping.
+        existing_middlewares: Pre-existing middlewares from the caller.
+
+    Returns:
+        Combined middleware list, or None if no middlewares are configured.
+    """
+    middlewares: list[Any] = list(existing_middlewares) if existing_middlewares else []
+
+    # T15: SubagentLimitMiddleware
+    sl_cfg = ai_config.get("subagent_limit")
+    if sl_cfg and sl_cfg.get("enabled", False):
+        from apps.agent.app.config import settings
+        from apps.agent.services.runtime.subagent_limit_middleware import (
+            SubagentLimitMiddleware,
+        )
+
+        middlewares.append(
+            SubagentLimitMiddleware(
+                max_concurrent=sl_cfg.get(
+                    "max_concurrent", settings.SUBAGENT_MAX_CONCURRENT
+                ),
+                family_id=family_id,
+            )
+        )
+        logger.debug(
+            "[deerflow_config] SubagentLimitMiddleware instantiated: max=%s family=%s",
+            sl_cfg.get("max_concurrent", settings.SUBAGENT_MAX_CONCURRENT),
+            family_id,
+        )
+
+    # T17: ToolProgressMiddleware
+    tp_cfg = ai_config.get("tool_progress")
+    if tp_cfg and tp_cfg.get("enabled", False):
+        from apps.agent.services.runtime.tool_progress_middleware import (
+            ToolProgressMiddleware,
+        )
+
+        middlewares.append(
+            ToolProgressMiddleware(
+                warn_threshold_seconds=tp_cfg.get("warn_threshold_seconds", 30.0),
+                hard_stop_threshold_seconds=tp_cfg.get("hard_stop_threshold_seconds", 120.0),
+            )
+        )
+        logger.debug(
+            "[deerflow_config] ToolProgressMiddleware instantiated: warn=%.1fs hard_stop=%.1fs",
+            tp_cfg.get("warn_threshold_seconds", 30.0),
+            tp_cfg.get("hard_stop_threshold_seconds", 120.0),
+        )
+
+    return middlewares if middlewares else None
+
+
 def _inject_web_search(
     config: dict[str, Any],
     ai_config: dict[str, Any],
@@ -819,6 +883,9 @@ def get_family_adapter(
         memory_enabled=memory_enabled,
     )
 
+    # Build runtime middlewares from config (T15: SubagentLimit, T17: ToolProgress)
+    runtime_middlewares = _build_runtime_middlewares(ai_config, family_id, middlewares)
+
     # Obtain the shared checkpointer before reload_app_config() so the
     # checkpointer DB path is read from the base config, not the per-family
     # temp config (initialised exactly once).
@@ -856,7 +923,7 @@ def get_family_adapter(
                     subagent_enabled=subagent_enabled,
                     plan_mode=plan_mode,
                     agent_name=agent_name,
-                    middlewares=middlewares,
+                    middlewares=runtime_middlewares,
                     available_skills=available_skills,  # U3: slash activation whitelist
                 )
             finally:

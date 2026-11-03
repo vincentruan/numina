@@ -63,6 +63,17 @@ class FamilySubagentRegistry:
         return results
 
     @staticmethod
+    def count_active_for_family(family_id: str) -> int:
+        """Return count of all registered tasks for a family (running + completed).
+
+        Unlike ``list_for_family`` which returns only completed results, this
+        counts all tasks in the index regardless of completion status. Used by
+        ``SubagentLimitMiddleware`` to cap concurrent (not completed) tasks.
+        """
+        with _family_index_lock:
+            return sum(1 for fid in _family_task_index.values() if fid == family_id)
+
+    @staticmethod
     def request_cancel(family_id: str, task_id: str) -> bool:
         """Request cancellation of a background task, verifying family ownership.
 

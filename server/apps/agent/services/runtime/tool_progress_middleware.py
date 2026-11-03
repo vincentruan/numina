@@ -188,21 +188,6 @@ class ToolProgressMiddleware:
 
         return event
 
-    def check_tool_call(
-        self,
-        tool_name: str,
-        tool_args: dict[str, Any] | None = None,
-        context: dict[str, Any] | None = None,
-    ) -> bool:
-        """GuardrailMiddleware-compatible hook — always allows.
-
-        ToolProgressMiddleware is observational; it does not deny tool calls.
-        This method exists so the middleware can be registered alongside
-        guardrail providers without breaking the interface.
-        """
-        del tool_name, tool_args, context  # unused — observational only
-        return True
-
     # -- Introspection -------------------------------------------------------
 
     def get_active_tools(self) -> list[dict[str, Any]]:

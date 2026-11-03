@@ -58,6 +58,8 @@ All protective middlewares are in the upstream default chain or config-driven. *
 | `TokenBudgetMiddleware` | `token_budget.enabled` (Numina injects) | Lead agent chain |
 | `PiiRedactionMiddleware` | `pii_redaction.enabled` (Numina injects) | Model-call outer wrapper |
 | `GuardrailMiddleware` | `guardrails.enabled` (Numina injects) | Tool execution |
+| `SubagentLimitMiddleware` | `subagent_limit.enabled` (T15, Numina injects) | Subagent spawn guard |
+| `ToolProgressMiddleware` | `tool_progress.enabled` (T17, Numina injects) | Tool execution tracker |
 
 **Two-layer PII** (KTD1): Upstream `PiiRedactionMiddleware` handles free-text in user messages + tool results (agent graph). Numina `PIIRedactor` handles structured `FamilyContext` (pre-dispatch). Both active simultaneously.
 

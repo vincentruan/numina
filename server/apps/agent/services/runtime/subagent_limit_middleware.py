@@ -14,7 +14,6 @@ lock for all reads.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from packages.core.logging import get_logger
 
@@ -37,8 +36,8 @@ class SubagentDecision:
 class SubagentLimitMiddleware:
     """Per-family subagent concurrency limiter.
 
-    Queries ``FamilySubagentRegistry.list_for_family(family_id)`` before each
-    spawn and denies the request when the active count meets or exceeds
+    Queries ``FamilySubagentRegistry.count_active_for_family(family_id)`` before
+    each spawn and denies the request when the active count meets or exceeds
     ``max_concurrent``.
 
     Configuration (injected via ``family_adapter_cache._inject_subagent_limit``):
@@ -73,8 +72,6 @@ class SubagentLimitMiddleware:
     def check_subagent_spawn(
         self,
         family_id: str | None = None,
-        *,
-        context: dict[str, Any] | None = None,
     ) -> SubagentDecision:
         """Check whether a new subagent spawn is permitted.
 
@@ -82,14 +79,13 @@ class SubagentLimitMiddleware:
 
         Args:
             family_id: Override family_id (takes precedence over init-time value).
-            context: Execution context dict (reserved for future use).
 
         Returns:
             SubagentDecision with allowed=True/False and reason.
         """
         effective_family = family_id or self._family_id
         if effective_family is None:
-            # Fallback: read from sandbox ContextVar
+            # Deferred import to avoid circular dependency with sandbox_provider
             from apps.agent.services.runtime.sandbox_provider import (
                 get_family_sandbox_context,
             )
@@ -105,15 +101,15 @@ class SubagentLimitMiddleware:
                 reason="No family_id context available",
             )
 
-        del context  # reserved for future use
-
         try:
+            # Deferred import to avoid circular dependency with subagent_registry
             from apps.agent.services.runtime.subagent_registry import (
                 FamilySubagentRegistry,
             )
 
-            active_tasks = FamilySubagentRegistry.list_for_family(effective_family)
-            active_count = len(active_tasks)
+            active_count = FamilySubagentRegistry.count_active_for_family(
+                effective_family
+            )
         except Exception as e:
             logger.warning(
                 "[subagent_limit] registry read failed (fail-closed): family=%s error=%s",
