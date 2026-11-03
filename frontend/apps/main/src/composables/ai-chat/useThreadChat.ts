@@ -270,6 +270,57 @@ function isNonEmptyString(value: string | undefined): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
+// ---------------------------------------------------------------------------
+// T20: sessionStorage persistence for chat streaming state.
+// Replicates the useReportStream pattern (numina:report-stream-state).
+// ---------------------------------------------------------------------------
+
+/** sessionStorage key for persisting chat streaming state across page navigation. */
+const CHAT_SESSION_STORAGE_KEY = 'numina:chat-stream-state'
+
+/** Serialized snapshot of chat streaming state for sessionStorage persistence. */
+interface SavedChatState {
+  status: 'streaming' | 'connecting'
+  threadId: string | null
+  runId: string | null
+  messages: ChatMessage[]
+  planningSteps: PlanningStep[]
+  error: string | null
+}
+
+function saveChatStateToStorage(state: SavedChatState): void {
+  try {
+    sessionStorage.setItem(CHAT_SESSION_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // sessionStorage may be unavailable (private browsing, quota exceeded)
+  }
+}
+
+function restoreChatStateFromStorage(): SavedChatState | null {
+  try {
+    const raw = sessionStorage.getItem(CHAT_SESSION_STORAGE_KEY)
+    if (!raw) return null
+    const saved = JSON.parse(raw) as SavedChatState
+    // Only restore when the previous run was actively streaming/connecting.
+    if (saved.status !== 'connecting' && saved.status !== 'streaming') return null
+    return saved
+  } catch {
+    return null
+  }
+}
+
+function clearChatStateFromStorage(): void {
+  try {
+    sessionStorage.removeItem(CHAT_SESSION_STORAGE_KEY)
+  } catch {
+    // best-effort
+  }
+}
+
+// ---------------------------------------------------------------------------
+// useThreadChat composable
+// ---------------------------------------------------------------------------
+
 /**
  * Whether a message should be hidden from the UI (control / summary messages).
  * Mirrors DeerFlow `isHiddenFromUIMessage`. numina marks hidden continuation
@@ -618,6 +669,35 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   // Distinguishes a user-initiated cancel from a stream timeout/error abort.
   // Timeout and stream errors must be retryable; a user cancel must not be.
   let userCancelled = false
+
+  // ── T20: sessionStorage restore + snapshot-clear suppression ──
+  /** Set while loadHistory() internally cancels: the snapshot must survive. */
+  let suppressSnapshotClear = false
+
+  // Restore chat state from a previous session (page leave during active stream)
+  // so the UI renders immediately instead of blank while the checkpoint loads.
+  // Page re-entry continues through the existing checkChatTask() polling +
+  // loadHistory() path; the restored messages are the same shape those produce,
+  // so loadHistory replaces them wholesale once canonical state is available.
+  const savedChatState = restoreChatStateFromStorage()
+  if (savedChatState) {
+    if (savedChatState.messages.length > 0) {
+      messages.value = savedChatState.messages
+    }
+    if (savedChatState.planningSteps.length > 0) {
+      planningSteps.value = savedChatState.planningSteps
+    }
+    if (savedChatState.runId) {
+      runId.value = savedChatState.runId
+    }
+    if (savedChatState.threadId) {
+      currentThreadId = savedChatState.threadId
+    }
+    if (savedChatState.error) {
+      error.value = savedChatState.error
+    }
+    isLoading.value = true
+  }
 
   // ── Stream text batching (rAF coalescing) ──
   // Multiple SSE text chunks often arrive within a single frame (~16ms).
@@ -1222,6 +1302,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     setUserMsgStatus(userMsgId, 'sent')
     // Clear standalone suggestions (now attached inline)
     suggestions.value = []
+    // T20: terminal state — a completed stream never needs restoring.
+    clearChatStateFromStorage()
   }
 
   async function sendMessage(
@@ -1287,6 +1369,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     runId.value = null
     userCancelled = false
     abortController = new AbortController()
+    // T20: a fresh generation supersedes any snapshot left by a prior run.
+    clearChatStateFromStorage()
 
     try {
     const userMsg = addOptimisticUserMessage(text, additionalKwargs)
@@ -1902,6 +1986,11 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     planningSteps.value = planningSteps.value.map(s =>
       s.status === 'running' ? { ...s, status: 'error' as const } : s,
     )
+    // T20: user-initiated cancel — nothing to restore. Skipped when
+    // loadHistory() triggers this via a page re-entry: the snapshot must
+    // survive until canonical history / the still-running task supersedes it,
+    // otherwise the instant restore it exists for is destroyed on arrival.
+    if (!suppressSnapshotClear) clearChatStateFromStorage()
   }
 
   /**
@@ -1913,6 +2002,18 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * cancelStream() which sends client.runs.cancel() to the agent.
    */
   function abortLocalStream() {
+    // T20: Persist the current streaming state so returning to the page can
+    // restore the UI instantly, before SSE replay catches up.
+    if (isLoading.value) {
+      saveChatStateToStorage({
+        status: 'streaming',
+        threadId: currentThreadId,
+        runId: runId.value,
+        messages: messages.value,
+        planningSteps: planningSteps.value,
+        error: error.value,
+      })
+    }
     if (abortController) {
       abortController.abort()
       abortController = null
@@ -1932,8 +2033,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   }
 
   async function loadHistory(threadId: string, retries = 1): Promise<void> {
-    // Cancel any ongoing stream before loading new history
+    // Cancel any ongoing stream before loading new history. T20: this also runs
+    // on page re-entry (onActivated), where the sessionStorage snapshot must
+    // survive until canonical history supersedes it — suppress the clear here.
+    suppressSnapshotClear = true
     cancelStream()
+    suppressSnapshotClear = false
 
     // U6: history reload is authoritative — drain the transient bridge so
     // summarized-away turns (which will never reappear in canonical history)
