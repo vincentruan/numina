@@ -162,6 +162,5 @@
   "SCHEDULED_TASK_NOT_FOUND": "Scheduled task not found",
   "SCHEDULED_TASK_SKILL_INVALID": "Unsupported skill — only asset reports and literacy weekly reports can be scheduled",
   "SCHEDULED_TASK_CRON_INVALID": "Invalid cron expression — use the 5-field format (minute hour day month weekday)",
-  "SCHEDULED_TASK_DISABLED": "Scheduled task is disabled",
-  "SCHEDULED_TASK_EXECUTE_FAILED": "Scheduled task execution failed"
+  "SCHEDULED_TASK_DISABLED": "Scheduled task is disabled"
 }

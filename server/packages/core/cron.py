@@ -6,6 +6,7 @@ server runs. Persisted timestamps are always UTC.
 """
 
 from datetime import UTC, datetime
+from typing import cast
 from zoneinfo import ZoneInfo
 
 from croniter import CroniterBadCronError, CroniterBadDateError, croniter
@@ -38,9 +39,7 @@ def compute_next_run_at(expression: str, *, after: datetime | None = None) -> da
         base = base.replace(tzinfo=UTC)
 
     local_base = base.astimezone(SCHEDULE_TZ)
-    next_local_raw = croniter(expression, local_base).get_next(datetime)
-    # croniter.get_next(datetime) returns datetime but typed as Any in stubs.
-    next_local: datetime = next_local_raw
+    next_local = cast(datetime, croniter(expression, local_base).get_next(datetime))
     if next_local.tzinfo is None:
         next_local = next_local.replace(tzinfo=SCHEDULE_TZ)
     return next_local.astimezone(UTC)

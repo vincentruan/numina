@@ -30,7 +30,6 @@ class ScheduledTask(Base):
         UTCDateTime(), server_default=func.now(), onupdate=func.now()
     )
 
-    # Composite indexes for efficient queries
     __table_args__ = (
         Index("ix_scheduled_tasks_family_enabled", "family_id", "is_enabled"),
         Index("ix_scheduled_tasks_poll", "is_enabled", "next_run_at"),

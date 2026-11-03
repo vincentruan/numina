@@ -19,7 +19,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.has_table(bind, "scheduled_tasks"):
-        return  # table already present (fresh-DB bootstrap)
+        return
 
     op.create_table(
         "scheduled_tasks",

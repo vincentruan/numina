@@ -1,225 +1,209 @@
 """Tests for scheduled_task_poll_job.
 
-Covers the polling contract: queries due tasks, updates status, calls backend,
-handles failures, resets stale running tasks.
+The poll job decides, once a minute, which tasks fire. These tests pin the
+properties that make that safe: a task that is not due is left alone, a task
+that fails does not become permanently due, and a task whose process died is
+recovered instead of staying stuck.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
+import apps.scheduler_worker.jobs as jobs_module
 from apps.scheduler_worker.jobs import scheduled_task_poll_job
 from packages.db.models.scheduled_task import ScheduledTask
+from packages.db.session import Base
 
 
-@pytest.fixture
-def db_session():
-    """Yield a test database session."""
-    from packages.db.session import SessionLocal
+@pytest.fixture()
+def db_session(monkeypatch):
+    """Isolated in-memory DB, patched in as the job's session factory.
 
-    session = SessionLocal()
+    The job opens its own session via the module-level SessionLocal, so the job
+    must be handed this engine rather than the ambient one.
+    """
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    monkeypatch.setattr(jobs_module, "SessionLocal", factory, raising=True)
+
+    session = factory()
     try:
         yield session
     finally:
         session.close()
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
 
 
-@pytest.fixture
-def sample_task(db_session):
-    """Create a sample scheduled task due now."""
-    task = ScheduledTask(
-        family_id=1001,
-        skill_id="asset-report",
-        cron_expression="0 9 * * *",
-        is_enabled=True,
-        next_run_at=datetime.now(UTC) - timedelta(minutes=5),
-        status="idle",
-    )
-    db_session.add(task)
-    db_session.commit()
-    db_session.refresh(task)
-    yield task
-    # Cleanup
-    db_session.query(ScheduledTask).filter(ScheduledTask.id == task.id).delete()
-    db_session.commit()
+def _make_task(db: Session, **overrides) -> ScheduledTask:
+    fields = {
+        "family_id": 1001,
+        "skill_id": "asset-report",
+        "cron_expression": "0 9 * * *",
+        "is_enabled": True,
+        "next_run_at": datetime.now(UTC) - timedelta(minutes=5),
+        "status": "idle",
+    }
+    fields.update(overrides)
+    task = ScheduledTask(**fields)
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+def _mock_client(status_code: int = 200, side_effect=None):
+    """Patch httpx.AsyncClient so the job's POST is intercepted."""
+    response = AsyncMock()
+    response.status_code = status_code
+    response.text = ""
+
+    client = AsyncMock()
+    client.post = AsyncMock(side_effect=side_effect, return_value=response)
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+
+    return patch("httpx.AsyncClient", return_value=client), client
 
 
 @pytest.mark.asyncio
-async def test_poll_finds_and_executes_due_task(db_session, sample_task):
-    """Poll job should find a due task and execute it."""
-    mock_response = AsyncMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {"success": True}
+async def test_poll_executes_due_task_and_advances_schedule(db_session):
+    task = _make_task(db_session)
+    patcher, client = _mock_client()
 
-    with patch("httpx.AsyncClient") as mock_client_cls:
-        mock_client = AsyncMock()
-        mock_client.post = AsyncMock(return_value=mock_response)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client_cls.return_value = mock_client
-
+    with patcher:
         await scheduled_task_poll_job()
 
-    # Task should be updated to 'success'
-    db_session.refresh(sample_task)
-    assert sample_task.status == "success"
-    assert sample_task.last_run_at is not None
-    assert sample_task.last_error is None
-    # next_run_at should be advanced
-    assert sample_task.next_run_at > datetime.now(UTC)
+    db_session.refresh(task)
+    assert task.status == "success"
+    assert task.last_run_at is not None
+    assert task.last_error is None
+    assert task.next_run_at > datetime.now(UTC)
+    client.post.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_poll_skips_disabled_task(db_session):
-    """Poll job should skip disabled tasks."""
-    task = ScheduledTask(
-        family_id=1001,
-        skill_id="asset-report",
-        cron_expression="0 9 * * *",
-        is_enabled=False,
-        next_run_at=datetime.now(UTC) - timedelta(minutes=5),
-        status="idle",
-    )
-    db_session.add(task)
-    db_session.commit()
+    task = _make_task(db_session, is_enabled=False)
+    patcher, client = _mock_client()
 
-    with patch("httpx.AsyncClient") as mock_client_cls:
-        mock_client = AsyncMock()
-        mock_client.post = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client_cls.return_value = mock_client
-
+    with patcher:
         await scheduled_task_poll_job()
 
-    # Task should remain idle
     db_session.refresh(task)
     assert task.status == "idle"
-    # No HTTP call should have been made
-    mock_client.post.assert_not_called()
-
-    # Cleanup
-    db_session.query(ScheduledTask).filter(ScheduledTask.id == task.id).delete()
-    db_session.commit()
+    client.post.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_poll_skips_future_task(db_session):
-    """Poll job should skip tasks scheduled in the future."""
-    task = ScheduledTask(
-        family_id=1001,
-        skill_id="asset-report",
-        cron_expression="0 9 * * *",
-        is_enabled=True,
-        next_run_at=datetime.now(UTC) + timedelta(hours=1),
-        status="idle",
-    )
-    db_session.add(task)
-    db_session.commit()
+    task = _make_task(db_session, next_run_at=datetime.now(UTC) + timedelta(hours=1))
+    patcher, client = _mock_client()
 
-    with patch("httpx.AsyncClient") as mock_client_cls:
-        mock_client = AsyncMock()
-        mock_client.post = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client_cls.return_value = mock_client
-
+    with patcher:
         await scheduled_task_poll_job()
 
-    # Task should remain idle
     db_session.refresh(task)
     assert task.status == "idle"
-    mock_client.post.assert_not_called()
-
-    # Cleanup
-    db_session.query(ScheduledTask).filter(ScheduledTask.id == task.id).delete()
-    db_session.commit()
+    client.post.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_poll_handles_failure(db_session):
-    """Poll job should mark task as 'failed' on error."""
-    task = ScheduledTask(
-        family_id=1001,
-        skill_id="asset-report",
-        cron_expression="0 9 * * *",
-        is_enabled=True,
-        next_run_at=datetime.now(UTC) - timedelta(minutes=5),
-        status="idle",
-    )
-    db_session.add(task)
-    db_session.commit()
+async def test_failed_task_does_not_stay_due(db_session):
+    """A failure must not leave the row permanently due.
 
-    with patch("httpx.AsyncClient") as mock_client_cls:
-        mock_client = AsyncMock()
-        # Make __aexit__ not suppress exceptions
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.post = AsyncMock(side_effect=Exception("Network error"))
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client_cls.return_value = mock_client
+    Without advancing next_run_at the same row is re-dispatched on every poll,
+    turning one backend error into a 1-minute retry loop forever.
+    """
+    task = _make_task(db_session, next_run_at=datetime.now(UTC) - timedelta(minutes=5))
+    patcher, _ = _mock_client(side_effect=RuntimeError("Network error"))
 
+    with patcher:
         await scheduled_task_poll_job()
 
-    # Task should be marked as failed
     db_session.refresh(task)
     assert task.status == "failed"
     assert task.last_error is not None
     assert "Network error" in task.last_error
+    assert task.next_run_at > datetime.now(UTC)
 
-    # Cleanup
-    db_session.query(ScheduledTask).filter(ScheduledTask.id == task.id).delete()
-    db_session.commit()
+    # A second poll must not re-dispatch it.
+    patcher2, client2 = _mock_client()
+    with patcher2:
+        await scheduled_task_poll_job()
+    client2.post.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_http_error_marks_failed_and_records_status(db_session):
+    task = _make_task(db_session)
+    patcher, _ = _mock_client(status_code=500)
+
+    with patcher:
+        await scheduled_task_poll_job()
+
+    db_session.refresh(task)
+    assert task.status == "failed"
+    assert task.last_error is not None
+    assert "500" in task.last_error
+    assert task.next_run_at > datetime.now(UTC)
+
+
+@pytest.mark.asyncio
+async def test_unparseable_cron_still_advances_schedule(db_session):
+    """A cron that no longer parses must not strand the task as due."""
+    task = _make_task(db_session, cron_expression="bogus")
+    patcher, _ = _mock_client(status_code=200)
+
+    with patcher:
+        await scheduled_task_poll_job()
+
+    db_session.refresh(task)
+    assert task.next_run_at > datetime.now(UTC)
 
 
 @pytest.mark.asyncio
 async def test_poll_resets_stale_running_tasks(db_session):
-    """Poll job should reset tasks stuck in 'running' for > 10 minutes."""
-    task = ScheduledTask(
-        family_id=1001,
-        skill_id="asset-report",
-        cron_expression="0 9 * * *",
-        is_enabled=True,
-        next_run_at=datetime.now(UTC) + timedelta(hours=1),
+    task = _make_task(
+        db_session,
         status="running",
+        next_run_at=datetime.now(UTC) + timedelta(hours=1),
         updated_at=datetime.now(UTC) - timedelta(minutes=15),
     )
-    db_session.add(task)
-    db_session.commit()
+    patcher, _ = _mock_client()
 
-    await scheduled_task_poll_job()
+    with patcher:
+        await scheduled_task_poll_job()
 
-    # Task should be reset to idle
     db_session.refresh(task)
     assert task.status == "idle"
 
-    # Cleanup
-    db_session.query(ScheduledTask).filter(ScheduledTask.id == task.id).delete()
-    db_session.commit()
-
 
 @pytest.mark.asyncio
-async def test_poll_does_not_reset_recent_running_tasks(db_session):
-    """Poll job should not reset tasks that started running recently."""
-    task = ScheduledTask(
-        family_id=1001,
-        skill_id="asset-report",
-        cron_expression="0 9 * * *",
-        is_enabled=True,
-        next_run_at=datetime.now(UTC) + timedelta(hours=1),
+async def test_poll_leaves_recent_running_tasks_alone(db_session):
+    task = _make_task(
+        db_session,
         status="running",
+        next_run_at=datetime.now(UTC) + timedelta(hours=1),
         updated_at=datetime.now(UTC) - timedelta(minutes=5),
     )
-    db_session.add(task)
-    db_session.commit()
+    patcher, _ = _mock_client()
 
-    await scheduled_task_poll_job()
+    with patcher:
+        await scheduled_task_poll_job()
 
-    # Task should still be running
     db_session.refresh(task)
     assert task.status == "running"
-
-    # Cleanup
-    db_session.query(ScheduledTask).filter(ScheduledTask.id == task.id).delete()
-    db_session.commit()

@@ -1182,7 +1182,6 @@ async def internal_generate_literacy_report(
     if child is None:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
-    # Find family owner for user_id context
     owner = (
         db.query(User)
         .filter(
@@ -1474,7 +1473,6 @@ async def execute_scheduled_task(
     skill_id = task.skill_id
     family_id = task.family_id
 
-    # Find family owner for user_id context
     owner = (
         db.query(User)
         .filter(
@@ -1498,11 +1496,6 @@ async def execute_scheduled_task(
 
 
 async def _execute_asset_report(db: Session, family_id: int, owner: User) -> int:
-    """Dispatch asset-report generation for a single family.
-
-    Mirrors auto_generate_reports per-family body: create session + task, then
-    fire-and-forget POST to agent gateway.
-    """
     from apps.backend.app.services.agent_client import AgentClient
     from apps.backend.app.services.ai_task_service import AITaskService
     from apps.backend.app.services.chat_session import ChatSessionService
@@ -1513,14 +1506,12 @@ async def _execute_asset_report(db: Session, family_id: int, owner: User) -> int
         db=db,
         source="asset-report",
     )
-    task = AITaskService.create_task(
+    AITaskService.create_task(
         family_id=family_id,
         skill_id="asset-report",
         session_id=session.id,
         db=db,
     )
-    # task is created for tracking but not used in this scope (fire-and-forget)
-    _ = task
 
     agent_client = AgentClient(family_id, owner.id, timeout=30.0)
     try:
@@ -1545,10 +1536,6 @@ async def _execute_asset_report(db: Session, family_id: int, owner: User) -> int
 
 
 async def _execute_literacy_report(db: Session, family_id: int, owner: User) -> int:
-    """Generate literacy reports for all children in the family.
-
-    Iterates active children and calls generate_literacy_report service per child.
-    """
     from datetime import date
 
     from apps.backend.app.services.literacy_report import _sunday_of

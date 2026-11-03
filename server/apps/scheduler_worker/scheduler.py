@@ -189,8 +189,6 @@ def setup_all_jobs() -> None:
     logger.info("家庭数据备份任务已配置（每日 %s:30）", settings.BACKUP_HOUR)
 
     # Job 13: Scheduled task polling — every 60 seconds
-    # Polls the scheduled_tasks table for due tasks and dispatches them via the
-    # backend internal execute endpoint. max_instances=1 prevents overlapping polls.
     scheduler.add_job(
         scheduled_task_poll_job,
         trigger="interval",
@@ -203,8 +201,6 @@ def setup_all_jobs() -> None:
     )
     logger.info("定时任务轮询已配置（每 60 秒）")
 
-    # Legacy jobs — disabled when DISABLE_LEGACY_REPORT_JOBS=true
-    # The scheduled task poll job above replaces these hardcoded schedules.
     import os
 
     disable_legacy = os.environ.get("DISABLE_LEGACY_REPORT_JOBS", "").lower() in (

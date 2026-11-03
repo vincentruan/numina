@@ -1,14 +1,3 @@
-"""定时任务 CRUD 路由。
-
-- GET    /api/v1/ai/scheduled-tasks      — 列出当前家庭的定时任务
-- POST   /api/v1/ai/scheduled-tasks      — 创建定时任务
-- PUT    /api/v1/ai/scheduled-tasks/{id} — 更新定时任务（含启用/禁用）
-- DELETE /api/v1/ai/scheduled-tasks/{id} — 删除定时任务
-
-所有端点仅家庭 Owner 可访问。cron 表达式按 Asia/Shanghai 解释，
-``next_run_at`` 持久化为 UTC。
-"""
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -44,11 +33,6 @@ def _validate_cron(cron_expression: str) -> str:
 
 
 def _get_family_task(db: Session, *, task_id: int, family_id: int) -> ScheduledTask:
-    """Fetch a task scoped to the caller's family.
-
-    Cross-family access surfaces as 404 rather than 403 so the endpoint does not
-    reveal whether a task id exists in another family.
-    """
     task = (
         db.query(ScheduledTask)
         .filter(
@@ -111,11 +95,7 @@ def update_scheduled_task(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> ScheduledTaskResponse:
-    """更新定时任务（仅 owner）。
-
-    cron 表达式变化时重新计算 ``next_run_at``；仅切换启用状态时保留原计划，
-    避免用户只是想临时禁用却意外推迟下次执行时间。
-    """
+    """更新定时任务（仅 owner）。"""
     task = _get_family_task(db, task_id=task_id, family_id=current_user.family_id)
 
     if payload.skill_id is not None:
