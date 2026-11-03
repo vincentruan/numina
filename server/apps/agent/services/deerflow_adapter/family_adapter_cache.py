@@ -322,6 +322,11 @@ def _inject_tool_search(
     Precedence: explicit per-family ``ai_config.tool_search.enabled``
     overrides the threshold check.  The threshold check only fires when
     the explicit flag is absent (``None``).
+
+    Note: ``mcp_server_threshold`` is a Numina-only field — upstream
+    ``ToolSearchConfig`` has only ``enabled`` and ``auto_promote_top_k``.
+    Pydantic v2 silently ignores extra keys, so the threshold value
+    written to config.yaml is harmless to the harness.
     """
     ts_config = config.get("tool_search", {})
     ai_ts = ai_config.get("tool_search", {})
@@ -347,6 +352,35 @@ def _inject_tool_search(
         len(config.get("mcp_servers") or []),
         threshold,
     )
+
+
+def _inject_task_continuity(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+) -> None:
+    """Inject task continuity config (in-place).
+
+    Enables upstream's ``task_note`` / ``history_search`` / ``history_read``
+    tools and the ``DurableContextMiddleware`` projection for ``task_notes``.
+
+    Precedence: explicit per-family ``ai_config.task_continuity.enabled``
+    overrides the base-config default.  The base-config default (from
+    ``deerflow_config/base/config.yaml``) is the fallback when the override
+    is absent.
+    """
+    base_cfg = config.get("task_continuity", {})
+    ai_cfg = ai_config.get("task_continuity", {})
+
+    explicit_enabled = ai_cfg.get("enabled")  # None | True | False
+    if explicit_enabled is not None:
+        enabled = bool(explicit_enabled)
+    else:
+        enabled = bool(base_cfg.get("enabled", False))
+
+    config.setdefault("task_continuity", {})
+    config["task_continuity"]["enabled"] = enabled
+
+    logger.debug("[deerflow_config] task_continuity resolved: enabled=%s", enabled)
 
 
 def _build_runtime_middlewares(
@@ -783,6 +817,7 @@ def _generate_temp_config(
     _inject_subagent_limit(config, ai_config)
     _inject_tool_progress(config, ai_config)
     _inject_tool_search(config, ai_config)
+    _inject_task_continuity(config, ai_config)
     web_search_mcp = ai_config.get("web_search_mcp_servers", [])
     _inject_web_search(config, ai_config, mcp_servers, web_search_mcp)
 
