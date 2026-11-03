@@ -1437,3 +1437,165 @@ def internal_task_info(
         "last_checkpoint_id": task.last_checkpoint_id,
         "skill_id": task.skill_id,
     }
+
+
+# ---------------------------------------------------------------------------
+# Scheduled task execution — internal endpoint for scheduler_worker
+# ---------------------------------------------------------------------------
+
+
+class ScheduledTaskExecuteRequest(BaseModel):
+    task_id: int
+
+
+@router.post("/ai/scheduled-tasks/execute")
+async def execute_scheduled_task(
+    payload: ScheduledTaskExecuteRequest,
+    _auth: bool = Depends(verify_system_token),
+    db: Session = Depends(get_db),
+):
+    """Execute a scheduled task by task_id.
+
+    Called by scheduler_worker when a task is due. Reads skill_id from the DB
+    (not request body) to prevent white-list bypass. Dispatches based on skill_id:
+    - asset-report: creates session + task, fires agent gateway (fire-and-forget)
+    - literacy-weekly-report: generates reports for all children in the family
+
+    Returns execution result (triggered count, skill_id).
+    """
+    from packages.db.models.scheduled_task import ScheduledTask
+
+    task = db.query(ScheduledTask).filter(ScheduledTask.id == payload.task_id).first()
+    if not task:
+        raise AppError(ErrorCode.SCHEDULED_TASK_NOT_FOUND)
+    if not task.is_enabled:
+        raise AppError(ErrorCode.SCHEDULED_TASK_DISABLED)
+
+    skill_id = task.skill_id
+    family_id = task.family_id
+
+    # Find family owner for user_id context
+    owner = (
+        db.query(User)
+        .filter(
+            User.family_id == family_id,
+            User.role == UserRole.OWNER,
+            User.is_active.is_(True),
+        )
+        .first()
+    )
+    if not owner:
+        raise AppError(ErrorCode.FAMILY_NO_ACTIVE_MEMBERS)
+
+    if skill_id == "asset-report":
+        triggered = await _execute_asset_report(db, family_id, owner)
+    elif skill_id == "literacy-weekly-report":
+        triggered = await _execute_literacy_report(db, family_id, owner)
+    else:
+        raise AppError(ErrorCode.SCHEDULED_TASK_SKILL_INVALID)
+
+    return {"status": "triggered", "skill_id": skill_id, "triggered": triggered}
+
+
+async def _execute_asset_report(db: Session, family_id: int, owner: User) -> int:
+    """Dispatch asset-report generation for a single family.
+
+    Mirrors auto_generate_reports per-family body: create session + task, then
+    fire-and-forget POST to agent gateway.
+    """
+    from apps.backend.app.services.agent_client import AgentClient
+    from apps.backend.app.services.ai_task_service import AITaskService
+    from apps.backend.app.services.chat_session import ChatSessionService
+
+    session = await ChatSessionService.create_session(
+        family_id=family_id,
+        user_id=owner.id,
+        db=db,
+        source="asset-report",
+    )
+    task = AITaskService.create_task(
+        family_id=family_id,
+        skill_id="asset-report",
+        session_id=session.id,
+        db=db,
+    )
+    # task is created for tracking but not used in this scope (fire-and-forget)
+    _ = task
+
+    agent_client = AgentClient(family_id, owner.id, timeout=30.0)
+    try:
+        await agent_client.post(
+            f"/internal/gateway/runs/asset-report/{session.id}",
+            json={
+                "family_id": str(family_id),
+                "user_id": str(owner.id),
+                "language": owner.language,
+                "on_disconnect": "continue",
+            },
+        )
+        logger.info("[scheduled-task] triggered asset-report family=%s", family_id)
+        return 1
+    except Exception as agent_err:
+        logger.warning(
+            "[scheduled-task] agent call failed family=%s err=%s",
+            family_id,
+            agent_err,
+        )
+        return 0
+
+
+async def _execute_literacy_report(db: Session, family_id: int, owner: User) -> int:
+    """Generate literacy reports for all children in the family.
+
+    Iterates active children and calls generate_literacy_report service per child.
+    """
+    from datetime import date
+
+    from apps.backend.app.services.literacy_report import _sunday_of
+    from apps.backend.app.services.literacy_report_service import (
+        generate_literacy_report,
+    )
+
+    children = (
+        db.query(User)
+        .filter(
+            User.family_id == family_id,
+            User.role == UserRole.CHILD,
+            User.is_active.is_(True),
+        )
+        .all()
+    )
+
+    if not children:
+        logger.info("[scheduled-task] literacy-report: no active children family=%s", family_id)
+        return 0
+
+    week_start = _sunday_of(date.today())
+    triggered = 0
+
+    for child in children:
+        try:
+            report = await generate_literacy_report(
+                db,
+                family_id=family_id,
+                child_id=child.id,
+                week_start=week_start,
+                user_id=owner.id,
+                force=False,
+            )
+            if report is not None:
+                triggered += 1
+                logger.info(
+                    "[scheduled-task] literacy-report generated child=%s family=%s",
+                    child.id,
+                    family_id,
+                )
+        except Exception as e:
+            logger.warning(
+                "[scheduled-task] literacy-report failed child=%s family=%s err=%s",
+                child.id,
+                family_id,
+                e,
+            )
+
+    return triggered
