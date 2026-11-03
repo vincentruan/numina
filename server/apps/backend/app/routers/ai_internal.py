@@ -1514,25 +1514,17 @@ async def _execute_asset_report(db: Session, family_id: int, owner: User) -> int
     )
 
     agent_client = AgentClient(family_id, owner.id, timeout=30.0)
-    try:
-        await agent_client.post(
-            f"/internal/gateway/runs/asset-report/{session.id}",
-            json={
-                "family_id": str(family_id),
-                "user_id": str(owner.id),
-                "language": owner.language,
-                "on_disconnect": "continue",
-            },
-        )
-        logger.info("[scheduled-task] triggered asset-report family=%s", family_id)
-        return 1
-    except Exception as agent_err:
-        logger.warning(
-            "[scheduled-task] agent call failed family=%s err=%s",
-            family_id,
-            agent_err,
-        )
-        return 0
+    await agent_client.post(
+        f"/internal/gateway/runs/asset-report/{session.id}",
+        json={
+            "family_id": str(family_id),
+            "user_id": str(owner.id),
+            "language": owner.language,
+            "on_disconnect": "continue",
+        },
+    )
+    logger.info("[scheduled-task] triggered asset-report family=%s", family_id)
+    return 1
 
 
 async def _execute_literacy_report(db: Session, family_id: int, owner: User) -> int:
