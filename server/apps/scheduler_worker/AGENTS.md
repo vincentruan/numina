@@ -50,6 +50,7 @@ The worker has no `routers/` — it exposes only liveness/readiness probes from 
 | `device_session_cleanup` | `device_session_cleanup_job` | Cron hourly :15 | Remove expired device sessions |
 | `reminder_daily` | `reminder_job` | Cron daily 09:20 | Compute due reminders + dispatch via notification channels |
 | `snapshot_daily` | `snapshot_job` | Cron daily 00:05 | Take per-family net-worth snapshot |
+| `scheduled_task_poll` | `scheduled_task_poll_job` (async) | Interval 60s | Dispatch due user-configured scheduled tasks to the backend |
 
 ## Key Invariants
 
