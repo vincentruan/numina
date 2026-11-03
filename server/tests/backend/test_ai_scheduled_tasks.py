@@ -79,18 +79,10 @@ class TestCreateScheduledTask:
         assert response.status_code == 400
         assert _body(response)["code"] == "SCHEDULED_TASK_SKILL_INVALID"
 
-    def test_rejects_invalid_cron(self, client, auth_headers):
-        response = client.post(
-            BASE,
-            headers=auth_headers,
-            json={"skill_id": "asset-report", "cron_expression": "0 9 * *"},
-        )
-
-        assert response.status_code == 400
-        assert _body(response)["code"] == "SCHEDULED_TASK_CRON_INVALID"
-
-    @pytest.mark.parametrize("expression", ["not a cron", "0 25 * * *", ""])
-    def test_cron_rejections_never_500(self, client, auth_headers, expression):
+    @pytest.mark.parametrize(
+        "expression", ["0 9 * *", "not a cron", "0 25 * * *", ""]
+    )
+    def test_rejects_invalid_cron(self, client, auth_headers, expression):
         response = client.post(
             BASE,
             headers=auth_headers,
@@ -98,6 +90,7 @@ class TestCreateScheduledTask:
         )
 
         assert response.status_code == 400
+        assert _body(response)["code"] == "SCHEDULED_TASK_CRON_INVALID"
 
     def test_non_owner_cannot_create(self, client, member_headers):
         response = client.post(

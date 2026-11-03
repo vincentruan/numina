@@ -85,6 +85,9 @@ class TestExecuteScheduledTask:
         data = _body(response)
         assert data["status"] == "triggered"
         assert data["skill_id"] == "asset-report"
+        # The worker only reads the status code, so a swallowed agent error would
+        # otherwise look identical to a real dispatch.
+        assert data["triggered"] == 1
 
         # AgentClient was instantiated with the correct family_id and owner.
         mock_client_cls.assert_called_once_with(
@@ -152,3 +155,33 @@ class TestExecuteScheduledTask:
         # injected value (finance-coach).
         data = _body(response)
         assert data["skill_id"] == "asset-report"
+
+    def test_agent_failure_returns_500(self, client, _seed_task):
+        """A failed agent dispatch must not report success.
+
+        The worker treats HTTP 200 as success and advances the schedule, so a
+        swallowed gateway error would mark the task successful while nothing ran.
+        """
+        from fastapi.testclient import TestClient
+
+        from apps.backend.app.main import app
+
+        task = _seed_task["task"]
+
+        with patch(
+            "apps.backend.app.services.agent_client.AgentClient"
+        ) as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=RuntimeError("gateway down"))
+            mock_client_cls.return_value = mock_client
+
+            # The endpoint deliberately lets the error propagate, so the test
+            # client must not re-raise it to observe the status code.
+            with TestClient(app, raise_server_exceptions=False) as raw_client:
+                response = raw_client.post(
+                    BASE,
+                    headers=_system_headers(),
+                    json={"task_id": task.id},
+                )
+
+        assert response.status_code == 500
