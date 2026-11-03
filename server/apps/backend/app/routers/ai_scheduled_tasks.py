@@ -1,3 +1,6 @@
+from datetime import datetime
+
+from croniter import CroniterBadCronError, CroniterBadDateError
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -12,8 +15,8 @@ from apps.backend.app.schemas.scheduled_task import (
     ScheduledTaskResponse,
     ScheduledTaskUpdate,
 )
-from packages.core.cron import compute_next_run_at, is_valid_cron
-from packages.db.models.scheduled_task import ScheduledTask
+from packages.core.cron import compute_next_run_at
+from packages.db.models.scheduled_task import ScheduledTask, ScheduledTaskStatus
 
 router = APIRouter(prefix="/ai/scheduled-tasks", tags=["ai-scheduled-tasks"])
 
@@ -25,11 +28,17 @@ def _validate_skill(skill_id: str) -> str:
     return skill
 
 
-def _validate_cron(cron_expression: str) -> str:
+def _next_run_or_reject(cron_expression: str) -> tuple[str, datetime]:
+    """Normalize a cron expression and compute its next run in one parse.
+
+    ``compute_next_run_at`` is the single validator: it raises for a malformed
+    expression, so validating separately would parse the same string twice.
+    """
     expression = cron_expression.strip()
-    if not is_valid_cron(expression):
-        raise AppError(ErrorCode.SCHEDULED_TASK_CRON_INVALID)
-    return expression
+    try:
+        return expression, compute_next_run_at(expression)
+    except (ValueError, KeyError, CroniterBadCronError, CroniterBadDateError):
+        raise AppError(ErrorCode.SCHEDULED_TASK_CRON_INVALID) from None
 
 
 def _get_family_task(db: Session, *, task_id: int, family_id: int) -> ScheduledTask:
@@ -71,15 +80,15 @@ def create_scheduled_task(
 ) -> ScheduledTaskResponse:
     """创建定时任务（仅 owner）。"""
     skill_id = _validate_skill(payload.skill_id)
-    cron_expression = _validate_cron(payload.cron_expression)
+    cron_expression, next_run_at = _next_run_or_reject(payload.cron_expression)
 
     task = ScheduledTask(
         family_id=current_user.family_id,
         skill_id=skill_id,
         cron_expression=cron_expression,
         is_enabled=payload.is_enabled,
-        next_run_at=compute_next_run_at(cron_expression),
-        status="idle",
+        next_run_at=next_run_at,
+        status=ScheduledTaskStatus.IDLE,
     )
     db.add(task)
     db.commit()
@@ -102,10 +111,10 @@ def update_scheduled_task(
         task.skill_id = _validate_skill(payload.skill_id)
 
     if payload.cron_expression is not None:
-        cron_expression = _validate_cron(payload.cron_expression)
+        cron_expression, next_run_at = _next_run_or_reject(payload.cron_expression)
         if cron_expression != task.cron_expression:
             task.cron_expression = cron_expression
-            task.next_run_at = compute_next_run_at(cron_expression)
+            task.next_run_at = next_run_at
 
     if payload.is_enabled is not None:
         task.is_enabled = payload.is_enabled

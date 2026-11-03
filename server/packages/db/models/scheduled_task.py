@@ -1,10 +1,23 @@
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
 from packages.db.session import Base, UTCDateTime
+
+
+class ScheduledTaskStatus(StrEnum):
+    """Lifecycle state of a scheduled task.
+
+    Inherits from str so comparisons with the raw DB column work transparently.
+    """
+
+    IDLE = "idle"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
 
 
 class ScheduledTask(Base):
@@ -20,8 +33,8 @@ class ScheduledTask(Base):
     next_run_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     last_run_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     status: Mapped[str] = mapped_column(
-        String(20), default="idle", nullable=False
-    )  # idle | running | success | failed
+        String(20), default=ScheduledTaskStatus.IDLE, nullable=False
+    )
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now()

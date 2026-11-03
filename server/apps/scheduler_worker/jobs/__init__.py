@@ -788,7 +788,7 @@ async def scheduled_task_poll_job() -> None:
 
     import httpx
 
-    from packages.db.models.scheduled_task import ScheduledTask
+    from packages.db.models.scheduled_task import ScheduledTask, ScheduledTaskStatus
     from packages.security.service_auth.agent_jwt import create_system_token
 
     db = SessionLocal()
@@ -797,11 +797,11 @@ async def scheduled_task_poll_job() -> None:
         stale_count = (
             db.query(ScheduledTask)
             .filter(
-                ScheduledTask.status == "running",
+                ScheduledTask.status == ScheduledTaskStatus.RUNNING,
                 ScheduledTask.updated_at < stale_cutoff,
             )
             .update(
-                {ScheduledTask.status: "idle"},
+                {ScheduledTask.status: ScheduledTaskStatus.IDLE},
                 synchronize_session=False,
             )
         )
@@ -815,7 +815,7 @@ async def scheduled_task_poll_job() -> None:
             .filter(
                 ScheduledTask.is_enabled.is_(True),
                 ScheduledTask.next_run_at <= now,
-                ScheduledTask.status != "running",
+                ScheduledTask.status != ScheduledTaskStatus.RUNNING,
             )
             .all()
         )
@@ -838,10 +838,10 @@ async def scheduled_task_poll_job() -> None:
                     db.query(ScheduledTask)
                     .filter(
                         ScheduledTask.id == task_id,
-                        ScheduledTask.status != "running",
+                        ScheduledTask.status != ScheduledTaskStatus.RUNNING,
                     )
                     .update(
-                        {ScheduledTask.status: "running"},
+                        {ScheduledTask.status: ScheduledTaskStatus.RUNNING},
                         synchronize_session=False,
                     )
                 )
@@ -867,7 +867,7 @@ async def scheduled_task_poll_job() -> None:
                         ).update(
                             {
                                 ScheduledTask.last_run_at: datetime.now(UTC),
-                                ScheduledTask.status: "success",
+                                ScheduledTask.status: ScheduledTaskStatus.SUCCESS,
                                 ScheduledTask.next_run_at: next_run,
                             },
                             synchronize_session=False,
@@ -917,11 +917,11 @@ def _record_failure(
     re-dispatched on every poll, turning one backend error into an unbounded
     1-minute retry loop.
     """
-    from packages.db.models.scheduled_task import ScheduledTask
+    from packages.db.models.scheduled_task import ScheduledTask, ScheduledTaskStatus
 
     db.query(ScheduledTask).filter(ScheduledTask.id == task_id).update(
         {
-            ScheduledTask.status: "failed",
+            ScheduledTask.status: ScheduledTaskStatus.FAILED,
             ScheduledTask.last_error: error_msg[:1000],
             ScheduledTask.next_run_at: _next_run_after(cron_expression),
         },
