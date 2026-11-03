@@ -777,3 +777,138 @@ def _already_backed_up_today(db, family_id: int) -> bool:
         .first()
     )
     return existing is not None
+
+
+# ── Job 13: Scheduled task polling ─────────────────────────────────────────────
+
+
+async def scheduled_task_poll_job() -> None:
+    """Poll for due scheduled tasks and execute them.
+
+    Runs every 60 seconds (max_instances=1). Queries tasks where
+    is_enabled=True AND next_run_at <= now AND status != 'running', then
+    dispatches each to the backend execute endpoint.
+
+    Concurrency protection: optimistic lock via status='running' update.
+    Only proceeds if the UPDATE succeeds (rowcount == 1).
+
+    On success: updates last_run_at, status='success', next_run_at.
+    On failure: updates status='failed', last_error (truncated to 1000 chars).
+    """
+    from datetime import UTC, datetime, timedelta
+
+    import httpx
+
+    from packages.core.cron import compute_next_run_at
+    from packages.db.models.scheduled_task import ScheduledTask
+    from packages.security.service_auth.agent_jwt import create_system_token
+
+    db = SessionLocal()
+    try:
+        # Startup recovery: reset stale 'running' tasks (updated_at < 10 min ago)
+        stale_cutoff = datetime.now(UTC) - timedelta(minutes=10)
+        stale_count = (
+            db.query(ScheduledTask)
+            .filter(
+                ScheduledTask.status == "running",
+                ScheduledTask.updated_at < stale_cutoff,
+            )
+            .update(
+                {ScheduledTask.status: "idle"},
+                synchronize_session=False,
+            )
+        )
+        if stale_count > 0:
+            db.commit()
+            logger.info("重置 %d 个卡死的运行中任务", stale_count)
+
+        # Query due tasks
+        now = datetime.now(UTC)
+        due_tasks = (
+            db.query(ScheduledTask)
+            .filter(
+                ScheduledTask.is_enabled.is_(True),
+                ScheduledTask.next_run_at <= now,
+                ScheduledTask.status != "running",
+            )
+            .all()
+        )
+
+        if not due_tasks:
+            return
+
+        logger.info("发现 %d 个到期任务", len(due_tasks))
+
+        for task in due_tasks:
+            # Optimistic lock: mark as running
+            updated = (
+                db.query(ScheduledTask)
+                .filter(
+                    ScheduledTask.id == task.id,
+                    ScheduledTask.status != "running",
+                )
+                .update(
+                    {ScheduledTask.status: "running"},
+                    synchronize_session=False,
+                )
+            )
+            db.commit()
+
+            if updated != 1:
+                logger.warning("任务 %d 已被其他进程锁定，跳过", task.id)
+                continue
+
+            # Call backend execute endpoint
+            try:
+                async with httpx.AsyncClient(timeout=300.0, trust_env=False) as client:
+                    resp = await client.post(
+                        f"{settings.BACKEND_BASE_URL}/api/v1/internal/ai/scheduled-tasks/execute",
+                        headers={
+                            "Authorization": f"Bearer {create_system_token()}",
+                        },
+                        json={"task_id": task.id},
+                    )
+
+                if resp.status_code == 200:
+                    # Success: update last_run_at, status='success', next_run_at
+                    next_run = compute_next_run_at(task.cron_expression)
+                    db.query(ScheduledTask).filter(ScheduledTask.id == task.id).update(
+                        {
+                            ScheduledTask.last_run_at: datetime.now(UTC),
+                            ScheduledTask.status: "success",
+                            ScheduledTask.next_run_at: next_run,
+                        },
+                        synchronize_session=False,
+                    )
+                    db.commit()
+                    logger.info("任务 %d 执行成功，下次执行 %s", task.id, next_run)
+                else:
+                    # HTTP error
+                    error_msg = f"HTTP {resp.status_code}: {resp.text[:500]}"
+                    db.query(ScheduledTask).filter(ScheduledTask.id == task.id).update(
+                        {
+                            ScheduledTask.status: "failed",
+                            ScheduledTask.last_error: error_msg[:1000],
+                        },
+                        synchronize_session=False,
+                    )
+                    db.commit()
+                    logger.warning("任务 %d 执行失败: %s", task.id, error_msg)
+
+            except Exception as e:
+                # Network or other error
+                error_msg = str(e)[:1000]
+                db.query(ScheduledTask).filter(ScheduledTask.id == task.id).update(
+                    {
+                        ScheduledTask.status: "failed",
+                        ScheduledTask.last_error: error_msg,
+                    },
+                    synchronize_session=False,
+                )
+                db.commit()
+                logger.exception("任务 %d 执行异常: %s", task.id, e)
+
+    except Exception:
+        logger.exception("定时任务轮询异常")
+    finally:
+        db.close()
