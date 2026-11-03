@@ -122,9 +122,20 @@ tool_progress:
 # 延迟 MCP 工具 schema 提升（T24 — 条件启用 tool_search）
 # 当 MCP server 数量 >= mcp_server_threshold 时自动启用，
 # 或按家庭 ai_config.tool_search.enabled 显式覆盖。
+# 注意: mcp_server_threshold 是 Numina-only 字段，上游 ToolSearchConfig
+# 无此字段（Pydantic v2 extra="ignore" 静默忽略），仅 Numina 注入逻辑使用。
 tool_search:
   enabled: false
-  mcp_server_threshold: 3
+  mcp_server_threshold: 3  # Numina-only, ignored by upstream harness
+
+# 任务连续性（T25 — task_note + history_search + history_read）
+# 启用后，LLM 获得三个工具：
+# - task_note: 持久化笔记，跨 compaction 保留
+# - history_search: 当前线程内的消息搜索（SQLite FTS）
+# - history_read: 当前线程 compaction 归档的源文档读取
+# 上游 TaskNotesChannel 硬编码限制：最多 8 条笔记，每条 750 字符。
+task_continuity:
+  enabled: true
 
 # 流式超时
 stream:
