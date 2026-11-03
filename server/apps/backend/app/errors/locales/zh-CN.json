@@ -162,5 +162,6 @@
   "SCHEDULED_TASK_NOT_FOUND": "定时任务不存在",
   "SCHEDULED_TASK_SKILL_INVALID": "不支持该技能，当前仅支持资产报告和识字周报",
   "SCHEDULED_TASK_CRON_INVALID": "cron 表达式无效，请使用 5 字段格式（分 时 日 月 周）",
-  "SCHEDULED_TASK_DISABLED": "定时任务已禁用"
+  "SCHEDULED_TASK_DISABLED": "定时任务已禁用",
+  "SCHEDULED_TASK_EXECUTE_FAILED": "定时任务执行失败"
 }

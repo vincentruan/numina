@@ -180,7 +180,7 @@ class TestExecuteScheduledTask:
 
         assert response.status_code == 403
 
-    def test_agent_gateway_non_2xx_returns_500(self, client, _seed_task):
+    def test_agent_gateway_non_2xx_returns_502(self, client, _seed_task):
         """A gateway 409/5xx must not silently report success to the worker."""
         from fastapi.testclient import TestClient
 
@@ -206,7 +206,8 @@ class TestExecuteScheduledTask:
                     json={"task_id": task.id},
                 )
 
-        assert response.status_code == 500
+        assert response.status_code == 502
+        assert response.json()["code"] == "SCHEDULED_TASK_EXECUTE_FAILED"
 
     def test_agent_failure_returns_500(self, client, _seed_task):
         """A failed agent dispatch must not report success.
