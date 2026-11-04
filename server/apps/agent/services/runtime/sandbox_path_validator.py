@@ -103,7 +103,7 @@ def validate_path_against_policy(
     # 4. Check allowed_paths (if configured)
     if policy.allowed_paths:
         under_allowed = any(
-            _is_under_prefix(resolved, prefix) for prefix in policy.allowed_paths
+            is_under_prefix(resolved, prefix) for prefix in policy.allowed_paths
         )
         if not under_allowed:
             return PathPolicyResult(
@@ -115,7 +115,7 @@ def validate_path_against_policy(
 
     # 5. Check read_only_paths
     is_read_only = any(
-        _is_under_prefix(resolved, prefix) for prefix in policy.read_only_paths
+        is_under_prefix(resolved, prefix) for prefix in policy.read_only_paths
     )
 
     return PathPolicyResult(
@@ -125,7 +125,7 @@ def validate_path_against_policy(
     )
 
 
-def _is_under_prefix(path: Path, prefix: str) -> bool:
+def is_under_prefix(path: Path, prefix: str) -> bool:
     """Check if ``path`` is under the given absolute prefix string."""
     try:
         path.relative_to(prefix)
