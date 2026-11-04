@@ -182,6 +182,37 @@ def _inject_pii_redaction(config: dict[str, Any]) -> None:
     }
 
 
+def _inject_container_sandbox(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+    family_id: str,
+) -> None:
+    """Opt the family into DeerFlow's container sandbox when enabled (in-place).
+
+    Container isolation is opt-in per family via
+    ``ai_config["sandbox"]["container_enabled"]``, so this is a no-op unless the
+    backend explicitly enables it. Per-thread mount selection is left to
+    ``AioSandboxProvider``, which derives it from family_id + thread_id at
+    acquire time.
+    """
+    # Local imports: ``apps.agent.services.runtime`` pulls in the worker, which
+    # imports this adapter package — module-level imports here are circular.
+    from apps.agent.services.runtime.numina_container_overlay import (
+        override_sandbox_provider,
+    )
+
+    try:
+        from deerflow.config.paths import get_paths
+
+        family_root = Path(get_paths().host_base_dir) / "users" / family_id
+    except Exception:
+        from apps.agent.app.config import settings
+
+        family_root = Path(settings.AGENT_DATA_DIR) / family_id
+
+    override_sandbox_provider(config, ai_config, family_id, family_root)
+
+
 def _inject_sandbox_gate(
     config: dict[str, Any],
     ai_config: dict[str, Any],
@@ -826,6 +857,7 @@ def _generate_temp_config(
     # Numina-specific injections (no DeerFlow equivalents)
     _inject_memory(config, family_id, memory_enabled)
     _inject_sandbox(config)
+    _inject_container_sandbox(config, ai_config, family_id)
     _inject_skills(config)
     _inject_mcp(config, mcp_servers)
     _inject_token_budget(config)
