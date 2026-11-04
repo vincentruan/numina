@@ -388,3 +388,61 @@ class TestDecisionShape:
         assert decision.policy_id == "numina-sandbox-gate"
         assert len(decision.reasons) == 1
         assert decision.reasons[0].code and decision.reasons[0].message
+
+
+class TestStrReplacePayload:
+    """str_replace's payload key is new_str, not content."""
+
+    def test_oversized_new_str_denied(self) -> None:
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"max_file_size_bytes": 10}
+        )
+
+        decision = provider.evaluate(
+            _request(
+                "str_replace",
+                {
+                    "path": "/mnt/user-data/workspace/a.txt",
+                    "old_str": "x",
+                    "new_str": "y" * 50,
+                },
+            )
+        )
+
+        assert decision.allow is False
+        assert decision.reasons[0].code == "file_too_large"
+
+    def test_shrinking_str_replace_allowed(self) -> None:
+        """A str_replace that shrinks the file skips the size check."""
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"max_file_size_bytes": 10}
+        )
+
+        decision = provider.evaluate(
+            _request(
+                "str_replace",
+                {
+                    "path": "/mnt/user-data/workspace/a.txt",
+                    "old_str": "long text here",
+                    "new_str": "x",
+                },
+            )
+        )
+
+        assert decision.allow is True
+
+
+class TestQuotaWriteOnly:
+    """Cumulative quota is enforced only on writes."""
+
+    def test_read_allowed_when_over_quota(self, user_data_root: Path) -> None:
+        (user_data_root / "workspace" / "big.bin").write_bytes(b"x" * 4096)
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"max_total_quota_bytes": 1024}
+        )
+
+        decision = provider.evaluate(
+            _request("read_file", {"path": "/mnt/user-data/workspace/big.bin"})
+        )
+
+        assert decision.allow is True

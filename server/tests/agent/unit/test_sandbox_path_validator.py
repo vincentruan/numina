@@ -188,17 +188,18 @@ class TestSandboxRootContainment:
         assert result.allowed is False
         assert result.reason == "Path outside allowed directories"
 
-    def test_cross_family_path_blocked(self, tmp_path: Path) -> None:
-        """A sibling family's tree is outside this family's root."""
-        own = tmp_path / "users" / "family-A"
-        other = tmp_path / "users" / "family-B"
-        own.mkdir(parents=True)
-        other.mkdir(parents=True)
+    def test_cross_family_path_blocked(self, user_data_root: Path) -> None:
+        """A traversal that escapes the root is blocked."""
         policy = SandboxPolicy.default_policy()
 
-        result = validate_path_against_policy(str(other / "private.json"), own, policy)
+        result = validate_path_against_policy(
+            "/mnt/user-data/workspace/../../family-B/threads/t1/user-data/workspace/private.json",
+            user_data_root,
+            policy,
+        )
 
         assert result.allowed is False
+        assert "escapes sandbox root" in result.reason
 
 
 class TestReturnShape:
@@ -227,3 +228,39 @@ class TestReturnShape:
 
         assert result.allowed is True
         assert result.reason == ""
+
+
+class TestFrameworkMounts:
+    """Framework mounts (/mnt/skills, /mnt/acp-workspace) are deferred to upstream."""
+
+    def test_skills_mount_deferred(self, user_data_root: Path) -> None:
+        policy = SandboxPolicy.default_policy()
+
+        result = validate_path_against_policy(
+            "/mnt/skills/public/chat/SKILL.md", user_data_root, policy
+        )
+
+        assert result.allowed is True
+        assert result.deferred is True
+        assert result.is_read_only is True
+
+    def test_acp_workspace_mount_deferred(self, user_data_root: Path) -> None:
+        policy = SandboxPolicy.default_policy()
+
+        result = validate_path_against_policy(
+            "/mnt/acp-workspace/output.html", user_data_root, policy
+        )
+
+        assert result.allowed is True
+        assert result.deferred is True
+
+    def test_skills_mount_ignores_allowed_paths(self, user_data_root: Path) -> None:
+        """Even a restrictive allowed_paths does not block framework mounts."""
+        policy = SandboxPolicy(allowed_paths=["/nonexistent/only"])
+
+        result = validate_path_against_policy(
+            "/mnt/skills/public/chat/SKILL.md", user_data_root, policy
+        )
+
+        assert result.allowed is True
+        assert result.deferred is True

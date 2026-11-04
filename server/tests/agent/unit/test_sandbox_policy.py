@@ -165,3 +165,21 @@ class TestFrozenModel:
         policy = SandboxPolicy.default_policy()
         with pytest.raises(ValidationError):
             policy.max_file_size_bytes = 999  # type: ignore[misc]
+
+
+class TestForbidExtra:
+    """SandboxPolicy rejects unknown keys (extra='forbid')."""
+
+    def test_typo_key_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="extra"):
+            SandboxPolicy.from_config({"max_file_size_byte": 1024})
+
+    def test_unknown_dict_field_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="extra"):
+            SandboxPolicy.from_config({"allowed_paths": [], "read_only_prefixes": []})
+
+    def test_valid_config_still_works(self) -> None:
+        policy = SandboxPolicy.from_config(
+            {"max_file_size_bytes": 2048, "allowed_paths": []}
+        )
+        assert policy.max_file_size_bytes == 2048

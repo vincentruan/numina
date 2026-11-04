@@ -177,6 +177,11 @@ class NuminaGuardrailProvider:
         path_result = validate_path_against_policy(
             virtual_path, sandbox_root, self._policy
         )
+        if path_result.deferred:
+            # Framework mounts (/mnt/skills, /mnt/acp-workspace) are enforced by
+            # DeerFlow's upstream validation. The gate does not apply per-family
+            # policy to them.
+            return _allow()
         if not path_result.allowed:
             return self._violation(
                 request,
@@ -202,7 +207,8 @@ class NuminaGuardrailProvider:
 
         # 3. Single-file size limit (write payloads only)
         if is_write:
-            size = check_file_size(request.tool_input.get("content"), self._policy)
+            payload = self._write_payload_size(request)
+            size = check_file_size(payload, self._policy)
             if not size.allowed:
                 return self._violation(
                     request,
@@ -213,17 +219,20 @@ class NuminaGuardrailProvider:
                     message=size.reason,
                 )
 
-        # 4. Cumulative quota for the family tree
-        quota = check_cumulative_quota(sandbox_root, self._policy)
-        if not quota.allowed:
-            return self._violation(
-                request,
-                family_id=family_id,
-                operation="write" if is_write else "read",
-                path=virtual_path,
-                code="quota_exceeded",
-                message=quota.reason,
-            )
+        # 4. Cumulative quota for the family tree (writes only — reads cannot
+        # grow usage, and a permanent read denial after an upload bumps usage
+        # past the cap would lock the family out of its own sandbox).
+        if is_write:
+            quota = check_cumulative_quota(sandbox_root, self._policy)
+            if not quota.allowed:
+                return self._violation(
+                    request,
+                    family_id=family_id,
+                    operation="write",
+                    path=virtual_path,
+                    code="quota_exceeded",
+                    message=quota.reason,
+                )
 
         return _allow()
 
@@ -250,6 +259,26 @@ class NuminaGuardrailProvider:
         if not thread_id:
             raise RuntimeError("SandboxGate: tool call arrived without a thread_id")
         return Path(get_paths().host_sandbox_user_data_dir(thread_id, user_id=family_id))
+
+    @staticmethod
+    def _write_payload_size(request: GuardrailRequest) -> str | bytes | None:
+        """Return the size-bearing payload for a write tool, or None for reads.
+
+        write_file carries ``content``; str_replace carries ``new_str`` and
+        grows the file by the portion of ``new_str`` not already covered by
+        ``old_str``. Reading ``content`` for str_replace would silently skip
+        the per-file size cap.
+        """
+        if request.tool_name == "str_replace":
+            new = request.tool_input.get("new_str")
+            if new is None:
+                return None
+            old = request.tool_input.get("old_str") or ""
+            if isinstance(new, str) and isinstance(old, str) and len(new) <= len(old):
+                # Replacement shrinks the file — size check passes trivially.
+                return None
+            return new
+        return request.tool_input.get("content")
 
     def _violation(
         self,

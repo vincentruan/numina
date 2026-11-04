@@ -51,7 +51,7 @@ class SandboxPolicy(BaseModel):
             Must be positive. Default: 1.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     allowed_paths: list[str] = []
     read_only_paths: list[str] = []

@@ -88,16 +88,20 @@ class TestPerFamilyMountIsolation:
         assert any("family-B" in src for src in sources_b)
 
     @requires_docker
-    def test_family_trees_are_disjoint(self, tmp_path: Path) -> None:
-        """A file in one family's tree is not reachable from the other's."""
-        a_ws = tmp_path / "users" / "family-A" / "threads" / "t1" / "user-data" / "workspace"
-        b_ws = tmp_path / "users" / "family-B" / "threads" / "t1" / "user-data" / "workspace"
-        a_ws.mkdir(parents=True)
-        b_ws.mkdir(parents=True)
+    def test_provider_mounts_include_user_id(self) -> None:
+        """The provider's mount computation scopes by the supplied user_id."""
+        from deerflow.community.aio_sandbox.aio_sandbox_provider import (
+            AioSandboxProvider,
+        )
 
-        (b_ws / "private.json").write_text('{"secret": true}', encoding="utf-8")
+        mounts_a = AioSandboxProvider._get_thread_mounts("t1", user_id="family-A")
+        mounts_b = AioSandboxProvider._get_thread_mounts("t1", user_id="family-B")
 
-        assert not (a_ws / "private.json").exists()
+        # Both calls resolve to the same thread_id but different users —
+        # verify the resulting mount sources differ.
+        sources_a = {src for src, _, _ in mounts_a}
+        sources_b = {src for src, _, _ in mounts_b}
+        assert sources_a != sources_b
 
 
 class TestDualEnforcement:

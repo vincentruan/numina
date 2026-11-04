@@ -5,6 +5,10 @@ Validates file operation paths against a ``SandboxPolicy``'s path-pattern rules:
 - Check the resolved path against ``allowed_paths`` prefixes
 - Mark paths under ``read_only_paths`` prefixes as read-only
 
+Framework mounts (/mnt/skills, /mnt/acp-workspace) are not family data. The
+gate defers to DeerFlow's own upstream validation for those paths and does not
+apply the family's allowed_paths/read_only_paths policy to them.
+
 This module does NOT prevent path traversal — DeerFlow's upstream
 ``validate_local_tool_path`` and ``_resolve_path_with_mapping`` handle that.
 T18's additive value is per-family policy patterns, not raw traversal prevention.
@@ -14,6 +18,8 @@ Virtual path forms accepted (see :func:`resolve_virtual_path`):
 * ``/mnt/user-data/workspace/x`` — DeerFlow's canonical absolute virtual form,
   which is what the file tools actually receive.
 * ``/mnt/user-data/uploads/x`` / ``/mnt/user-data/outputs/x`` — sibling mounts.
+* ``/mnt/skills/*`` — framework mount, deferred to upstream (read-only).
+* ``/mnt/acp-workspace/*`` — framework mount, deferred to upstream (read-only).
 * ``workspace/x`` — bare relative form, also accepted.
 
 Absolute paths outside the virtual prefix and outside the family tree are
@@ -29,6 +35,11 @@ from deerflow.config.paths import VIRTUAL_PATH_PREFIX
 
 from apps.agent.services.runtime.sandbox_policy import SandboxPolicy
 
+# Framework mounts the harness exposes read-only to the model. The gate defers
+# policy enforcement on these paths to DeerFlow's upstream validation.
+_SKILLS_VIRTUAL_PREFIX = "/mnt/skills"
+_ACP_VIRTUAL_PREFIX = "/mnt/acp-workspace"
+
 
 @dataclass
 class PathPolicyResult:
@@ -38,13 +49,18 @@ class PathPolicyResult:
         allowed: Whether the path is permitted for the operation.
         is_read_only: Whether the path falls under a read-only prefix.
         resolved_path: The host-absolute resolved path (after symlink resolution).
+            For deferred framework mounts, this is the family root (sentinel —
+            callers must check ``deferred`` before interpreting the path).
         reason: Human-readable reason when ``allowed`` is False.
+        deferred: True when the path is a framework mount (/mnt/skills or
+            /mnt/acp-workspace) that should be enforced by upstream validation.
     """
 
     allowed: bool
     is_read_only: bool
     resolved_path: Path
     reason: str = ""
+    deferred: bool = False
 
 
 def resolve_virtual_path(virtual_path: str, sandbox_root: Path | str) -> Path:
@@ -109,6 +125,16 @@ def validate_path_against_policy(
     sandbox_root = Path(sandbox_root)
 
     # 1. Translate to a host path
+    if _is_framework_mount(virtual_path):
+        # Framework mounts (/mnt/skills, /mnt/acp-workspace) are enforced by
+        # upstream validation. The gate does not apply per-family policy here.
+        return PathPolicyResult(
+            allowed=True,
+            is_read_only=True,
+            resolved_path=sandbox_root,
+            deferred=True,
+        )
+
     try:
         host_target = resolve_virtual_path(virtual_path, sandbox_root)
     except ValueError as e:
@@ -170,3 +196,11 @@ def is_under_prefix(path: Path, prefix: str | Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _is_framework_mount(virtual_path: str) -> bool:
+    """Whether the virtual path is a harness-managed mount outside the family tree."""
+    for prefix in (_SKILLS_VIRTUAL_PREFIX, _ACP_VIRTUAL_PREFIX):
+        if virtual_path == prefix or virtual_path.startswith(f"{prefix}/"):
+            return True
+    return False
