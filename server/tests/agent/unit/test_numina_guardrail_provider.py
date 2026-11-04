@@ -446,3 +446,75 @@ class TestQuotaWriteOnly:
         )
 
         assert decision.allow is True
+
+
+class TestAppendGuard:
+    """write_file with append=True must account for existing file size."""
+
+    def test_append_blocked_when_result_exceeds_cap(
+        self, user_data_root: Path
+    ) -> None:
+        """Appending to an existing file that would exceed the cap is denied."""
+        target = user_data_root / "workspace" / "growing.txt"
+        target.write_text("x" * 40)  # 40 bytes already
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"max_file_size_bytes": 50}
+        )
+
+        decision = provider.evaluate(
+            _request(
+                "write_file",
+                {
+                    "path": "/mnt/user-data/workspace/growing.txt",
+                    "content": "y" * 20,  # 40 + 20 = 60 > 50
+                    "append": True,
+                },
+            )
+        )
+
+        assert decision.allow is False
+        assert decision.reasons[0].code == "file_too_large"
+
+    def test_append_allowed_when_result_within_cap(
+        self, user_data_root: Path
+    ) -> None:
+        """Appending within the cap is allowed."""
+        target = user_data_root / "workspace" / "small.txt"
+        target.write_text("x" * 10)
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"max_file_size_bytes": 50}
+        )
+
+        decision = provider.evaluate(
+            _request(
+                "write_file",
+                {
+                    "path": "/mnt/user-data/workspace/small.txt",
+                    "content": "y" * 10,  # 10 + 10 = 20 < 50
+                    "append": True,
+                },
+            )
+        )
+
+        assert decision.allow is True
+
+    def test_append_to_nonexistent_file_uses_content_only(
+        self, user_data_root: Path
+    ) -> None:
+        """Appending to a file that doesn't exist yet only checks content size."""
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"max_file_size_bytes": 50}
+        )
+
+        decision = provider.evaluate(
+            _request(
+                "write_file",
+                {
+                    "path": "/mnt/user-data/workspace/new.txt",
+                    "content": "y" * 10,  # 0 + 10 = 10 < 50
+                    "append": True,
+                },
+            )
+        )
+
+        assert decision.allow is True

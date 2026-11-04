@@ -17,6 +17,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from apps.agent.services.runtime.sandbox_policy import SandboxPolicy
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -95,7 +98,11 @@ def check_cumulative_quota(
 
 
 def _measure_usage(root: Path) -> int:
-    """Sum file sizes under ``root``; tolerate missing/unreadable entries."""
+    """Sum file sizes under ``root``; tolerate missing/unreadable entries.
+
+    Unreadable entries are logged at WARNING so operators can detect partial
+    filesystem failures that might hide real quota usage.
+    """
     if not root.exists():
         return 0
 
@@ -105,9 +112,19 @@ def _measure_usage(root: Path) -> int:
             try:
                 if entry.is_file():
                     total += entry.stat().st_size
-            except OSError:
+            except OSError as e:
+                logger.warning(
+                    "[sandbox_quota] partial read: could not stat %s: %s",
+                    entry,
+                    e,
+                )
                 continue
-    except OSError:
+    except OSError as e:
+        logger.warning(
+            "[sandbox_quota] partial read: rglob failed under %s: %s",
+            root,
+            e,
+        )
         return total
     return total
 

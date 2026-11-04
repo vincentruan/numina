@@ -44,9 +44,6 @@ from deerflow.guardrails.provider import (
 from apps.agent.services.runtime.sandbox_path_validator import (
     validate_path_against_policy,
 )
-from apps.agent.services.runtime.sandbox_permission_check import (
-    check_write_permission,
-)
 from apps.agent.services.runtime.sandbox_policy import SandboxPolicy
 from apps.agent.services.runtime.sandbox_resource_check import (
     check_cumulative_quota,
@@ -192,20 +189,23 @@ class NuminaGuardrailProvider:
                 message=path_result.reason,
             )
 
-        # 2. Write permission against read-only prefixes
-        if is_write:
-            permission = check_write_permission(path_result.resolved_path, self._policy)
-            if not permission.allowed:
-                return self._violation(
-                    request,
-                    family_id=family_id,
-                    operation="write",
-                    path=virtual_path,
-                    code="read_only_path",
-                    message=permission.reason,
-                )
+        # 2. Write permission against read-only prefixes (already computed by
+        # the path validator in step 5 of validate_path_against_policy).
+        if is_write and path_result.is_read_only:
+            return self._violation(
+                request,
+                family_id=family_id,
+                operation="write",
+                path=virtual_path,
+                code="read_only_path",
+                message="Write operation not permitted on read-only path",
+            )
 
-        # 3. Single-file size limit (write payloads only)
+        # 3. Single-file size limit (write payloads only).
+        #    For append=True, check existing file size + new content, because
+        #    the per-call cap can otherwise be bypassed incrementally.
+        #    For str_replace with replace_all=True, the file grows by
+        #    count * (len(new) - len(old)); we check len(new) as a minimum.
         if is_write:
             payload = self._write_payload_size(request)
             size = check_file_size(payload, self._policy)
@@ -218,6 +218,36 @@ class NuminaGuardrailProvider:
                     code="file_too_large",
                     message=size.reason,
                 )
+            # Append guard: when appending, the resulting file size is the
+            # current size plus the new content. Each individual call can pass
+            # the cap while the file grows unboundedly.
+            if (
+                request.tool_name == "write_file"
+                and request.tool_input.get("append") is True
+                and path_result.resolved_path.is_file()
+            ):
+                try:
+                    existing = path_result.resolved_path.stat().st_size
+                except OSError:
+                    existing = 0
+                new_size = (
+                    len(payload.encode("utf-8"))
+                    if isinstance(payload, str)
+                    else len(payload) if payload is not None else 0
+                )
+                if existing + new_size > self._policy.max_file_size_bytes:
+                    return self._violation(
+                        request,
+                        family_id=family_id,
+                        operation="write",
+                        path=virtual_path,
+                        code="file_too_large",
+                        message=(
+                            f"Appending would grow file to "
+                            f"{existing + new_size} bytes, exceeding policy "
+                            f"limit {self._policy.max_file_size_bytes}"
+                        ),
+                    )
 
         # 4. Cumulative quota for the family tree (writes only — reads cannot
         # grow usage, and a permanent read denial after an upload bumps usage
@@ -277,8 +307,15 @@ class NuminaGuardrailProvider:
             if isinstance(new, str) and isinstance(old, str) and len(new) <= len(old):
                 # Replacement shrinks the file — size check passes trivially.
                 return None
-            return new
-        return request.tool_input.get("content")
+            # Narrow Any -> str | bytes for mypy.
+            if isinstance(new, (str, bytes)):
+                return new
+            return str(new) if new is not None else None
+        content = request.tool_input.get("content")
+        # Narrow Any -> str | bytes for mypy.
+        if isinstance(content, (str, bytes)):
+            return content
+        return None
 
     def _violation(
         self,

@@ -11,6 +11,8 @@ Tests cover:
 
 from pathlib import Path
 
+import pytest
+
 from apps.agent.services.runtime.sandbox_policy import SandboxPolicy
 from apps.agent.services.runtime.sandbox_resource_check import (
     ResourceCheckResult,
@@ -149,3 +151,60 @@ class TestReturnShape:
 
         assert isinstance(check_file_size("x", policy), ResourceCheckResult)
         assert isinstance(check_cumulative_quota(tmp_path, policy), ResourceCheckResult)
+
+
+class TestMeasureUsagePartialFailure:
+    """_measure_usage tolerates but logs partial filesystem failures."""
+
+    def test_nonexistent_root_returns_zero(self, tmp_path: Path) -> None:
+        from apps.agent.services.runtime.sandbox_resource_check import _measure_usage
+
+        assert _measure_usage(tmp_path / "nonexistent") == 0
+
+    def test_empty_root_returns_zero(self, tmp_path: Path) -> None:
+        from apps.agent.services.runtime.sandbox_resource_check import _measure_usage
+
+        root = tmp_path / "empty_sandbox"
+        root.mkdir()
+        assert _measure_usage(root) == 0
+
+    def test_counts_files_under_root(self, tmp_path: Path) -> None:
+        from apps.agent.services.runtime.sandbox_resource_check import _measure_usage
+
+        root = tmp_path / "sandbox"
+        root.mkdir()
+        (root / "a.txt").write_bytes(b"hello")
+        (root / "b.txt").write_bytes(b"world!!")
+        assert _measure_usage(root) == 5 + 7
+
+    def test_partial_read_logs_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Unreadable files are tolerated but logged at WARNING."""
+        import logging
+        import os
+        from apps.agent.services.runtime.sandbox_resource_check import _measure_usage
+
+        root = tmp_path / "sandbox"
+        root.mkdir()
+        (root / "readable.txt").write_bytes(b"data")
+        (root / "unreadable.txt").write_bytes(b"secret")
+
+        # Make stat() raise OSError for the unreadable file by patching
+        # os.stat for that specific path.
+        _original_stat = os.stat
+
+        def _patched_stat(path, **kwargs):
+            path_str = str(path)
+            if "unreadable.txt" in path_str:
+                raise OSError(13, "Permission denied", path_str)
+            return _original_stat(path, **kwargs)
+
+        monkeypatch.setattr(os, "stat", _patched_stat)
+
+        with caplog.at_level(logging.WARNING, logger="apps.agent.services.runtime.sandbox_resource_check"):
+            total = _measure_usage(root)
+
+        # The readable file should be counted; the unreadable is skipped.
+        assert total == 4  # len("data")
+        assert any("partial read" in rec.message for rec in caplog.records)

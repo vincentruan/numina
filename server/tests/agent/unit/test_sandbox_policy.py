@@ -5,7 +5,7 @@ Tests cover:
 - from_config() correctly deserializes a config dict with custom values
 - Validation rejects relative paths
 - Validation rejects non-positive numeric limits
-- to_container_config() returns correct memory/CPU keys
+- Default policy values are sensible
 - from_config with None or empty dict returns default policy
 """
 
@@ -134,27 +134,6 @@ class TestValidation:
         assert policy.read_only_paths == ["/data/users/family-A/config"]
 
 
-class TestToContainerConfig:
-    """Tests for SandboxPolicy.to_container_config()."""
-
-    def test_returns_memory_key(self) -> None:
-        """to_container_config includes memory key with 'm' suffix."""
-        policy = SandboxPolicy(max_memory_mb=512)
-        config = policy.to_container_config()
-        assert config["memory"] == "512m"
-
-    def test_returns_cpus_key(self) -> None:
-        """to_container_config includes cpus key as string."""
-        policy = SandboxPolicy(max_cpu_count=2)
-        config = policy.to_container_config()
-        assert config["cpus"] == "2"
-
-    def test_custom_values(self) -> None:
-        """to_container_config reflects custom policy values."""
-        policy = SandboxPolicy(max_memory_mb=1024, max_cpu_count=4)
-        config = policy.to_container_config()
-        assert config["memory"] == "1024m"
-        assert config["cpus"] == "4"
 
 
 class TestFrozenModel:

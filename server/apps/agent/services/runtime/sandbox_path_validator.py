@@ -127,7 +127,15 @@ def validate_path_against_policy(
     # 1. Translate to a host path
     if _is_framework_mount(virtual_path):
         # Framework mounts (/mnt/skills, /mnt/acp-workspace) are enforced by
-        # upstream validation. The gate does not apply per-family policy here.
+        # DeerFlow's upstream validate_local_tool_path and
+        # _resolve_path_with_mapping. The gate does not apply per-family policy
+        # to these paths.
+        #
+        # Accepted risk: this deferral trusts upstream to reject escapes like
+        # /mnt/skills/../../etc/passwd. If upstream validation is incomplete or
+        # a crafted path looks like a framework mount but isn't actually mounted
+        # by DeerFlow, cross-family or host access is possible. The container
+        # tier (T22) provides hard enforcement via mount namespace isolation.
         return PathPolicyResult(
             allowed=True,
             is_read_only=True,
@@ -146,6 +154,13 @@ def validate_path_against_policy(
         )
 
     # 2. Resolve symlinks
+    #
+    # Accepted risk (TOCTOU): resolve() catches symlinks at check time, but the
+    # actual file operation happens later. Between this check and the op, a
+    # concurrent request or attacker could swap the symlink target, allowing
+    # access outside the sandbox root. The container tier (T22) provides hard
+    # enforcement via mount namespace isolation; when containers are disabled
+    # (opt-in), this software gate is defense-in-depth only.
     try:
         resolved = host_target.resolve()
         resolved_root = sandbox_root.resolve()
@@ -166,9 +181,14 @@ def validate_path_against_policy(
             reason="Path escapes sandbox root directory",
         )
 
+    # Resolve policy prefixes so symlink-aware comparison works on macOS
+    # (/var -> /private/var) and Linux deployments with custom symlinks.
+    resolved_allowed = [Path(p).resolve() for p in policy.allowed_paths]
+    resolved_read_only = [Path(p).resolve() for p in policy.read_only_paths]
+
     # 4. Check allowed_paths (if configured)
-    if policy.allowed_paths and not any(
-        is_under_prefix(resolved, prefix) for prefix in policy.allowed_paths
+    if resolved_allowed and not any(
+        is_under_prefix(resolved, prefix) for prefix in resolved_allowed
     ):
         return PathPolicyResult(
             allowed=False,
@@ -179,7 +199,7 @@ def validate_path_against_policy(
 
     # 5. Check read_only_paths
     is_read_only = any(
-        is_under_prefix(resolved, prefix) for prefix in policy.read_only_paths
+        is_under_prefix(resolved, prefix) for prefix in resolved_read_only
     )
 
     return PathPolicyResult(

@@ -120,14 +120,3 @@ class SandboxPolicy(BaseModel):
             return cls.default_policy()
         return cls.model_validate(config)
 
-    def to_container_config(self) -> dict[str, Any]:
-        """Return a dict suitable for T22 AioSandboxProvider overlay.
-
-        Translates policy fields into container resource limit keys that
-        ``LocalContainerBackend._start_container`` reads from environment
-        variables (``DEER_FLOW_SANDBOX_MEMORY``, ``DEER_FLOW_SANDBOX_CPUS``).
-        """
-        return {
-            "memory": f"{self.max_memory_mb}m",
-            "cpus": str(self.max_cpu_count),
-        }
