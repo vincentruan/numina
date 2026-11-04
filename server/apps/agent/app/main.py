@@ -1,5 +1,6 @@
 """Numina AI Agent 微服务入口。"""
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -63,6 +64,26 @@ if "DEER_FLOW_CONFIG_PATH" not in os.environ:
     )
 
 setup_logging(log_level=settings.LOG_LEVEL, log_dir=settings.LOG_DIR)
+
+# Suppress noisy DeerFlow input sanitization warnings.
+# The upstream InputSanitizationMiddleware logs "rfind failed with original_user_content set"
+# at WARNING level for a design-intentional degradation path (KTD2: Bridge-don't-fork).
+# Downgrade these to DEBUG so they don't pollute INFO-level logs.
+
+
+class _SanitizationWarningFilter(logging.Filter):
+    """Downgrade 'rfind failed' WARNINGs from input_sanitization_middleware to DEBUG."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno == logging.WARNING and "rfind failed" in record.getMessage():
+            record.levelno = logging.DEBUG
+            record.levelname = "DEBUG"
+        return True  # never suppress, only downgrade
+
+
+logging.getLogger(
+    "deerflow.agents.middlewares.input_sanitization_middleware"
+).addFilter(_SanitizationWarningFilter())
 
 # Bridge the per-family DeerFlow AppConfig into the background memory-update
 # timer thread (see services/deerflow_adapter/memory_config_bridge.py for why).
