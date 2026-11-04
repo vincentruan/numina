@@ -187,6 +187,8 @@ def _resolve_policy(ai_config: dict[str, Any]) -> SandboxPolicy:
             return SandboxPolicy.from_config(raw)
         except Exception as e:
             logger.warning(
-                "[container_overlay] invalid sandbox_policy, using defaults: %s", e
+                "[container_overlay] invalid sandbox_policy, using defaults: %s",
+                e,
+                exc_info=True,
             )
     return SandboxPolicy.default_policy()

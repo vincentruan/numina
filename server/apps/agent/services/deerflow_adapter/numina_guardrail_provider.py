@@ -110,7 +110,7 @@ class NuminaGuardrailProvider:
         except Exception as e:
             self._policy = SandboxPolicy.default_policy()
             self._policy_error = str(e)
-            logger.error(
+            logger.exception(
                 "[sandbox_gate] invalid sandbox_policy; denying all sandbox "
                 "operations until the configuration is fixed: %s",
                 e,
