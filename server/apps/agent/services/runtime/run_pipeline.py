@@ -473,9 +473,9 @@ class RunPipeline:
         """Publish a ``tool.progress`` event for a ``write_file`` call.
 
         Runs on whichever thread invoked the tool, so the publish is scheduled
-        onto this pipeline's loop. The payload keeps the frontend contract from
-        ``aiEventNormalizer``: ``tool_id`` and ``progress_message`` are both
-        required or the event is dropped there.
+        onto this pipeline's loop. A ``done`` event carries ``ok`` so consumers
+        can tell a completed write from a rejected one — both end the progress
+        indicator, but only one means the file exists.
         """
         if not tool_call_id:
             return
@@ -483,23 +483,33 @@ class RunPipeline:
             "type": "tool.progress",
             "tool_id": tool_call_id,
             "status": status,
-            "progress_message": (
-                f"Writing {path}" if status == "writing" else f"Wrote {path}"
-            ),
         }
-        if size_bytes is not None:
-            payload["size_bytes"] = size_bytes
+        if status == "done":
+            # A size is only known when the body reported success, which is
+            # what separates a completed write from a rejected one.
+            ok = size_bytes is not None
+            payload["ok"] = ok
+            payload["progress_message"] = (
+                f"Wrote {path}" if ok else f"Failed to write {path}"
+            )
+            if ok:
+                payload["size_bytes"] = size_bytes
+        else:
+            payload["progress_message"] = f"Writing {path}"
 
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = None
 
-        if loop is not None:
+        # Identity-compare: DeerFlow's subagent/tool-sync pools run their own
+        # ``asyncio.run`` loop on the calling thread, so a bare get_running_loop()
+        # hit does not prove we are on the pipeline loop. Publishing onto a
+        # foreign loop would touch bridge primitives bound to this one.
+        if loop is self._pipeline_loop:
             _track_task(loop.create_task(self.bridge.publish(self.run_id, "custom", payload)))
             return
 
-        # Called from a worker thread — hand the publish to this run's loop.
         try:
             self._pipeline_loop.call_soon_threadsafe(
                 lambda: _track_task(

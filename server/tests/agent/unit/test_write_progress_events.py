@@ -160,10 +160,20 @@ class TestWriteProgressWrapper:
         _install_wrapper(write_tool, _body)
         assert write_tool.func(_FakeRuntime(), **_WRITE_ARGS) == "OK"
 
-    def test_read_file_is_not_wrapped(self) -> None:
+    def test_read_file_is_not_wrapped(self, write_tool) -> None:
         """Only write_file opts into progress; the sibling file tools stay bare."""
         from deerflow.sandbox import tools as sandbox_tools
 
+        def _body(*_args: Any, **_kwargs: Any) -> str:
+            return "OK"
+
+        _install_wrapper(write_tool, _body)
+
+        # write_file must be wrapped first, otherwise the assertions below
+        # would pass simply because nothing was patched at all.
+        assert getattr(
+            sandbox_tools.write_file_tool.func, "_numina_write_progress", False
+        )
         assert not getattr(
             sandbox_tools.read_file_tool.func, "_numina_write_progress", False
         )
@@ -359,3 +369,137 @@ class TestRunPipelineEmitter:
                 assert get_write_progress_emitter() is not None
 
         assert get_write_progress_emitter() is None
+
+
+class TestWorkerThreadEmit:
+    """The production path: emit from the tool thread, publish on the run loop.
+
+    DeerFlow executes tool bodies on its executor thread, so the emitter runs
+    off-loop and must hop back with ``call_soon_threadsafe``. The in-loop tests
+    above never exercise that hop, which is the branch every real write uses.
+    """
+
+    @staticmethod
+    def _emit_from_thread(pipeline: Any, status: str = "writing") -> None:
+        import asyncio
+
+        async def _run() -> None:
+            await asyncio.to_thread(
+                pipeline._emit_write_progress, status, "/mnt/x.md", None, "call_t"
+            )
+            # Let the hop'd publish coroutine run.
+            for _ in range(20):
+                await asyncio.sleep(0)
+
+        asyncio.run(_run())
+
+    def test_publish_hops_from_worker_thread_to_run_loop(self) -> None:
+        """A publish issued off-loop still lands on the pipeline's bridge."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        from deerflow.runtime import StreamBridge
+
+        from apps.agent.services.runtime.run_pipeline import RunPipeline
+
+        bridge = MagicMock(spec=StreamBridge)
+        bridge.publish = AsyncMock()
+
+        pipeline = RunPipeline.__new__(RunPipeline)
+        pipeline.bridge = bridge
+        pipeline.run_id = "run-1"
+        pipeline.app_name = "asset-report"
+        pipeline._pipeline_loop = asyncio.new_event_loop()
+
+        loop = pipeline._pipeline_loop
+        try:
+            def _drive() -> None:
+                loop.run_until_complete(
+                    asyncio.to_thread(
+                        pipeline._emit_write_progress,
+                        "writing",
+                        "/mnt/x.md",
+                        None,
+                        "call_t",
+                    )
+                )
+                # Drain the ensure_future scheduled via call_soon_threadsafe.
+                for _ in range(20):
+                    loop.run_until_complete(asyncio.sleep(0))
+
+            asyncio.run(asyncio.to_thread(_drive))
+        finally:
+            loop.close()
+
+        bridge.publish.assert_awaited()
+        args = bridge.publish.await_args.args
+        assert args[0] == "run-1"
+        assert args[1] == "custom"
+        assert args[2]["tool_id"] == "call_t"
+        assert args[2]["status"] == "writing"
+
+    def test_done_event_reports_failure_when_no_size(self) -> None:
+        """`done` without a byte count means the write was rejected."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        from deerflow.runtime import StreamBridge
+
+        from apps.agent.services.runtime.run_pipeline import RunPipeline
+
+        bridge = MagicMock(spec=StreamBridge)
+        bridge.publish = AsyncMock()
+
+        pipeline = RunPipeline.__new__(RunPipeline)
+        pipeline.bridge = bridge
+        pipeline.run_id = "run-1"
+        pipeline.app_name = "asset-report"
+        pipeline._pipeline_loop = asyncio.new_event_loop()
+        loop = pipeline._pipeline_loop
+        try:
+            async def _run() -> None:
+                pipeline._emit_write_progress("done", "/mnt/x.md", None, "call_t")
+                for _ in range(10):
+                    await asyncio.sleep(0)
+
+            loop.run_until_complete(_run())
+        finally:
+            loop.close()
+
+        payload = bridge.publish.await_args.args[2]
+        assert payload["ok"] is False
+        assert "Failed" in payload["progress_message"]
+        assert "size_bytes" not in payload
+
+    def test_done_event_reports_success_with_size(self) -> None:
+        """A byte count marks the write as succeeded."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        from deerflow.runtime import StreamBridge
+
+        from apps.agent.services.runtime.run_pipeline import RunPipeline
+
+        bridge = MagicMock(spec=StreamBridge)
+        bridge.publish = AsyncMock()
+
+        pipeline = RunPipeline.__new__(RunPipeline)
+        pipeline.bridge = bridge
+        pipeline.run_id = "run-1"
+        pipeline.app_name = "asset-report"
+        pipeline._pipeline_loop = asyncio.new_event_loop()
+        loop = pipeline._pipeline_loop
+        try:
+            async def _run() -> None:
+                pipeline._emit_write_progress("done", "/mnt/x.md", 7, "call_t")
+                for _ in range(10):
+                    await asyncio.sleep(0)
+
+            loop.run_until_complete(_run())
+        finally:
+            loop.close()
+
+        payload = bridge.publish.await_args.args[2]
+        assert payload["ok"] is True
+        assert payload["size_bytes"] == 7
+        assert "Wrote" in payload["progress_message"]

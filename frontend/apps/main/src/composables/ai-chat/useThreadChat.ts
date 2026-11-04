@@ -1095,6 +1095,29 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   }
 
   /**
+   * Attach a backend `tool.progress` message to the matching tool call so
+   * ChainOfThought can show what the tool is doing (e.g. "Writing report.md").
+   * The backend emits this only for long tools such as write_file.
+   */
+  function attachToolProgress(toolCallId: string, message: string): void {
+    if (!toolCallId || !message) return
+    const aiMsgIdx = messages.value.findLastIndex(
+      m => m.type === 'ai' && m.tool_calls?.some(tc => tc.id === toolCallId),
+    )
+    if (aiMsgIdx >= 0) {
+      const aiMsg = messages.value[aiMsgIdx]
+      const updatedCalls = (aiMsg.tool_calls || []).map(tc =>
+        tc.id === toolCallId ? { ...tc, progressMessage: message } : tc,
+      )
+      messages.value = [
+        ...messages.value.slice(0, aiMsgIdx),
+        { ...aiMsg, tool_calls: updatedCalls },
+        ...messages.value.slice(aiMsgIdx + 1),
+      ]
+    }
+  }
+
+  /**
    * Finalize all in-progress AI messages and planning steps.
    *
    * Marks every AI message with phase='answering' → phase='done', stops all
@@ -1524,6 +1547,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             const customData = chunk.data as {
               type?: string
               tool_call_id?: string
+              tool_id?: string
+              progress_message?: string
               tool_name?: string
               args?: Record<string, unknown>
               display_name?: string
@@ -1565,6 +1590,14 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
                   }
                 }
               }
+            } else if (customData.type === 'tool.progress') {
+              // Tool-level status from the backend (e.g. write_file
+              // "writing" -> "done"). Progress is advisory: an unknown or
+              // missing tool id simply leaves the UI unchanged.
+              attachToolProgress(
+                String(customData.tool_id || ''),
+                String(customData.progress_message || ''),
+              )
             } else if (customData.type === 'tool_result') {
               // Tool result from backend — update the corresponding tool_call
               // step status from 'running' to 'done' and attach the result.

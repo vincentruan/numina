@@ -251,9 +251,12 @@ def _apply_write_progress_patch() -> None:
     drives ``agent.stream()``, so LangChain dispatches through
     ``StructuredTool._run`` → ``self.func``.  (``_write_file_tool_async`` — the
     ``.coroutine`` half — only runs under ``agent.astream()``, i.e. subagents
-    and the Gateway.)  Numina's runners all set ``subagent_enabled=False``, so
-    ``.func`` is the body that actually writes report files, and it is where
-    progress has to be reported from.
+    and the Gateway.)  Numina's fixed-flow runners (asset-report, import-parse,
+    finance-coach, wish-advice) hard-code ``subagent_enabled=False``, so
+    ``.func`` is the body that writes their report files.  The chat runner
+    forwards a client-supplied ``subagent_enabled``, so on that path the async
+    half is reachable too; wrapping ``.func`` covers both, because
+    ``_write_file_tool_async`` dispatches through ``write_file_tool.func``.
 
     The wrapper reports at tool granularity rather than byte granularity:
     DeerFlow publishes writes atomically (temp file + rename), so there is no
@@ -274,9 +277,16 @@ def _apply_write_progress_patch() -> None:
         return
 
     tool = getattr(sandbox_tools, "write_file_tool", None)
+    if tool is None:
+        logger.warning(
+            "[sync_tool_patch] write_file_tool not found; skipping write progress patch"
+        )
+        return
     original = getattr(tool, "func", None)
     if original is None:
-        logger.debug(
+        # Warning, not debug: a silent miss here disables progress for every
+        # report write, and the configured log level would hide it.
+        logger.warning(
             "[sync_tool_patch] write_file_tool has no sync func; skipping write progress patch"
         )
         return
@@ -286,16 +296,14 @@ def _apply_write_progress_patch() -> None:
     @functools.wraps(original)
     def _write_file_with_progress(*args: object, **kwargs: object) -> object:
         tool_call_id = _resolve_tool_call_id(args, kwargs)
-        path = str(kwargs.get("path") or "")
+        path, content = _resolve_write_args(args, kwargs)
 
         emit_write_progress("writing", path, None, tool_call_id)
         size_bytes: int | None = None
         try:
             result = original(*args, **kwargs)
-            if result == "OK":
-                content = kwargs.get("content")
-                if isinstance(content, str):
-                    size_bytes = len(content.encode("utf-8"))
+            if result == "OK" and isinstance(content, str):
+                size_bytes = len(content.encode("utf-8"))
             return result
         finally:
             # Records that the write finished even when it raised or was
@@ -303,11 +311,29 @@ def _apply_write_progress_patch() -> None:
             emit_write_progress("done", path, size_bytes, tool_call_id)
 
     _write_file_with_progress._numina_write_progress = True  # type: ignore[attr-defined]
-    if tool is not None:
-        tool.func = _write_file_with_progress
+    tool.func = _write_file_with_progress
     logger.info(
         "[sync_tool_patch] patched write_file_tool.func to emit tool.progress events"
     )
+
+
+def _resolve_write_args(
+    args: tuple[object, ...], kwargs: dict[str, object]
+) -> tuple[str, object]:
+    """Extract ``path`` and ``content`` from a ``write_file`` invocation.
+
+    LangChain dispatches tool calls with keyword arguments, but DeerFlow's own
+    ``_write_file_tool_async`` calls the same body positionally as
+    ``(runtime, path, content, description, append)``. Reading only kwargs
+    would report an empty path on that path, so both shapes are handled.
+    """
+    path = kwargs.get("path")
+    if path is None and len(args) > 1:
+        path = args[1]
+    content = kwargs.get("content")
+    if content is None and len(args) > 2:
+        content = args[2]
+    return str(path or ""), content
 
 
 def _resolve_tool_call_id(args: tuple[object, ...], kwargs: dict[str, object]) -> str:

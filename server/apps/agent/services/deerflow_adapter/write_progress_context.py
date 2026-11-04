@@ -22,6 +22,10 @@ from __future__ import annotations
 import contextvars
 from collections.abc import Callable
 
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 # (status, path, size_bytes, tool_call_id) -> None
 WriteProgressEmitter = Callable[[str, str, "int | None", str], None]
 
@@ -67,8 +71,6 @@ def emit_write_progress(
     try:
         emitter(status, path, size_bytes, tool_call_id)
     except Exception:  # noqa: BLE001 — a progress event must not break the write
-        from packages.core.logging import get_logger
-
-        get_logger(__name__).debug(
+        logger.debug(
             "write progress emit failed (non-fatal): status=%s", status, exc_info=True
         )
