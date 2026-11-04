@@ -1,363 +1,368 @@
-"""Unit tests for NuminaGuardrailProvider — tool execution safety guardrails.
+"""Unit tests for NuminaGuardrailProvider — sandbox policy gate.
 
-Tests cover:
-- Allowlist: only listed tools execute
-- Denylist: explicitly denied tools never execute (overrides allowlist)
-- Fail-closed: provider errors deny tool calls by default
-- Fail-open: provider errors allow tool calls when configured
-- Default allow: no lists = all tools allowed
-- Integration with _inject_guardrail config injection
+Tests cover the GuardrailProvider protocol (evaluate / aevaluate):
+- Non-file tools bypass sandbox validation
+- Valid file operation within policy → allow
+- Path outside allowed prefixes → deny
+- Write to read-only path → deny
+- File size over limit → deny
+- Quota exceeded → deny
+- Missing family_id → fail-closed deny
+- Malformed sandbox_policy → constructor raises (config injection fails closed)
+- Fail-open mode allows on evaluation error
+- Protocol compliance (name / policy_id / release_policy_parameters)
 """
 
-from apps.agent.services.deerflow_adapter.numina_guardrail_provider import (
+from pathlib import Path
+
+import pytest
+from deerflow.guardrails.provider import (
     GuardrailDecision,
+    GuardrailProvider,
+    GuardrailRequest,
+)
+
+from apps.agent.services.deerflow_adapter.numina_guardrail_provider import (
     NuminaGuardrailProvider,
-    create_provider_from_config,
+)
+from apps.agent.services.runtime.sandbox_provider import (
+    reset_family_sandbox_context,
+    set_family_sandbox_context,
 )
 
 
-class TestNuminaGuardrailProvider:
-    """Tests for the core provider logic."""
+@pytest.fixture
+def user_data_root(tmp_path: Path) -> Path:
+    """Host user-data root for a test family/thread, with mounts created."""
+    root = tmp_path / "users" / "family-A" / "threads" / "t1" / "user-data"
+    (root / "workspace").mkdir(parents=True)
+    (root / "uploads").mkdir()
+    (root / "outputs").mkdir()
+    return root
 
-    def test_default_allow_all(self) -> None:
-        """No lists configured → all tools allowed."""
+
+@pytest.fixture(autouse=True)
+def family_context():
+    """Set the family sandbox ContextVar for every test, then reset."""
+    set_family_sandbox_context("family-A", caller_user_id="user-1")
+    try:
+        yield
+    finally:
+        reset_family_sandbox_context()
+
+
+@pytest.fixture(autouse=True)
+def sandbox_root_patch(user_data_root: Path, monkeypatch: pytest.MonkeyPatch):
+    """Point host_sandbox_user_data_dir at the tmp family tree."""
+
+    def _fake_root(thread_id: str, *, user_id: str | None = None) -> str:
+        assert user_id == "family-A"
+        return str(user_data_root)
+
+    monkeypatch.setattr(
+        "apps.agent.services.deerflow_adapter.numina_guardrail_provider.get_paths",
+        lambda: type("P", (), {"host_sandbox_user_data_dir": staticmethod(_fake_root)})(),
+    )
+    return user_data_root
+
+
+def _request(tool_name: str, tool_input: dict, thread_id: str | None = "t1") -> GuardrailRequest:
+    return GuardrailRequest(
+        tool_name=tool_name, tool_input=tool_input, thread_id=thread_id
+    )
+
+
+class TestProtocolCompliance:
+    """The provider must satisfy DeerFlow's runtime-checkable protocol."""
+
+    def test_satisfies_guardrail_provider_protocol(self) -> None:
         provider = NuminaGuardrailProvider()
-        result = provider.check_tool_call("get_assets")
-        assert result.allowed is True
-        assert result.reason == ""
+        assert isinstance(provider, GuardrailProvider)
 
-    def test_allowlist_permits_listed_tool(self) -> None:
-        """Allowlist configured → listed tool is allowed."""
-        provider = NuminaGuardrailProvider(allowlist=["get_assets", "get_liabilities"])
-        result = provider.check_tool_call("get_assets")
-        assert result.allowed is True
+    def test_declares_name_and_policy_id(self) -> None:
+        provider = NuminaGuardrailProvider()
+        assert provider.name == "numina-sandbox-gate"
+        assert provider.policy_id == "numina-sandbox-gate"
 
-    def test_allowlist_denies_unlisted_tool(self) -> None:
-        """Allowlist configured → unlisted tool is denied."""
-        provider = NuminaGuardrailProvider(allowlist=["get_assets"])
-        result = provider.check_tool_call("bash")
-        assert result.allowed is False
-        assert "not in the allowed list" in result.reason
+    def test_release_policy_parameters_declares_knobs(self) -> None:
+        provider = NuminaGuardrailProvider()
+        params = provider.release_policy_parameters()
+        assert params["max_file_size_bytes"] == 50 * 1024
+        assert params["max_total_quota_bytes"] == 1024 * 1024 * 1024
 
-    def test_denylist_denies_listed_tool(self) -> None:
-        """Denylist → listed tool is denied."""
-        provider = NuminaGuardrailProvider(denylist=["bash", "execute_code"])
-        result = provider.check_tool_call("bash")
-        assert result.allowed is False
-        assert "explicitly denied" in result.reason
+    def test_previous_check_tool_call_method_is_gone(self) -> None:
+        """The old, never-invoked entry point has been removed."""
+        assert not hasattr(NuminaGuardrailProvider(), "check_tool_call")
 
-    def test_denylist_allows_unlisted_tool(self) -> None:
-        """Denylist → unlisted tool is allowed."""
-        provider = NuminaGuardrailProvider(denylist=["bash"])
-        result = provider.check_tool_call("get_assets")
-        assert result.allowed is True
 
-    def test_denylist_overrides_allowlist(self) -> None:
-        """Denylist takes precedence over allowlist for same tool."""
+class TestNonFileTools:
+    """Tools that are not sandbox file operations pass through."""
+
+    @pytest.mark.parametrize("tool_name", ["get_assets", "bash", "web_search", "task"])
+    def test_non_file_tool_allowed(self, tool_name: str) -> None:
+        provider = NuminaGuardrailProvider()
+        decision = provider.evaluate(_request(tool_name, {"anything": 1}))
+        assert decision.allow is True
+
+
+class TestAllowedOperations:
+    """File operations within policy are allowed."""
+
+    def test_write_within_policy_allowed(self) -> None:
+        provider = NuminaGuardrailProvider()
+        decision = provider.evaluate(
+            _request("write_file", {"path": "/mnt/user-data/workspace/report.txt", "content": "hi"})
+        )
+        assert decision.allow is True
+        assert decision.reasons == []
+
+    def test_read_within_policy_allowed(self) -> None:
+        provider = NuminaGuardrailProvider()
+        decision = provider.evaluate(
+            _request("read_file", {"path": "/mnt/user-data/workspace/report.txt"})
+        )
+        assert decision.allow is True
+
+    def test_str_replace_within_policy_allowed(self) -> None:
+        provider = NuminaGuardrailProvider()
+        decision = provider.evaluate(
+            _request(
+                "str_replace",
+                {"path": "/mnt/user-data/workspace/report.txt", "old_str": "a", "new_str": "b"},
+            )
+        )
+        assert decision.allow is True
+
+
+class TestPathViolations:
+    """Path-pattern and containment violations are denied."""
+
+    def test_path_outside_allowed_prefixes_denied(self, user_data_root: Path) -> None:
+        public_dir = user_data_root / "workspace" / "public"
+        public_dir.mkdir()
         provider = NuminaGuardrailProvider(
-            allowlist=["bash", "get_assets"],
-            denylist=["bash"],
+            sandbox_policy={"allowed_paths": [str(public_dir)]}
         )
-        # bash is in both lists — deny wins
-        result = provider.check_tool_call("bash")
-        assert result.allowed is False
-        assert "explicitly denied" in result.reason
 
-        # get_assets is only in allowlist → allowed
-        result = provider.check_tool_call("get_assets")
-        assert result.allowed is True
-
-    def test_empty_allowlist_means_all_allowed(self) -> None:
-        """Empty allowlist (not None) means all tools allowed (subject to denylist)."""
-        provider = NuminaGuardrailProvider(allowlist=[], denylist=["bash"])
-        result = provider.check_tool_call("get_assets")
-        assert result.allowed is True
-
-        result = provider.check_tool_call("bash")
-        assert result.allowed is False
-
-
-class TestContextPassthrough:
-    """Tests for U2: guardrail context pass-through (caller_user_id, caller_role)."""
-
-    def test_check_tool_call_with_context_dict(self) -> None:
-        """check_tool_call with context dict returns valid GuardrailDecision without error."""
-        provider = NuminaGuardrailProvider()
-        context = {"caller_user_id": "u1", "caller_role": "member", "family_id": "100"}
-        result = provider.check_tool_call("get_assets", context=context)
-        assert result.allowed is True
-
-    def test_check_tool_call_with_context_none_backward_compat(self) -> None:
-        """check_tool_call with context=None still works (backward compat)."""
-        provider = NuminaGuardrailProvider()
-        result = provider.check_tool_call("get_assets", context=None)
-        assert result.allowed is True
-
-    def test_check_tool_call_with_tool_args_preserved(self) -> None:
-        """check_tool_call with tool_args does not raise (tool_args no longer deleted)."""
-        provider = NuminaGuardrailProvider()
-        result = provider.check_tool_call(
-            "get_assets",
-            tool_args={"category": "bank"},
-            context={"caller_user_id": "u1", "caller_role": "member"},
+        decision = provider.evaluate(
+            _request("write_file", {"path": "/mnt/user-data/workspace/report.txt", "content": "x"})
         )
-        assert result.allowed is True
 
-    def test_check_internal_receives_context(self) -> None:
-        """_check_internal receives the context dict when passed through check_tool_call."""
+        assert decision.allow is False
+        assert decision.reasons[0].code == "path_not_allowed"
+        assert decision.reasons[0].message == "Path outside allowed directories"
+
+    def test_cross_family_path_denied(self, user_data_root: Path) -> None:
         provider = NuminaGuardrailProvider()
-        context = {"caller_user_id": "u1", "caller_role": "member"}
 
-        # _check_internal should accept context without error
-        result = provider._check_internal("get_assets", context=context)
-        assert result.allowed is True
+        decision = provider.evaluate(
+            _request("read_file", {"path": "/mnt/user-data/../../other-family/x"})
+        )
 
-    def test_check_internal_context_none(self) -> None:
-        """_check_internal works with context=None (backward compat)."""
+        assert decision.allow is False
+
+    def test_missing_path_argument_denied(self) -> None:
         provider = NuminaGuardrailProvider()
-        result = provider._check_internal("get_assets", context=None)
-        assert result.allowed is True
+        decision = provider.evaluate(_request("write_file", {"content": "x"}))
+        assert decision.allow is False
+        assert decision.reasons[0].code == "invalid_tool_input"
 
 
-class TestFailClosedBehavior:
-    """Tests for fail-closed/fail-open error handling."""
+class TestPermissionViolations:
+    """Writes to read-only prefixes are denied; reads are not."""
 
-    def test_fail_closed_denies_on_error(self) -> None:
-        """Fail-closed (default) → errors deny tool calls."""
-        provider = NuminaGuardrailProvider(fail_closed=True)
+    def test_write_to_read_only_path_denied(self, user_data_root: Path) -> None:
+        config_dir = user_data_root / "workspace" / "config"
+        config_dir.mkdir()
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"read_only_paths": [str(config_dir)]}
+        )
 
-        # Simulate an error by patching _check_internal to raise
-        def raise_error(tool_name: str) -> GuardrailDecision:
-            raise RuntimeError("Simulated error")
+        decision = provider.evaluate(
+            _request(
+                "write_file",
+                {"path": "/mnt/user-data/workspace/config/settings.json", "content": "{}"},
+            )
+        )
 
-        provider._check_internal = raise_error  # type: ignore[method-assign]
+        assert decision.allow is False
+        assert decision.reasons[0].code == "read_only_path"
 
-        result = provider.check_tool_call("get_assets")
-        assert result.allowed is False
-        assert "Guardrail check failed" in result.reason
+    def test_read_from_read_only_path_allowed(self, user_data_root: Path) -> None:
+        config_dir = user_data_root / "workspace" / "config"
+        config_dir.mkdir()
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"read_only_paths": [str(config_dir)]}
+        )
+
+        decision = provider.evaluate(
+            _request("read_file", {"path": "/mnt/user-data/workspace/config/settings.json"})
+        )
+
+        assert decision.allow is True
+
+    def test_write_to_writable_path_allowed(self, user_data_root: Path) -> None:
+        config_dir = user_data_root / "workspace" / "config"
+        config_dir.mkdir()
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"read_only_paths": [str(config_dir)]}
+        )
+
+        decision = provider.evaluate(
+            _request("write_file", {"path": "/mnt/user-data/workspace/report.txt", "content": "ok"})
+        )
+
+        assert decision.allow is True
+
+
+class TestResourceViolations:
+    """File size and cumulative quota limits are enforced."""
+
+    def test_file_too_large_denied(self) -> None:
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"max_file_size_bytes": 10}
+        )
+
+        decision = provider.evaluate(
+            _request(
+                "write_file",
+                {"path": "/mnt/user-data/workspace/big.txt", "content": "x" * 50},
+            )
+        )
+
+        assert decision.allow is False
+        assert decision.reasons[0].code == "file_too_large"
+        assert "exceeds policy limit" in decision.reasons[0].message
+
+    def test_quota_exceeded_denied(self, user_data_root: Path) -> None:
+        (user_data_root / "workspace" / "existing.bin").write_bytes(b"x" * 4096)
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"max_total_quota_bytes": 1024}
+        )
+
+        decision = provider.evaluate(
+            _request("write_file", {"path": "/mnt/user-data/workspace/more.txt", "content": "x"})
+        )
+
+        assert decision.allow is False
+        assert decision.reasons[0].code == "quota_exceeded"
+
+    def test_quota_within_limit_allowed(self, user_data_root: Path) -> None:
+        (user_data_root / "workspace" / "small.bin").write_bytes(b"x" * 10)
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"max_total_quota_bytes": 1024}
+        )
+
+        decision = provider.evaluate(
+            _request("write_file", {"path": "/mnt/user-data/workspace/ok.txt", "content": "x"})
+        )
+
+        assert decision.allow is True
+
+
+class TestFailClosed:
+    """Fail-closed behavior for missing context and errors."""
+
+    def test_missing_family_id_denied(self) -> None:
+        reset_family_sandbox_context()
+        provider = NuminaGuardrailProvider()
+
+        decision = provider.evaluate(
+            _request("write_file", {"path": "/mnt/user-data/workspace/x.txt", "content": "x"})
+        )
+
+        assert decision.allow is False
+        assert decision.reasons[0].code == "internal_error"
+
+    def test_missing_thread_id_denied(self) -> None:
+        provider = NuminaGuardrailProvider()
+
+        decision = provider.evaluate(
+            _request("write_file", {"path": "/mnt/user-data/workspace/x.txt", "content": "x"}, thread_id=None)
+        )
+
+        assert decision.allow is False
+        assert decision.reasons[0].code == "internal_error"
 
     def test_fail_open_allows_on_error(self) -> None:
-        """Fail-open → errors allow tool calls."""
+        reset_family_sandbox_context()
         provider = NuminaGuardrailProvider(fail_closed=False)
 
-        # Simulate an error by patching _check_internal to raise
-        def raise_error(tool_name: str) -> GuardrailDecision:
-            raise RuntimeError("Simulated error")
+        decision = provider.evaluate(
+            _request("write_file", {"path": "/mnt/user-data/workspace/x.txt", "content": "x"})
+        )
 
-        provider._check_internal = raise_error  # type: ignore[method-assign]
+        assert decision.allow is True
 
-        result = provider.check_tool_call("get_assets")
-        assert result.allowed is True
+    def test_malformed_policy_raises_at_construction(self) -> None:
+        """A malformed policy must fail visibly, not degrade to permissive defaults."""
+        with pytest.raises(Exception, match="positive"):
+            NuminaGuardrailProvider(sandbox_policy={"max_file_size_bytes": -5})
 
-
-class TestProperties:
-    """Tests for read-only properties."""
-
-    def test_allowlist_property(self) -> None:
-        """Allowlist property returns frozenset."""
-        provider = NuminaGuardrailProvider(allowlist=["get_assets", "get_liabilities"])
-        assert provider.allowlist == frozenset({"get_assets", "get_liabilities"})
-
-    def test_denylist_property(self) -> None:
-        """Denylist property returns frozenset."""
-        provider = NuminaGuardrailProvider(denylist=["bash"])
-        assert provider.denylist == frozenset({"bash"})
-
-    def test_fail_closed_property(self) -> None:
-        """Fail-closed property returns bool."""
-        provider = NuminaGuardrailProvider(fail_closed=True)
-        assert provider.fail_closed is True
-
-        provider = NuminaGuardrailProvider(fail_closed=False)
-        assert provider.fail_closed is False
+    def test_relative_policy_path_raises_at_construction(self) -> None:
+        with pytest.raises(Exception, match="absolute"):
+            NuminaGuardrailProvider(sandbox_policy={"allowed_paths": ["relative/path"]})
 
 
-class TestTypeValidation:
-    """Tests for type validation in __init__."""
+class TestAsyncVariant:
+    """aevaluate mirrors evaluate."""
 
-    def test_allowlist_string_raises_typeerror(self) -> None:
-        """String allowlist raises TypeError (would split into characters)."""
-        try:
-            NuminaGuardrailProvider(allowlist="bash")  # type: ignore[arg-type]
-            raise AssertionError("Expected TypeError")
-        except TypeError as e:
-            assert "allowlist must be a list" in str(e)
-            assert "str" in str(e)
-
-    def test_denylist_string_raises_typeerror(self) -> None:
-        """String denylist raises TypeError (would split into characters)."""
-        try:
-            NuminaGuardrailProvider(denylist="bash")  # type: ignore[arg-type]
-            raise AssertionError("Expected TypeError")
-        except TypeError as e:
-            assert "denylist must be a list" in str(e)
-            assert "str" in str(e)
-
-    def test_allowlist_tuple_raises_typeerror(self) -> None:
-        """Tuple allowlist raises TypeError (strict list check)."""
-        try:
-            NuminaGuardrailProvider(allowlist=("bash",))  # type: ignore[arg-type]
-            raise AssertionError("Expected TypeError")
-        except TypeError as e:
-            assert "allowlist must be a list" in str(e)
-
-    def test_none_and_empty_list_accepted(self) -> None:
-        """None and empty list are both valid."""
-        # None — default
+    async def test_aevaluate_allows_valid_operation(self) -> None:
         provider = NuminaGuardrailProvider()
-        assert provider.allowlist == frozenset()
+        decision = await provider.aevaluate(
+            _request("write_file", {"path": "/mnt/user-data/workspace/a.txt", "content": "x"})
+        )
+        assert decision.allow is True
 
-        # Empty list
-        provider = NuminaGuardrailProvider(allowlist=[], denylist=[])
-        assert provider.allowlist == frozenset()
-        assert provider.denylist == frozenset()
-
-
-class TestFactory:
-    """Tests for create_provider_from_config factory."""
-
-    def test_create_from_full_config(self) -> None:
-        """Factory creates provider from complete config."""
-        config = {
-            "enabled": True,
-            "fail_closed": False,
-            "allowlist": ["get_assets"],
-            "denylist": ["bash"],
-        }
-        provider = create_provider_from_config(config)
-        assert provider.allowlist == frozenset({"get_assets"})
-        assert provider.denylist == frozenset({"bash"})
-        assert provider.fail_closed is False
-
-    def test_create_from_minimal_config(self) -> None:
-        """Factory creates provider with defaults for missing keys."""
-        config = {"enabled": True}
-        provider = create_provider_from_config(config)
-        assert provider.allowlist == frozenset()
-        assert provider.denylist == frozenset()
-        assert provider.fail_closed is True  # default
-
-
-class TestInjectGuardrail:
-    """Tests for _inject_guardrail config injection."""
-
-    def test_inject_when_enabled(self) -> None:
-        """Inject guardrail config when ai_config has guardrails.enabled=True."""
-        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
-            _inject_guardrail,
+    async def test_aevaluate_denies_violation(self, user_data_root: Path) -> None:
+        config_dir = user_data_root / "workspace" / "config"
+        config_dir.mkdir()
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"read_only_paths": [str(config_dir)]}
         )
 
-        config: dict = {}
-        ai_config = {
-            "guardrails": {
-                "enabled": True,
-                "fail_closed": False,
-                "allowlist": ["get_assets"],
-                "denylist": ["bash"],
-            }
-        }
-
-        _inject_guardrail(config, ai_config)
-
-        assert config["guardrails"]["enabled"] is True
-        assert config["guardrails"]["fail_closed"] is False
-        assert config["guardrails"]["allowlist"] == ["get_assets"]
-        assert config["guardrails"]["denylist"] == ["bash"]
-        assert "numina_guardrail_provider" in config["guardrails"]["provider"]["use"]
-
-    def test_inject_when_disabled(self) -> None:
-        """No injection when guardrails.enabled=False."""
-        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
-            _inject_guardrail,
+        decision = await provider.aevaluate(
+            _request("write_file", {"path": "/mnt/user-data/workspace/config/s.json", "content": "x"})
         )
+        assert decision.allow is False
 
-        config: dict = {}
-        ai_config = {"guardrails": {"enabled": False}}
 
-        _inject_guardrail(config, ai_config)
+class TestAuditLogging:
+    """Violations are logged with family/tool/operation/path/reason."""
 
-        assert "guardrails" not in config
+    def test_violation_logged_with_full_context(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        provider = NuminaGuardrailProvider(sandbox_policy={"max_file_size_bytes": 1})
 
-    def test_inject_when_missing(self) -> None:
-        """No injection when ai_config has no guardrails key."""
-        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
-            _inject_guardrail,
+        with caplog.at_level("WARNING"):
+            provider.evaluate(
+                _request("write_file", {"path": "/mnt/user-data/workspace/big.txt", "content": "xxxx"})
+            )
+
+        record = next(r for r in caplog.records if "sandbox_gate] violation" in r.message)
+        assert "family_id=family-A" in record.message
+        assert "tool=write_file" in record.message
+        assert "operation=write" in record.message
+        assert "path=/mnt/user-data/workspace/big.txt" in record.message
+        assert "reason=" in record.message
+
+
+class TestDecisionShape:
+    """Returned decisions match DeerFlow's GuardrailDecision shape."""
+
+    def test_allow_decision_shape(self) -> None:
+        provider = NuminaGuardrailProvider()
+        decision = provider.evaluate(_request("get_assets", {}))
+        assert isinstance(decision, GuardrailDecision)
+        assert decision.allow is True
+
+    def test_deny_decision_carries_policy_id_and_reason(self) -> None:
+        provider = NuminaGuardrailProvider(sandbox_policy={"max_file_size_bytes": 1})
+        decision = provider.evaluate(
+            _request("write_file", {"path": "/mnt/user-data/workspace/b.txt", "content": "xxxx"})
         )
-
-        config: dict = {}
-        ai_config: dict = {}
-
-        _inject_guardrail(config, ai_config)
-
-        assert "guardrails" not in config
-
-    def test_inject_defaults(self) -> None:
-        """Injection uses defaults for missing optional keys."""
-        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
-            _inject_guardrail,
-        )
-
-        config: dict = {}
-        ai_config = {"guardrails": {"enabled": True}}
-
-        _inject_guardrail(config, ai_config)
-
-        assert config["guardrails"]["fail_closed"] is True  # default
-        assert config["guardrails"]["allowlist"] == []  # default
-        assert config["guardrails"]["denylist"] == []  # default
-
-
-class TestPolicyGuardNoConflict:
-    """Verify NuminaGuardrailProvider does not conflict with PolicyGuard.
-
-    PolicyGuard is a pre-dispatch gate (checks skill/capability before LLM call).
-    NuminaGuardrailProvider is a tool execution gate (during LLM run, per-tool).
-    They operate at different layers and should not interfere.
-    """
-
-    def test_different_responsibilities(self) -> None:
-        """PolicyGuard and NuminaGuardrailProvider have distinct responsibilities."""
-        from apps.agent.schemas.policy import CapabilityPolicy
-        from apps.agent.services.policy_guard import PolicyGuard
-
-        # PolicyGuard: pre-dispatch, checks capability access
-        policy_guard = PolicyGuard()
-        policy = CapabilityPolicy(ai_enabled=True, allowed_capabilities=["chat"])
-
-        # PolicyGuard allows/disallows entire capabilities (skills)
-        decision = policy_guard.check(policy, "chat")
-        assert decision.allowed is True
-
-        decision = policy_guard.check(policy, "asset-report")
-        assert decision.allowed is False
-
-        # NuminaGuardrailProvider: tool execution, checks individual tools
-        guardrail = NuminaGuardrailProvider(allowlist=["get_assets"])
-
-        # Provider allows/denies specific tool calls
-        result = guardrail.check_tool_call("get_assets")
-        assert result.allowed is True
-
-        result = guardrail.check_tool_call("bash")
-        assert result.allowed is False
-
-    def test_both_can_be_active(self) -> None:
-        """Both gates can be active simultaneously without conflict."""
-        from apps.agent.schemas.policy import CapabilityPolicy
-        from apps.agent.services.policy_guard import PolicyGuard
-
-        # Setup: AI enabled, chat allowed, guardrail allows get_assets
-        policy_guard = PolicyGuard()
-        policy = CapabilityPolicy(ai_enabled=True, allowed_capabilities=["chat"])
-        guardrail = NuminaGuardrailProvider(allowlist=["get_assets"])
-
-        # PolicyGuard allows dispatch
-        assert policy_guard.check(policy, "chat").allowed is True
-
-        # Guardrail allows get_assets tool
-        assert guardrail.check_tool_call("get_assets").allowed is True
-
-        # Guardrail denies bash tool (not in allowlist)
-        assert guardrail.check_tool_call("bash").allowed is False
-
-        # They don't interfere — each does its job at its layer
+        assert decision.allow is False
+        assert decision.policy_id == "numina-sandbox-gate"
+        assert len(decision.reasons) == 1
+        assert decision.reasons[0].code and decision.reasons[0].message
