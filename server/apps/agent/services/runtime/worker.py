@@ -1413,16 +1413,18 @@ async def _run_finance_coach_agent(
                             p.run_id,
                             validation_errors[:5],
                         )
-                    await bridge.publish(
-                        p.run_id,
-                        "error",
-                        {"error": "财务建议格式异常，请重试"},
-                    )
-                else:
+                        await bridge.publish(
+                            p.run_id,
+                            "error",
+                            {"error": "财务建议格式异常，请重试"},
+                        )
+
+                # Shared success path: runs when first parse OR fallback succeeded
+                if not validation_errors:
                     # Anti-hallucination: sanitise suggestions referencing entity
                     # IDs not present in the snapshot (LLM fabricated IDs → 404
-                    # on click).  target_id/target_type are cleared so the text
-                    # is still shown but the CTA button is inert.
+                    # on click).  target_id is cleared, target_type is kept so the
+                    # text is still shown but the CTA button is inert.
                     if _valid_coach_ids:
                         parsed, _filtered = filter_coach_suggestions_by_ids(
                             parsed, _valid_coach_ids
