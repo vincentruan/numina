@@ -390,7 +390,13 @@ export function useReportStream(): UseReportStreamReturn {
    * tool.progress → update top-level progressMessage so the 3-step timeline
    * shows what the tool is doing (e.g. "Writing report.md") instead of the
    * generic "报告生成中" label. */
-  function handleCustom(data: { type?: string; payload?: unknown }): void {
+  function handleCustom(data: {
+    type?: string
+    payload?: unknown
+    status?: string
+    path?: string
+    ok?: boolean
+  }): void {
     if (data.type === 'report.step2_json' && data.payload) {
       step2Json.value = data.payload as Record<string, unknown>
       step2Status.value = 'finish'
@@ -401,11 +407,10 @@ export function useReportStream(): UseReportStreamReturn {
       // page renders a single top-level progressMessage in ReportStepTimeline;
       // update it with the tool-specific message so the user sees what is
       // being written rather than the generic label.
-      const d = data as Record<string, unknown>
-      const status = d.status as string | undefined
-      const path = String(d.path || '')
+      const status = data.status
+      const path = String(data.path || '')
       if (status === 'done') {
-        const ok = d.ok === true
+        const ok = data.ok === true
         progressMessage.value = ok
           ? t('aiHub.toolProgressWrote', { path })
           : t('aiHub.toolProgressFailed', { path })

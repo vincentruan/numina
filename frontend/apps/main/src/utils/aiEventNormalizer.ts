@@ -194,12 +194,9 @@ export function normalizeAgentEvent(
     }
 
     case 'tool.progress':
-      // Backend sends structured payload (status, path, ok); compose message.
-      // Fallback to progress_message for backward compat with old events.
+      // Backend sends structured payload (status, path, ok). Consumers handle
+      // i18n; only use progress_message if explicitly provided.
       const progressMsg = event.progress_message
-        ?? (event.status === 'done'
-          ? (event.ok ? `Wrote ${event.path || ''}` : `Failed to write ${event.path || ''}`)
-          : `Writing ${event.path || ''}`)
       if (event.tool_id && progressMsg) {
         const target = state.steps.find(
           (s): s is Extract<ProcessStep, { type: 'tool_call' }> =>

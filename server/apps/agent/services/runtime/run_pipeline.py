@@ -511,9 +511,8 @@ class RunPipeline:
         try:
             self._pipeline_loop.call_soon_threadsafe(
                 lambda: _track_task(
-                    asyncio.ensure_future(
-                        self._publish_write_progress(payload),
-                        loop=self._pipeline_loop,
+                    self._pipeline_loop.create_task(
+                        self._publish_write_progress(payload)
                     )
                 )
             )

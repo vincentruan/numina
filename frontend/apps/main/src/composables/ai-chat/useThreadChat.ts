@@ -1557,6 +1557,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               tool_id?: string
               path?: string
               status?: string
+              ok?: boolean
               tool_name?: string
               args?: Record<string, unknown>
               display_name?: string
