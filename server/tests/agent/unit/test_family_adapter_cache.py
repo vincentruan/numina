@@ -733,8 +733,12 @@ class TestSummarizationInjection:
         _inject_summarization(config, memory_enabled=True)
 
         assert config["summarization"]["enabled"] is True
-        assert config["summarization"]["trigger"] == {"type": "fraction", "value": 0.8}
-        assert config["summarization"]["keep"] == {"type": "messages", "value": 20}
+        # Absolute-value triggers (messages OR tokens), aligned with base/config.yaml
+        assert config["summarization"]["trigger"] == [
+            {"type": "messages", "value": 40},
+            {"type": "tokens", "value": 12000},
+        ]
+        assert config["summarization"]["keep"] == {"type": "messages", "value": 12}
 
     def test_summarization_skipped_when_memory_disabled(self):
         """Fixed-flow agents (memory_enabled=False) skip summarization."""

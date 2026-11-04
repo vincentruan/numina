@@ -284,8 +284,9 @@ def _inject_summarization(config: dict[str, Any], memory_enabled: bool) -> None:
     etc.) pass ``memory_enabled=False`` and skip this — they are stateless
     single-run paths that should not accumulate or compact history.
 
-    Trigger: 80% of model's max input tokens (fraction-based).
-    Keep: last 20 messages after summarization (DeerFlow default).
+    Trigger: absolute message/token counts (OR relationship — either threshold
+    triggers compaction). Aligned with ``deerflow_config/base/config.yaml``.
+    Keep: last 12 messages after summarization (≈6 conversation turns).
 
     The middleware is auto-instantiated by ``build_middlewares`` when
     ``summarization.enabled=True`` — no manual ``custom_middlewares`` mount
@@ -296,8 +297,11 @@ def _inject_summarization(config: dict[str, Any], memory_enabled: bool) -> None:
 
     config["summarization"] = {
         "enabled": True,
-        "trigger": {"type": "fraction", "value": 0.8},
-        "keep": {"type": "messages", "value": 20},
+        "trigger": [
+            {"type": "messages", "value": 40},
+            {"type": "tokens", "value": 12000},
+        ],
+        "keep": {"type": "messages", "value": 12},
     }
 
 
