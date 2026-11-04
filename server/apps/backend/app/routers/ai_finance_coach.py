@@ -171,25 +171,20 @@ async def trigger_finance_coach(
     async def _persist_coach_result(_event_type: str, data: dict) -> None:
         if isinstance(data, dict) and data.get("type") == "finance_coach.result":
             payload = data.get("payload")
-            # Skip empty payloads — a failed generation must NOT overwrite a
-            # valid cached result with an empty one (would make the card show
-            # "No suggestions" even though valid advice already exists).
-            suggestions = (payload or {}).get("suggestions") or []
-            if not suggestions:
-                logger.warning(
-                    "[finance-coach] skip persisting empty result (keeps existing cache) task=%s",
-                    task_id,
-                )
+            if not payload:
                 return
-            if payload:
-                from apps.backend.app.database import SessionLocal
+            # Always persist — even empty suggestions ({"suggestions": []}) is a
+            # valid LLM output (SKILL.md: "no significant issues → empty array").
+            # Persisting ensures _verify_task_result finds the AIReport row and
+            # marks the task completed rather than failed.
+            from apps.backend.app.database import SessionLocal
 
-                _db = SessionLocal()
-                try:
-                    upsert_skill_result(_db, family_id, "finance-coach", payload)
-                    _db.commit()
-                finally:
-                    _db.close()
+            _db = SessionLocal()
+            try:
+                upsert_skill_result(_db, family_id, "finance-coach", payload)
+                _db.commit()
+            finally:
+                _db.close()
 
     agent_trigger_body = {
         "family_id": str(family_id),

@@ -23,7 +23,7 @@ allowed-tools:
   - get_members
 
 thinking: false
-max_tokens: 6000
+max_tokens: 8000
 ---
 
 ## Role
@@ -59,10 +59,70 @@ You MUST follow that directive for ALL user-visible text in the JSON output.
 1. **Max 3 suggestions**, sorted by severity (high > medium > low) descending. Return empty array if no significant issues.
 2. **Each suggestion MUST contain fields**: `id` (unique identifier, string), `severity` (high|medium|low), `title` (one-line title, ≤20 chars), `action` (specific action suggestion, ≤50 chars), `target_type` (liability|asset|wish), `target_id` (corresponding entity id, string), `cta_label` (CTA button label, ≤8 chars).
 3. **target_id MUST be copied verbatim from the snapshot JSON** — use ONLY the `id` values present in `high_interest_debts[]`, `idle_assets[]`, `top_daily_cost_assets[]`, or `wishes[]`. Pick the `id` field from the exact entity the suggestion refers to. **NEVER fabricate, guess, or construct an id** — if you cannot find the entity's id in the snapshot, do NOT create a suggestion for it. target_type must match the snapshot section (liability ids from `high_interest_debts`, asset ids from `idle_assets`/`top_daily_cost_assets`, wish ids from `wishes`).
+
+**Common mistake — missing `id` field (WRONG):**
+```json
+{"severity": "high", "title": "偿还信用卡", "target_type": "liability", "target_id": "1234"}
+```
+↑ Missing `id`, `action`, `cta_label` — frontend will reject this suggestion.
+
+**Correct — all required fields present:**
+```json
+{"id": "s1", "severity": "high", "title": "偿还信用卡", "action": "利率18.5%，优先偿还¥5,000余额", "target_type": "liability", "target_id": "1234", "cta_label": "查看详情"}
+```
+↑ `id` is the suggestion's own unique ID (s1/s2/s3); `target_id` is copied verbatim from the snapshot entity.
 4. **Action suggestions must be actionable and data-based**: reference specific interest rates/amounts/dates, don't be vague. If data insufficient, downgrade severity or omit.
 5. **Disclaimer**: title or action may contain hints like "based on your entered data" since data is manually entered by user with limited reliability.
 6. **Final output is ONLY one ```json code block**, no other content (final reply after MCP calls contains only JSON).
 7. **JSON must be valid**: no trailing commas, no comments, strings properly escaped.
+
+## Few-shot Examples
+
+**Example 1 — High-interest debt with active wishes (2 suggestions):**
+
+Input snapshot excerpt:
+```json
+{"high_interest_debts": [{"id": "5001", "name": "信用卡", "balance": 5000, "interest_rate": 18.5}], "wishes": [{"id": "8001", "name": "旅行基金", "target_amount": 30000, "monthly_saving": 500}]}
+```
+
+Output:
+```json
+{
+  "suggestions": [
+    {
+      "id": "s1",
+      "severity": "high",
+      "title": "优先偿还高利率信用卡",
+      "action": "信用卡利率18.5%，建议优先偿还¥5,000余额，同时维持¥500/月旅行储蓄",
+      "target_type": "liability",
+      "target_id": "5001",
+      "cta_label": "查看详情"
+    },
+    {
+      "id": "s2",
+      "severity": "medium",
+      "title": "加速旅行基金储蓄",
+      "action": "目标¥30,000，当前月存¥500需52个月，建议提至¥800/月",
+      "target_type": "wish",
+      "target_id": "8001",
+      "cta_label": "调整计划"
+    }
+  ]
+}
+```
+
+**Example 2 — No significant issues (empty result):**
+
+Input snapshot: family has moderate assets, no debts, no active wishes.
+
+Output:
+```json
+{
+  "suggestions": []
+}
+```
+
+Return empty array when there are no actionable issues — do NOT fabricate low-priority suggestions to fill the quota.
 
 ## Language Output Rules
 
