@@ -507,14 +507,14 @@ class RunPipeline:
         # hit does not prove we are on the pipeline loop. Publishing onto a
         # foreign loop would touch bridge primitives bound to this one.
         if loop is self._pipeline_loop:
-            _track_task(loop.create_task(self.bridge.publish(self.run_id, "custom", payload)))
+            _track_task(loop.create_task(self._publish_write_progress(payload)))
             return
 
         try:
             self._pipeline_loop.call_soon_threadsafe(
                 lambda: _track_task(
                     asyncio.ensure_future(
-                        self.bridge.publish(self.run_id, "custom", payload),
+                        self._publish_write_progress(payload),
                         loop=self._pipeline_loop,
                     )
                 )
@@ -522,6 +522,24 @@ class RunPipeline:
         except RuntimeError:
             logger.debug(
                 "[%s] write progress dropped: run loop is closed", self.app_name
+            )
+
+    async def _publish_write_progress(self, payload: dict[str, Any]) -> None:
+        """Publish one progress frame, logging rather than raising on failure.
+
+        ``_track_task`` only discards the task, so an exception escaping here
+        would surface as an unretrieved-task warning with no context. Publish
+        failures are non-fatal: the write itself already succeeded.
+        """
+        try:
+            await self.bridge.publish(self.run_id, "custom", payload)
+        except Exception:
+            logger.debug(
+                "[%s] write progress publish failed run=%s tool_id=%s",
+                self.app_name,
+                self.run_id,
+                payload.get("tool_id"),
+                exc_info=True,
             )
 
     async def __aexit__(
@@ -539,13 +557,17 @@ class RunPipeline:
             reset_active_skill(self._skill_token)
 
         # 1b. Reset the write-progress emitter (prevent ContextVar leak into
-        #     the next run on this task).
+        #     the next run on this task). Suppressed for the same reason the
+        #     adapter suppresses its ContextVar reset: a token created in a
+        #     different context raises ValueError, and leaking the emitter is
+        #     better than aborting the cleanup below.
         if self._write_progress_token is not None:
             from apps.agent.services.deerflow_adapter.write_progress_context import (
                 reset_write_progress_emitter,
             )
 
-            reset_write_progress_emitter(self._write_progress_token)
+            with contextlib.suppress(ValueError):
+                reset_write_progress_emitter(self._write_progress_token)
 
         # 2. Handle exception — set terminal state but do NOT return early.
         #    All paths (success/error/cancellation) share the cleanup below.

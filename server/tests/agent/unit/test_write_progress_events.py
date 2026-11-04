@@ -503,3 +503,46 @@ class TestWorkerThreadEmit:
         assert payload["ok"] is True
         assert payload["size_bytes"] == 7
         assert "Wrote" in payload["progress_message"]
+
+    def test_publish_failure_is_logged_not_raised(self, caplog: Any) -> None:
+        """A failing bridge.publish is logged, not left unretrieved.
+
+        ``_track_task`` only discards the task, so an escaping exception would
+        surface as a context-free "Task exception was never retrieved" warning.
+        """
+        import asyncio
+        import logging
+        from unittest.mock import AsyncMock, MagicMock
+
+        from deerflow.runtime import StreamBridge
+
+        from apps.agent.services.runtime.run_pipeline import RunPipeline
+
+        bridge = MagicMock(spec=StreamBridge)
+        bridge.publish = AsyncMock(side_effect=RuntimeError("bridge closed"))
+
+        pipeline = RunPipeline.__new__(RunPipeline)
+        pipeline.bridge = bridge
+        pipeline.run_id = "run-1"
+        pipeline.app_name = "asset-report"
+        pipeline._pipeline_loop = asyncio.new_event_loop()
+        loop = pipeline._pipeline_loop
+        try:
+            async def _run() -> None:
+                pipeline._emit_write_progress("writing", "/mnt/x.md", None, "call_t")
+                for _ in range(20):
+                    await asyncio.sleep(0)
+
+            # Must not raise even though publish does.
+            with caplog.at_level(
+                logging.DEBUG, logger="apps.agent.services.runtime.run_pipeline"
+            ):
+                loop.run_until_complete(_run())
+        finally:
+            loop.close()
+
+        bridge.publish.assert_awaited()
+        assert any(
+            "write progress publish failed" in rec.getMessage()
+            for rec in caplog.records
+        ), "publish failure must be observed, not left as an unretrieved task exception"

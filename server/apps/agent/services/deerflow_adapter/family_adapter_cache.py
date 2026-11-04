@@ -287,7 +287,9 @@ def _inject_tool_progress(
 
     Enables ``ToolProgressMiddleware`` when ``tool_progress.enabled=True``.
     The middleware tracks tool execution duration through ACTIVE → WARNED →
-    BLOCKED states, emitting progress events for frontend display.
+    BLOCKED states and logs transitions; it does not emit SSE events.
+    Client-visible tool progress comes from
+    ``RunPipeline._emit_write_progress`` instead.
 
     Configuration source: ``ai_config["tool_progress"]`` (optional).
     When absent or ``enabled=False``, no injection occurs.
