@@ -59,10 +59,13 @@ Call :func:`apply_sync_tool_patches` once from the agent lifespan startup.
 
 from __future__ import annotations
 
+import functools
 import inspect
 import shutil
 
 from packages.core.logging import get_logger
+
+from .write_progress_context import emit_write_progress
 
 logger = get_logger(__name__)
 
@@ -238,6 +241,90 @@ def apply_sync_tool_patches() -> None:
     # asyncio.run fallback — the old module-level asyncio.Lock deadlock is fixed.
     _apply_mcp_httpx_factory_patch()
     _apply_original_user_content_patch()
+    _apply_write_progress_patch()
+
+
+def _apply_write_progress_patch() -> None:
+    """Wrap ``write_file_tool.func`` to emit ``tool.progress`` events.
+
+    DeerFlow runs tools synchronously on this path: ``DeerFlowClient.stream()``
+    drives ``agent.stream()``, so LangChain dispatches through
+    ``StructuredTool._run`` → ``self.func``.  (``_write_file_tool_async`` — the
+    ``.coroutine`` half — only runs under ``agent.astream()``, i.e. subagents
+    and the Gateway.)  Numina's runners all set ``subagent_enabled=False``, so
+    ``.func`` is the body that actually writes report files, and it is where
+    progress has to be reported from.
+
+    The wrapper reports at tool granularity rather than byte granularity:
+    DeerFlow publishes writes atomically (temp file + rename), so there is no
+    intermediate state to observe.  ``done`` is emitted from ``finally`` so a
+    failed write still terminates the progress indicator, and carries a byte
+    count only when the write reported success.
+
+    Wrapping is idempotent — ``write_file_tool`` is a process-wide singleton
+    and ``apply_sync_tool_patches`` is called once at startup, but tests and
+    re-entry must not stack wrappers.
+    """
+    try:
+        from deerflow.sandbox import tools as sandbox_tools
+    except ImportError:
+        logger.warning(
+            "[sync_tool_patch] deerflow.sandbox.tools not found; skipping write progress patch"
+        )
+        return
+
+    tool = getattr(sandbox_tools, "write_file_tool", None)
+    original = getattr(tool, "func", None)
+    if original is None:
+        logger.debug(
+            "[sync_tool_patch] write_file_tool has no sync func; skipping write progress patch"
+        )
+        return
+    if getattr(original, "_numina_write_progress", False):
+        return
+
+    @functools.wraps(original)
+    def _write_file_with_progress(*args: object, **kwargs: object) -> object:
+        tool_call_id = _resolve_tool_call_id(args, kwargs)
+        path = str(kwargs.get("path") or "")
+
+        emit_write_progress("writing", path, None, tool_call_id)
+        size_bytes: int | None = None
+        try:
+            result = original(*args, **kwargs)
+            if result == "OK":
+                content = kwargs.get("content")
+                if isinstance(content, str):
+                    size_bytes = len(content.encode("utf-8"))
+            return result
+        finally:
+            # Records that the write finished even when it raised or was
+            # rejected, so callers can always clear their progress indicator.
+            emit_write_progress("done", path, size_bytes, tool_call_id)
+
+    _write_file_with_progress._numina_write_progress = True  # type: ignore[attr-defined]
+    if tool is not None:
+        tool.func = _write_file_with_progress
+    logger.info(
+        "[sync_tool_patch] patched write_file_tool.func to emit tool.progress events"
+    )
+
+
+def _resolve_tool_call_id(args: tuple[object, ...], kwargs: dict[str, object]) -> str:
+    """Find the LangGraph tool-call id injected into a tool invocation.
+
+    LangChain injects the tool runtime as a keyword argument named ``runtime``;
+    positional placement is handled too so the wrapper does not silently lose
+    the id if a caller invokes the body directly.  An absent id degrades to an
+    empty string, which the frontend drops — the write still proceeds.
+    """
+    runtime = kwargs.get("runtime")
+    if runtime is None:
+        runtime = next(
+            (a for a in args if hasattr(a, "tool_call_id")),
+            None,
+        )
+    return str(getattr(runtime, "tool_call_id", "") or "")
 
 
 def _apply_original_user_content_patch() -> None:
