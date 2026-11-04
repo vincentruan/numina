@@ -242,6 +242,7 @@ def apply_sync_tool_patches() -> None:
     _apply_mcp_httpx_factory_patch()
     _apply_original_user_content_patch()
     _apply_write_progress_patch()
+    _apply_write_file_io_pool_patch()
 
 
 def _apply_write_progress_patch() -> None:
@@ -302,8 +303,15 @@ def _apply_write_progress_patch() -> None:
         size_bytes: int | None = None
         try:
             result = original(*args, **kwargs)
-            if result == "OK" and isinstance(content, str):
-                size_bytes = len(content.encode("utf-8"))
+            # size_bytes is the success signal: non-None on "OK" (even when
+            # content is non-str, use 0 so the emitter's `size_bytes is not
+            # None` ok-derivation stays correct), None on failure.
+            if result == "OK":
+                size_bytes = (
+                    len(content.encode("utf-8"))
+                    if isinstance(content, str)
+                    else 0
+                )
             return result
         finally:
             # Records that the write finished even when it raised or was
@@ -314,6 +322,94 @@ def _apply_write_progress_patch() -> None:
     tool.func = _write_file_with_progress
     logger.info(
         "[sync_tool_patch] patched write_file_tool.func to emit tool.progress events"
+    )
+
+
+def _apply_write_file_io_pool_patch() -> None:
+    """Switch ``write_file`` async path from default executor to file-io pool.
+
+    DeerFlow's ``_write_file_tool_async`` dispatches through
+    ``_run_sync_tool_after_async_sandbox_init`` → ``run_sync_lifecycle_operation``
+    which uses ``asyncio.to_thread`` (the default executor).  For large file
+    writes this competes with every other default-pool task and can delay
+    heartbeats.
+
+    This patch replaces ``write_file_tool.coroutine`` with a thin wrapper that
+    does the same sandbox init but dispatches through ``run_file_io`` —
+    DeerFlow's dedicated bounded ``file-io`` pool (``thread_name_prefix="file-io"``).
+    ContextVar propagation is preserved (``run_file_io`` calls
+    ``contextvars.copy_context()`` explicitly).  ``read_file`` and ``str_replace``
+    remain on ``run_sync_lifecycle_operation`` (plan R3).
+
+    The wrapper delegates to ``write_file_tool.func`` (which is already wrapped
+    by :func:`_apply_write_progress_patch` for progress events), so both the
+    sync and async paths emit ``tool.progress`` events.
+    """
+    try:
+        from deerflow.sandbox import tools as sandbox_tools
+        from deerflow.sandbox.exceptions import SandboxError
+        from deerflow.sandbox.tools import (
+            _reject_elision_placeholder_content,
+            _sanitize_error,
+            ensure_sandbox_initialized_async,
+            sandbox_authorization_scope_async,
+        )
+        from deerflow.utils.file_io import run_file_io
+    except ImportError:
+        logger.warning(
+            "[sync_tool_patch] deerflow file_io or sandbox symbols not found; "
+            "skipping write_file pool patch"
+        )
+        return
+
+    tool = getattr(sandbox_tools, "write_file_tool", None)
+    if tool is None:
+        logger.warning(
+            "[sync_tool_patch] write_file_tool not found; skipping pool patch"
+        )
+        return
+    original_coro = getattr(tool, "coroutine", None)
+    if original_coro is None:
+        return
+    if getattr(original_coro, "_numina_file_io_pool", False):
+        return
+
+    @functools.wraps(original_coro)
+    async def _write_file_via_file_io(
+        runtime: object,
+        path: str,
+        content: str,
+        description: str = "",
+        append: bool = False,
+    ) -> str:
+        placeholder_error = _reject_elision_placeholder_content(content)
+        if placeholder_error is not None:
+            return placeholder_error
+        try:
+            async with sandbox_authorization_scope_async(runtime):
+                await ensure_sandbox_initialized_async(runtime)
+                # Dispatch the (already progress-wrapped) sync body on the
+                # dedicated file-io pool instead of the default executor.
+                return await run_file_io(
+                    tool.func,
+                    runtime,
+                    path,
+                    content,
+                    description,
+                    append,
+                )
+        except SandboxError as e:
+            return f"Error: {e}"
+        except Exception as e:
+            return (
+                f"Error: Unexpected error initializing sandbox: "
+                f"{_sanitize_error(e, runtime)}"
+            )
+
+    _write_file_via_file_io._numina_file_io_pool = True  # type: ignore[attr-defined]
+    tool.coroutine = _write_file_via_file_io
+    logger.info(
+        "[sync_tool_patch] patched write_file_tool.coroutine to use run_file_io pool"
     )
 
 

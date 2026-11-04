@@ -194,18 +194,24 @@ export function normalizeAgentEvent(
     }
 
     case 'tool.progress':
-      if (event.tool_id && event.progress_message) {
+      // Backend sends structured payload (status, path, ok); compose message.
+      // Fallback to progress_message for backward compat with old events.
+      const progressMsg = event.progress_message
+        ?? (event.status === 'done'
+          ? (event.ok ? `Wrote ${event.path || ''}` : `Failed to write ${event.path || ''}`)
+          : `Writing ${event.path || ''}`)
+      if (event.tool_id && progressMsg) {
         const target = state.steps.find(
           (s): s is Extract<ProcessStep, { type: 'tool_call' }> =>
             s.type === 'tool_call' && s.id === event.tool_id,
         )
         if (target) {
-          target.progressMessage = event.progress_message
+          target.progressMessage = progressMsg
         }
         events.push({
           type: 'tool_progress',
           toolCallId: event.tool_id,
-          progressMessage: event.progress_message,
+          progressMessage: progressMsg,
         })
       }
       break

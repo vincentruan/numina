@@ -326,7 +326,7 @@ class TestRunPipelineEmitter:
         assert frames[0][2]["type"] == "tool.progress"
         assert "size_bytes" not in frames[0][2]  # omitted when unknown
         assert frames[1][2]["size_bytes"] == 5
-        assert all("progress_message" in f[2] for f in frames)
+        assert all("path" in f[2] for f in frames)
 
     @pytest.mark.asyncio
     async def test_emitter_dropped_after_exit(self) -> None:
@@ -468,7 +468,7 @@ class TestWorkerThreadEmit:
 
         payload = bridge.publish.await_args.args[2]
         assert payload["ok"] is False
-        assert "Failed" in payload["progress_message"]
+        assert payload["path"] == "/mnt/x.md"
         assert "size_bytes" not in payload
 
     def test_done_event_reports_success_with_size(self) -> None:
@@ -502,7 +502,7 @@ class TestWorkerThreadEmit:
         payload = bridge.publish.await_args.args[2]
         assert payload["ok"] is True
         assert payload["size_bytes"] == 7
-        assert "Wrote" in payload["progress_message"]
+        assert payload["path"] == "/mnt/x.md"
 
     def test_publish_failure_is_logged_not_raised(self, caplog: Any) -> None:
         """A failing bridge.publish is logged, not left unretrieved.
@@ -546,3 +546,87 @@ class TestWorkerThreadEmit:
             "write progress publish failed" in rec.getMessage()
             for rec in caplog.records
         ), "publish failure must be observed, not left as an unretrieved task exception"
+
+
+class TestLifespanWrapperInstallation:
+    """The lifespan wiring is the single point of failure for this feature.
+
+    If ``apply_sync_tool_patches()`` is skipped, import order changes, or
+    the harness replaces ``write_file_tool`` with a different symbol, the
+    wrapper must still be in place.  This test asserts the production
+    install path actually wraps the tool.
+    """
+
+    def test_apply_sync_tool_patches_installs_wrapper(self) -> None:
+        """apply_sync_tool_patches marks write_file_tool.func with the flag."""
+        from deerflow.sandbox import tools as sandbox_tools
+
+        import apps.agent.services.deerflow_adapter.sync_tool_patch as mod
+
+        original = sandbox_tools.write_file_tool.func
+        had_flag = getattr(original, "_numina_write_progress", False)
+        if had_flag:
+            # Already wrapped by a prior test in this process — just confirm
+            # the flag is still present; re-applying is idempotent.
+            assert getattr(
+                sandbox_tools.write_file_tool.func, "_numina_write_progress", False
+            )
+            return
+
+        # Force re-apply so the test is self-contained.
+        saved = mod._patched
+        mod._patched = False
+        try:
+            mod.apply_sync_tool_patches()
+        finally:
+            mod._patched = saved
+
+        assert getattr(
+            sandbox_tools.write_file_tool.func, "_numina_write_progress", False
+        ), "apply_sync_tool_patches() did not install the write-file progress wrapper"
+
+
+class TestFileIoPoolPatch:
+    """U1: write_file async path switched to run_file_io (plan R1-R4)."""
+
+    def test_coroutine_patched_to_file_io_pool(self) -> None:
+        """apply_sync_tool_patches marks write_file_tool.coroutine."""
+        from deerflow.sandbox import tools as sandbox_tools
+
+        import apps.agent.services.deerflow_adapter.sync_tool_patch as mod
+
+        original_coro = sandbox_tools.write_file_tool.coroutine
+        had_flag = getattr(original_coro, "_numina_file_io_pool", False)
+        if had_flag:
+            return
+
+        saved = mod._patched
+        mod._patched = False
+        try:
+            mod.apply_sync_tool_patches()
+        finally:
+            mod._patched = saved
+
+        assert getattr(
+            sandbox_tools.write_file_tool.coroutine, "_numina_file_io_pool", False
+        ), "apply_sync_tool_patches() did not switch write_file to run_file_io pool"
+
+    def test_read_file_and_str_replace_not_patched(self) -> None:
+        """R3: read_file and str_replace remain on run_sync_lifecycle_operation."""
+        from deerflow.sandbox import tools as sandbox_tools
+
+        import apps.agent.services.deerflow_adapter.sync_tool_patch as mod
+
+        saved = mod._patched
+        mod._patched = False
+        try:
+            mod.apply_sync_tool_patches()
+        finally:
+            mod._patched = saved
+
+        assert not getattr(
+            sandbox_tools.read_file_tool.coroutine, "_numina_file_io_pool", False
+        ), "read_file must stay on run_sync_lifecycle_operation"
+        assert not getattr(
+            sandbox_tools.str_replace_tool.coroutine, "_numina_file_io_pool", False
+        ), "str_replace must stay on run_sync_lifecycle_operation"

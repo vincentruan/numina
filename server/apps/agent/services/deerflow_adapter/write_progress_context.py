@@ -53,6 +53,12 @@ def get_write_progress_emitter() -> WriteProgressEmitter | None:
     return _write_progress_emitter.get()
 
 
+# Module-level flag: log a missing emitter at most once per process so a
+# wiring break (patches applied but emitter not installed) is visible in
+# logs without flooding them on every write_file call.
+_missing_emitter_logged = False
+
+
 def emit_write_progress(
     status: str,
     path: str,
@@ -64,9 +70,20 @@ def emit_write_progress(
     Emission is best-effort: a publisher failure (closed bridge, full queue)
     must never fail a file write that already succeeded, so the error is
     swallowed.  The emitter is itself responsible for logging.
+
+    When no emitter is installed (non-pipeline path such as direct tool use,
+    a custom runner, or a lifespan ordering gap), a single debug-level log
+    is emitted so a wiring break is not entirely silent.
     """
+    global _missing_emitter_logged  # noqa: PLW0603
     emitter = _write_progress_emitter.get()
     if emitter is None:
+        if not _missing_emitter_logged:
+            _missing_emitter_logged = True
+            logger.debug(
+                "write progress: no emitter installed; "
+                "tool.progress events will not be emitted"
+            )
         return
     try:
         emitter(status, path, size_bytes, tool_call_id)

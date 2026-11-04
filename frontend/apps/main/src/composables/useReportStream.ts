@@ -386,13 +386,32 @@ export function useReportStream(): UseReportStreamReturn {
   }
 
   /** custom event: report.step2_json → step2 finish; tool_call/tool_result
-   * synthesized events also arrive here (worker mirrors them from messages). */
+   * synthesized events also arrive here (worker mirrors them from messages).
+   * tool.progress → update top-level progressMessage so the 3-step timeline
+   * shows what the tool is doing (e.g. "Writing report.md") instead of the
+   * generic "报告生成中" label. */
   function handleCustom(data: { type?: string; payload?: unknown }): void {
     if (data.type === 'report.step2_json' && data.payload) {
       step2Json.value = data.payload as Record<string, unknown>
       step2Status.value = 'finish'
       // step3 (json-repair 落库) begins.
       step3Status.value = 'process'
+    } else if (data.type === 'tool.progress') {
+      // Tool-level progress from write_file (writing → done). The report
+      // page renders a single top-level progressMessage in ReportStepTimeline;
+      // update it with the tool-specific message so the user sees what is
+      // being written rather than the generic label.
+      const d = data as Record<string, unknown>
+      const status = d.status as string | undefined
+      const path = String(d.path || '')
+      if (status === 'done') {
+        const ok = d.ok === true
+        progressMessage.value = ok
+          ? t('aiHub.toolProgressWrote', { path })
+          : t('aiHub.toolProgressFailed', { path })
+      } else {
+        progressMessage.value = t('aiHub.toolProgressWriting', { path })
+      }
     } else if (data.type === 'report.busy') {
       // Another run is already active on the agent — don't show error,
       // just complete gracefully so the user can refresh to see the result.

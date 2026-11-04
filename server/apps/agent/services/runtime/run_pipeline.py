@@ -481,21 +481,19 @@ class RunPipeline:
             return
         payload: dict[str, Any] = {
             "type": "tool.progress",
+            # Named tool_id to match aiEventNormalizer's contract for
+            # tool.progress events.  Sibling custom events (tool_result,
+            # tool_call, suggestions) use tool_call_id on the same channel —
+            # the divergence is per-event-type, not a bug.
             "tool_id": tool_call_id,
             "status": status,
+            "path": path,
         }
         if status == "done":
-            # A size is only known when the body reported success, which is
-            # what separates a completed write from a rejected one.
             ok = size_bytes is not None
             payload["ok"] = ok
-            payload["progress_message"] = (
-                f"Wrote {path}" if ok else f"Failed to write {path}"
-            )
             if ok:
                 payload["size_bytes"] = size_bytes
-        else:
-            payload["progress_message"] = f"Writing {path}"
 
         try:
             loop = asyncio.get_running_loop()

@@ -1098,16 +1098,23 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * Attach a backend `tool.progress` message to the matching tool call so
    * ChainOfThought can show what the tool is doing (e.g. "Writing report.md").
    * The backend emits this only for long tools such as write_file.
+   *
+   * When *clear* is true the progressMessage is removed instead of set —
+   * used for the `done` status so the label does not persist after the tool
+   * has finished (the result content already shows what was written).
    */
-  function attachToolProgress(toolCallId: string, message: string): void {
-    if (!toolCallId || !message) return
+  function attachToolProgress(toolCallId: string, message: string, clear = false): void {
+    if (!toolCallId) return
+    if (!clear && !message) return
     const aiMsgIdx = messages.value.findLastIndex(
       m => m.type === 'ai' && m.tool_calls?.some(tc => tc.id === toolCallId),
     )
     if (aiMsgIdx >= 0) {
       const aiMsg = messages.value[aiMsgIdx]
       const updatedCalls = (aiMsg.tool_calls || []).map(tc =>
-        tc.id === toolCallId ? { ...tc, progressMessage: message } : tc,
+        tc.id === toolCallId
+          ? { ...tc, progressMessage: clear ? undefined : message }
+          : tc,
       )
       messages.value = [
         ...messages.value.slice(0, aiMsgIdx),
@@ -1548,7 +1555,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               type?: string
               tool_call_id?: string
               tool_id?: string
-              progress_message?: string
+              path?: string
+              status?: string
               tool_name?: string
               args?: Record<string, unknown>
               display_name?: string
@@ -1594,9 +1602,16 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               // Tool-level status from the backend (e.g. write_file
               // "writing" -> "done"). Progress is advisory: an unknown or
               // missing tool id simply leaves the UI unchanged.
+              // On "done" the progress label is cleared — the tool result
+              // already shows what was written; persisting the label would
+              // make the step look permanently in-progress.
+              const isDone = customData.status === 'done'
               attachToolProgress(
                 String(customData.tool_id || ''),
-                String(customData.progress_message || ''),
+                isDone
+                  ? ''
+                  : t('aiHub.toolProgressWriting', { path: String(customData.path || '') }),
+                isDone,
               )
             } else if (customData.type === 'tool_result') {
               // Tool result from backend — update the corresponding tool_call
