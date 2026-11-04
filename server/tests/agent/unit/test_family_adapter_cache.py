@@ -746,3 +746,115 @@ class TestSummarizationInjection:
         _inject_summarization(config, memory_enabled=False)
 
         assert "summarization" not in config
+
+
+class TestSandboxGateInjection:
+    """U6: _inject_sandbox_gate wires the per-family sandbox policy gate."""
+
+    def test_default_policy_when_absent(self):
+        """No sandbox_policy in ai_config → default policy injected."""
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+            _inject_sandbox_gate,
+        )
+        from apps.agent.services.runtime.sandbox_policy import SandboxPolicy
+
+        config: dict = {}
+        _inject_sandbox_gate(config, {})
+
+        gate = config["guardrails"]
+        assert gate["enabled"] is True
+        assert gate["fail_closed"] is True
+        assert "NuminaGuardrailProvider" in gate["provider"]["use"]
+
+        injected = gate["provider"]["config"]["sandbox_policy"]
+        assert injected == SandboxPolicy.default_policy().model_dump()
+
+    def test_custom_policy_passed_through(self):
+        """Valid sandbox_policy dict is injected verbatim."""
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+            _inject_sandbox_gate,
+        )
+
+        custom = {
+            "allowed_paths": ["/data/users/family-A/workspace"],
+            "read_only_paths": ["/data/users/family-A/config"],
+            "max_file_size_bytes": 1024,
+        }
+        config: dict = {}
+        _inject_sandbox_gate(config, {"sandbox_policy": custom})
+
+        assert config["guardrails"]["provider"]["config"]["sandbox_policy"] == custom
+
+    def test_injection_is_unconditional(self):
+        """Gate is injected even when ai_config carries no guardrails key."""
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+            _inject_sandbox_gate,
+        )
+
+        config: dict = {}
+        _inject_sandbox_gate(config, {"model_id": "x", "api_key": "y"})
+
+        assert config["guardrails"]["enabled"] is True
+
+    def test_overwrites_preexisting_guardrails(self):
+        """A pre-existing guardrails block cannot disable the sandbox gate."""
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+            _inject_sandbox_gate,
+        )
+
+        config: dict = {"guardrails": {"enabled": False}}
+        _inject_sandbox_gate(config, {})
+
+        assert config["guardrails"]["enabled"] is True
+
+    def test_non_dict_policy_yields_invalid_marker(self):
+        """A non-dict policy produces a value the provider rejects (fail-closed)."""
+        from deerflow.guardrails.provider import GuardrailRequest
+
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+            _inject_sandbox_gate,
+        )
+        from apps.agent.services.deerflow_adapter.numina_guardrail_provider import (
+            NuminaGuardrailProvider,
+        )
+
+        config: dict = {}
+        _inject_sandbox_gate(config, {"sandbox_policy": "not-a-dict"})
+
+        policy_dict = config["guardrails"]["provider"]["config"]["sandbox_policy"]
+        provider = NuminaGuardrailProvider(sandbox_policy=policy_dict)
+        decision = provider.evaluate(
+            GuardrailRequest(
+                tool_name="write_file",
+                tool_input={"path": "/mnt/user-data/workspace/x", "content": "x"},
+                thread_id="t1",
+            )
+        )
+        assert decision.allow is False
+        assert decision.reasons[0].code == "invalid_policy"
+
+    def test_malformed_dict_policy_fails_closed_at_evaluation(self):
+        """A malformed dict is injected as-is so the provider denies sandbox ops."""
+        from deerflow.guardrails.provider import GuardrailRequest
+
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+            _inject_sandbox_gate,
+        )
+        from apps.agent.services.deerflow_adapter.numina_guardrail_provider import (
+            NuminaGuardrailProvider,
+        )
+
+        config: dict = {}
+        _inject_sandbox_gate(config, {"sandbox_policy": {"max_file_size_bytes": -1}})
+
+        policy_dict = config["guardrails"]["provider"]["config"]["sandbox_policy"]
+        provider = NuminaGuardrailProvider(sandbox_policy=policy_dict)
+        decision = provider.evaluate(
+            GuardrailRequest(
+                tool_name="read_file",
+                tool_input={"path": "/mnt/user-data/workspace/x"},
+                thread_id="t1",
+            )
+        )
+        assert decision.allow is False
+        assert decision.reasons[0].code == "invalid_policy"

@@ -87,6 +87,10 @@ agent = [
     "pyyaml>=6.0.3",
     # Cache (Redis)
     "redis>=5.0.0",
+    # Docker Engine API for DeerFlow's container sandbox (AioSandboxProvider).
+    # Required at runtime, not only in tests: the agent Dockerfile installs the
+    # agent extra and excludes dev dependencies.
+    "docker>=7.0.0",
     # DeerFlow harness (workspace member — installed from apps/agent/vendor/deerflow-harness)
     "deerflow-harness",
 ]
@@ -136,6 +140,7 @@ addopts = "--tb=short -q"
 log_level = "WARNING"
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "docker: marks tests that require a running Docker Engine",
 ]
 
 [tool.ruff]

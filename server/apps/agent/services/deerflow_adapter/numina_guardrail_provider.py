@@ -1,210 +1,378 @@
-"""NuminaGuardrailProvider — tool execution safety guardrails for DeerFlow.
+"""NuminaGuardrailProvider — sandbox policy gate for DeerFlow tool calls.
 
-This provider implements DeerFlow's GuardrailMiddleware provider interface to
-enforce per-family tool allow/deny lists. It integrates with Numina's existing
-CapabilityPolicy system for family-level access control.
+Implements DeerFlow's ``GuardrailProvider`` protocol
+(``deerflow.guardrails.provider``), which ``GuardrailMiddleware`` invokes as
+``evaluate(request) -> GuardrailDecision`` / ``aevaluate`` before each tool call.
 
-Design:
-- Allowlist takes precedence: if allowlist is non-empty, only listed tools execute
-- Denylist overrides allowlist: explicitly denied tools never execute
-- Fail-closed: on provider errors, tool calls are denied (configurable)
-- Per-family configurable via ai_config guardrails section
+What this provider enforces, per family:
+- Path patterns: the tool's virtual path must land inside the family's sandbox
+  tree and inside ``allowed_paths`` prefixes.
+- Write permission: writes under ``read_only_paths`` prefixes are denied.
+- File size: a single write's content must fit ``max_file_size_bytes``.
+- Cumulative quota: the family sandbox tree's total size must fit
+  ``max_total_quota_bytes`` (measured at check time; see caveat below).
+
+What it deliberately does NOT enforce:
+- Raw path traversal. DeerFlow validates that upstream via
+  ``validate_local_tool_path`` and ``LocalSandbox._resolve_path_with_mapping``.
+- Execution time and execute-path denials. The protocol has no post-execution
+  hook to time a call, and ``allow_host_bash: false`` means no tool triggers
+  the execute axis.
+
+Quota caveat: the usage walk and the tool's own write are not atomic, so
+concurrent requests can overshoot by up to one file's worth. That is accepted
+here; hard enforcement belongs to the container tier's OS-level quota.
 
 Relationship to PolicyGuard:
-- PolicyGuard: pre-dispatch gate (checks skill/capability access before LLM call)
-- NuminaGuardrailProvider: tool execution gate (checks individual tool calls during LLM run)
-Both are active simultaneously — PolicyGuard gates dispatch, this provider gates tools.
+- PolicyGuard: pre-dispatch gate (checks skill/capability before the LLM call)
+- NuminaGuardrailProvider: tool execution gate (per tool call during the run)
+Both are active simultaneously — different layers, no overlap.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
+
+from pathlib import Path
 from typing import Any
 
+from deerflow.config.paths import get_paths
+from deerflow.guardrails.provider import (
+    GuardrailDecision,
+    GuardrailReason,
+    GuardrailRequest,
+)
+
+from apps.agent.services.runtime.sandbox_path_validator import (
+    validate_path_against_policy,
+)
+from apps.agent.services.runtime.sandbox_policy import SandboxPolicy
+from apps.agent.services.runtime.sandbox_resource_check import (
+    check_cumulative_quota,
+    check_file_size,
+)
 from packages.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Tools whose paths and payloads this gate inspects. Everything else is not a
+# sandbox file operation and passes through untouched.
+_FILE_PATH_TOOLS = frozenset({"write_file", "read_file", "str_replace"})
 
-@dataclass
-class GuardrailDecision:
-    """Result of a guardrail check.
+# Tools that mutate file content, and therefore need the write-permission check.
+_WRITE_TOOLS = frozenset({"write_file", "str_replace"})
 
-    Attributes:
-        allowed: Whether the tool call is permitted
-        reason: Human-readable reason for the decision (empty if allowed)
-    """
-
-    allowed: bool
-    reason: str = ""
+_POLICY_ID = "numina-sandbox-gate"
 
 
 class NuminaGuardrailProvider:
-    """Per-family tool execution guardrail provider.
+    """Per-family sandbox policy gate for DeerFlow tool calls.
 
-    Checks tool calls against configured allow/deny lists. Integrates with
-    DeerFlow's GuardrailMiddleware which calls ``check_tool_call`` before
-    each tool execution.
+    Configuration (injected via ``family_adapter_cache._inject_sandbox_gate``)::
 
-    Configuration (injected via family_adapter_cache._inject_guardrail):
         guardrails:
-            enabled: true
-            fail_closed: true  # deny on error
-            allowlist:         # empty = all allowed (subject to denylist)
-                - get_assets
-                - get_liabilities
-            denylist:          # explicit denials override allowlist
-                - bash
-                - execute_code
+          enabled: true
+          provider:
+            use: "...:NuminaGuardrailProvider"
+            config:
+              sandbox_policy: {max_file_size_bytes: 51200, ...}
+              fail_closed: true
 
-    Thread safety: This class is stateless after init — safe for concurrent use.
+    Thread safety: the policy is immutable after init and no per-call state is
+    stored, so one instance is safe for concurrent use.
     """
+
+    name = "numina-sandbox-gate"
+    policy_id = _POLICY_ID
 
     def __init__(
         self,
-        allowlist: list[str] | None = None,
-        denylist: list[str] | None = None,
+        sandbox_policy: dict[str, Any] | None = None,
         fail_closed: bool = True,
     ) -> None:
-        """Initialize the guardrail provider.
+        """Initialize the provider.
+
+        A malformed ``sandbox_policy`` does not raise: the provider stays
+        loadable but enters a fail-closed state that denies every sandbox file
+        operation, so a misconfiguration blocks sandbox work instead of
+        silently degrading to the permissive default or crashing the run.
 
         Args:
-            allowlist: Tools explicitly allowed. Empty/None = all allowed (except denylist).
-            denylist: Tools explicitly denied. Overrides allowlist.
-            fail_closed: If True, deny tool calls on provider errors. If False, allow.
-
-        Raises:
-            TypeError: If allowlist or denylist is not a list (when provided).
+            sandbox_policy: Policy dict from config, or ``None`` for defaults.
+            fail_closed: When True (default), any evaluation error denies the
+                call. When False, errors allow the call through with a warning.
         """
-        # Validate types — a string would be split into characters by set()
-        if allowlist is not None and not isinstance(allowlist, list):
-            raise TypeError(
-                f"allowlist must be a list, got {type(allowlist).__name__}"
-            )
-        if denylist is not None and not isinstance(denylist, list):
-            raise TypeError(
-                f"denylist must be a list, got {type(denylist).__name__}"
-            )
-
-        self._allowlist = set(allowlist) if allowlist else set()
-        self._denylist = set(denylist) if denylist else set()
         self._fail_closed = fail_closed
+        self._policy_error: str | None = None
+        try:
+            self._policy = SandboxPolicy.from_config(sandbox_policy)
+        except Exception as e:
+            self._policy = SandboxPolicy.default_policy()
+            self._policy_error = str(e)
+            logger.exception(
+                "[sandbox_gate] invalid sandbox_policy; denying all sandbox "
+                "operations until the configuration is fixed: %s",
+                e,
+            )
 
         logger.debug(
-            "[guardrail] initialized: allowlist=%s denylist=%s fail_closed=%s",
-            self._allowlist or "<all>",
-            self._denylist or "<none>",
+            "[sandbox_gate] initialized: max_file_size=%s quota=%s "
+            "allowed_paths=%d read_only_paths=%d fail_closed=%s",
+            self._policy.max_file_size_bytes,
+            self._policy.max_total_quota_bytes,
+            len(self._policy.allowed_paths),
+            len(self._policy.read_only_paths),
             self._fail_closed,
         )
 
-    def check_tool_call(
-        self,
-        tool_name: str,
-        tool_args: dict[str, Any] | None = None,  # reserved for arg-level checks
-        context: dict[str, Any] | None = None,  # reserved for context-aware checks
-    ) -> GuardrailDecision:
-        """Check if a tool call is permitted.
+    # -- GuardrailProvider protocol -----------------------------------------
 
-        Called by DeerFlow's GuardrailMiddleware before each tool execution.
-
-        Args:
-            tool_name: Name of the tool being called
-            tool_args: Tool arguments (reserved for future arg-level checks)
-            context: Execution context (family_id, caller_user_id, caller_role, etc.)
-
-        Returns:
-            GuardrailDecision with allowed=True/False and reason
-        """
-        if context:
-            logger.debug(
-                "[guardrail] context: caller_user_id=%s caller_role=%s",
-                context.get("caller_user_id"),
-                context.get("caller_role"),
-            )
+    def evaluate(self, request: GuardrailRequest) -> GuardrailDecision:
+        """Evaluate a tool call against the family's sandbox policy."""
         try:
-            return self._check_internal(tool_name, context=context)
+            return self._evaluate_internal(request)
         except Exception as e:
-            # Fail-closed: deny on error (default)
-            # Fail-open: allow on error (explicit opt-in)
-            if self._fail_closed:
-                logger.warning(
-                    "[guardrail] check failed (fail-closed): tool=%s error=%s",
-                    tool_name,
-                    e,
-                )
-                return GuardrailDecision(
-                    allowed=False,
-                    reason=f"Guardrail check failed: {e}",
-                )
-            else:
-                logger.warning(
-                    "[guardrail] check failed (fail-open): tool=%s error=%s",
-                    tool_name,
-                    e,
-                )
-                return GuardrailDecision(allowed=True, reason="")
+            return self._handle_error(e, request)
 
-    def _check_internal(self, tool_name: str, context: dict[str, Any] | None = None) -> GuardrailDecision:
-        """Internal check logic — pure function, no exception handling.
+    async def aevaluate(self, request: GuardrailRequest) -> GuardrailDecision:
+        """Async variant. The checks are filesystem-bound and stay synchronous."""
+        return self.evaluate(request)
 
-        Priority order:
-        1. Denylist check (highest priority — explicit denial always wins)
-        2. Allowlist check (if non-empty, tool must be listed)
-        3. Default allow (if no lists configured)
-        """
-        # 1. Denylist — explicit denial overrides everything
-        if tool_name in self._denylist:
-            logger.debug("[guardrail] denied (denylist): tool=%s", tool_name)
-            return GuardrailDecision(
-                allowed=False,
-                reason=f"Tool '{tool_name}' is explicitly denied",
-            )
-
-        # 2. Allowlist — if configured, tool must be listed
-        if self._allowlist and tool_name not in self._allowlist:
-            logger.debug("[guardrail] denied (not in allowlist): tool=%s", tool_name)
-            return GuardrailDecision(
-                allowed=False,
-                reason=f"Tool '{tool_name}' is not in the allowed list",
-            )
-
-        # 3. Default allow
-        logger.debug("[guardrail] allowed: tool=%s", tool_name)
-        return GuardrailDecision(allowed=True, reason="")
-
-    @property
-    def allowlist(self) -> frozenset[str]:
-        """Return the configured allowlist (read-only)."""
-        return frozenset(self._allowlist)
-
-    @property
-    def denylist(self) -> frozenset[str]:
-        """Return the configured denylist (read-only)."""
-        return frozenset(self._denylist)
-
-    @property
-    def fail_closed(self) -> bool:
-        """Return whether the provider fails closed on errors."""
-        return self._fail_closed
-
-
-def create_provider_from_config(config: dict[str, Any]) -> NuminaGuardrailProvider:
-    """Factory: create a NuminaGuardrailProvider from a config dict.
-
-    Expected config structure (from family_adapter_cache._inject_guardrail):
-        {
-            "enabled": True,
-            "fail_closed": True,
-            "allowlist": ["get_assets", "get_liabilities"],
-            "denylist": ["bash"],
+    def release_policy_parameters(self) -> dict[str, object]:
+        """Declare the policy knobs active for this provider (audit visibility)."""
+        return {
+            "max_file_size_bytes": self._policy.max_file_size_bytes,
+            "max_total_quota_bytes": self._policy.max_total_quota_bytes,
+            "allowed_paths": list(self._policy.allowed_paths),
+            "read_only_paths": list(self._policy.read_only_paths),
         }
 
-    Args:
-        config: Guardrail configuration dict
+    # -- Internals ----------------------------------------------------------
 
-    Returns:
-        Configured NuminaGuardrailProvider instance
-    """
-    return NuminaGuardrailProvider(
-        allowlist=config.get("allowlist"),
-        denylist=config.get("denylist"),
-        fail_closed=config.get("fail_closed", True),
+    def _evaluate_internal(self, request: GuardrailRequest) -> GuardrailDecision:
+        """Run the policy checks. Exceptions propagate to :meth:`evaluate`."""
+        if request.tool_name not in _FILE_PATH_TOOLS:
+            return _allow()
+
+        if self._policy_error is not None:
+            return _deny(
+                "invalid_policy",
+                f"Sandbox policy configuration is invalid: {self._policy_error}",
+            )
+
+        family_id = self._require_family_id()
+
+        virtual_path = request.tool_input.get("path")
+        if not isinstance(virtual_path, str) or not virtual_path:
+            return _deny(
+                "invalid_tool_input",
+                f"Tool '{request.tool_name}' was called without a usable 'path' argument",
+            )
+
+        sandbox_root = self._sandbox_root(request.thread_id, family_id)
+        is_write = request.tool_name in _WRITE_TOOLS
+
+        # 1. Path patterns + sandbox-root containment
+        path_result = validate_path_against_policy(
+            virtual_path, sandbox_root, self._policy
+        )
+        if path_result.deferred:
+            # Framework mounts (/mnt/skills, /mnt/acp-workspace) are enforced by
+            # DeerFlow's upstream validation. The gate does not apply per-family
+            # policy to them.
+            return _allow()
+        if not path_result.allowed:
+            return self._violation(
+                request,
+                family_id=family_id,
+                operation="write" if is_write else "read",
+                path=virtual_path,
+                code="path_not_allowed",
+                message=path_result.reason,
+            )
+
+        # 2. Write permission against read-only prefixes (already computed by
+        # the path validator in step 5 of validate_path_against_policy).
+        if is_write and path_result.is_read_only:
+            return self._violation(
+                request,
+                family_id=family_id,
+                operation="write",
+                path=virtual_path,
+                code="read_only_path",
+                message="Write operation not permitted on read-only path",
+            )
+
+        # 3. Single-file size limit (write payloads only).
+        #    For append=True, check existing file size + new content, because
+        #    the per-call cap can otherwise be bypassed incrementally.
+        #    For str_replace with replace_all=True, the file grows by
+        #    count * (len(new) - len(old)); we check len(new) as a minimum.
+        if is_write:
+            payload = self._write_payload_size(request)
+            size = check_file_size(payload, self._policy)
+            if not size.allowed:
+                return self._violation(
+                    request,
+                    family_id=family_id,
+                    operation="write",
+                    path=virtual_path,
+                    code="file_too_large",
+                    message=size.reason,
+                )
+            # Append guard: when appending, the resulting file size is the
+            # current size plus the new content. Each individual call can pass
+            # the cap while the file grows unboundedly.
+            if (
+                request.tool_name == "write_file"
+                and request.tool_input.get("append") is True
+                and path_result.resolved_path.is_file()
+            ):
+                try:
+                    existing = path_result.resolved_path.stat().st_size
+                except OSError:
+                    existing = 0
+                new_size = (
+                    len(payload.encode("utf-8"))
+                    if isinstance(payload, str)
+                    else len(payload) if payload is not None else 0
+                )
+                if existing + new_size > self._policy.max_file_size_bytes:
+                    return self._violation(
+                        request,
+                        family_id=family_id,
+                        operation="write",
+                        path=virtual_path,
+                        code="file_too_large",
+                        message=(
+                            f"Appending would grow file to "
+                            f"{existing + new_size} bytes, exceeding policy "
+                            f"limit {self._policy.max_file_size_bytes}"
+                        ),
+                    )
+
+        # 4. Cumulative quota for the family tree (writes only — reads cannot
+        # grow usage, and a permanent read denial after an upload bumps usage
+        # past the cap would lock the family out of its own sandbox).
+        if is_write:
+            quota = check_cumulative_quota(sandbox_root, self._policy)
+            if not quota.allowed:
+                return self._violation(
+                    request,
+                    family_id=family_id,
+                    operation="write",
+                    path=virtual_path,
+                    code="quota_exceeded",
+                    message=quota.reason,
+                )
+
+        return _allow()
+
+    def _require_family_id(self) -> str:
+        """Read family_id, raising when the run context is incomplete."""
+        from apps.agent.services.runtime.run_context import assert_run_context_complete
+        from apps.agent.services.runtime.sandbox_provider import (
+            get_family_sandbox_context,
+        )
+
+        assert_run_context_complete("SandboxGate")
+        family_id = get_family_sandbox_context()
+        if not family_id:
+            raise RuntimeError("SandboxGate: family_id ContextVar is not set")
+        return family_id
+
+    @staticmethod
+    def _sandbox_root(thread_id: str | None, family_id: str) -> Path:
+        """Resolve the family's host user-data root for this thread.
+
+        DeerFlow's ``get_paths()`` returns host paths as strings; normalize to
+        ``Path`` here so every downstream check works on one type.
+        """
+        if not thread_id:
+            raise RuntimeError("SandboxGate: tool call arrived without a thread_id")
+        return Path(get_paths().host_sandbox_user_data_dir(thread_id, user_id=family_id))
+
+    @staticmethod
+    def _write_payload_size(request: GuardrailRequest) -> str | bytes | None:
+        """Return the size-bearing payload for a write tool, or None for reads.
+
+        write_file carries ``content``; str_replace carries ``new_str`` and
+        grows the file by the portion of ``new_str`` not already covered by
+        ``old_str``. Reading ``content`` for str_replace would silently skip
+        the per-file size cap.
+        """
+        if request.tool_name == "str_replace":
+            new = request.tool_input.get("new_str")
+            if new is None:
+                return None
+            old = request.tool_input.get("old_str") or ""
+            if isinstance(new, str) and isinstance(old, str) and len(new) <= len(old):
+                # Replacement shrinks the file — size check passes trivially.
+                return None
+            # Narrow Any -> str | bytes for mypy.
+            if isinstance(new, (str, bytes)):
+                return new
+            return str(new) if new is not None else None
+        content = request.tool_input.get("content")
+        # Narrow Any -> str | bytes for mypy.
+        if isinstance(content, (str, bytes)):
+            return content
+        return None
+
+    def _violation(
+        self,
+        request: GuardrailRequest,
+        *,
+        family_id: str,
+        operation: str,
+        path: str,
+        code: str,
+        message: str,
+    ) -> GuardrailDecision:
+        """Log a policy violation and return the deny decision."""
+        logger.warning(
+            "[sandbox_gate] violation: family_id=%s tool=%s operation=%s path=%s reason=%s",
+            family_id,
+            request.tool_name,
+            operation,
+            path,
+            message,
+        )
+        return _deny(code, message)
+
+    def _handle_error(self, error: Exception, request: GuardrailRequest) -> GuardrailDecision:
+        """Apply the configured fail mode after an evaluation error."""
+        mode = "fail-closed" if self._fail_closed else "fail-open"
+        logger.warning(
+            "[sandbox_gate] evaluation failed (%s): family_id=%s tool=%s error=%s",
+            mode,
+            _best_effort_family_id(),
+            request.tool_name,
+            error,
+            exc_info=True,
+        )
+        if self._fail_closed:
+            return _deny("internal_error", f"Sandbox gate evaluation failed: {error}")
+        return _allow()
+
+
+def _allow() -> GuardrailDecision:
+    return GuardrailDecision(allow=True)
+
+
+def _deny(code: str, message: str) -> GuardrailDecision:
+    return GuardrailDecision(
+        allow=False,
+        policy_id=_POLICY_ID,
+        reasons=[GuardrailReason(code=code, message=message)],
     )
+
+
+def _best_effort_family_id() -> str | None:
+    """Read family_id without raising — used only for error-path logging."""
+    try:
+        from apps.agent.services.runtime.sandbox_provider import (
+            get_family_sandbox_context,
+        )
+
+        return get_family_sandbox_context()
+    except Exception:
+        return None

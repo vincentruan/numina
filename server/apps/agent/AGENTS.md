@@ -35,7 +35,7 @@ services/deerflow_adapter/
 ├── memory_config_bridge.py # bridges DeerMem memory config per family
 ├── original_user_content_context.py  # ContextVar preserving original user content through middleware
 ├── sync_tool_patch.py      # monkey-patches DeerFlow harness: sync wrapping, ContextVar propagation, MCP proxy, active-skill tool filter
-├── numina_guardrail_provider.py # NuminaGuardrailProvider — tool execution allow/deny lists for GuardrailMiddleware
+├── numina_guardrail_provider.py # NuminaGuardrailProvider — per-family sandbox policy gate (path patterns, write permission, file size, quota) for GuardrailMiddleware
 ├── patched_dashscope.py    # DashScope/Qwen reasoning_content capture (upstream per-vendor pattern)
 ├── patched_anthropic.py    # Anthropic thinking block capture (upstream _extract_text drops thinking blocks)
 ├── patched_reasoning_chat.py # [DEPRECATED] replaced by patched_dashscope.py + upstream per-vendor classes
@@ -114,6 +114,8 @@ Each non-numina runner sets a fixed `skill_name`, injects a synthetic slash-trig
 ### Sandbox
 
 `worker.run_agent` calls `set_family_sandbox_context(family_id, caller_user_id=user_id)` before dispatch and `reset_family_sandbox_context()` in `finally`. This sets a coroutine-scoped `sandbox_family_id` ContextVar read by `NuminaLocalSandboxProvider` (`services/runtime/sandbox_provider.py`) so `write_file`/`read_file`/`str_replace` resolve to `{DEER_FLOW_HOME}/users/{family_id}/threads/{thread_id}/user-data/workspace/`. The ContextVar is propagated into the DeerFlow ThreadPoolExecutor via `adapter._run_in_executor_with_context` (`contextvars.copy_context()`).
+
+**Two tiers.** A software gate (`NuminaGuardrailProvider`, injected unconditionally by `family_adapter_cache._inject_sandbox_gate`) validates every file tool call against the family's `SandboxPolicy` (`services/runtime/sandbox_policy.py`): path patterns, write permission against read-only prefixes, per-file size, and cumulative quota. Violations hard-block with a reason the agent can read. `services/runtime/numina_container_overlay.py` adds an optional Docker tier: setting `ai_config["sandbox"]["container_enabled"]` switches `sandbox.use` to DeerFlow's `AioSandboxProvider`, which mounts only that family's tree. The software gate keeps running in the agent process either way (defense-in-depth).
 
 ### Tool filtering
 
