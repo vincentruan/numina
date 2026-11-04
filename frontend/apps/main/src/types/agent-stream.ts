@@ -98,6 +98,10 @@ export interface AgentEvent {
   todos?: Array<{ id: string; content: string; status: string }>
   // tool.progress payload
   progress_message?: string
+  status?: string
+  path?: string
+  ok?: boolean
+  size_bytes?: number
 }
 
 // Plan step — represents a single step in an AI-generated plan (spec §4.2)

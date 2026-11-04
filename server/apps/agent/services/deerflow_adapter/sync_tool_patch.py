@@ -59,10 +59,13 @@ Call :func:`apply_sync_tool_patches` once from the agent lifespan startup.
 
 from __future__ import annotations
 
+import functools
 import inspect
 import shutil
 
 from packages.core.logging import get_logger
+
+from .write_progress_context import emit_write_progress
 
 logger = get_logger(__name__)
 
@@ -238,6 +241,212 @@ def apply_sync_tool_patches() -> None:
     # asyncio.run fallback — the old module-level asyncio.Lock deadlock is fixed.
     _apply_mcp_httpx_factory_patch()
     _apply_original_user_content_patch()
+    _apply_write_progress_patch()
+    _apply_write_file_io_pool_patch()
+
+
+def _apply_write_progress_patch() -> None:
+    """Wrap ``write_file_tool.func`` to emit ``tool.progress`` events.
+
+    DeerFlow runs tools synchronously on this path: ``DeerFlowClient.stream()``
+    drives ``agent.stream()``, so LangChain dispatches through
+    ``StructuredTool._run`` → ``self.func``.  (``_write_file_tool_async`` — the
+    ``.coroutine`` half — only runs under ``agent.astream()``, i.e. subagents
+    and the Gateway.)  Numina's fixed-flow runners (asset-report, import-parse,
+    finance-coach, wish-advice) hard-code ``subagent_enabled=False``, so
+    ``.func`` is the body that writes their report files.  The chat runner
+    forwards a client-supplied ``subagent_enabled``, so on that path the async
+    half is reachable too; wrapping ``.func`` covers both, because
+    ``_write_file_tool_async`` dispatches through ``write_file_tool.func``.
+
+    The wrapper reports at tool granularity rather than byte granularity:
+    DeerFlow publishes writes atomically (temp file + rename), so there is no
+    intermediate state to observe.  ``done`` is emitted from ``finally`` so a
+    failed write still terminates the progress indicator, and carries a byte
+    count only when the write reported success.
+
+    Wrapping is idempotent — ``write_file_tool`` is a process-wide singleton
+    and ``apply_sync_tool_patches`` is called once at startup, but tests and
+    re-entry must not stack wrappers.
+    """
+    try:
+        from deerflow.sandbox import tools as sandbox_tools
+    except ImportError:
+        logger.warning(
+            "[sync_tool_patch] deerflow.sandbox.tools not found; skipping write progress patch"
+        )
+        return
+
+    tool = getattr(sandbox_tools, "write_file_tool", None)
+    if tool is None:
+        logger.warning(
+            "[sync_tool_patch] write_file_tool not found; skipping write progress patch"
+        )
+        return
+    original = getattr(tool, "func", None)
+    if original is None:
+        # Warning, not debug: a silent miss here disables progress for every
+        # report write, and the configured log level would hide it.
+        logger.warning(
+            "[sync_tool_patch] write_file_tool has no sync func; skipping write progress patch"
+        )
+        return
+    if getattr(original, "_numina_write_progress", False):
+        return
+
+    @functools.wraps(original)
+    def _write_file_with_progress(*args: object, **kwargs: object) -> object:
+        tool_call_id = _resolve_tool_call_id(args, kwargs)
+        path, content = _resolve_write_args(args, kwargs)
+
+        emit_write_progress("writing", path, None, tool_call_id)
+        size_bytes: int | None = None
+        try:
+            result = original(*args, **kwargs)
+            # size_bytes is the success signal: non-None on "OK" (even when
+            # content is non-str, use 0 so the emitter's `size_bytes is not
+            # None` ok-derivation stays correct), None on failure.
+            if result == "OK":
+                size_bytes = (
+                    len(content.encode("utf-8"))
+                    if isinstance(content, str)
+                    else 0
+                )
+            return result
+        finally:
+            # Records that the write finished even when it raised or was
+            # rejected, so callers can always clear their progress indicator.
+            emit_write_progress("done", path, size_bytes, tool_call_id)
+
+    _write_file_with_progress._numina_write_progress = True  # type: ignore[attr-defined]
+    tool.func = _write_file_with_progress
+    logger.info(
+        "[sync_tool_patch] patched write_file_tool.func to emit tool.progress events"
+    )
+
+
+def _apply_write_file_io_pool_patch() -> None:
+    """Switch ``write_file`` async path from default executor to file-io pool.
+
+    DeerFlow's ``_write_file_tool_async`` dispatches through
+    ``_run_sync_tool_after_async_sandbox_init`` → ``run_sync_lifecycle_operation``
+    which uses ``asyncio.to_thread`` (the default executor).  For large file
+    writes this competes with every other default-pool task and can delay
+    heartbeats.
+
+    This patch replaces ``write_file_tool.coroutine`` with a thin wrapper that
+    does the same sandbox init but dispatches through ``run_file_io`` —
+    DeerFlow's dedicated bounded ``file-io`` pool (``thread_name_prefix="file-io"``).
+    ContextVar propagation is preserved (``run_file_io`` calls
+    ``contextvars.copy_context()`` explicitly).  ``read_file`` and ``str_replace``
+    remain on ``run_sync_lifecycle_operation`` (plan R3).
+
+    The wrapper delegates to ``write_file_tool.func`` (which is already wrapped
+    by :func:`_apply_write_progress_patch` for progress events), so both the
+    sync and async paths emit ``tool.progress`` events.
+    """
+    try:
+        from deerflow.sandbox import tools as sandbox_tools
+        from deerflow.sandbox.exceptions import SandboxError
+        from deerflow.sandbox.tools import (
+            _reject_elision_placeholder_content,
+            _sanitize_error,
+            ensure_sandbox_initialized_async,
+            sandbox_authorization_scope_async,
+        )
+        from deerflow.utils.file_io import run_file_io
+    except ImportError:
+        logger.warning(
+            "[sync_tool_patch] deerflow file_io or sandbox symbols not found; "
+            "skipping write_file pool patch"
+        )
+        return
+
+    tool = getattr(sandbox_tools, "write_file_tool", None)
+    if tool is None:
+        logger.warning(
+            "[sync_tool_patch] write_file_tool not found; skipping pool patch"
+        )
+        return
+    original_coro = getattr(tool, "coroutine", None)
+    if original_coro is None:
+        return
+    if getattr(original_coro, "_numina_file_io_pool", False):
+        return
+
+    @functools.wraps(original_coro)
+    async def _write_file_via_file_io(
+        runtime: object,
+        path: str,
+        content: str,
+        description: str = "",
+        append: bool = False,
+    ) -> str:
+        placeholder_error = _reject_elision_placeholder_content(content)
+        if placeholder_error is not None:
+            return placeholder_error
+        try:
+            async with sandbox_authorization_scope_async(runtime):
+                await ensure_sandbox_initialized_async(runtime)
+                # Dispatch the (already progress-wrapped) sync body on the
+                # dedicated file-io pool instead of the default executor.
+                return await run_file_io(
+                    tool.func,
+                    runtime,
+                    path,
+                    content,
+                    description,
+                    append,
+                )
+        except SandboxError as e:
+            return f"Error: {e}"
+        except Exception as e:
+            return (
+                f"Error: Unexpected error initializing sandbox: "
+                f"{_sanitize_error(e, runtime)}"
+            )
+
+    _write_file_via_file_io._numina_file_io_pool = True  # type: ignore[attr-defined]
+    tool.coroutine = _write_file_via_file_io
+    logger.info(
+        "[sync_tool_patch] patched write_file_tool.coroutine to use run_file_io pool"
+    )
+
+
+def _resolve_write_args(
+    args: tuple[object, ...], kwargs: dict[str, object]
+) -> tuple[str, object]:
+    """Extract ``path`` and ``content`` from a ``write_file`` invocation.
+
+    LangChain dispatches tool calls with keyword arguments, but DeerFlow's own
+    ``_write_file_tool_async`` calls the same body positionally as
+    ``(runtime, path, content, description, append)``. Reading only kwargs
+    would report an empty path on that path, so both shapes are handled.
+    """
+    path = kwargs.get("path")
+    if path is None and len(args) > 1:
+        path = args[1]
+    content = kwargs.get("content")
+    if content is None and len(args) > 2:
+        content = args[2]
+    return str(path or ""), content
+
+
+def _resolve_tool_call_id(args: tuple[object, ...], kwargs: dict[str, object]) -> str:
+    """Find the LangGraph tool-call id injected into a tool invocation.
+
+    LangChain injects the tool runtime as a keyword argument named ``runtime``;
+    positional placement is handled too so the wrapper does not silently lose
+    the id if a caller invokes the body directly.  An absent id degrades to an
+    empty string, which the frontend drops — the write still proceeds.
+    """
+    runtime = kwargs.get("runtime")
+    if runtime is None:
+        runtime = next(
+            (a for a in args if hasattr(a, "tool_call_id")),
+            None,
+        )
+    return str(getattr(runtime, "tool_call_id", "") or "")
 
 
 def _apply_original_user_content_patch() -> None:

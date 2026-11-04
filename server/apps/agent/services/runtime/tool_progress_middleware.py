@@ -1,8 +1,14 @@
 """ToolProgressMiddleware — tool execution health tracking.
 
 Tracks each tool execution through a state machine (ACTIVE → WARNED → BLOCKED)
-based on elapsed time.  Emits ``tool_progress`` events on state transitions so
-the frontend can display tool execution health.
+based on elapsed time, for logging and introspection via
+:meth:`ToolProgressMiddleware.get_active_tools`.
+
+This middleware does **not** publish anything to the client: it has no bridge
+reference and only logs state transitions. Tool-level SSE progress (the
+``tool.progress`` custom event) is produced separately by
+``deerflow_adapter/write_progress_context.py`` and
+``RunPipeline._emit_write_progress``.
 
 Activation: config-driven via ``tool_progress.enabled: true`` in the per-family
 DeerFlow temp config (injected by ``family_adapter_cache``).

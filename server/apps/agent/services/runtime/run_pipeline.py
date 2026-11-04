@@ -315,6 +315,8 @@ class RunPipeline:
         self.selected_provider: dict | None = None
         self.adapter: Any = None
         self._skill_token: Any = None
+        self._pipeline_loop: Any = None
+        self._write_progress_token: Any = None
         self._t_start: float = 0.0
 
         # Populated by run_skill / set_error
@@ -329,6 +331,7 @@ class RunPipeline:
 
     async def __aenter__(self) -> RunPipeline:
         self._t_start = time.monotonic()
+        self._pipeline_loop = asyncio.get_running_loop()
 
         # 1. Mark running + publish metadata (DeerFlow pattern)
         await self.run_manager.set_status(self.run_id, RunStatus.running)
@@ -452,7 +455,89 @@ class RunPipeline:
             )
 
             self._skill_token = set_active_skill(self.skill_name)
+
+        # 7. Install the write-progress emitter for this run. The tool body runs
+        #    on the DeerFlow executor thread, not this event loop, so the
+        #    emitter hops back here to publish. ContextVars are copied into the
+        #    executor thread, which is how the tool sees this emitter at all.
+        from apps.agent.services.deerflow_adapter.write_progress_context import (
+            set_write_progress_emitter,
+        )
+
+        self._write_progress_token = set_write_progress_emitter(self._emit_write_progress)
         return self
+
+    def _emit_write_progress(
+        self, status: str, path: str, size_bytes: int | None, tool_call_id: str
+    ) -> None:
+        """Publish a ``tool.progress`` event for a ``write_file`` call.
+
+        Runs on whichever thread invoked the tool, so the publish is scheduled
+        onto this pipeline's loop. A ``done`` event carries ``ok`` so consumers
+        can tell a completed write from a rejected one — both end the progress
+        indicator, but only one means the file exists.
+        """
+        if not tool_call_id:
+            return
+        payload: dict[str, Any] = {
+            "type": "tool.progress",
+            # Named tool_id to match aiEventNormalizer's contract for
+            # tool.progress events.  Sibling custom events (tool_result,
+            # tool_call, suggestions) use tool_call_id on the same channel —
+            # the divergence is per-event-type, not a bug.
+            "tool_id": tool_call_id,
+            "status": status,
+            "path": path,
+        }
+        if status == "done":
+            ok = size_bytes is not None
+            payload["ok"] = ok
+            if ok:
+                payload["size_bytes"] = size_bytes
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        # Identity-compare: DeerFlow's subagent/tool-sync pools run their own
+        # ``asyncio.run`` loop on the calling thread, so a bare get_running_loop()
+        # hit does not prove we are on the pipeline loop. Publishing onto a
+        # foreign loop would touch bridge primitives bound to this one.
+        if loop is self._pipeline_loop:
+            _track_task(loop.create_task(self._publish_write_progress(payload)))
+            return
+
+        try:
+            self._pipeline_loop.call_soon_threadsafe(
+                lambda: _track_task(
+                    self._pipeline_loop.create_task(
+                        self._publish_write_progress(payload)
+                    )
+                )
+            )
+        except RuntimeError:
+            logger.debug(
+                "[%s] write progress dropped: run loop is closed", self.app_name
+            )
+
+    async def _publish_write_progress(self, payload: dict[str, Any]) -> None:
+        """Publish one progress frame, logging rather than raising on failure.
+
+        ``_track_task`` only discards the task, so an exception escaping here
+        would surface as an unretrieved-task warning with no context. Publish
+        failures are non-fatal: the write itself already succeeded.
+        """
+        try:
+            await self.bridge.publish(self.run_id, "custom", payload)
+        except Exception:
+            logger.debug(
+                "[%s] write progress publish failed run=%s tool_id=%s",
+                self.app_name,
+                self.run_id,
+                payload.get("tool_id"),
+                exc_info=True,
+            )
 
     async def __aexit__(
         self,
@@ -467,6 +552,19 @@ class RunPipeline:
             )
 
             reset_active_skill(self._skill_token)
+
+        # 1b. Reset the write-progress emitter (prevent ContextVar leak into
+        #     the next run on this task). Suppressed for the same reason the
+        #     adapter suppresses its ContextVar reset: a token created in a
+        #     different context raises ValueError, and leaking the emitter is
+        #     better than aborting the cleanup below.
+        if self._write_progress_token is not None:
+            from apps.agent.services.deerflow_adapter.write_progress_context import (
+                reset_write_progress_emitter,
+            )
+
+            with contextlib.suppress(ValueError):
+                reset_write_progress_emitter(self._write_progress_token)
 
         # 2. Handle exception — set terminal state but do NOT return early.
         #    All paths (success/error/cancellation) share the cleanup below.
