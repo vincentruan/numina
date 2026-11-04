@@ -10,13 +10,14 @@ import pytest
 class TestSimpleAppConfig:
     """Verify the _SimpleAppConfig registry has expected entries and values."""
 
-    def test_simple_apps_registry_has_three_entries(self):
+    def test_simple_apps_registry_has_four_entries(self):
         from apps.agent.services.runtime.worker import _SIMPLE_APPS
 
         assert set(_SIMPLE_APPS.keys()) == {
             "dashboard-narrative",
             "literacy-weekly-report",
             "learning-tutor",
+            "learning-topic-generator",
         }
 
     def test_dashboard_narrative_config(self):
@@ -52,6 +53,18 @@ class TestSimpleAppConfig:
         assert cfg.enable_thinking is False
         assert cfg.enable_reasoning_delta is False
         assert cfg.memory_enabled is False
+        assert cfg.result_event_type == ""  # no result event
+        assert cfg.result_builder is None
+
+    def test_learning_topic_generator_config(self):
+        from apps.agent.services.runtime.worker import _SIMPLE_APPS
+
+        cfg = _SIMPLE_APPS["learning-topic-generator"]
+        assert cfg.skill_name == "learning-topic-generator"
+        assert cfg.enable_thinking is True
+        assert cfg.enable_reasoning_delta is False
+        assert cfg.memory_enabled is False
+        assert cfg.timeout_seconds == 120
         assert cfg.result_event_type == ""  # no result event
         assert cfg.result_builder is None
 
@@ -97,6 +110,7 @@ class TestRunnersDict:
             "dashboard-narrative",
             "literacy-weekly-report",
             "learning-tutor",
+            "learning-topic-generator",
         }
         assert all_apps == expected
 
