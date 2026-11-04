@@ -198,8 +198,12 @@ def _inject_container_sandbox(
     # Local imports: ``apps.agent.services.runtime`` pulls in the worker, which
     # imports this adapter package — module-level imports here are circular.
     from apps.agent.services.runtime.numina_container_overlay import (
+        container_enabled,
         override_sandbox_provider,
     )
+
+    if not container_enabled(ai_config):
+        return
 
     try:
         from deerflow.config.paths import get_paths

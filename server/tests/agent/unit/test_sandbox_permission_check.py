@@ -75,24 +75,6 @@ class TestWritePermission:
         assert result.allowed is True
 
 
-class TestReadOperations:
-    """Read operations are not gated by this check."""
-
-    def test_read_only_path_does_not_affect_reads(self, tmp_path: Path) -> None:
-        """The permission check only concerns writes; reads are unrestricted.
-
-        Callers invoke ``check_write_permission`` for write-shaped operations
-        only, so a read-only prefix never denies a read.
-        """
-        config_dir = tmp_path / "config"
-        config_dir.mkdir()
-        policy = SandboxPolicy(read_only_paths=[str(config_dir)])
-
-        # Reading is not routed through this function at all; verify the write
-        # gate still denies so the distinction is explicit.
-        assert check_write_permission(config_dir / "s.json", policy).allowed is False
-
-
 class TestReturnShape:
     """Tests for the returned result object."""
 

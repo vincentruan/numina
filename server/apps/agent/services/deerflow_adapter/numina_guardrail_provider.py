@@ -171,6 +171,7 @@ class NuminaGuardrailProvider:
             )
 
         sandbox_root = self._sandbox_root(request.thread_id, family_id)
+        is_write = request.tool_name in _WRITE_TOOLS
 
         # 1. Path patterns + sandbox-root containment
         path_result = validate_path_against_policy(
@@ -180,14 +181,13 @@ class NuminaGuardrailProvider:
             return self._violation(
                 request,
                 family_id=family_id,
-                operation="write" if request.tool_name in _WRITE_TOOLS else "read",
+                operation="write" if is_write else "read",
                 path=virtual_path,
                 code="path_not_allowed",
                 message=path_result.reason,
             )
 
         # 2. Write permission against read-only prefixes
-        is_write = request.tool_name in _WRITE_TOOLS
         if is_write:
             permission = check_write_permission(path_result.resolved_path, self._policy)
             if not permission.allowed:
@@ -274,36 +274,18 @@ class NuminaGuardrailProvider:
 
     def _handle_error(self, error: Exception, request: GuardrailRequest) -> GuardrailDecision:
         """Apply the configured fail mode after an evaluation error."""
-        family_id = _best_effort_family_id()
-
-        if self._fail_closed:
-            logger.warning(
-                "[sandbox_gate] evaluation failed (fail-closed): family_id=%s tool=%s error=%s",
-                family_id,
-                request.tool_name,
-                error,
-                exc_info=True,
-            )
-            return _deny("internal_error", f"Sandbox gate evaluation failed: {error}")
-
+        mode = "fail-closed" if self._fail_closed else "fail-open"
         logger.warning(
-            "[sandbox_gate] evaluation failed (fail-open): family_id=%s tool=%s error=%s",
-            family_id,
+            "[sandbox_gate] evaluation failed (%s): family_id=%s tool=%s error=%s",
+            mode,
+            _best_effort_family_id(),
             request.tool_name,
             error,
             exc_info=True,
         )
+        if self._fail_closed:
+            return _deny("internal_error", f"Sandbox gate evaluation failed: {error}")
         return _allow()
-
-    @property
-    def policy(self) -> SandboxPolicy:
-        """Return the immutable policy this provider enforces."""
-        return self._policy
-
-    @property
-    def fail_closed(self) -> bool:
-        """Return whether the provider denies on evaluation errors."""
-        return self._fail_closed
 
 
 def _allow() -> GuardrailDecision:

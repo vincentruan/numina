@@ -8,7 +8,7 @@ Tests cover the GuardrailProvider protocol (evaluate / aevaluate):
 - File size over limit → deny
 - Quota exceeded → deny
 - Missing family_id → fail-closed deny
-- Malformed sandbox_policy → constructor raises (config injection fails closed)
+- Malformed sandbox_policy → sandbox ops denied (config injection fails closed)
 - Fail-open mode allows on evaluation error
 - Protocol compliance (name / policy_id / release_policy_parameters)
 """
