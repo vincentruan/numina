@@ -29,6 +29,7 @@ dependencies = [
     "short-io-api-client>=1.0.0",
     # Web Push notifications
     "pywebpush>=2.0.0",
+    "croniter>=6.2.2",
 ]
 
 [project.optional-dependencies]

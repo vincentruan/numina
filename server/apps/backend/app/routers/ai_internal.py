@@ -1182,7 +1182,6 @@ async def internal_generate_literacy_report(
     if child is None:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
-    # Find family owner for user_id context
     owner = (
         db.query(User)
         .filter(
@@ -1437,3 +1436,178 @@ def internal_task_info(
         "last_checkpoint_id": task.last_checkpoint_id,
         "skill_id": task.skill_id,
     }
+
+
+# ---------------------------------------------------------------------------
+# Scheduled task execution — internal endpoint for scheduler_worker
+# ---------------------------------------------------------------------------
+
+
+class ScheduledTaskExecuteRequest(BaseModel):
+    task_id: int
+
+
+@router.post("/ai/scheduled-tasks/execute")
+async def execute_scheduled_task(
+    payload: ScheduledTaskExecuteRequest,
+    _auth: bool = Depends(verify_system_token),
+    db: Session = Depends(get_db),
+):
+    """Execute a scheduled task by task_id.
+
+    Called by scheduler_worker when a task is due. Reads skill_id from the DB
+    (not request body) to prevent white-list bypass. Dispatches based on skill_id:
+    - asset-report: creates session + task, fires agent gateway (fire-and-forget)
+    - literacy-weekly-report: generates reports for all children in the family
+
+    Returns execution result (triggered count, skill_id).
+    """
+    from packages.db.models.family import Family
+    from packages.db.models.scheduled_task import ScheduledTask
+
+    task = db.query(ScheduledTask).filter(ScheduledTask.id == payload.task_id).first()
+    if not task:
+        raise AppError(ErrorCode.SCHEDULED_TASK_NOT_FOUND)
+    if not task.is_enabled:
+        raise AppError(ErrorCode.SCHEDULED_TASK_DISABLED)
+
+    skill_id = task.skill_id
+    family_id = task.family_id
+
+    family = db.query(Family).filter(Family.id == family_id).first()
+    if not family or not family.ai_enabled:
+        raise AppError(ErrorCode.AI_NOT_ENABLED)
+
+    owner = (
+        db.query(User)
+        .filter(
+            User.family_id == family_id,
+            User.role == UserRole.OWNER,
+            User.is_active.is_(True),
+        )
+        .first()
+    )
+    if not owner:
+        raise AppError(ErrorCode.FAMILY_NO_ACTIVE_MEMBERS)
+
+    if skill_id == "asset-report":
+        triggered = await _execute_asset_report(db, family_id, owner)
+    elif skill_id == "literacy-weekly-report":
+        triggered = await _execute_literacy_report(db, family_id, owner)
+    else:
+        raise AppError(ErrorCode.SCHEDULED_TASK_SKILL_INVALID)
+
+    return {"status": "triggered", "skill_id": skill_id, "triggered": triggered}
+
+
+async def _execute_asset_report(db: Session, family_id: int, owner: User) -> int:
+    from apps.backend.app.services.agent_client import AgentClient
+    from apps.backend.app.services.ai_task_service import AITaskService
+    from apps.backend.app.services.chat_session import ChatSessionService
+
+    session = await ChatSessionService.create_session(
+        family_id=family_id,
+        user_id=owner.id,
+        db=db,
+        source="asset-report",
+    )
+    task = AITaskService.create_task(
+        family_id=family_id,
+        skill_id="asset-report",
+        session_id=session.id,
+        db=db,
+    )
+
+    agent_client = AgentClient(family_id, owner.id, timeout=30.0)
+    try:
+        response = await agent_client.post(
+            f"/internal/gateway/runs/asset-report/{session.id}",
+            json={
+                "family_id": str(family_id),
+                "user_id": str(owner.id),
+                "language": owner.language,
+                "on_disconnect": "continue",
+            },
+        )
+        failed = response.status_code >= 400
+        failure_reason = f"agent gateway returned {response.status_code}"
+    except Exception as e:
+        failed = True
+        failure_reason = f"agent trigger failed: {type(e).__name__}"
+
+    if failed:
+        # Both rows are already committed at this point, so an unhandled failure
+        # leaves an AITask stuck in 'running' forever and an empty chat session
+        # the owner can open. Mirror ai_report.py:326-335, which fails the task
+        # before surfacing the error.
+        AITaskService.fail_task(task.id, failure_reason, db)
+        raise AppError(
+            ErrorCode.SCHEDULED_TASK_EXECUTE_FAILED,
+            details=failure_reason,
+        )
+
+    logger.info("[scheduled-task] triggered asset-report family=%s", family_id)
+    return 1
+
+
+async def _execute_literacy_report(db: Session, family_id: int, owner: User) -> int:
+    from datetime import date
+
+    from apps.backend.app.services.literacy_report import _sunday_of
+    from apps.backend.app.services.literacy_report_service import (
+        generate_literacy_report,
+    )
+
+    children = (
+        db.query(User)
+        .filter(
+            User.family_id == family_id,
+            User.role == UserRole.CHILD,
+            User.is_active.is_(True),
+        )
+        .all()
+    )
+
+    if not children:
+        logger.info("[scheduled-task] literacy-report: no active children family=%s", family_id)
+        return 0
+
+    week_start = _sunday_of(date.today())
+    triggered = 0
+    failures = 0
+
+    for child in children:
+        try:
+            report = await generate_literacy_report(
+                db,
+                family_id=family_id,
+                child_id=child.id,
+                week_start=week_start,
+                user_id=owner.id,
+                force=False,
+            )
+            if report is not None:
+                triggered += 1
+                logger.info(
+                    "[scheduled-task] literacy-report generated child=%s family=%s",
+                    child.id,
+                    family_id,
+                )
+            else:
+                failures += 1
+        except Exception as e:
+            logger.warning(
+                "[scheduled-task] literacy-report failed child=%s family=%s err=%s",
+                child.id,
+                family_id,
+                e,
+            )
+            failures += 1
+
+    if triggered == 0 and failures > 0:
+        raise AppError(
+            ErrorCode.SCHEDULED_TASK_EXECUTE_FAILED,
+            details=f"literacy-report: all {failures} child dispatch(es) failed",
+        )
+
+    return triggered

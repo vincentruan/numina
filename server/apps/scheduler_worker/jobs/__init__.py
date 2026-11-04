@@ -777,3 +777,158 @@ def _already_backed_up_today(db, family_id: int) -> bool:
         .first()
     )
     return existing is not None
+
+
+# ── Job 13: Scheduled task polling ─────────────────────────────────────────────
+
+
+async def scheduled_task_poll_job() -> None:
+    """Poll for due scheduled tasks and dispatch each to the backend."""
+    from datetime import UTC, datetime, timedelta
+
+    import httpx
+
+    from packages.db.models.scheduled_task import ScheduledTask, ScheduledTaskStatus
+    from packages.security.service_auth.agent_jwt import create_system_token
+
+    db = SessionLocal()
+    try:
+        stale_cutoff = datetime.now(UTC) - timedelta(minutes=10)
+        stale_count = (
+            db.query(ScheduledTask)
+            .filter(
+                ScheduledTask.status == ScheduledTaskStatus.RUNNING,
+                ScheduledTask.updated_at < stale_cutoff,
+            )
+            .update(
+                {ScheduledTask.status: ScheduledTaskStatus.IDLE},
+                synchronize_session=False,
+            )
+        )
+        if stale_count > 0:
+            db.commit()
+            logger.info("重置 %d 个卡死的运行中任务", stale_count)
+
+        now = datetime.now(UTC)
+        due_tasks = (
+            db.query(ScheduledTask)
+            .filter(
+                ScheduledTask.is_enabled.is_(True),
+                ScheduledTask.next_run_at <= now,
+                ScheduledTask.status != ScheduledTaskStatus.RUNNING,
+            )
+            .all()
+        )
+
+        if not due_tasks:
+            return
+
+        logger.info("发现 %d 个到期任务", len(due_tasks))
+
+        # One client for the whole batch: each task would otherwise pay a fresh
+        # TCP+TLS handshake to the backend, once per task per minute.
+        async with httpx.AsyncClient(timeout=300.0, trust_env=False) as client:
+            for task in due_tasks:
+                task_id = task.id
+
+                updated = (
+                    db.query(ScheduledTask)
+                    .filter(
+                        ScheduledTask.id == task_id,
+                        ScheduledTask.status != ScheduledTaskStatus.RUNNING,
+                    )
+                    .update(
+                        {ScheduledTask.status: ScheduledTaskStatus.RUNNING},
+                        synchronize_session=False,
+                    )
+                )
+                db.commit()
+
+                if updated != 1:
+                    logger.warning("任务 %d 已被其他进程锁定，跳过", task_id)
+                    continue
+
+                # Read the schedule only after taking the lock: an owner may have
+                # edited cron_expression between the batch SELECT and this commit,
+                # and computing next_run_at from the pre-edit value would silently
+                # overwrite their change with one derived from the old expression.
+                cron_expression = task.cron_expression
+
+                try:
+                    resp = await client.post(
+                        f"{settings.BACKEND_BASE_URL}/api/v1/internal/ai/scheduled-tasks/execute",
+                        headers={
+                            "Authorization": f"Bearer {create_system_token()}",
+                        },
+                        json={"task_id": task_id},
+                    )
+
+                    if resp.status_code == 200:
+                        next_run = _next_run_after(cron_expression)
+                        db.query(ScheduledTask).filter(
+                            ScheduledTask.id == task_id
+                        ).update(
+                            {
+                                ScheduledTask.last_run_at: datetime.now(UTC),
+                                ScheduledTask.status: ScheduledTaskStatus.SUCCESS,
+                                ScheduledTask.next_run_at: next_run,
+                                ScheduledTask.last_error: None,
+                            },
+                            synchronize_session=False,
+                        )
+                        db.commit()
+                        logger.info("任务 %d 执行成功，下次执行 %s", task_id, next_run)
+                    else:
+                        error_msg = f"HTTP {resp.status_code}: {resp.text[:500]}"
+                        _record_failure(db, task_id, cron_expression, error_msg)
+                        logger.warning("任务 %d 执行失败: %s", task_id, error_msg)
+
+                except Exception as e:
+                    error_msg = str(e)[:1000]
+                    _record_failure(db, task_id, cron_expression, error_msg)
+                    logger.exception("任务 %d 执行异常: %s", task_id, e)
+
+    except Exception:
+        logger.exception("定时任务轮询异常")
+    finally:
+        db.close()
+
+
+def _next_run_after(cron_expression: str) -> datetime:
+    """Next fire time for ``cron_expression``, falling back to a retry window.
+
+    A stored expression that no longer parses must not strand the row: returning
+    a future timestamp lets the task retry on the next schedule instead of being
+    re-dispatched on every poll.
+    """
+    from datetime import timedelta
+
+    from packages.core.cron import compute_next_run_at
+
+    try:
+        return compute_next_run_at(cron_expression)
+    except Exception:
+        logger.warning("cron 表达式无法解析: %s，改为 1 小时后重试", cron_expression)
+        return datetime.now(UTC) + timedelta(hours=1)
+
+
+def _record_failure(
+    db, task_id: int, cron_expression: str, error_msg: str
+) -> None:
+    """Mark a task failed without letting it block the next scheduled slot.
+
+    ``next_run_at`` advances on failure too — a due row that stays due would be
+    re-dispatched on every poll, turning one backend error into an unbounded
+    1-minute retry loop.
+    """
+    from packages.db.models.scheduled_task import ScheduledTask, ScheduledTaskStatus
+
+    db.query(ScheduledTask).filter(ScheduledTask.id == task_id).update(
+        {
+            ScheduledTask.status: ScheduledTaskStatus.FAILED,
+            ScheduledTask.last_error: error_msg[:1000],
+            ScheduledTask.next_run_at: _next_run_after(cron_expression),
+        },
+        synchronize_session=False,
+    )
+    db.commit()

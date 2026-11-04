@@ -28,6 +28,7 @@ def setup_all_jobs() -> None:
         notification_digest_job,
         reminder_job,
         revoked_token_cleanup_job,
+        scheduled_task_poll_job,
         snapshot_job,
         travel_transition_job,
     )
@@ -140,35 +141,6 @@ def setup_all_jobs() -> None:
     )
     logger.info("快照定时任务已配置（每日 00:05）")
 
-    # Job 8: Auto report generation — daily at 08:35
-    scheduler.add_job(
-        auto_report_job,
-        trigger="cron",
-        hour=8,
-        minute=35,
-        id="auto_report_daily",
-        name="auto_report_job",
-        replace_existing=True,
-        max_instances=1,
-        coalesce=True,
-    )
-    logger.info("自动报告生成任务已配置（每日 08:35）")
-
-    # Job 9: Weekly literacy report — Sunday at 02:00
-    scheduler.add_job(
-        literacy_report_weekly_job,
-        trigger="cron",
-        day_of_week="sun",
-        hour=2,
-        minute=0,
-        id="literacy_report_weekly",
-        name="literacy_report_weekly_job",
-        replace_existing=True,
-        max_instances=1,
-        coalesce=True,
-    )
-    logger.info("识字周报生成任务已配置（每周日 02:00）")
-
     # Job 10: Daily notification digest — every 5 minutes, per-channel
     # digest_time filtering happens inside the job (see _in_digest_window).
     scheduler.add_job(
@@ -215,3 +187,56 @@ def setup_all_jobs() -> None:
         coalesce=True,
     )
     logger.info("家庭数据备份任务已配置（每日 %s:30）", settings.BACKUP_HOUR)
+
+    # Job 13: Scheduled task polling — every 60 seconds
+    scheduler.add_job(
+        scheduled_task_poll_job,
+        trigger="interval",
+        seconds=60,
+        id="scheduled_task_poll",
+        name="scheduled_task_poll_job",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("定时任务轮询已配置（每 60 秒）")
+
+    import os
+
+    disable_legacy = os.environ.get("DISABLE_LEGACY_REPORT_JOBS", "").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+
+    if disable_legacy:
+        logger.info("已跳过遗留报告任务（DISABLE_LEGACY_REPORT_JOBS=true）")
+    else:
+        # Job 8: Auto report generation — daily at 08:35
+        scheduler.add_job(
+            auto_report_job,
+            trigger="cron",
+            hour=8,
+            minute=35,
+            id="auto_report_daily",
+            name="auto_report_job",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info("自动报告生成任务已配置（每日 08:35）")
+
+        # Job 9: Weekly literacy report — Sunday at 02:00
+        scheduler.add_job(
+            literacy_report_weekly_job,
+            trigger="cron",
+            day_of_week="sun",
+            hour=2,
+            minute=0,
+            id="literacy_report_weekly",
+            name="literacy_report_weekly_job",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info("识字周报生成任务已配置（每周日 02:00）")

@@ -104,6 +104,7 @@ from apps.backend.app.routers import ai_literacy_report as ai_literacy_report_ro
 from apps.backend.app.routers import ai_mcp as ai_mcp_router
 from apps.backend.app.routers import ai_mcp_token as ai_mcp_token_router
 from apps.backend.app.routers import ai_report as ai_report_router
+from apps.backend.app.routers import ai_scheduled_tasks as ai_scheduled_tasks_router
 from apps.backend.app.routers import ai_skills as ai_skills_router
 from apps.backend.app.routers import ai_suggest as ai_suggest_router
 from apps.backend.app.routers import ai_tasks as ai_tasks_router
@@ -632,6 +633,7 @@ app.include_router(ai_internal_router.router, prefix="/api/v1")
 app.include_router(mcp_internal_router.router, prefix="/api/v1")
 app.include_router(mcp_public_router.router, prefix="/api/v1")
 app.include_router(ai_report_router.router, prefix="/api/v1")
+app.include_router(ai_scheduled_tasks_router.router, prefix="/api/v1")
 app.include_router(ai_finance_coach_router.router, prefix="/api/v1")
 app.include_router(ai_suggest_router.router, prefix="/api/v1")
 app.include_router(ai_context_router.router, prefix="/api/v1")

@@ -37,6 +37,7 @@ from packages.db.models.reminder import Reminder
 from packages.db.models.reminder_notification import ReminderNotification
 from packages.db.models.rental_contract import RentalContract
 from packages.db.models.revoked_token import RevokedToken
+from packages.db.models.scheduled_task import ScheduledTask
 from packages.db.models.security_audit_log import SecurityAuditLog
 from packages.db.models.split_group import (
     SplitGroup,
@@ -87,6 +88,7 @@ __all__ = [
     "ReminderNotification",
     "RentalContract",
     "RevokedToken",
+    "ScheduledTask",
     "SecurityAuditLog",
     "SplitGroup",
     "SplitParticipant",
