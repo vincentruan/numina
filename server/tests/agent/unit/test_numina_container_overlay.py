@@ -15,7 +15,6 @@ import pytest
 
 from apps.agent.services.runtime.numina_container_overlay import (
     AIO_SANDBOX_PROVIDER_PATH,
-    DEFAULT_CONTAINER_IMAGE,
     container_enabled,
     numina_container_sandbox_config,
     override_sandbox_provider,
@@ -133,16 +132,22 @@ class TestOverrideSandboxProvider:
 
         assert config["sandbox"]["use"] == AIO_SANDBOX_PROVIDER_PATH
 
-    def test_sets_pinned_image(self, family_root: Path) -> None:
+    def test_does_not_impose_an_image(self, family_root: Path) -> None:
+        """The provider needs its own sandbox-server image, so we set none.
+
+        AioSandboxProvider drives an all-in-one sandbox server; substituting a
+        plain runtime image yields a container with nothing to talk to. An
+        absent key lets the provider apply its own default.
+        """
         config: dict = {}
         ai_config = {"sandbox": {"container_enabled": True}}
 
         override_sandbox_provider(config, ai_config, "family-A", family_root)
 
-        assert config["sandbox"]["image"] == DEFAULT_CONTAINER_IMAGE
+        assert "image" not in config["sandbox"]
 
     def test_preserves_operator_image(self, family_root: Path) -> None:
-        """An explicitly configured image is not replaced by the default."""
+        """An explicitly configured image is left untouched."""
         config: dict = {"sandbox": {"image": "custom:1.0"}}
         ai_config = {"sandbox": {"container_enabled": True}}
 

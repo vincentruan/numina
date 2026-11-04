@@ -135,6 +135,7 @@ addopts = "--tb=short -q"
 log_level = "WARNING"
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "docker: marks tests that require a running Docker Engine",
 ]
 
 [tool.ruff]

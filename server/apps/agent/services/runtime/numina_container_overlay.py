@@ -25,6 +25,14 @@ Agent-wide: memory/CPU/pids limits. ``SandboxConfig`` has no such fields;
 process environment. Per-family limits would need a ``LocalContainerBackend``
 subclass overriding ``_start_container``.
 
+Image selection
+---------------
+The container must run DeerFlow's all-in-one sandbox server, so this overlay
+does not impose an image: ``sandbox["image"]`` stays whatever the operator
+configured, and ``AioSandboxProvider`` falls back to its own default when it is
+absent. Pinning a plain Python runtime here would produce a container the
+provider cannot drive.
+
 Hardening already applied by ``LocalContainerBackend``
 -----------------------------------------------------
 ``--cap-drop=ALL``, ``no-new-privileges``, memory/CPU/pids limits, plus the
@@ -49,9 +57,6 @@ AIO_SANDBOX_PROVIDER_PATH = (
 )
 
 DEFAULT_TIMEOUT_SECONDS = 600
-
-# Pinned base image for T22's first pass.
-DEFAULT_CONTAINER_IMAGE = "python:3.12-slim"
 
 # DeerFlow's agent-wide container defaults. A policy asking for anything else
 # cannot be honoured per family in this pass (see the module docstring).
@@ -152,7 +157,10 @@ def override_sandbox_provider(
 
     sandbox = config.setdefault("sandbox", {})
     sandbox["use"] = AIO_SANDBOX_PROVIDER_PATH
-    sandbox.setdefault("image", DEFAULT_CONTAINER_IMAGE)
+    # Deliberately leave ``image`` unset when the operator has not chosen one:
+    # AioSandboxProvider runs its own all-in-one sandbox server image, and
+    # substituting a plain runtime image yields a container with nothing to
+    # talk to. DeerFlow's DEFAULT_IMAGE applies when the key is absent.
     sandbox["environment"] = {
         **sandbox.get("environment", {}),
         **overlay["environment"],
@@ -162,7 +170,7 @@ def override_sandbox_provider(
     logger.info(
         "[container_overlay] family_id=%s using AioSandboxProvider image=%s",
         family_id,
-        sandbox["image"],
+        sandbox.get("image", "<provider default>"),
     )
 
 
