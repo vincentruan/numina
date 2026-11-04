@@ -63,10 +63,16 @@ function onTabChange(name: string | number) {
 </script>
 
 <style scoped>
-/* Force all tab items to share width equally regardless of count */
+/* Force all tab items to share width equally regardless of count.
+   Also pin position:fixed/bottom:0 to override Vant's .van-hairline--top-bottom
+   which sets position:relative (same specificity, loses CSS cascade battle when
+   Vant CSS loads after scoped styles). See hairline root-cause analysis. */
 .app-tabbar :deep(.van-tabbar),
 .app-tabbar {
   display: flex;
+  position: fixed;
+  bottom: 0;
+  left: 0;
   z-index: 1000 !important;
 }
 .app-tabbar :deep(.van-tabbar-item) {
