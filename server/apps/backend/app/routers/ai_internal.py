@@ -1511,7 +1511,7 @@ async def _execute_asset_report(db: Session, family_id: int, owner: User) -> int
         db=db,
         source="asset-report",
     )
-    AITaskService.create_task(
+    task = AITaskService.create_task(
         family_id=family_id,
         skill_id="asset-report",
         session_id=session.id,
@@ -1519,20 +1519,33 @@ async def _execute_asset_report(db: Session, family_id: int, owner: User) -> int
     )
 
     agent_client = AgentClient(family_id, owner.id, timeout=30.0)
-    response = await agent_client.post(
-        f"/internal/gateway/runs/asset-report/{session.id}",
-        json={
-            "family_id": str(family_id),
-            "user_id": str(owner.id),
-            "language": owner.language,
-            "on_disconnect": "continue",
-        },
-    )
-    if response.status_code >= 400:
+    try:
+        response = await agent_client.post(
+            f"/internal/gateway/runs/asset-report/{session.id}",
+            json={
+                "family_id": str(family_id),
+                "user_id": str(owner.id),
+                "language": owner.language,
+                "on_disconnect": "continue",
+            },
+        )
+        failed = response.status_code >= 400
+        failure_reason = f"agent gateway returned {response.status_code}"
+    except Exception as e:
+        failed = True
+        failure_reason = f"agent trigger failed: {type(e).__name__}"
+
+    if failed:
+        # Both rows are already committed at this point, so an unhandled failure
+        # leaves an AITask stuck in 'running' forever and an empty chat session
+        # the owner can open. Mirror ai_report.py:326-335, which fails the task
+        # before surfacing the error.
+        AITaskService.fail_task(task.id, failure_reason, db)
         raise AppError(
             ErrorCode.SCHEDULED_TASK_EXECUTE_FAILED,
-            details=f"agent gateway returned {response.status_code}",
+            details=failure_reason,
         )
+
     logger.info("[scheduled-task] triggered asset-report family=%s", family_id)
     return 1
 

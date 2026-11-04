@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import create_engine
@@ -207,3 +208,127 @@ async def test_poll_leaves_recent_running_tasks_alone(db_session):
 
     db_session.refresh(task)
     assert task.status == "running"
+
+
+@pytest.mark.asyncio
+async def test_poll_skips_task_claimed_by_another_process():
+    """The rowcount guard is the only thing preventing duplicate dispatch.
+
+    R7 requires that two overlapping polls never both run the same task. The due
+    SELECT and the claiming UPDATE are separate statements, so a task can be
+    claimed by a competitor in between; when that happens the UPDATE matches zero
+    rows and the job must skip rather than dispatch a second copy.
+    """
+    from sqlalchemy import event
+
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    setup = factory()
+    task = _make_task(setup)
+    task_id = task.id
+    setup.close()
+
+    claimed = {"done": False}
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _steal_lock(conn, cursor, statement, parameters, context, executemany):
+        """Simulate a competing worker claiming the row just before our UPDATE.
+
+        Only the claim statement (``SET status=? ... WHERE id = ? AND status != ?``)
+        is intercepted, so the stale-reset UPDATE is left alone.
+        """
+        if claimed["done"]:
+            return
+        if "SET status=?" in statement and "scheduled_tasks.id = ?" in statement:
+            claimed["done"] = True
+            conn.exec_driver_sql(
+                "UPDATE scheduled_tasks SET status='running' WHERE id=?", (task_id,)
+            )
+
+    checker = factory()
+    caplog_target = jobs_module  # noqa: F841 -- keep the monkeypatch target obvious
+
+    patcher, client = _mock_client()
+    try:
+        with patch.object(jobs_module, "SessionLocal", factory), patcher:
+            await scheduled_task_poll_job()
+
+        assert claimed["done"], "the steal hook never fired; test does not cover the guard"
+        # The competitor owns the task, so this process must not dispatch it.
+        client.post.assert_not_awaited()
+
+        row = checker.query(ScheduledTask).filter(ScheduledTask.id == task_id).first()
+        assert row.status == "running"
+    finally:
+        event.remove(engine, "before_cursor_execute", _steal_lock)
+        checker.close()
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_schedule_edit_during_dispatch_wins_over_stale_read():
+    """next_run_at must be derived from the schedule current at claim time.
+
+    An owner can edit cron_expression while a dispatch is in flight. The poll
+    caches the expression from the batch SELECT, so reading it before the claim
+    commit would compute next_run_at from the superseded expression and silently
+    overwrite the owner's change. Daily -> weekly would then fire once too often;
+    weekly -> daily would skip a day.
+    """
+    from sqlalchemy import event
+
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    setup = factory()
+    task = _make_task(setup, cron_expression="0 9 * * *")
+    task_id = task.id
+    setup.close()
+
+    edits = {"applied": False}
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _owner_edits_schedule(conn, cursor, statement, parameters, context, executemany):
+        """Apply the owner's edit just before the claim commit lands."""
+        if edits["applied"]:
+            return
+        if "SET status=?" in statement and "scheduled_tasks.id = ?" in statement:
+            edits["applied"] = True
+            conn.exec_driver_sql(
+                "UPDATE scheduled_tasks SET cron_expression='30 6 * * 1' WHERE id=?",
+                (task_id,),
+            )
+
+    patcher, _client = _mock_client()
+    checker = factory()
+    try:
+        with patch.object(jobs_module, "SessionLocal", factory), patcher:
+            await scheduled_task_poll_job()
+
+        assert edits["applied"], "the edit hook never fired; test does not cover the read"
+
+        row = checker.query(ScheduledTask).filter(ScheduledTask.id == task_id).first()
+        # The expression is interpreted in Asia/Shanghai and stored as UTC, so the
+        # edited "30 6 * * 1" is Monday 06:30 CST == Sunday 22:30 UTC. The superseded
+        # "0 9 * * *" would have produced 01:00 UTC on a daily cadence instead.
+        local = row.next_run_at.astimezone(ZoneInfo("Asia/Shanghai"))
+        assert local.weekday() == 0
+        assert (local.hour, local.minute) == (6, 30)
+        assert row.next_run_at.utcoffset() is not None
+    finally:
+        event.remove(engine, "before_cursor_execute", _owner_edits_schedule)
+        checker.close()
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()

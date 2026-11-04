@@ -209,15 +209,18 @@ class TestExecuteScheduledTask:
         assert response.status_code == 502
         assert response.json()["code"] == "SCHEDULED_TASK_EXECUTE_FAILED"
 
-    def test_agent_failure_returns_500(self, client, _seed_task):
-        """A failed agent dispatch must not report success.
+    def test_agent_failure_returns_502_and_fails_the_task(self, client, _seed_task, db):
+        """A failed agent dispatch must not report success, and must not strand rows.
 
         The worker treats HTTP 200 as success and advances the schedule, so a
         swallowed gateway error would mark the task successful while nothing ran.
+        The AITask and its chat session are committed before the dispatch, so the
+        failure path has to close them out too.
         """
         from fastapi.testclient import TestClient
 
         from apps.backend.app.main import app
+        from packages.db.models.ai_task import AITask
 
         task = _seed_task["task"]
 
@@ -228,8 +231,6 @@ class TestExecuteScheduledTask:
             mock_client.post = AsyncMock(side_effect=RuntimeError("gateway down"))
             mock_client_cls.return_value = mock_client
 
-            # The endpoint deliberately lets the error propagate, so the test
-            # client must not re-raise it to observe the status code.
             with TestClient(app, raise_server_exceptions=False) as raw_client:
                 response = raw_client.post(
                     BASE,
@@ -237,4 +238,164 @@ class TestExecuteScheduledTask:
                     json={"task_id": task.id},
                 )
 
-        assert response.status_code == 500
+        assert response.status_code == 502
+        assert response.json()["code"] == "SCHEDULED_TASK_EXECUTE_FAILED"
+
+        # No AITask may be left 'running' with no agent run behind it.
+        ai_task = (
+            db.query(AITask)
+            .filter(AITask.family_id == _seed_task["family"].id)
+            .first()
+        )
+        assert ai_task is not None
+        assert ai_task.status == "failed"
+        assert ai_task.completed_at is not None
+        assert ai_task.error_message == "agent trigger failed: RuntimeError"
+
+
+@pytest.fixture()
+def _seed_literacy_task(db, _seed_task):
+    """Switch the seeded task to the literacy skill and add two children."""
+    import bcrypt
+
+    from apps.backend.app.models.user import User
+    from packages.db.models.scheduled_task import ScheduledTask
+
+    family_id = _seed_task["family"].id
+
+    for child_id, name in ((3001, "kid-a"), (3002, "kid-b")):
+        db.add(
+            User(
+                id=child_id,
+                family_id=family_id,
+                username=name,
+                display_name=name,
+                password_hash=bcrypt.hashpw(b"pass", bcrypt.gensalt(rounds=4)).decode(),
+                role="child",
+            )
+        )
+    db.flush()
+
+    task = db.query(ScheduledTask).filter(ScheduledTask.id == _seed_task["task"].id).first()
+    task.skill_id = "literacy-weekly-report"
+    db.commit()
+    db.refresh(task)
+
+    return {**_seed_task, "task": task}
+
+
+def _patch_literacy(return_value=None, side_effect=None):
+    """Patch generate_literacy_report at its definition site."""
+    return patch(
+        "apps.backend.app.services.literacy_report_service.generate_literacy_report",
+        new=AsyncMock(return_value=return_value, side_effect=side_effect),
+    )
+
+
+class TestExecuteLiteracyReport:
+    """The second schedulable skill had no coverage at all.
+
+    Its failures are silent to the worker (which only reads the HTTP status),
+    so a broken dispatch here would mark the task successful while nothing ran.
+    """
+
+    def test_all_children_generated_returns_count(self, client, _seed_literacy_task):
+        task = _seed_literacy_task["task"]
+        report = object()
+
+        with _patch_literacy(return_value=report):
+            response = client.post(
+                BASE,
+                headers=_system_headers(),
+                json={"task_id": task.id},
+            )
+
+        assert response.status_code == 200
+        data = _body(response)
+        assert data["skill_id"] == "literacy-weekly-report"
+        assert data["triggered"] == 2
+
+    def test_partial_failure_returns_partial_count(self, client, _seed_literacy_task):
+        """One child raising must not turn the whole dispatch into a failure."""
+        task = _seed_literacy_task["task"]
+        calls = {"n": 0}
+
+        async def _side_effect(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("child boom")
+            return object()
+
+        with _patch_literacy(side_effect=_side_effect):
+            response = client.post(
+                BASE,
+                headers=_system_headers(),
+                json={"task_id": task.id},
+            )
+
+        assert response.status_code == 200
+        data = _body(response)
+        assert data["triggered"] == 1
+
+    def test_no_active_children_returns_zero(self, client, db, _seed_task):
+        """A family with no children is not an error — nothing to generate."""
+        from packages.db.models.scheduled_task import ScheduledTask
+
+        task = db.query(ScheduledTask).filter(ScheduledTask.id == _seed_task["task"].id).first()
+        task.skill_id = "literacy-weekly-report"
+        db.commit()
+        db.refresh(task)
+
+        with _patch_literacy(return_value=object()) as mock_gen:
+            response = client.post(
+                BASE,
+                headers=_system_headers(),
+                json={"task_id": task.id},
+            )
+
+        assert response.status_code == 200
+        assert _body(response)["triggered"] == 0
+        mock_gen.assert_not_awaited()
+
+    def test_all_children_failing_returns_502(self, client, _seed_literacy_task):
+        """Every child failing must surface as SCHEDULED_TASK_EXECUTE_FAILED.
+
+        Returning 200 here would make the worker advance the schedule and mark
+        the task successful with no report generated for anyone.
+        """
+        from fastapi.testclient import TestClient
+
+        from apps.backend.app.main import app
+
+        task = _seed_literacy_task["task"]
+
+        with _patch_literacy(side_effect=RuntimeError("boom")), TestClient(
+            app, raise_server_exceptions=False
+        ) as raw_client:
+            response = raw_client.post(
+                BASE,
+                headers=_system_headers(),
+                json={"task_id": task.id},
+            )
+
+        assert response.status_code == 502
+        assert response.json()["code"] == "SCHEDULED_TASK_EXECUTE_FAILED"
+
+    def test_generated_report_none_counts_as_failure(self, client, _seed_literacy_task):
+        """``None`` from the service means it produced nothing, not success."""
+        from fastapi.testclient import TestClient
+
+        from apps.backend.app.main import app
+
+        task = _seed_literacy_task["task"]
+
+        with _patch_literacy(return_value=None), TestClient(
+            app, raise_server_exceptions=False
+        ) as raw_client:
+            response = raw_client.post(
+                BASE,
+                headers=_system_headers(),
+                json={"task_id": task.id},
+            )
+
+        assert response.status_code == 502

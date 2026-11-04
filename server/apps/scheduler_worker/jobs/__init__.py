@@ -829,10 +829,7 @@ async def scheduled_task_poll_job() -> None:
         # TCP+TLS handshake to the backend, once per task per minute.
         async with httpx.AsyncClient(timeout=300.0, trust_env=False) as client:
             for task in due_tasks:
-                # Read before commit: expire_on_commit=True would otherwise emit a
-                # refresh SELECT per task just to re-read these two columns.
                 task_id = task.id
-                cron_expression = task.cron_expression
 
                 updated = (
                     db.query(ScheduledTask)
@@ -850,6 +847,12 @@ async def scheduled_task_poll_job() -> None:
                 if updated != 1:
                     logger.warning("任务 %d 已被其他进程锁定，跳过", task_id)
                     continue
+
+                # Read the schedule only after taking the lock: an owner may have
+                # edited cron_expression between the batch SELECT and this commit,
+                # and computing next_run_at from the pre-edit value would silently
+                # overwrite their change with one derived from the old expression.
+                cron_expression = task.cron_expression
 
                 try:
                     resp = await client.post(
