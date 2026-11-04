@@ -182,44 +182,62 @@ def _inject_pii_redaction(config: dict[str, Any]) -> None:
     }
 
 
-def _inject_guardrail(
+def _inject_sandbox_gate(
     config: dict[str, Any],
     ai_config: dict[str, Any],
 ) -> None:
-    """Inject tool execution guardrail config (in-place).
+    """Inject the per-family sandbox policy gate (in-place).
 
-    Enables DeerFlow's GuardrailMiddleware with Numina's guardrail provider.
-    The provider checks each tool call against per-family allow/deny lists.
+    Enables DeerFlow's ``GuardrailMiddleware`` with ``NuminaGuardrailProvider``,
+    which enforces each family's resource limits and path patterns on file
+    tool calls. Injection is unconditional: the gate must be active for every
+    family run, so it cannot be keyed off an optional backend field that does
+    not exist (an absent field previously left the gate silently inert).
 
-    Configuration source: ai_config["guardrails"] (optional). If not present
-    or guardrails.enabled=False, no injection occurs (middleware stays off).
+    Policy source: ``ai_config["sandbox_policy"]``. When absent, the default
+    policy applies. When present but malformed, the policy dict is passed
+    through as-is so the provider enters its fail-closed state and denies
+    sandbox file operations — a misconfiguration must not silently degrade to
+    the permissive default.
 
-    Design (KTD1 — two-layer safety):
-    - PolicyGuard: pre-dispatch gate (checks skill/capability before LLM call)
-    - NuminaGuardrailProvider: tool execution gate (during LLM run, per-tool)
+    Design (two-layer safety):
+    - PolicyGuard: pre-dispatch gate (checks skill/capability before the LLM call)
+    - NuminaGuardrailProvider: tool execution gate (per tool call during the run)
     Both are active simultaneously for defense-in-depth.
-
-    Fail-closed behavior: on provider errors, tool calls are denied by default.
-    Set fail_closed=False to allow on error (not recommended for production).
     """
-    guardrails_cfg = ai_config.get("guardrails")
-    if not guardrails_cfg or not guardrails_cfg.get("enabled", False):
-        return
+    # Import locally: ``apps.agent.services.runtime`` pulls in the worker, which
+    # imports this adapter package — a module-level import here is circular.
+    from apps.agent.services.runtime.sandbox_policy import SandboxPolicy
+
+    raw_policy = ai_config.get("sandbox_policy")
+    if raw_policy is None:
+        policy_dict: dict[str, Any] = SandboxPolicy.default_policy().model_dump()
+    elif isinstance(raw_policy, dict):
+        policy_dict = raw_policy
+    else:
+        # Non-dict policy is unusable; pass a sentinel the provider rejects so
+        # the gate fails closed rather than falling back to the default.
+        logger.error(
+            "[deerflow_config] sandbox_policy must be a dict, got %s; "
+            "sandbox operations will be denied for this family",
+            type(raw_policy).__name__,
+        )
+        policy_dict = {"allowed_paths": ["<invalid>"]}
 
     config["guardrails"] = {
         "enabled": True,
         "provider": {
             "use": "apps.agent.services.deerflow_adapter.numina_guardrail_provider:NuminaGuardrailProvider",
+            "config": {
+                "sandbox_policy": policy_dict,
+                "fail_closed": True,
+            },
         },
-        "fail_closed": guardrails_cfg.get("fail_closed", True),
-        "allowlist": guardrails_cfg.get("allowlist", []),
-        "denylist": guardrails_cfg.get("denylist", []),
+        "fail_closed": True,
     }
     logger.debug(
-        "[deerflow_config] guardrail injected: fail_closed=%s allowlist=%s denylist=%s",
-        guardrails_cfg.get("fail_closed", True),
-        guardrails_cfg.get("allowlist", []),
-        guardrails_cfg.get("denylist", []),
+        "[deerflow_config] sandbox gate injected: policy=%s",
+        sorted(policy_dict),
     )
 
 
@@ -812,7 +830,7 @@ def _generate_temp_config(
     _inject_mcp(config, mcp_servers)
     _inject_token_budget(config)
     _inject_pii_redaction(config)
-    _inject_guardrail(config, ai_config)
+    _inject_sandbox_gate(config, ai_config)
     _inject_summarization(config, memory_enabled)
     _inject_subagent_limit(config, ai_config)
     _inject_tool_progress(config, ai_config)

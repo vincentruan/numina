@@ -93,19 +93,28 @@ class NuminaGuardrailProvider:
     ) -> None:
         """Initialize the provider.
 
+        A malformed ``sandbox_policy`` does not raise: the provider stays
+        loadable but enters a fail-closed state that denies every sandbox file
+        operation, so a misconfiguration blocks sandbox work instead of
+        silently degrading to the permissive default or crashing the run.
+
         Args:
             sandbox_policy: Policy dict from config, or ``None`` for defaults.
             fail_closed: When True (default), any evaluation error denies the
                 call. When False, errors allow the call through with a warning.
-
-        Raises:
-            pydantic.ValidationError: If ``sandbox_policy`` is malformed. The
-                caller (config injection) is responsible for failing closed on
-                a bad policy; raising here keeps the misconfiguration visible
-                instead of silently degrading to the permissive default.
         """
-        self._policy = SandboxPolicy.from_config(sandbox_policy)
         self._fail_closed = fail_closed
+        self._policy_error: str | None = None
+        try:
+            self._policy = SandboxPolicy.from_config(sandbox_policy)
+        except Exception as e:
+            self._policy = SandboxPolicy.default_policy()
+            self._policy_error = str(e)
+            logger.error(
+                "[sandbox_gate] invalid sandbox_policy; denying all sandbox "
+                "operations until the configuration is fixed: %s",
+                e,
+            )
 
         logger.debug(
             "[sandbox_gate] initialized: max_file_size=%s quota=%s "
@@ -145,6 +154,12 @@ class NuminaGuardrailProvider:
         """Run the policy checks. Exceptions propagate to :meth:`evaluate`."""
         if request.tool_name not in _FILE_PATH_TOOLS:
             return _allow()
+
+        if self._policy_error is not None:
+            return _deny(
+                "invalid_policy",
+                f"Sandbox policy configuration is invalid: {self._policy_error}",
+            )
 
         family_id = self._require_family_id()
 

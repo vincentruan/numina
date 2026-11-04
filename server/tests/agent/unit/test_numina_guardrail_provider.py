@@ -294,14 +294,36 @@ class TestFailClosed:
 
         assert decision.allow is True
 
-    def test_malformed_policy_raises_at_construction(self) -> None:
-        """A malformed policy must fail visibly, not degrade to permissive defaults."""
-        with pytest.raises(Exception, match="positive"):
-            NuminaGuardrailProvider(sandbox_policy={"max_file_size_bytes": -5})
+    def test_malformed_policy_denies_sandbox_operations(self) -> None:
+        """A malformed policy blocks sandbox ops instead of passing permissively."""
+        provider = NuminaGuardrailProvider(sandbox_policy={"max_file_size_bytes": -5})
 
-    def test_relative_policy_path_raises_at_construction(self) -> None:
-        with pytest.raises(Exception, match="absolute"):
-            NuminaGuardrailProvider(sandbox_policy={"allowed_paths": ["relative/path"]})
+        decision = provider.evaluate(
+            _request("write_file", {"path": "/mnt/user-data/workspace/x.txt", "content": "x"})
+        )
+
+        assert decision.allow is False
+        assert decision.reasons[0].code == "invalid_policy"
+
+    def test_relative_policy_path_denies_sandbox_operations(self) -> None:
+        provider = NuminaGuardrailProvider(
+            sandbox_policy={"allowed_paths": ["relative/path"]}
+        )
+
+        decision = provider.evaluate(
+            _request("read_file", {"path": "/mnt/user-data/workspace/x.txt"})
+        )
+
+        assert decision.allow is False
+        assert decision.reasons[0].code == "invalid_policy"
+
+    def test_malformed_policy_still_allows_non_file_tools(self) -> None:
+        """A policy problem must not break unrelated tool calls."""
+        provider = NuminaGuardrailProvider(sandbox_policy={"max_file_size_bytes": -5})
+
+        decision = provider.evaluate(_request("get_assets", {}))
+
+        assert decision.allow is True
 
 
 class TestAsyncVariant:
