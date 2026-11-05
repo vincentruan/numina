@@ -8,13 +8,13 @@ def test_reserved_names_contains_chat_and_time_machine():
 
     U7 deleted ``time_machine`` (and 4 other trigger skills); U8 added
     ``import-parse``; Plan A T1 added ``finance-coach``; Learning OS added
-    ``learning-tutor``. The current reserved set is the post-U7 + Plan A +
+    ``learning-tutor``; Issue #190 added ``learning-topic-generator``.
     Learning OS state — ``time_machine`` is intentionally gone.
     """
     assert RESERVED_NAMES == [
         "chat", "asset-report", "import-parse", "finance-coach",
         "wish-advice", "dashboard-narrative", "literacy-weekly-report",
-        "learning-tutor",
+        "learning-tutor", "learning-topic-generator",
         # DeerFlow public skills introduced as builtin
         "deep-research", "chart-visualization", "data-analysis",
         "bootstrap", "finance-digest", "financial-deep-analysis", "surprise-me",

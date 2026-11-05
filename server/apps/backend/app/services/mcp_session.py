@@ -748,7 +748,7 @@ class MCPSession:
                             data = {"error": "topic_not_found"}
                         else:
                             # Family-scope validation: child must belong to caller's family
-                            child = (
+                            child_user = (
                                 db.query(User)
                                 .filter(
                                     User.id == child_id,
@@ -756,7 +756,7 @@ class MCPSession:
                                 )
                                 .first()
                             )
-                            if not child:
+                            if not child_user:
                                 data = {"error": "child_not_in_family"}
                             else:
                                 progress = (
@@ -768,7 +768,7 @@ class MCPSession:
                                     "topic_id": str(topic.id),
                                     "name": topic.name,
                                     "description": topic.description,
-                                    "evidence_criteria": topic.evidence_json,
+                                    "evidence_criteria": topic.evidence_json or [],
                                     "assessment_prompt": topic.assessment_prompt,
                                     "mastery_level": (
                                         progress.mastery_level if progress else "locked"
@@ -801,37 +801,37 @@ class MCPSession:
                                 "child_id": str(child_id),
                             }
                         else:
-                            query = db.query(LearningProgress).filter(
+                            profile_query = db.query(LearningProgress).filter(
                                 LearningProgress.child_id == child_id
                             )
                             if subject:
                                 # subject lives on LearningTopic; join to filter
-                                query = query.join(
+                                profile_query = profile_query.join(
                                     LearningTopic,
                                     LearningProgress.topic_id == LearningTopic.id,
                                 ).filter(LearningTopic.subject == subject)
-                            progresses = query.all()
+                            profile_progresses: list = profile_query.all()
 
                             data = {
                                 "child_id": str(child_id),
-                                "total_topics": len(progresses),
+                                "total_topics": len(profile_progresses),
                                 "mastered": sum(
-                                    1 for p in progresses if p.mastery_level == "mastered"
+                                    1 for p in profile_progresses if p.mastery_level == "mastered"
                                 ),
                                 "learning": sum(
-                                    1 for p in progresses if p.mastery_level == "learning"
+                                    1 for p in profile_progresses if p.mastery_level == "learning"
                                 ),
                                 "available": sum(
-                                    1 for p in progresses if p.mastery_level == "available"
+                                    1 for p in profile_progresses if p.mastery_level == "available"
                                 ),
                                 "review": sum(
-                                    1 for p in progresses if p.mastery_level == "review"
+                                    1 for p in profile_progresses if p.mastery_level == "review"
                                 ),
                                 "locked": sum(
-                                    1 for p in progresses if p.mastery_level == "locked"
+                                    1 for p in profile_progresses if p.mastery_level == "locked"
                                 ),
                                 "assessing": sum(
-                                    1 for p in progresses if p.mastery_level == "assessing"
+                                    1 for p in profile_progresses if p.mastery_level == "assessing"
                                 ),
                             }
                 elif name == "record_learning_result":
@@ -877,7 +877,7 @@ class MCPSession:
                         if not session:
                             data = {"error": "session_not_found"}
                         else:
-                            child = (
+                            session_child = (
                                 db.query(User)
                                 .filter(
                                     User.id == session.child_id,
@@ -885,7 +885,7 @@ class MCPSession:
                                 )
                                 .first()
                             )
-                            if not child:
+                            if not session_child:
                                 data = {"error": "session_not_in_family"}
                             else:
                                 rec = evaluation["recommendation"]
@@ -1096,6 +1096,252 @@ class MCPSession:
                                     "coins_earned": coins_earned,
                                     "assessment_attempt_id": str(attempt.id),
                                 }
+                elif name == "get_taxonomy_topic":
+                    from apps.backend.app.services.learning import topic_service
+
+                    topic_key = arguments.get("topic_key", "")
+                    source_taxonomy = arguments.get("source_taxonomy")
+
+                    if not topic_key or not isinstance(topic_key, str):
+                        data = {"error": "invalid_arguments", "detail": "topic_key is required and must be a string"}
+                    else:
+                        topic = topic_service.get_topic_by_key(
+                            db, topic_key, source_taxonomy=source_taxonomy
+                        )
+                        if not topic:
+                            data = {"error": "topic_not_found", "topic_key": topic_key}
+                        else:
+                            data = {
+                                "topic_id": str(topic.id),
+                                "topic_key": topic.topic_key,
+                                "name": topic.name,
+                                "name_zh": topic.name_zh,
+                                "description": topic.description,
+                                "description_zh": topic.description_zh,
+                                "subject": topic.subject,
+                                "domain": topic.domain,
+                                "age_group": topic.age_group,
+                                "evidence_criteria": topic.evidence_json or [],
+                                "assessment_prompt": topic.assessment_prompt,
+                                "source_taxonomy": topic.source_taxonomy,
+                            }
+                elif name == "get_taxonomy_dependencies":
+                    from apps.backend.app.services.learning import topic_service
+
+                    topic_key = arguments.get("topic_key", "")
+
+                    if not topic_key or not isinstance(topic_key, str):
+                        data = {"error": "invalid_arguments", "detail": "topic_key is required"}
+                    else:
+                        topic = topic_service.get_topic_by_key(db, topic_key)
+                        if not topic:
+                            data = {"error": "topic_not_found", "topic_key": topic_key}
+                        else:
+                            graph = topic_service.get_topic_graph(
+                                db, topic.id, source_taxonomy=topic.source_taxonomy
+                            )
+                            prereqs = []
+                            if graph and "prerequisites" in graph:
+                                for p in graph["prerequisites"]:
+                                    prereqs.append({
+                                        "topic_id": str(p.get("id", "")),
+                                        "topic_key": p.get("topic_key", ""),
+                                        "name": p.get("name", ""),
+                                        "name_zh": p.get("name_zh", ""),
+                                        "strength": p.get("strength", "weak"),
+                                        "reason": p.get("reason", ""),
+                                    })
+                            data = {
+                                "topic_key": topic_key,
+                                "prerequisites": prereqs,
+                            }
+                elif name == "list_taxonomy_topics":
+                    from apps.backend.app.services.learning import topic_service
+
+                    subject = arguments.get("subject", "")
+                    domain = arguments.get("domain")
+                    age_group = arguments.get("age_group")
+                    source_taxonomy = arguments.get("source_taxonomy")
+                    try:
+                        limit = max(1, min(int(arguments.get("limit", 50)), 200))
+                    except (ValueError, TypeError):
+                        limit = 50
+
+                    if not subject or not isinstance(subject, str):
+                        data = {"error": "invalid_arguments", "detail": "subject is required"}
+                    else:
+                        topics = topic_service.list_topics(
+                            db,
+                            subject=subject,
+                            domain=domain,
+                            age_group=age_group,
+                            limit=limit,
+                            source_taxonomy=source_taxonomy,
+                        )
+                        data = {
+                            "count": len(topics),
+                            "topics": [
+                                {
+                                    "topic_id": str(t.id),
+                                    "topic_key": t.topic_key,
+                                    "name": t.name,
+                                    "name_zh": t.name_zh,
+                                    "subject": t.subject,
+                                    "domain": t.domain,
+                                    "age_group": t.age_group,
+                                }
+                                for t in topics
+                            ],
+                        }
+                elif name == "validate_question":
+                    from apps.backend.app.services.learning import question_service
+
+                    try:
+                        topic_id = int(arguments["topic_id"])
+                        question_type = arguments["question_type"]
+                        stem = arguments["stem"]
+                        answer = arguments["answer"]
+                        age_group = arguments["age_group"]
+                        options = arguments.get("options")
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        errors = question_service.validate_question(
+                            topic_id=topic_id,
+                            question_type=question_type,
+                            stem=stem,
+                            answer=answer,
+                            age_group=age_group,
+                            db=db,
+                            options=options,
+                        )
+                        data = {
+                            "passed": len(errors) == 0,
+                            "errors": errors,
+                        }
+                elif name == "get_child_weak_points":
+                    from apps.backend.app.services.learning import zone_service
+                    from packages.db.models.learning.progress import LearningProgress
+                    from packages.db.models.learning.topic import LearningTopic
+
+                    try:
+                        child_id = int(arguments["child_id"])
+                        if child_id <= 0:
+                            raise ValueError("child_id must be a positive integer")
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        subject = arguments.get("subject")
+                        try:
+                            limit = max(1, min(int(arguments.get("limit", 10)), 100))
+                        except (ValueError, TypeError):
+                            limit = 10
+
+                        # Family-scope validation
+                        child_in_family = (
+                            db.query(User.id)
+                            .filter(
+                                User.id == child_id,
+                                User.family_id == int(self._family_id),
+                                User.role == "child",
+                            )
+                            .first()
+                        )
+                        if not child_in_family:
+                            data = {"error": "child_not_in_family", "child_id": str(child_id)}
+                        else:
+                            # Step 1: Query progress rows with low mastery
+                            wp_query = db.query(LearningProgress).filter(
+                                LearningProgress.child_id == child_id,
+                                LearningProgress.mastery_level.in_(
+                                    ["available", "learning", "review"]
+                                ),
+                            )
+                            if subject:
+                                wp_query = wp_query.join(
+                                    LearningTopic,
+                                    LearningProgress.topic_id == LearningTopic.id,
+                                ).filter(LearningTopic.subject == subject)
+                            wp_progresses: list[LearningProgress] = wp_query.limit(limit).all()
+
+                            # Batch-fetch all topics to avoid N+1 queries
+                            topic_ids = {wp.topic_id for wp in wp_progresses}
+
+                            # Build result with mastery_level priority for sorting
+                            _LEVEL_PRIORITY = {"available": 0, "learning": 1, "review": 2}
+                            result_map: dict[int, dict] = {}
+
+                            if topic_ids:
+                                topic_rows = (
+                                    db.query(LearningTopic)
+                                    .filter(LearningTopic.id.in_(topic_ids))
+                                    .all()
+                                )
+                                topic_by_id = {t.id: t for t in topic_rows}
+                            else:
+                                topic_by_id = {}
+
+                            for wp in wp_progresses:
+                                wp_topic = topic_by_id.get(wp.topic_id)
+                                if wp_topic:
+                                    result_map[wp.topic_id] = {
+                                        "topic_id": str(wp.topic_id),
+                                        "topic_key": wp_topic.topic_key,
+                                        "name": wp_topic.name,
+                                        "name_zh": wp_topic.name_zh,
+                                        "mastery_level": wp.mastery_level,
+                                        "is_breakpoint": False,
+                                    }
+
+                            # Step 2: Get breakpoints from zone_service
+                            try:
+                                breakpoints = zone_service.find_breakpoint_topics(
+                                    db, child_id
+                                )
+                                for bp in breakpoints:
+                                    # Resolve topic from batch cache or DB
+                                    bp_topic = topic_by_id.get(bp.topic_id)
+                                    if not bp_topic:
+                                        bp_topic = (
+                                            db.query(LearningTopic)
+                                            .filter(LearningTopic.id == bp.topic_id)
+                                            .first()
+                                        )
+                                        if bp_topic:
+                                            topic_by_id[bp.topic_id] = bp_topic
+                                    # Apply subject filter
+                                    if subject and (not bp_topic or bp_topic.subject != subject):
+                                        continue
+                                    if bp.topic_id not in result_map and bp_topic:
+                                        result_map[bp.topic_id] = {
+                                            "topic_id": str(bp.topic_id),
+                                            "topic_key": bp_topic.topic_key,
+                                            "name": bp_topic.name,
+                                            "name_zh": bp_topic.name_zh,
+                                            "mastery_level": "available",
+                                            "is_breakpoint": True,
+                                        }
+                            except Exception:
+                                logger.warning(
+                                    "[mcp_session] find_breakpoint_topics failed "
+                                    "for child=%s (non-blocking)",
+                                    child_id,
+                                    exc_info=True,
+                                )
+
+                            # Step 3: Sort by mastery_level priority and limit
+                            items = sorted(
+                                result_map.values(),
+                                key=lambda x: _LEVEL_PRIORITY.get(
+                                    x["mastery_level"], 99
+                                ),
+                            )[:limit]
+
+                            data = {
+                                "child_id": str(child_id),
+                                "count": len(items),
+                                "weak_points": items,
+                            }
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 

@@ -939,6 +939,11 @@ _SYNTHETIC_TRIGGERS_BY_LANG = {
         "zh-CN": "/learning-tutor 提供个性化学习辅导",
         "default": "/learning-tutor 提供个性化学习辅导",
     },
+    "learning-topic-generator": {
+        "en-US": "/learning-topic-generator Generate learning topic plan",
+        "zh-CN": "/learning-topic-generator 生成学习课题方案",
+        "default": "/learning-topic-generator 生成学习课题方案",
+    },
 }
 
 # Localized session titles for skill runs (shown in chat history sidebar).
@@ -978,6 +983,11 @@ _SESSION_TITLES_BY_LANG = {
         "zh-CN": "学习辅导",
         "default": "学习辅导",
     },
+    "learning-topic-generator": {
+        "en-US": "Learning Topic Plan",
+        "zh-CN": "学习课题方案",
+        "default": "学习课题方案",
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -1012,6 +1022,15 @@ _SIMPLE_APPS: dict[str, _SimpleAppConfig] = {
         memory_enabled=False,
         trigger_key="learning-tutor",
         # no result_event_type, no result_builder — frontend consumes streamed frames directly
+    ),
+    "learning-topic-generator": _SimpleAppConfig(
+        app_name="learning-topic-generator",
+        skill_name="learning-topic-generator",
+        enable_thinking=True,
+        memory_enabled=False,
+        timeout_seconds=120,
+        trigger_key="learning-topic-generator",
+        # no result_event_type — frontend consumes streamed frames directly
     ),
 }
 

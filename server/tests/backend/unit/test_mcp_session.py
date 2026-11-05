@@ -29,7 +29,7 @@ async def test_list_tools_returns_all_tools():
     session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
     tools = await session.list_tools()
     names = {t.name for t in tools}
-    # 10 existing + 3 travel + 3 learning tools
+    # 10 existing + 3 travel + 3 learning + 5 topic-generator tools
     assert names == {
         "get_family_overview",
         "get_assets",
@@ -47,6 +47,12 @@ async def test_list_tools_returns_all_tools():
         "get_learning_topic",
         "get_child_learning_profile",
         "record_learning_result",
+        # Issue #190: learning-topic-generator tools
+        "get_child_weak_points",
+        "get_taxonomy_topic",
+        "list_taxonomy_topics",
+        "get_taxonomy_dependencies",
+        "validate_question",
     }
 
 

@@ -758,3 +758,83 @@ async def trigger_learning_tutor_run(
             "Content-Location": f"/internal/gateway/runs/learning-tutor/{thread_id}/{record.run_id}",
         },
     )
+
+
+# ── learning-topic-generator ──────────────────────────────────────────────────
+
+
+class LearningTopicGeneratorRunRequest(BaseModel):
+    """Request body for internal learning-topic-generator run trigger."""
+
+    family_id: str
+    user_id: str | None = None
+    input: dict[str, Any] | None = None
+    on_disconnect: str = "continue"
+    # Backend-injected metadata (language, topic_key, age_group) — spread into
+    # run metadata so the worker can localize the trigger message.
+    metadata: dict[str, Any] | None = None
+
+
+@router.post("/runs/learning-topic-generator/{thread_id}")
+async def trigger_learning_topic_generator_run(
+    thread_id: str,
+    body: LearningTopicGeneratorRunRequest,
+    request: Request,
+    _family_id: str = Depends(verify_service_token),
+) -> StreamingResponse:
+    """Trigger a learning-topic-generator stream_run from the backend.
+
+    The backend trigger creates a stream_run with app="learning-topic-generator"
+    via this X-Agent-Token-authenticated endpoint, bypassing R1's frontend 409
+    gate (internal=True). The worker's _run_simple_app then drives the plan
+    generation agent.
+    """
+    _validate_path_segment(thread_id, "thread_id")
+
+    run_body = SimpleNamespace(
+        assistant_id=None,
+        input=body.input,
+        config=None,
+        metadata={"app": "learning-topic-generator", **(body.metadata or {})},
+        on_disconnect=body.on_disconnect,
+        multitask_strategy="reject",
+    )
+
+    try:
+        record = await start_run(
+            run_body,
+            thread_id,
+            request,
+            body.family_id,
+            body.user_id,
+            internal=True,
+        )
+    except ConflictError:
+        logger.warning(
+            "[gateway] learning-topic-generator ConflictError thread=%s — "
+            "another run is already active",
+            thread_id,
+        )
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": f"Thread {thread_id} already has an active run",
+            },
+        )
+    run_mgr = get_run_manager(request)
+
+    async def sse_generator():
+        bridge = await get_stream_bridge(request)
+        async for frame in sse_consumer(bridge, record, request, run_mgr):
+            yield frame
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Location": f"/internal/gateway/runs/learning-topic-generator/{thread_id}/{record.run_id}",
+        },
+    )
