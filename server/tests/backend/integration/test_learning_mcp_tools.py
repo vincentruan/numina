@@ -303,5 +303,5 @@ class TestTopicGeneratorToolRegistry:
             ), f"{name} roles mismatch"
 
     def test_tool_count_total(self):
-        """Registry should have 21 tools (16 existing + 5 new)."""
-        assert len(TOOL_REGISTRY) == 21
+        """Registry should have 26 tools (21 existing + 5 smart tutor)."""
+        assert len(TOOL_REGISTRY) == 26

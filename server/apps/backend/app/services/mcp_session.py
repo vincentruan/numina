@@ -24,6 +24,19 @@ from packages.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# ---------------------------------------------------------------------------
+# Smart Tutor phase transition rules (Issue #191, Gap 8)
+# Mirrors the Socratic Guidance Protocol in SKILL.md.
+# ---------------------------------------------------------------------------
+VALID_PHASE_TRANSITIONS: dict[str, set[str]] = {
+    "DIAGNOSE": {"FOCUSED_GUIDANCE", "PREREQUISITE_RETRACE", "MISCONCEPTION_CORRECTION"},
+    "FOCUSED_GUIDANCE": {"VERIFY", "DIAGNOSE"},
+    "PREREQUISITE_RETRACE": {"VERIFY", "DIAGNOSE"},
+    "MISCONCEPTION_CORRECTION": {"VERIFY", "DIAGNOSE"},
+    "VERIFY": {"CONSOLIDATE", "DIAGNOSE"},
+    "CONSOLIDATE": set(),  # terminal phase
+}
+
 
 def _parse_date(value: Any) -> date | None:
     """Parse a YYYY-MM-DD string (or None) into a date; None/invalid → None."""
@@ -1098,6 +1111,9 @@ class MCPSession:
                                 }
                 # ── Smart-tutor tools (Issue #191) ─────────────────────
                 elif name == "get_guided_question":
+                    from apps.backend.app.services.learning.content_safety_filter import (
+                        filter_tutor_output,
+                    )
                     from packages.db.models.learning.practice import PracticeAttempt
                     from packages.db.models.learning.question import Question
                     from packages.db.models.learning.topic import LearningTopic
@@ -1139,41 +1155,54 @@ class MCPSession:
                                 if not topic:
                                     data = {"error": "topic_not_found"}
                                 else:
-                                    # Recent attempts for this question (error patterns)
-                                    recent_attempts = (
-                                        db.query(PracticeAttempt)
-                                        .filter(
-                                            PracticeAttempt.child_id == child_id,
-                                            PracticeAttempt.question_id == question_id,
-                                        )
-                                        .order_by(PracticeAttempt.created_at.desc())
-                                        .limit(5)
-                                        .all()
+                                    # Gap 7: Content safety filter on question stems (Issue #191)
+                                    stem_safe = filter_tutor_output(
+                                        question.stem or "", child_id=child_id
                                     )
-                                    data = {
-                                        "question_id": str(question.id),
-                                        "topic_id": str(topic_id),
-                                        "stem": question.stem,
-                                        "stem_zh": question.stem_zh,
-                                        "question_type": question.question_type,
-                                        "options": question.options,
-                                        "difficulty": question.difficulty,
-                                        "bloom_level": question.bloom_level,
-                                        "age_group": question.age_group,
-                                        # Do NOT expose solution — Socratic method requires
-                                        # guiding the child, not giving answers directly
-                                        "topic_name": topic.name_zh or topic.name,
-                                        "topic_subject": topic.subject,
-                                        "recent_attempts": [
-                                            {
-                                                "is_correct": a.is_correct,
-                                                "answer": a.user_answer,
-                                                "attempt_number": a.attempt_number,
-                                            }
-                                            for a in recent_attempts
-                                        ],
-                                        "attempt_count": len(recent_attempts),
-                                    }
+                                    stem_zh_safe = filter_tutor_output(
+                                        question.stem_zh or "", child_id=child_id
+                                    )
+                                    if not stem_safe.safe or not stem_zh_safe.safe:
+                                        data = {
+                                            "error": "content_safety_violation",
+                                            "detail": "Question content failed safety check",
+                                        }
+                                    else:
+                                        # Recent attempts for this question (error patterns)
+                                        recent_attempts = (
+                                            db.query(PracticeAttempt)
+                                            .filter(
+                                                PracticeAttempt.child_id == child_id,
+                                                PracticeAttempt.question_id == question_id,
+                                            )
+                                            .order_by(PracticeAttempt.created_at.desc())
+                                            .limit(5)
+                                            .all()
+                                        )
+                                        data = {
+                                            "question_id": str(question.id),
+                                            "topic_id": str(topic_id),
+                                            "stem": question.stem,
+                                            "stem_zh": question.stem_zh,
+                                            "question_type": question.question_type,
+                                            "options": question.options,
+                                            "difficulty": question.difficulty,
+                                            "bloom_level": question.bloom_level,
+                                            "age_group": question.age_group,
+                                            # Do NOT expose solution — Socratic method requires
+                                            # guiding the child, not giving answers directly
+                                            "topic_name": topic.name_zh or topic.name,
+                                            "topic_subject": topic.subject,
+                                            "recent_attempts": [
+                                                {
+                                                    "is_correct": a.is_correct,
+                                                    "answer": a.user_answer,
+                                                    "attempt_number": a.attempt_number,
+                                                }
+                                                for a in recent_attempts
+                                            ],
+                                            "attempt_count": len(recent_attempts),
+                                        }
                 elif name == "submit_guided_answer":
                     try:
                         question_id = int(arguments["question_id"])
@@ -1244,6 +1273,9 @@ class MCPSession:
                                 "is_question": is_question,
                             }
                 elif name == "get_knowledge_bridge":
+                    from apps.backend.app.services.learning.content_safety_filter import (
+                        filter_tutor_output,
+                    )
                     from packages.db.models.learning.progress import LearningProgress
                     from packages.db.models.learning.topic import (
                         LearningDependency,
@@ -1339,6 +1371,15 @@ class MCPSession:
                                 if node["mastery_level"] in ("locked", "available"):
                                     broken_link = node
                                     break
+
+                            # Gap 7: Content safety filter on topic names (Issue #191)
+                            for node in chain:
+                                if node["name"]:
+                                    result = filter_tutor_output(
+                                        node["name"], child_id=child_id
+                                    )
+                                    if not result.safe:
+                                        node["name"] = "[内容已被过滤]"
 
                             data = {
                                 "topic_id": str(topic_id),
@@ -1549,38 +1590,52 @@ class MCPSession:
                         if not session:
                             data = {"error": "session_not_found"}
                         else:
-                            # Store tutoring step data as JSON on the session's
-                            # progress field. We accumulate steps in a list.
-                            # This avoids a new DB migration for MVP.
-                            existing_steps_raw = session.progress_json
-                            try:
-                                existing_steps = json.loads(existing_steps_raw) if existing_steps_raw else []
-                                if not isinstance(existing_steps, list):
+                            # Gap 8: Validate Socratic phase transition (Issue #191)
+                            if phase not in VALID_PHASE_TRANSITIONS:
+                                data = {
+                                    "error": "invalid_phase",
+                                    "detail": f"Unknown phase: {phase}",
+                                    "allowed_phases": list(VALID_PHASE_TRANSITIONS.keys()),
+                                }
+                            elif next_phase and next_phase not in VALID_PHASE_TRANSITIONS[phase]:
+                                data = {
+                                    "error": "invalid_phase_transition",
+                                    "detail": f"Transition {phase} → {next_phase} is not allowed",
+                                    "allowed_next_phases": sorted(VALID_PHASE_TRANSITIONS[phase]),
+                                }
+                            else:
+                                # Store tutoring step data as JSON on the session's
+                                # progress field. We accumulate steps in a list.
+                                # This avoids a new DB migration for MVP.
+                                existing_steps_raw = session.progress_json
+                                try:
+                                    existing_steps = json.loads(existing_steps_raw) if existing_steps_raw else []
+                                    if not isinstance(existing_steps, list):
+                                        existing_steps = []
+                                except (json.JSONDecodeError, TypeError):
                                     existing_steps = []
-                            except (json.JSONDecodeError, TypeError):
-                                existing_steps = []
 
-                            step_record = {
-                                "step": step_number,
-                                "phase": phase,
-                                "quality": child_response_quality,
-                                "next_phase": next_phase,
-                                "strategy": arguments.get("ai_strategy", ""),
-                                "question_id": str(question_id),
-                            }
-                            existing_steps.append(step_record)
+                                step_record = {
+                                    "step": step_number,
+                                    "phase": phase,
+                                    "quality": child_response_quality,
+                                    "next_phase": next_phase,
+                                    "strategy": arguments.get("ai_strategy", ""),
+                                    "question_id": str(question_id),
+                                }
+                                existing_steps.append(step_record)
 
-                            session.progress_json = json.dumps(existing_steps, ensure_ascii=False)
-                            db.commit()
+                                session.progress_json = json.dumps(existing_steps, ensure_ascii=False)
+                                db.commit()
 
-                            data = {
-                                "ok": True,
-                                "session_id": str(session_id),
-                                "step_number": step_number,
-                                "total_steps": len(existing_steps),
-                                "phase": phase,
-                                "next_phase": next_phase,
-                            }
+                                data = {
+                                    "ok": True,
+                                    "session_id": str(session_id),
+                                    "step_number": step_number,
+                                    "total_steps": len(existing_steps),
+                                    "phase": phase,
+                                    "next_phase": next_phase,
+                                }
                 elif name == "get_taxonomy_topic":
                     from apps.backend.app.services.learning import topic_service
 
