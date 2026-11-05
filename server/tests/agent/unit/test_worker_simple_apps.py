@@ -18,6 +18,7 @@ class TestSimpleAppConfig:
             "literacy-weekly-report",
             "learning-tutor",
             "learning-smart-tutor",
+            "learning-topic-generator",
         }
 
     def test_dashboard_narrative_config(self):
@@ -67,6 +68,18 @@ class TestSimpleAppConfig:
         assert cfg.result_event_type == ""  # no result event
         assert cfg.result_builder is None
 
+    def test_learning_topic_generator_config(self):
+        from apps.agent.services.runtime.worker import _SIMPLE_APPS
+
+        cfg = _SIMPLE_APPS["learning-topic-generator"]
+        assert cfg.skill_name == "learning-topic-generator"
+        assert cfg.enable_thinking is True
+        assert cfg.enable_reasoning_delta is False
+        assert cfg.memory_enabled is False
+        assert cfg.timeout_seconds == 120
+        assert cfg.result_event_type == ""  # no result event
+        assert cfg.result_builder is None
+
     def test_result_builder_dashboard_narrative(self):
         from apps.agent.services.runtime.worker import _SIMPLE_APPS
 
@@ -110,6 +123,7 @@ class TestRunnersDict:
             "literacy-weekly-report",
             "learning-tutor",
             "learning-smart-tutor",
+            "learning-topic-generator",
         }
         assert all_apps == expected
 

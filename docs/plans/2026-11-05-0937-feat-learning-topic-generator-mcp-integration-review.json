@@ -1,0 +1,31 @@
+{
+  "review_date": "2026-11-05",
+  "plan_path": "docs/plans/2026-11-05-0937-feat-learning-topic-generator-mcp-integration-plan.md",
+  "mode": "non-interactive",
+  "coverage": {
+    "reviewers_dispatched": ["coherence", "feasibility", "security-lens", "scope-guardian", "adversarial"],
+    "reviewers_completed": ["coherence", "feasibility", "security-lens", "scope-guardian", "adversarial"],
+    "reviewers_failed": []
+  },
+  "fixes_applied": 10,
+  "proposed_fixes_count": 0,
+  "decisions_count": 0,
+  "fyi_count": 2,
+  "summary": "Doc review applied 10 fixes. 0 decisions, 0 proposed fixes, 2 FYI observations remain.",
+  "fixes": [
+    "Tool count corrected: '5 new + 2 reused = 7 total in allowed-tools' (coherence, scope-guardian)",
+    "Mermaid diagram: '+5 new tools' not '+7' (coherence)",
+    "validate_question schema: removed difficulty from required, matching actual service signature (scope-guardian, adversarial)",
+    "KTD4 corrected: 'L1 format validation only' not 'L1+L2' (scope-guardian)",
+    "mcp_servers=['learning'] removed: replaced with skill-level allowed-tools explanation (feasibility, scope-guardian, adversarial)",
+    "topic_service function references: corrected to use get_topic_graph() for dependencies, added get_topic_by_key() to scope (feasibility, adversarial)",
+    "get_child_weak_points: removed suggested_difficulty, added explicit merge algorithm per KTD5, added limit maximum:100 (scope-guardian, security)",
+    "Tenant isolation for get_child_learning_profile: documented as already enforced by existing handler (security)",
+    "source_taxonomy parameter added to list_taxonomy_topics input_schema (feasibility)",
+    "R12 added: language-aware output per user's locale requirement (user-directed)"
+  ],
+  "fyi_observations": [
+    "validate_question topic_id: topics are family-global (no family_id column), confirmed via ORM model — no authz needed",
+    "Record_learning_result in allowed-tools: write operation included alongside read-only tools; acceptable since topic-generator needs to record outcomes"
+  ]
+}

@@ -563,6 +563,142 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=True,
     ),
+    # ── Learning-topic-generator skill (Issue #190) ───────────────────
+    "get_taxonomy_topic": MCPToolMeta(
+        name="get_taxonomy_topic",
+        description=(
+            "获取知识点详情（名称、描述、证据标准、评估提示、年龄组、学科、领域）。"
+            "通过 topic_key 查询。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "topic_key": {"type": "string", "description": "知识点唯一标识"},
+                "source_taxonomy": {
+                    "type": "string",
+                    "description": "分类体系名称（可选，默认自动选择）",
+                },
+            },
+            "required": ["topic_key"],
+        },
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
+        requires_write=False,
+    ),
+    "get_taxonomy_dependencies": MCPToolMeta(
+        name="get_taxonomy_dependencies",
+        description=(
+            "获取知识点的前置依赖关系列表。返回前置知识点的 topic_key、"
+            "依赖强度和原因。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "topic_key": {"type": "string", "description": "知识点唯一标识"},
+            },
+            "required": ["topic_key"],
+        },
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
+        requires_write=False,
+    ),
+    "list_taxonomy_topics": MCPToolMeta(
+        name="list_taxonomy_topics",
+        description=(
+            "按条件列出知识点索引。支持按学科、领域、年龄组筛选。"
+            "返回轻量级列表（id、topic_key、name、subject、domain、age_group）。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "subject": {"type": "string", "description": "学科名称"},
+                "domain": {"type": "string", "description": "领域名称（可选）"},
+                "age_group": {
+                    "type": "string",
+                    "enum": ["low", "mid", "high"],
+                    "description": "年龄组（可选）",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "最大返回数量",
+                    "default": 50,
+                    "maximum": 200,
+                },
+            },
+            "required": ["subject"],
+        },
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
+        requires_write=False,
+    ),
+    "validate_question": MCPToolMeta(
+        name="validate_question",
+        description=(
+            "验证生成的题目是否符合格式要求（L1 格式验证）。"
+            "检查题干非空、答案存在、知识点存在、题型特定字段。"
+            "返回验证结果和错误详情。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "topic_id": {"type": "integer", "description": "知识点 ID"},
+                "question_type": {
+                    "type": "string",
+                    "enum": [
+                        "calculation",
+                        "multiple_choice",
+                        "fill_blank",
+                        "true_false",
+                    ],
+                    "description": "题目类型",
+                },
+                "stem": {"type": "string", "description": "题干"},
+                "answer": {"type": "object", "description": "答案 JSON"},
+                "options": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "选项（仅 multiple_choice）",
+                },
+                "age_group": {
+                    "type": "string",
+                    "enum": ["low", "mid", "high"],
+                    "description": "目标年龄组",
+                },
+            },
+            "required": [
+                "topic_id",
+                "question_type",
+                "stem",
+                "answer",
+                "age_group",
+            ],
+        },
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
+        requires_write=False,
+    ),
+    "get_child_weak_points": MCPToolMeta(
+        name="get_child_weak_points",
+        description=(
+            "获取儿童薄弱知识点列表，按掌握度从低到高排序。"
+            "包含知识断点（前置已掌握但当前未掌握的知识点）。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "child_id": {"type": "integer", "description": "儿童用户 ID"},
+                "subject": {
+                    "type": "string",
+                    "description": "可选：按科目过滤",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "最大返回数量",
+                    "default": 10,
+                    "maximum": 100,
+                },
+            },
+            "required": ["child_id"],
+        },
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
+        requires_write=False,
+    ),
 }
 
 

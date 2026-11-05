@@ -99,6 +99,25 @@ def get_topic_by_id(
     )
 
 
+def get_topic_by_key(
+    db: Session,
+    topic_key: str,
+    source_taxonomy: str | None = None,
+) -> LearningTopic | None:
+    """Get a single topic by its topic_key (e.g. 'mt_AzTrT5ySCx').
+
+    When source_taxonomy is provided, restricts to that taxonomy.
+    Returns None if not found.
+    """
+    q = db.query(LearningTopic).filter(
+        LearningTopic.topic_key == topic_key,
+        LearningTopic.deprecated == False,  # noqa: E712
+    )
+    if source_taxonomy:
+        q = q.filter(LearningTopic.source_taxonomy == source_taxonomy)
+    return q.first()
+
+
 def list_topics_by_ids(
     db: Session,
     topic_ids: list[int],
