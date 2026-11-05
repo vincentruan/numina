@@ -39,6 +39,12 @@ class TestRegistryContents:
             "get_learning_topic",
             "get_child_learning_profile",
             "record_learning_result",
+            # Issue #190: learning-topic-generator tools
+            "get_child_weak_points",
+            "get_taxonomy_topic",
+            "list_taxonomy_topics",
+            "get_taxonomy_dependencies",
+            "validate_question",
         }
         assert set(TOOL_REGISTRY.keys()) == expected_names
 
@@ -68,13 +74,13 @@ class TestGetTool:
 class TestListToolsForRole:
     def test_list_tools_for_role_owner(self):
         tools = list_tools_for_role("owner")
-        # 10 existing + 3 travel + 3 learning tools
-        assert len(tools) == 16
+        # 10 existing + 3 travel + 3 learning + 5 topic-generator tools
+        assert len(tools) == 21
         assert all(isinstance(t, MCPToolMeta) for t in tools)
 
     def test_list_tools_for_role_member(self):
         tools = list_tools_for_role("member")
-        assert len(tools) == 16
+        assert len(tools) == 21
 
     def test_list_tools_for_role_child(self):
         tools = list_tools_for_role("child")
