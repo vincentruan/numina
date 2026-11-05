@@ -686,6 +686,10 @@ function getFetchDomain(url: string): string {
               <div v-if="isSubagentTask(step) && step.status === 'running'" class="subagent-progress">
                 <span class="subagent-progress-text">{{ t('aiChat.subtaskExecuting') }}</span>
               </div>
+              <!-- Tool progress message (e.g. "Writing report.md") -->
+              <div v-else-if="step.progressMessage && step.status === 'running'" class="tool-progress">
+                <span class="tool-progress-text">{{ step.progressMessage }}</span>
+              </div>
               <!-- Error state: tool returned an error -->
               <div v-if="hasToolError(step)" class="tool-error">
                 <IIcon icon="lucide:x-circle" class="tool-error-icon" />
@@ -771,6 +775,11 @@ function getFetchDomain(url: string): string {
               >
                 <path d="M21 12a9 9 0 11-6.219-8.56"/>
               </svg>
+            </div>
+
+            <!-- Tool progress message (e.g. "Writing report.md") -->
+            <div v-if="lastToolCallStep.progressMessage && lastToolCallStep.status === 'running'" class="tool-progress">
+              <span class="tool-progress-text">{{ lastToolCallStep.progressMessage }}</span>
             </div>
 
             <!-- Error state: tool returned an error -->
@@ -1391,6 +1400,20 @@ function getFetchDomain(url: string): string {
   font-size: 12px;
   color: var(--text-secondary);
   font-style: italic;
+}
+
+/* Tool progress message (e.g. "Writing report.md") */
+.tool-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.tool-progress-text {
+  font-size: 12px;
+  color: var(--van-primary-color);
+  font-weight: 500;
 }
 
 @keyframes spin {
