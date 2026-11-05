@@ -51,6 +51,9 @@ class TestRegistryContents:
             "get_knowledge_bridge",
             "get_teacher_persona",
             "record_tutoring_step",
+            # Issue #191: adaptive question selection + hint generation
+            "select_adaptive_question",
+            "generate_hint",
         }
         assert set(TOOL_REGISTRY.keys()) == expected_names
 
@@ -80,24 +83,27 @@ class TestGetTool:
 class TestListToolsForRole:
     def test_list_tools_for_role_owner(self):
         tools = list_tools_for_role("owner")
-        # 10 existing + 3 travel + 3 learning + 5 topic-generator + 5 smart-tutor tools
-        assert len(tools) == 26
+        # 10 existing + 3 travel + 3 learning + 5 topic-generator + 5 smart-tutor + 2 adaptive tools
+        assert len(tools) == 28
         assert all(isinstance(t, MCPToolMeta) for t in tools)
 
     def test_list_tools_for_role_member(self):
         tools = list_tools_for_role("member")
-        assert len(tools) == 26
+        assert len(tools) == 28
 
     def test_list_tools_for_role_child(self):
         tools = list_tools_for_role("child")
-        # Smart tutor tools (Issue #191) are accessible to children
-        assert len(tools) == 4
+        # Smart tutor tools (Issue #191) are accessible to children:
+        # 4 core + select_adaptive_question + generate_hint (both read-only)
+        assert len(tools) == 6
         child_tool_names = {t.name for t in tools}
         assert child_tool_names == {
             "get_guided_question",
             "submit_guided_answer",
             "get_knowledge_bridge",
             "get_teacher_persona",
+            "select_adaptive_question",
+            "generate_hint",
         }
 
     def test_list_tools_for_role_unknown(self):

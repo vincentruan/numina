@@ -29,7 +29,7 @@ async def test_list_tools_returns_all_tools():
     session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
     tools = await session.list_tools()
     names = {t.name for t in tools}
-    # 10 existing + 3 travel + 3 learning + 5 topic-generator + 5 smart-tutor tools
+    # 10 existing + 3 travel + 3 learning + 5 topic-generator + 5 smart-tutor + 2 adaptive tools
     assert names == {
         "get_family_overview",
         "get_assets",
@@ -59,6 +59,9 @@ async def test_list_tools_returns_all_tools():
         "get_knowledge_bridge",
         "get_teacher_persona",
         "record_tutoring_step",
+        # Issue #191: adaptive question selection + hint generation
+        "select_adaptive_question",
+        "generate_hint",
     }
 
 

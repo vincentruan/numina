@@ -557,6 +557,24 @@ export default {
       broken_link_hint: 'Knowledge gap found: {name} is not yet mastered, and it\'s key to understanding this problem',
       current_topic: 'Current',
       no_bridge_data: 'No knowledge graph data yet',
+      // SocraticSteps phase labels
+      phase_diagnose: 'Diagnose',
+      phase_focused_guidance: 'Guide',
+      phase_verify: 'Verify',
+      phase_consolidate: 'Master',
+      step_counter: 'Step {step} / {max}',
+      // TeacherAvatar subject labels
+      teacher_math: 'Math Teacher',
+      teacher_chinese: 'Chinese Teacher',
+      teacher_english: 'English Teacher',
+      teacher_science: 'Science Teacher',
+      // KnowledgeBridge mastery labels
+      mastery_mastered: 'Mastered',
+      mastery_learning: 'Learning',
+      mastery_assessing: 'Assessing',
+      mastery_available: 'Available',
+      mastery_locked: 'Locked',
+      mastery_review: 'Review',
       error: {
         smart_tutor_start: 'Failed to start smart tutor: {status}',
         smart_tutor_answer: 'Failed to submit answer: {status}',

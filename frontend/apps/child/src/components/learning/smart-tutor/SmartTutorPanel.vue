@@ -190,13 +190,14 @@ const effectiveAgeGroup = computed(() => persona.value?.age_group ?? props.ageGr
     <!-- Input area -->
     <div v-if="started" class="smart-tutor-panel__input">
       <van-field
-        v-model="answerInput"
+        :model-value="answerInput"
         :placeholder="t('learning.smart_tutor.input_placeholder')"
         :disabled="isStreaming"
         maxlength="500"
         autosize
         type="textarea"
         rows="1"
+        @update:model-value="answerInput = $event"
         @keyup.enter.exact.prevent="handleSend"
       />
       <van-button

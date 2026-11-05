@@ -35,15 +35,15 @@ const masteryColor = (level: string): string => {
 }
 
 const masteryLabel = (level: string): string => {
-  const labels: Record<string, string> = {
-    mastered: '已掌握',
-    learning: '学习中',
-    assessing: '评估中',
-    available: '可学习',
-    locked: '未解锁',
-    review: '需复习',
+  const keys: Record<string, string> = {
+    mastered: 'learning.smart_tutor.mastery_mastered',
+    learning: 'learning.smart_tutor.mastery_learning',
+    assessing: 'learning.smart_tutor.mastery_assessing',
+    available: 'learning.smart_tutor.mastery_available',
+    locked: 'learning.smart_tutor.mastery_locked',
+    review: 'learning.smart_tutor.mastery_review',
   }
-  return labels[level] ?? level
+  return t(keys[level] ?? '') || level
 }
 </script>
 

@@ -7,6 +7,7 @@
  * celebrating) based on the current tutoring phase.
  */
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 interface Props {
   subject: string
@@ -19,13 +20,15 @@ const props = withDefaults(defineProps<Props>(), {
   isStreaming: false,
 })
 
+const { t } = useI18n()
+
 // Subject-based color and icon mapping
 const subjectConfig = computed(() => {
-  const configs: Record<string, { color: string; emoji: string; label: string }> = {
-    math: { color: '#4A90D9', emoji: '🧮', label: '数学老师' },
-    chinese: { color: '#D94A6B', emoji: '📖', label: '语文老师' },
-    english: { color: '#4AD97A', emoji: '🌍', label: '英语老师' },
-    science: { color: '#D9A34A', emoji: '🔬', label: '科学老师' },
+  const configs: Record<string, { color: string; emoji: string; labelKey: string }> = {
+    math: { color: '#4A90D9', emoji: '🧮', labelKey: 'learning.smart_tutor.teacher_math' },
+    chinese: { color: '#D94A6B', emoji: '📖', labelKey: 'learning.smart_tutor.teacher_chinese' },
+    english: { color: '#4AD97A', emoji: '🌍', labelKey: 'learning.smart_tutor.teacher_english' },
+    science: { color: '#D9A34A', emoji: '🔬', labelKey: 'learning.smart_tutor.teacher_science' },
   }
   return configs[props.subject] ?? configs.math!
 })
@@ -78,7 +81,7 @@ const emotionEmoji = computed(() => {
     <div class="teacher-avatar__bubble" aria-live="polite">
       <span class="teacher-avatar__emotion">{{ emotionEmoji }}</span>
     </div>
-    <div class="teacher-avatar__label">{{ subjectConfig.label }}</div>
+    <div class="teacher-avatar__label">{{ t(subjectConfig.labelKey) }}</div>
     <div v-if="isStreaming" class="teacher-avatar__pulse" />
   </div>
 </template>

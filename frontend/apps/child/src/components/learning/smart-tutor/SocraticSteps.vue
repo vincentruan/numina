@@ -6,6 +6,7 @@
  * child's progress through the tutoring session.
  */
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { TutorPhase } from '@/composables/useSmartTutor'
 
 interface Props {
@@ -18,12 +19,14 @@ const props = withDefaults(defineProps<Props>(), {
   maxSteps: 5,
 })
 
-const phases: { key: TutorPhase; label: string; icon: string }[] = [
-  { key: 'diagnose', label: '诊断', icon: '🔍' },
-  { key: 'focused_guidance', label: '引导', icon: '💡' },
-  { key: 'verify', label: '验证', icon: '✅' },
-  { key: 'consolidate', label: '巩固', icon: '🏆' },
-]
+const { t } = useI18n()
+
+const phases = computed(() => [
+  { key: 'diagnose' as TutorPhase, label: t('learning.smart_tutor.phase_diagnose'), icon: '🔍' },
+  { key: 'focused_guidance' as TutorPhase, label: t('learning.smart_tutor.phase_focused_guidance'), icon: '💡' },
+  { key: 'verify' as TutorPhase, label: t('learning.smart_tutor.phase_verify'), icon: '✅' },
+  { key: 'consolidate' as TutorPhase, label: t('learning.smart_tutor.phase_consolidate'), icon: '🏆' },
+])
 
 const currentIndex = computed(() => {
   const phaseOrder: TutorPhase[] = [
@@ -70,7 +73,7 @@ const currentIndex = computed(() => {
       </div>
     </div>
     <div class="socratic-steps__counter">
-      第 {{ stepCount }} / {{ maxSteps }} 步
+      {{ t('learning.smart_tutor.step_counter', { step: stepCount, max: maxSteps }) }}
     </div>
   </div>
 </template>

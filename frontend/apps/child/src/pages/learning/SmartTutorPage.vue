@@ -5,20 +5,34 @@
  * Receives sessionId, questionId, subject, and ageGroup via route params/query,
  * then renders the SmartTutorPanel.
  */
-import { useRoute } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import SmartTutorPanel from '@/components/learning/smart-tutor/SmartTutorPanel.vue'
 
 defineOptions({ name: 'SmartTutorPage' })
 
 const route = useRoute()
-const sessionId = route.params.sessionId as string
-const questionId = route.query.questionId as string
-const subject = (route.query.subject as string) || 'math'
-const ageGroup = (route.query.ageGroup as string) || 'mid'
+const router = useRouter()
+const { t } = useI18n()
+
+const sessionId = computed(() => route.params.sessionId as string)
+const questionId = computed(() => route.query.questionId as string)
+const subject = computed(() => (route.query.subject as string) || 'math')
+const ageGroup = computed(() => (route.query.ageGroup as string) || 'mid')
+
+// Validate required params — redirect home if missing
+const isValid = computed(() => !!sessionId.value && !!questionId.value)
+
+if (!isValid.value) {
+  showToast(t('learning.smart_tutor.error.smart_tutor_start', { status: 400 }))
+  router.replace({ name: 'ChildHome' })
+}
 </script>
 
 <template>
-  <div class="smart-tutor-page">
+  <div v-if="isValid" class="smart-tutor-page">
     <SmartTutorPanel
       :session-id="sessionId"
       :question-id="questionId"

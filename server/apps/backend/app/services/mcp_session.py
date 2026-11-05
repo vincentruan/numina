@@ -30,9 +30,9 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 VALID_PHASE_TRANSITIONS: dict[str, set[str]] = {
     "DIAGNOSE": {"FOCUSED_GUIDANCE", "PREREQUISITE_RETRACE", "MISCONCEPTION_CORRECTION"},
-    "FOCUSED_GUIDANCE": {"VERIFY", "DIAGNOSE"},
-    "PREREQUISITE_RETRACE": {"VERIFY", "DIAGNOSE"},
-    "MISCONCEPTION_CORRECTION": {"VERIFY", "DIAGNOSE"},
+    "FOCUSED_GUIDANCE": {"VERIFY", "DIAGNOSE", "PREREQUISITE_RETRACE"},
+    "PREREQUISITE_RETRACE": {"VERIFY", "DIAGNOSE", "FOCUSED_GUIDANCE"},
+    "MISCONCEPTION_CORRECTION": {"VERIFY", "DIAGNOSE", "FOCUSED_GUIDANCE"},
     "VERIFY": {"CONSOLIDATE", "DIAGNOSE"},
     "CONSOLIDATE": set(),  # terminal phase
 }
@@ -1257,8 +1257,10 @@ class MCPSession:
 
                             if is_empty_vague:
                                 quality = "no_response"
-                            elif has_numbers or has_reasoning:
-                                quality = "attempted"
+                            elif has_reasoning:
+                                quality = "attempted_with_reasoning"
+                            elif has_numbers:
+                                quality = "attempted_with_calculation"
                             else:
                                 quality = "attempted"
 
@@ -2089,6 +2091,7 @@ class MCPSession:
                                     progresses = (
                                         db.query(LearningProgress)
                                         .filter(LearningProgress.child_id == child_id)
+                                        .limit(500)
                                         .all()
                                     )
                                     for p in progresses:

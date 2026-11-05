@@ -777,6 +777,24 @@ export default {
       broken_link_hint: '发现知识断点：{name} 还没有掌握，这是理解当前题目的关键',
       current_topic: '当前',
       no_bridge_data: '暂无知识图谱数据',
+      // SocraticSteps phase labels
+      phase_diagnose: '诊断',
+      phase_focused_guidance: '引导',
+      phase_verify: '验证',
+      phase_consolidate: '巩固',
+      step_counter: '第 {step} / {max} 步',
+      // TeacherAvatar subject labels
+      teacher_math: '数学老师',
+      teacher_chinese: '语文老师',
+      teacher_english: '英语老师',
+      teacher_science: '科学老师',
+      // KnowledgeBridge mastery labels
+      mastery_mastered: '已掌握',
+      mastery_learning: '学习中',
+      mastery_assessing: '评估中',
+      mastery_available: '可学习',
+      mastery_locked: '未解锁',
+      mastery_review: '需复习',
       error: {
         smart_tutor_start: '启动智能导师失败: {status}',
         smart_tutor_answer: '提交答案失败: {status}',
