@@ -699,6 +699,102 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
     ),
+    # ── Adaptive question selection (Issue #191 Phase 3) ────────────────
+    "select_adaptive_question": MCPToolMeta(
+        name="select_adaptive_question",
+        description=(
+            "自适应选题：根据儿童薄弱点、历史表现和难度偏好，推荐最合适的题目。"
+            "优先从薄弱知识点选题，避免重复已做过的题目。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "child_id": {"type": "integer", "description": "儿童用户 ID"},
+                "topic_id": {
+                    "type": "integer",
+                    "description": "可选：限定知识点范围",
+                },
+                "subject": {
+                    "type": "string",
+                    "description": "可选：按科目过滤（当不指定 topic_id 时）",
+                },
+                "min_difficulty": {
+                    "type": "integer",
+                    "description": "最低难度（1-5）",
+                    "default": 1,
+                    "minimum": 1,
+                    "maximum": 5,
+                },
+                "max_difficulty": {
+                    "type": "integer",
+                    "description": "最高难度（1-5）",
+                    "default": 3,
+                    "minimum": 1,
+                    "maximum": 5,
+                },
+                "bloom_level": {
+                    "type": "string",
+                    "enum": [
+                        "remember",
+                        "understand",
+                        "apply",
+                        "analyze",
+                        "evaluate",
+                        "create",
+                    ],
+                    "description": "可选：布鲁姆认知层次",
+                },
+                "exclude_question_ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "可选：排除的题目 ID 列表（避免重复）",
+                },
+            },
+            "required": ["child_id"],
+        },
+        allowed_roles=frozenset({"owner", "member", "child", "external_token"}),
+        requires_write=False,
+    ),
+    # ── Hint generation (Issue #191 Phase 4) ────────────────────────────
+    "generate_hint": MCPToolMeta(
+        name="generate_hint",
+        description=(
+            "根据儿童的错误模式和薄弱点，生成针对性的引导提示。"
+            "不直接给出答案，而是提供思考方向或关联已掌握知识。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "question_id": {"type": "integer", "description": "题目 ID"},
+                "child_id": {"type": "integer", "description": "儿童用户 ID"},
+                "error_pattern": {
+                    "type": "string",
+                    "enum": [
+                        "computation",
+                        "concept",
+                        "reading",
+                        "partial",
+                        "guessing",
+                        "unknown",
+                    ],
+                    "description": "检测到的错误模式",
+                },
+                "attempt_number": {
+                    "type": "integer",
+                    "description": "当前尝试次数（1-5）",
+                    "default": 1,
+                },
+                "hint_type": {
+                    "type": "string",
+                    "enum": ["conceptual", "procedural", "encouragement", "bridge"],
+                    "description": "提示类型（可选，不传则自动选择）",
+                },
+            },
+            "required": ["question_id", "child_id", "error_pattern"],
+        },
+        allowed_roles=frozenset({"owner", "member", "child", "external_token"}),
+        requires_write=False,
+    ),
 }
 
 

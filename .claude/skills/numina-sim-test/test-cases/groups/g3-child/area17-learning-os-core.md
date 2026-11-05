@@ -424,6 +424,156 @@ Assertions:
 
 ---
 
+## Smart Tutor — Socratic guided problem-solving (Issue #191)
+
+> **Why this section exists:** Issue #191 新增了「智能解题」功能 — 不同于
+> C17.8–C17.11 的 AI 辅导对话（topic exploration），Smart Tutor 是**题目驱动**
+> 的苏格拉底式引导：child 带着具体题目进入，AI 教师通过提问引导解题，
+> 而非直接给出答案。UI 包含教师头像、4 阶段引导进度条、快捷操作按钮、
+> 知识桥接叠加层。
+>
+> 路由：`${CHILD_BASE}learning/smart-tutor/:sessionId?questionId=X&subject=math&ageGroup=mid`
+> 前置：需要 child session + 有效的 learning session（含 question_id）。
+> AI 必须启用；未启用则标记 `SKIP-AI`。
+
+### C17.22 Smart Tutor — page load with teacher avatar + welcome
+
+> 验证 SmartTutorPage 加载后渲染教师头像和欢迎消息。
+
+```
+# Navigate to smart-tutor with a valid session and question
+bsk navigate "${CHILD_BASE}learning/smart-tutor/<session_id>?questionId=<question_id>&subject=math&ageGroup=mid" --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 3000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.22-smart-tutor-welcome.png
+```
+
+Assertions:
+- [ ] SmartTutorPage loads without errors (HTTP 200, no console errors)
+- [ ] TeacherAvatar component renders (teacher icon/illustration at top)
+- [ ] Welcome message visible: "欢迎来到智能解题课堂！老师会一步步引导你思考，而不是直接告诉你答案。" 或类似文本
+- [ ] "开始解题" button is visible and clickable
+- [ ] Subject-specific persona is applied (math → 逻辑推理趣味型 for mid age)
+- [ ] `[console]` zero errors
+
+### C17.23 Smart Tutor — Socratic phase indicator (SocraticSteps)
+
+> 验证 4 阶段引导进度条渲染并随对话推进。
+
+```
+# After starting the session and exchanging at least one message:
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.23-socratic-steps.png
+```
+
+Assertions:
+- [ ] SocraticSteps component shows 4 phases: 诊断 → 引导 → 验证 → 巩固 (or Chinese equivalents)
+- [ ] Current phase is highlighted/active
+- [ ] Progress bar or step counter shows advancement (e.g. "步骤 2/5")
+- [ ] Phase transitions are visible after multiple exchanges (diagnose → focused_guidance)
+- [ ] `[console]` zero errors
+
+### C17.24 Smart Tutor — child sends answer, AI responds with guidance
+
+> 验证 child 可以在输入框提交答案，AI 以苏格拉底方式回应（不给答案，而是引导）。
+
+```
+# Type answer in the input field
+bsk snapshot --session <id>
+bsk fill @eN --session <id> --value "我觉得应该是 1/2"
+bsk click @eN --session <id>   # send button
+bsk wait-ms --session <id> 5000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.24-smart-tutor-answer.png
+```
+
+Assertions:
+- [ ] Child's message appears in the chat area (user bubble)
+- [ ] AI responds with streaming text (incremental appearance)
+- [ ] AI response does NOT directly give the answer — instead asks a guiding question or provides a hint
+- [ ] Response uses age-appropriate language (matches the ageGroup persona)
+- [ ] Input field clears after sending
+- [ ] `[console]` zero errors
+
+### C17.25 Smart Tutor — quick action buttons (hint/understand/more help)
+
+> 验证 QuickActions 组件渲染三个快捷按钮。
+
+```
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] "给个提示" button is visible and clickable
+- [ ] "我理解了" button is visible and clickable
+- [ ] "需要更多帮助" button is visible (may be conditional on guidance phase)
+- [ ] Clicking "给个提示" sends a hint request message on behalf of the child
+- [ ] AI responds to the hint request with a targeted hint (not the full answer)
+- [ ] `[console]` zero errors
+
+### C17.26 Smart Tutor — knowledge bridge overlay
+
+> 验证知识桥接叠加层显示前置知识链和断点。
+
+```
+# After AI triggers get_knowledge_bridge (when child is stuck):
+# The overlay should appear as a bottom panel
+bsk wait-ms --session <id> 3000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.26-knowledge-bridge.png
+```
+
+Assertions:
+- [ ] KnowledgeBridgeOverlay renders when knowledge bridge data is available
+- [ ] Title "知识桥接地图" is visible
+- [ ] Prerequisite chain shows as nodes with color-coded mastery dots:
+  - 🟢 Mastered: bright/solid
+  - 🔵 Learning: pulse/semi-transparent
+  - 🔒 Locked/Available: dark/faded
+- [ ] Current topic is marked with "当前" badge
+- [ ] If broken_link exists: red alert shows "发现知识断点：{name} 还没有掌握"
+- [ ] If no bridge data: shows "暂无知识图谱数据"
+- [ ] `[console]` zero errors
+
+### C17.27 Smart Tutor — error handling (AI connection failure)
+
+> 验证 AI 连接失败时的优雅降级。
+
+```
+# If possible, trigger a failure (e.g. agent service temporarily unavailable)
+# Or navigate with an invalid/expired session
+bsk navigate "${CHILD_BASE}learning/smart-tutor/invalid-session-id?questionId=999&subject=math&ageGroup=mid" --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 2000
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] Error toast/message shows "启动智能导师失败: {status}" or similar user-friendly text
+- [ ] No blank page or unhandled exception
+- [ ] A retry or back navigation option is available
+- [ ] `[console]` zero errors (or errors are caught and displayed)
+
+### C17.28 Smart Tutor — streaming + SSE protocol
+
+> 验证 SSE 流式传输正常工作（消息增量出现，非一次性加载）。
+
+```
+# Start a fresh session and observe the streaming behavior
+bsk navigate "${CHILD_BASE}learning/smart-tutor/<new_session_id>?questionId=<question_id>&subject=math&ageGroup=mid" --session <id>
+# Observe the first AI message — it should appear incrementally
+bsk wait-ms --session <id> 2000
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] AI greeting text appears incrementally (streaming), not after a long delay all at once
+- [ ] Status indicator shows "connecting" → "streaming" → completion (via useSmartTutor composable)
+- [ ] Phase tracking updates during streaming (currentPhase changes from idle to a phase name)
+- [ ] Step counter increments as tutoring progresses
+- [ ] `[console]` zero errors
+
+---
+
 ## Quick Reference
 
 | Case | Feature | Route | Key assertion |
@@ -449,3 +599,10 @@ Assertions:
 | C17.19 | Self-selected assignment | API check | `self_selected` assignment created |
 | C17.20 | Translate hidden | `/learning/topic/:id` | No button for translated topics |
 | C17.21 | Translate shown | `/learning/topic/:id` | Button visible for untranslated topics |
+| C17.22 | Smart Tutor welcome | `/learning/smart-tutor/:id` | Teacher avatar + welcome text + start button |
+| C17.23 | Socratic phases | `/learning/smart-tutor/:id` | 4-phase indicator + progress bar |
+| C17.24 | Tutor answer flow | `/learning/smart-tutor/:id` | Child sends answer → AI guides (no direct answer) |
+| C17.25 | Quick actions | `/learning/smart-tutor/:id` | Hint / understand / more-help buttons |
+| C17.26 | Knowledge bridge | `/learning/smart-tutor/:id` | Prerequisite chain + broken link alert |
+| C17.27 | Tutor error | `/learning/smart-tutor/:id` | Friendly error + retry/back option |
+| C17.28 | Tutor SSE streaming | `/learning/smart-tutor/:id` | Incremental text + phase tracking |

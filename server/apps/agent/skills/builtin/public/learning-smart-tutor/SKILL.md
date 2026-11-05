@@ -17,6 +17,11 @@ allowed-tools:
   - record_tutoring_step
   - get_learning_topic
   - get_child_learning_profile
+  - get_child_weak_points
+  - get_taxonomy_topic
+  - list_taxonomy_topics
+  - select_adaptive_question
+  - generate_hint
 thinking: true
 max_tokens: 16000
 ---
@@ -42,11 +47,16 @@ development stage (Piaget's theory).
 |------|-------------|-------------------|
 | `get_guided_question` | **Session start** — first call to load the question | `stem`, `stem_zh`, `question_type`, `options`, `difficulty`, `bloom_level`, `topic_name`, `topic_subject`, `recent_attempts[]` (child's error history for this question) |
 | `get_child_learning_profile` | **Session start** — understand the child's overall level | `mastered`, `learning`, `available`, `review`, `locked` counts; `total_topics` |
+| `get_child_weak_points` | **Session start** or **when child struggles** — identify weak areas for targeted guidance | `weak_points[]` (each: `topic_id`, `name`, `name_zh`, `mastery_level`, `is_breakpoint`), sorted by priority |
+| `select_adaptive_question` | **After session ends** or **for targeted practice** — recommend next question | `question_id`, `stem`, `stem_zh`, `difficulty`, `bloom_level`, `recommendation_reason`, `candidate_count` |
+| `generate_hint` | **When child is stuck** — get structured hint context for LLM | `hint_type`, `hint_guidance`, `hint_context` (includes `bridge_topic` if applicable), `scaffold_level` |
+| `get_taxonomy_topic` | **Need full topic context by topic_key** — evidence criteria, assessment prompt | `topic_id`, `name`, `name_zh`, `description`, `evidence_criteria`, `assessment_prompt`, `subject`, `domain`, `age_group` |
+| `list_taxonomy_topics` | **Browse related topics** — find practice material or suggest next steps | `topics[]` (each: `topic_id`, `topic_key`, `name`, `name_zh`, `subject`, `domain`, `age_group`), `count` |
 | `get_knowledge_bridge` | **When child is stuck** — trace prerequisite gaps | `prerequisite_chain[]` (each node: `topic_id`, `name`, `mastery_level`, `depth`), `broken_link` (first weak prerequisite) |
 | `get_teacher_persona` | **Session start** (optional — persona is deterministic) | `style`, `tone`, `strategies[]`, `max_sentence_length`, `use_emoji` |
-| `submit_guided_answer` | **Each time child responds** — record their answer step | `quality_assessment` ("correct"/"partial"/"incorrect"/"no_response"), `has_reasoning`, `has_numbers` |
+| `submit_guided_answer` | **Each time child responds** — record their answer step | `quality_assessment` ("attempted"/"no_response"), `has_reasoning`, `has_numbers` |
 | `record_tutoring_step` | **End of each significant turn** — persist tutoring data | `ok`, `total_steps`, `phase`, `next_phase` |
-| `get_learning_topic` | **When you need full topic context** (evidence criteria, assessment prompt) | `name`, `description`, `evidence_criteria`, `assessment_prompt`, `mastery_level` |
+| `get_learning_topic` | **When you need full topic context by topic_id** (evidence criteria, assessment prompt) | `name`, `description`, `evidence_criteria`, `assessment_prompt`, `mastery_level` |
 
 ## Session Initialization Flow
 
@@ -61,7 +71,12 @@ On the **first turn** of a session, execute these tool calls in order:
    → Understand the child's overall mastery landscape
    → If mastered count is low for this subject → child may need more scaffolding
 
-3. [Optional] get_knowledge_bridge(topic_id, child_id, depth=2)
+3. [Optional] get_child_weak_points(child_id, subject=topic_subject, limit=5)
+   → Identify the child's weakest topics in this subject
+   → If the current question's topic appears in weak_points → child likely needs extra support
+   → Use is_breakpoint=true topics to anticipate specific knowledge gaps
+
+4. [Optional] get_knowledge_bridge(topic_id, child_id, depth=2)
    → Pre-load the prerequisite chain if the question's bloom_level is high
    → Use broken_link to anticipate where the child might struggle
 ```
@@ -339,6 +354,106 @@ specific question. Use it to avoid repeating the same hints:
 - Address the broken_link topic, not the surface symptom
 - Use the chain to find a "bridge" — a mastered topic the child can relate to
 
+### Interpreting `get_child_weak_points`
+
+```json
+{
+  "child_id": "123",
+  "count": 3,
+  "weak_points": [
+    {"topic_id": "70", "name": "最小公倍数", "name_zh": "最小公倍数", "mastery_level": "available", "is_breakpoint": true},
+    {"topic_id": "85", "name": "通分", "name_zh": "通分", "mastery_level": "learning", "is_breakpoint": false},
+    {"topic_id": "92", "name": "分数比较", "name_zh": "分数比较", "mastery_level": "learning", "is_breakpoint": false}
+  ]
+}
+```
+
+- `is_breakpoint: true` = knowledge breakpoint (prerequisite mastered but current topic not) — these are high-priority gaps
+- `mastery_level` priority: `available` (never attempted) > `learning` (in progress) > `review` (needs refresh)
+- Use weak points to:
+  - Anticipate struggles before starting a question
+  - Suggest related practice topics when the child completes a question successfully
+  - Connect current question to the child's known weak areas: "这道题和你之前觉得有点难的 [weak topic] 有关联哦"
+
+### Using `get_taxonomy_topic` and `list_taxonomy_topics`
+
+These tools help you understand the broader knowledge structure:
+
+- **`get_taxonomy_topic(topic_key)`**: Get full topic details by topic_key (different from topic_id). Use when you have a topic_key from weak_points or knowledge_bridge and need its evidence criteria or assessment prompt.
+
+- **`list_taxonomy_topics(subject, domain?, age_group?)`**: Browse topics in a subject area. Use to:
+  - Find related topics for suggested practice
+  - Understand what topics exist in the child's curriculum
+  - Suggest "what to learn next" after the child masters the current topic
+
+### Using `select_adaptive_question`
+
+Call this tool when you need to recommend the next question for practice:
+
+**When to call:**
+- After a successful session → recommend follow-up practice
+- When the child asks for more challenges → find harder questions
+- For targeted weak-point practice → combine with `get_child_weak_points`
+
+**Parameters:**
+- `child_id` (required): The child's user ID
+- `topic_id` (optional): Limit to a specific knowledge point
+- `subject` (optional): Filter by subject when topic_id not specified
+- `min_difficulty` / `max_difficulty`: Control difficulty range (1-5)
+- `bloom_level`: Target specific cognitive level
+- `exclude_question_ids`: Avoid repeating recent questions
+
+**Response:**
+```json
+{
+  "question_id": "12345",
+  "topic_id": "67",
+  "stem": "...",
+  "stem_zh": "...",
+  "difficulty": 2,
+  "bloom_level": "apply",
+  "recommendation_reason": "薄弱知识点、新题目",
+  "candidate_count": 15
+}
+```
+
+The tool automatically prioritizes questions from the child's weak topics and avoids recently attempted questions.
+
+### Using `generate_hint`
+
+Call this tool when the child is stuck and you need structured hint context:
+
+**When to call:**
+- Child gives wrong answer → get hint guidance before responding
+- Child says "不知道" → generate appropriate scaffolding
+- Multiple failed attempts → progressively stronger hints
+
+**Error patterns detected:**
+| Pattern | Meaning | Suggested hint_type |
+|---------|---------|-------------------|
+| `computation` | Right method, wrong arithmetic | `procedural` |
+| `concept` | Wrong formula/approach | `conceptual` |
+| `reading` | Misread the question | `procedural` |
+| `partial` | Missing a step | `bridge` |
+| `guessing` | Random answer | `encouragement` |
+| `unknown` | Can't determine | `conceptual` |
+
+**Response:**
+```json
+{
+  "hint_type": "bridge",
+  "hint_guidance": "关联到已掌握的知识点「加法」来建立桥梁",
+  "hint_context": {
+    "is_weak_topic": true,
+    "child_weak_count": 5,
+    "bridge_topic": {"name_zh": "加法", ...}
+  },
+  "scaffold_level": 1
+}
+```
+
+Use `hint_guidance` to craft your response — it tells you the pedagogical approach. Use `scaffold_level` (1-3) to gauge how much support to provide (higher = more stuck = more direct hints).
+
 ## Error Pattern Recognition
 
 Common misconception patterns to watch for:
@@ -380,28 +495,63 @@ Call tools at phase transitions, not mid-sentence. Always call
 | `get_guided_question` fails | Ask the child to describe the question; proceed without structured data |
 | `get_knowledge_bridge` fails | Skip PREREQUISITE_RETRACE; use FOCUSED_GUIDANCE with general hints |
 | `get_child_learning_profile` fails | Assume mid-level; adjust based on conversation signals |
+| `get_child_weak_points` fails | Skip targeted guidance; use general scaffolding approach |
+| `select_adaptive_question` fails | Use `get_guided_question` with a known question_id instead |
+| `generate_hint` fails | Generate hint from your own knowledge; use `hint_context` patterns above |
+| `get_taxonomy_topic` fails | Use `get_learning_topic` with topic_id instead |
+| `list_taxonomy_topics` fails | Skip topic suggestions; focus on current question only |
 | `submit_guided_answer` fails | Continue the conversation; record via `record_tutoring_step` instead |
 | `record_tutoring_step` fails | Non-blocking; continue tutoring, don't mention the error to the child |
+
+## Related Tools (Available via Other Skills)
+
+The following tools exist in the MCP registry but are **not included** in this
+skill's `allowed-tools`. They are used by the `learning-topic-generator` skill
+for curriculum planning. Listed here for reference:
+
+| Tool | Purpose | Why Not Included |
+|------|---------|------------------|
+| `validate_question` | L1 format validation for generated questions | Smart tutor guides, doesn't author questions |
+| `get_taxonomy_dependencies` | Prerequisite edges by topic_key | `get_knowledge_bridge` provides equivalent data by topic_id |
+| `record_learning_result` | End-of-session assessment recording | Smart tutor uses `record_tutoring_step` for step-level data |
 
 ## Future MCP Capabilities (Planned)
 
 > **Note:** The following tools are **not yet available** but are planned
-> for the next iteration. Do not attempt to call them — they are listed
-> here as architectural placeholders.
+> for future iterations. Do not attempt to call them.
 
 | Planned Tool | Purpose |
 |-------------|---------|
-| `get_child_weak_topics` | Query the child's weakest knowledge areas (low accuracy topics) for targeted practice |
-| `select_adaptive_question` | Adaptive question selection based on mastery level + difficulty range |
 | `get_recommended_topic` | AI-recommended next topic based on learning path and zone of proximal development |
-| `list_questions_for_topic` | Browse available questions for a topic with difficulty/bloom filters |
-| `get_question_harness` | Full question harness: solution steps, grading rubric, common error patterns |
+| `list_questions_for_topic` | Browse all available questions for a topic with difficulty/bloom filters |
 
-These will connect to existing backend services:
-- `practice_service.get_weak_topics()` — low-accuracy topic analysis
-- `adaptive_service.select_questions()` — mastery-based question selection
-- `adaptive_service.find_weak_prerequisites()` — prerequisite weakness detection
-- `progress_service.find_recommended_topic()` — next-topic recommendation
+## Architecture Decisions
+
+> Design decisions from spec gap analysis (2026-11-05).
+
+### Data Storage: `progress_json` vs PracticeAttempt
+
+**Decision:** Use `LearningSession.progress_json` to store Socratic tutoring step data (MVP approach).
+
+**Rationale:**
+- Smart Tutor is **tutorial-style** (Socratic guided problem-solving), not **practice drill** (adaptive刷题)
+- `PracticeAttempt` is designed for adaptive drill — links to `PracticeSession`, not `LearningSession`
+- The two data hierarchies exist for a reason:
+  - `PracticeSession` / `PracticeAttempt` → adaptive drill (practice/review/challenge modes)
+  - `LearningSession` / `progress_json` → AI-guided tutorial (Socratic method)
+- `progress_json` satisfies current requirements; consider structured storage only if cross-session learning path analysis becomes a requirement
+
+### Adaptive Question Selection: Agent-Level vs Service-Level
+
+**Decision:** Adaptive selection logic stays at the agent layer (this skill), not integrated into `adaptive_service.py` MCP tools.
+
+**Rationale:**
+- The agent (LLM executing this skill) decides which question to work on, using:
+  - `get_child_learning_profile` — understand child's overall mastery landscape
+  - `get_child_weak_points` — identify specific weak areas
+  - `get_knowledge_bridge` — trace prerequisite gaps
+- `get_guided_question` takes `question_id` as input — the tool provides guidance, the agent decides what to ask
+- This separation of concerns is intentional: the LLM orchestrates the Socratic flow; the tools provide data
 
 ## Content Safety Rules (Mandatory)
 

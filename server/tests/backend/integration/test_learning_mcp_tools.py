@@ -302,6 +302,56 @@ class TestTopicGeneratorToolRegistry:
                 {"owner", "member", "external_token"}
             ), f"{name} roles mismatch"
 
+    def test_select_adaptive_question_registered(self):
+        """select_adaptive_question tool is registered with correct schema."""
+        meta = get_tool("select_adaptive_question")
+        assert meta is not None
+        assert meta.name == "select_adaptive_question"
+        assert meta.requires_write is False
+        # Should allow child role for self-service
+        assert "child" in meta.allowed_roles
+        props = meta.input_schema.get("properties", {})
+        assert "child_id" in props
+        assert "topic_id" in props
+        assert "min_difficulty" in props
+        assert "max_difficulty" in props
+        assert "bloom_level" in props
+        assert "exclude_question_ids" in props
+        # Only child_id should be required
+        required = set(meta.input_schema.get("required", []))
+        assert required == {"child_id"}
+
+    def test_generate_hint_registered(self):
+        """generate_hint tool is registered with correct schema."""
+        meta = get_tool("generate_hint")
+        assert meta is not None
+        assert meta.name == "generate_hint"
+        assert meta.requires_write is False
+        # Should allow child role for self-service
+        assert "child" in meta.allowed_roles
+        props = meta.input_schema.get("properties", {})
+        assert "question_id" in props
+        assert "child_id" in props
+        assert "error_pattern" in props
+        assert "attempt_number" in props
+        assert "hint_type" in props
+        # error_pattern enum values
+        error_pattern = props.get("error_pattern", {})
+        assert "enum" in error_pattern
+        assert set(error_pattern["enum"]) == {
+            "computation", "concept", "reading", "partial", "guessing", "unknown"
+        }
+        # Required fields
+        required = set(meta.input_schema.get("required", []))
+        assert required == {"question_id", "child_id", "error_pattern"}
+
+    def test_adaptive_tools_allow_child_role(self):
+        """Adaptive tools (select_adaptive_question, generate_hint) allow child role."""
+        for name in ("select_adaptive_question", "generate_hint"):
+            meta = get_tool(name)
+            assert meta is not None, f"{name} not registered"
+            assert "child" in meta.allowed_roles, f"{name} should allow child role"
+
     def test_tool_count_total(self):
-        """Registry should have 26 tools (21 existing + 5 smart tutor)."""
-        assert len(TOOL_REGISTRY) == 26
+        """Registry should have 28 tools (21 existing + 5 smart tutor + 2 adaptive)."""
+        assert len(TOOL_REGISTRY) == 28

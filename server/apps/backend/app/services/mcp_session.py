@@ -1374,9 +1374,10 @@ class MCPSession:
 
                             # Gap 7: Content safety filter on topic names (Issue #191)
                             for node in chain:
-                                if node["name"]:
+                                topic_name = node.get("name")
+                                if isinstance(topic_name, str) and topic_name:
                                     result = filter_tutor_output(
-                                        node["name"], child_id=child_id
+                                        topic_name, child_id=child_id
                                     )
                                     if not result.safe:
                                         node["name"] = "[内容已被过滤]"
@@ -1882,6 +1883,310 @@ class MCPSession:
                                 "count": len(items),
                                 "weak_points": items,
                             }
+                elif name == "select_adaptive_question":
+                    from packages.db.models.learning.practice import PracticeAttempt
+                    from packages.db.models.learning.progress import LearningProgress
+                    from packages.db.models.learning.question import Question
+
+                    try:
+                        child_id = int(arguments["child_id"])
+                        if child_id <= 0:
+                            raise ValueError("child_id must be a positive integer")
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        # Parse optional filters
+                        topic_id = arguments.get("topic_id")
+                        subject = arguments.get("subject")
+                        min_difficulty = int(arguments.get("min_difficulty", 1))
+                        max_difficulty = int(arguments.get("max_difficulty", 3))
+                        bloom_level = arguments.get("bloom_level")
+                        exclude_ids = arguments.get("exclude_question_ids") or []
+
+                        try:
+                            min_difficulty = max(1, min(min_difficulty, 5))
+                            max_difficulty = max(1, min(max_difficulty, 5))
+                            if min_difficulty > max_difficulty:
+                                min_difficulty, max_difficulty = max_difficulty, min_difficulty
+                        except (ValueError, TypeError):
+                            min_difficulty, max_difficulty = 1, 3
+
+                        # Family-scope validation
+                        child = (
+                            db.query(User)
+                            .filter(
+                                User.id == child_id,
+                                User.family_id == int(self._family_id),
+                            )
+                            .first()
+                        )
+                        if not child:
+                            data = {"error": "child_not_in_family"}
+                        else:
+                            # Step 1: Get child's weak topics for prioritization
+                            weak_topic_ids: set[int] = set()
+                            try:
+                                weak_progresses = (
+                                    db.query(LearningProgress.topic_id)
+                                    .filter(
+                                        LearningProgress.child_id == child_id,
+                                        LearningProgress.mastery_level.in_(
+                                            ["available", "learning", "review"]
+                                        ),
+                                    )
+                                    .limit(20)
+                                    .all()
+                                )
+                                weak_topic_ids = {wp.topic_id for wp in weak_progresses}
+                            except Exception:
+                                logger.warning(
+                                    "[mcp_session] weak_topics query failed for child=%s",
+                                    child_id,
+                                    exc_info=True,
+                                )
+
+                            # Step 2: Get recently attempted question IDs (to avoid repeats)
+                            recent_question_ids: set[int] = set()
+                            try:
+                                recent_attempts = (
+                                    db.query(PracticeAttempt.question_id)
+                                    .filter(PracticeAttempt.child_id == child_id)
+                                    .order_by(PracticeAttempt.created_at.desc())
+                                    .limit(20)
+                                    .all()
+                                )
+                                recent_question_ids = {
+                                    a.question_id for a in recent_attempts
+                                }
+                            except Exception:
+                                logger.warning(
+                                    "[mcp_session] recent_attempts query failed for child=%s",
+                                    child_id,
+                                    exc_info=True,
+                                )
+
+                            # Add explicitly excluded IDs
+                            exclude_set = set(exclude_ids) | recent_question_ids
+
+                            # Step 3: Query candidate questions
+                            query = db.query(Question).filter(
+                                Question.review_status == "approved",
+                                Question.difficulty >= min_difficulty,
+                                Question.difficulty <= max_difficulty,
+                            )
+
+                            if topic_id:
+                                query = query.filter(Question.topic_id == topic_id)
+                            elif subject:
+                                query = query.join(
+                                    LearningTopic,
+                                    Question.topic_id == LearningTopic.id,
+                                ).filter(LearningTopic.subject == subject)
+
+                            if bloom_level:
+                                query = query.filter(Question.bloom_level == bloom_level)
+
+                            candidates = query.limit(100).all()
+
+                            # Step 4: Score and rank candidates
+                            scored: list[tuple[int, Question]] = []
+                            for q in candidates:
+                                if q.id in exclude_set:
+                                    continue
+                                score = 0
+                                # Priority: weak topic questions score higher
+                                if q.topic_id in weak_topic_ids:
+                                    score += 10
+                                # Prefer less-used questions (variety)
+                                score -= min(q.times_used, 10)
+                                # Slight preference for moderate difficulty
+                                score += 3 - abs(q.difficulty - 3)
+                                scored.append((score, q))
+
+                            # Sort by score descending, take top candidate
+                            scored.sort(key=lambda x: x[0], reverse=True)
+
+                            if scored:
+                                _, best = scored[0]
+                                # Determine recommendation reason
+                                reasons = []
+                                if best.topic_id in weak_topic_ids:
+                                    reasons.append("薄弱知识点")
+                                if best.times_used < 3:
+                                    reasons.append("新题目")
+                                if not reasons:
+                                    reasons.append("难度匹配")
+
+                                data = {
+                                    "question_id": str(best.id),
+                                    "topic_id": str(best.topic_id),
+                                    "question_type": best.question_type,
+                                    "stem": best.stem,
+                                    "stem_zh": best.stem_zh,
+                                    "difficulty": best.difficulty,
+                                    "bloom_level": best.bloom_level,
+                                    "options": best.options,
+                                    "recommendation_reason": "、".join(reasons),
+                                    "candidate_count": len(scored),
+                                }
+                            else:
+                                data = {
+                                    "error": "no_matching_question",
+                                    "detail": "未找到符合条件的题目",
+                                    "filters": {
+                                        "topic_id": topic_id,
+                                        "subject": subject,
+                                        "difficulty_range": [min_difficulty, max_difficulty],
+                                        "bloom_level": bloom_level,
+                                        "excluded_count": len(exclude_set),
+                                    },
+                                }
+                elif name == "generate_hint":
+                    from packages.db.models.learning.progress import LearningProgress
+                    from packages.db.models.learning.question import Question
+
+                    try:
+                        question_id = int(arguments["question_id"])
+                        child_id = int(arguments["child_id"])
+                        error_pattern = arguments["error_pattern"]
+                        attempt_number = int(arguments.get("attempt_number", 1))
+                        hint_type = arguments.get("hint_type")
+                        if question_id <= 0 or child_id <= 0:
+                            raise ValueError("IDs must be positive integers")
+                        if error_pattern not in (
+                            "computation", "concept", "reading", "partial",
+                            "guessing", "unknown",
+                        ):
+                            raise ValueError(f"invalid error_pattern: {error_pattern}")
+                        attempt_number = max(1, min(attempt_number, 5))
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        # Family-scope validation
+                        child = (
+                            db.query(User)
+                            .filter(
+                                User.id == child_id,
+                                User.family_id == int(self._family_id),
+                            )
+                            .first()
+                        )
+                        if not child:
+                            data = {"error": "child_not_in_family"}
+                        else:
+                            question = (
+                                db.query(Question)
+                                .filter(Question.id == question_id)
+                                .first()
+                            )
+                            if not question:
+                                data = {"error": "question_not_found"}
+                            else:
+                                # Get child's weak topics for bridge hints
+                                weak_topic_ids: set[int] = set()
+                                mastered_topic_ids: set[int] = set()
+                                try:
+                                    progresses = (
+                                        db.query(LearningProgress)
+                                        .filter(LearningProgress.child_id == child_id)
+                                        .all()
+                                    )
+                                    for p in progresses:
+                                        if p.mastery_level in ("available", "learning", "review"):
+                                            weak_topic_ids.add(p.topic_id)
+                                        elif p.mastery_level == "mastered":
+                                            mastered_topic_ids.add(p.topic_id)
+                                except Exception:
+                                    logger.warning(
+                                        "[mcp_session] progress query failed for hints",
+                                        exc_info=True,
+                                    )
+
+                                # Determine hint type if not specified
+                                if not hint_type:
+                                    if error_pattern == "concept":
+                                        hint_type = "conceptual"
+                                    elif error_pattern == "computation":
+                                        hint_type = "procedural"
+                                    elif error_pattern == "reading":
+                                        hint_type = "procedural"
+                                    elif error_pattern in ("guessing", "unknown"):
+                                        hint_type = "encouragement"
+                                    elif question.topic_id in weak_topic_ids and mastered_topic_ids:
+                                        hint_type = "bridge"
+                                    else:
+                                        hint_type = "conceptual"
+
+                                # Build hint templates by type
+                                # The actual hint text is generated by the LLM skill;
+                                # we provide structured context for hint generation
+                                topic = (
+                                    db.query(LearningTopic)
+                                    .filter(LearningTopic.id == question.topic_id)
+                                    .first()
+                                )
+
+                                # Find a mastered prerequisite for bridge hints
+                                bridge_topic = None
+                                if hint_type == "bridge" and mastered_topic_ids:
+                                    from packages.db.models.learning.topic import (
+                                        LearningDependency,
+                                    )
+
+                                    prereqs = (
+                                        db.query(LearningDependency)
+                                        .filter(
+                                            LearningDependency.topic_id == question.topic_id
+                                        )
+                                        .all()
+                                    )
+                                    for prereq in prereqs:
+                                        if prereq.prerequisite_id in mastered_topic_ids:
+                                            bridge_topic = (
+                                                db.query(LearningTopic)
+                                                .filter(
+                                                    LearningTopic.id == prereq.prerequisite_id
+                                                )
+                                                .first()
+                                            )
+                                            if bridge_topic:
+                                                break
+
+                                hint_context = {
+                                    "hint_type": hint_type,
+                                    "error_pattern": error_pattern,
+                                    "attempt_number": attempt_number,
+                                    "question_topic": {
+                                        "id": str(question.topic_id),
+                                        "name": topic.name if topic else None,
+                                        "name_zh": topic.name_zh if topic else None,
+                                    },
+                                    "child_weak_count": len(weak_topic_ids),
+                                    "is_weak_topic": question.topic_id in weak_topic_ids,
+                                }
+
+                                if bridge_topic:
+                                    hint_context["bridge_topic"] = {
+                                        "id": str(bridge_topic.id),
+                                        "name": bridge_topic.name,
+                                        "name_zh": bridge_topic.name_zh,
+                                    }
+
+                                # Guidance for the LLM skill
+                                hint_guidance = {
+                                    "conceptual": "引导思考概念本质，用类比或生活例子",
+                                    "procedural": "提示解题步骤，分解为更小的子任务",
+                                    "encouragement": "鼓励尝试，降低焦虑，提醒已有进步",
+                                    "bridge": f"关联到已掌握的知识点「{bridge_topic.name_zh or bridge_topic.name if bridge_topic else ''}」来建立桥梁",
+                                }
+
+                                data = {
+                                    "question_id": str(question_id),
+                                    "child_id": str(child_id),
+                                    "hint_context": hint_context,
+                                    "hint_guidance": hint_guidance.get(hint_type, ""),
+                                    "scaffold_level": min(attempt_number, 3),
+                                }
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 
