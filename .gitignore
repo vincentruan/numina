@@ -195,6 +195,7 @@ frontend/apps/*/package-lock.json
 # Dogfood audit output (screenshots, reports — local only)
 dogfood-output/
 tests/reports/ui-audit-*.md
+tests/reports/*.png
 tests/smoke-results.json
 
 # Playwright E2E Tests
