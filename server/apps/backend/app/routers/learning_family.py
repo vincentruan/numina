@@ -878,6 +878,7 @@ async def generate_topic_plan(
             "evidence": topic_data.get("evidenceZh") or topic_data.get("evidence", []),
             "prerequisites": prereqs,
             "cluster_summary": cluster_summary,
+            "locale": user.language or "zh-CN",
         },
         ensure_ascii=False,
     )

@@ -768,7 +768,7 @@ class MCPSession:
                                     "topic_id": str(topic.id),
                                     "name": topic.name,
                                     "description": topic.description,
-                                    "evidence_criteria": topic.evidence_json,
+                                    "evidence_criteria": topic.evidence_json or [],
                                     "assessment_prompt": topic.assessment_prompt,
                                     "mastery_level": (
                                         progress.mastery_level if progress else "locked"
@@ -1121,7 +1121,7 @@ class MCPSession:
                                 "subject": topic.subject,
                                 "domain": topic.domain,
                                 "age_group": topic.age_group,
-                                "evidence_criteria": topic.evidence_json,
+                                "evidence_criteria": topic.evidence_json or [],
                                 "assessment_prompt": topic.assessment_prompt,
                                 "source_taxonomy": topic.source_taxonomy,
                             }
@@ -1161,7 +1161,11 @@ class MCPSession:
                     subject = arguments.get("subject", "")
                     domain = arguments.get("domain")
                     age_group = arguments.get("age_group")
-                    limit = min(int(arguments.get("limit", 50)), 200)
+                    source_taxonomy = arguments.get("source_taxonomy")
+                    try:
+                        limit = max(1, min(int(arguments.get("limit", 50)), 200))
+                    except (ValueError, TypeError):
+                        limit = 50
 
                     if not subject or not isinstance(subject, str):
                         data = {"error": "invalid_arguments", "detail": "subject is required"}
@@ -1172,6 +1176,7 @@ class MCPSession:
                             domain=domain,
                             age_group=age_group,
                             limit=limit,
+                            source_taxonomy=source_taxonomy,
                         )
                         data = {
                             "count": len(topics),
@@ -1227,7 +1232,10 @@ class MCPSession:
                         data = {"error": "invalid_arguments", "detail": str(exc)}
                     else:
                         subject = arguments.get("subject")
-                        limit = min(int(arguments.get("limit", 10)), 100)
+                        try:
+                            limit = max(1, min(int(arguments.get("limit", 10)), 100))
+                        except (ValueError, TypeError):
+                            limit = 10
 
                         # Family-scope validation
                         child_in_family = (
@@ -1256,15 +1264,25 @@ class MCPSession:
                                 ).filter(LearningTopic.subject == subject)
                             wp_progresses: list[LearningProgress] = wp_query.limit(limit).all()
 
+                            # Batch-fetch all topics to avoid N+1 queries
+                            topic_ids = {wp.topic_id for wp in wp_progresses}
+
                             # Build result with mastery_level priority for sorting
                             _LEVEL_PRIORITY = {"available": 0, "learning": 1, "review": 2}
                             result_map: dict[int, dict] = {}
-                            for wp in wp_progresses:
-                                wp_topic = (
+
+                            if topic_ids:
+                                topic_rows = (
                                     db.query(LearningTopic)
-                                    .filter(LearningTopic.id == wp.topic_id)
-                                    .first()
+                                    .filter(LearningTopic.id.in_(topic_ids))
+                                    .all()
                                 )
+                                topic_by_id = {t.id: t for t in topic_rows}
+                            else:
+                                topic_by_id = {}
+
+                            for wp in wp_progresses:
+                                wp_topic = topic_by_id.get(wp.topic_id)
                                 if wp_topic:
                                     result_map[wp.topic_id] = {
                                         "topic_id": str(wp.topic_id),
@@ -1281,30 +1299,28 @@ class MCPSession:
                                     db, child_id
                                 )
                                 for bp in breakpoints:
-                                    # Apply subject filter manually if specified
-                                    if subject:
+                                    # Resolve topic from batch cache or DB
+                                    bp_topic = topic_by_id.get(bp.topic_id)
+                                    if not bp_topic:
                                         bp_topic = (
                                             db.query(LearningTopic)
                                             .filter(LearningTopic.id == bp.topic_id)
                                             .first()
                                         )
-                                        if not bp_topic or bp_topic.subject != subject:
-                                            continue
-                                    if bp.topic_id not in result_map:
-                                        topic = (
-                                            db.query(LearningTopic)
-                                            .filter(LearningTopic.id == bp.topic_id)
-                                            .first()
-                                        )
-                                        if topic:
-                                            result_map[bp.topic_id] = {
-                                                "topic_id": str(bp.topic_id),
-                                                "topic_key": topic.topic_key,
-                                                "name": topic.name,
-                                                "name_zh": topic.name_zh,
-                                                "mastery_level": "available",
-                                                "is_breakpoint": True,
-                                            }
+                                        if bp_topic:
+                                            topic_by_id[bp.topic_id] = bp_topic
+                                    # Apply subject filter
+                                    if subject and (not bp_topic or bp_topic.subject != subject):
+                                        continue
+                                    if bp.topic_id not in result_map and bp_topic:
+                                        result_map[bp.topic_id] = {
+                                            "topic_id": str(bp.topic_id),
+                                            "topic_key": bp_topic.topic_key,
+                                            "name": bp_topic.name,
+                                            "name_zh": bp_topic.name_zh,
+                                            "mastery_level": "available",
+                                            "is_breakpoint": True,
+                                        }
                             except Exception:
                                 logger.warning(
                                     "[mcp_session] find_breakpoint_topics failed "
