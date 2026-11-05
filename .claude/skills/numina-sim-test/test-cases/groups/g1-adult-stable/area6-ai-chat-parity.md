@@ -564,6 +564,100 @@ Assertions:
 
 ---
 
+## New cases — DeerFlow 特性同步 (#168-176)
+
+### C6.28 SummarizationMiddleware — 长对话自动压缩（#168）
+
+**来源:** T6 — SummarizationMiddleware for auto context compression
+
+验证长对话是否触发 SummarizationMiddleware 自动压缩上下文，而不丢失关键信息。
+
+```
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+
+# 发送 10+ 轮对话以触发上下文压缩（阈值由 SummarizationMiddleware 配置）
+bsk evaluate --session <id> "(async () => {
+  const messages = [
+    '我的总资产大概是多少',
+    '负债情况呢',
+    '净资产是多少',
+    '帮我分析资产配置',
+    '有没有优化建议',
+    '流动性资产够吗',
+    '投资资产分布如何',
+    '负债压力大吗',
+    '有哪些低风险理财',
+    '应急准备金留多少合适',
+    '总结一下今天的讨论',
+  ];
+  
+  for (const msg of messages) {
+    // 找到输入框并发送
+    const input = document.querySelector('textarea, [contenteditable]');
+    if (input) {
+      input.value = msg;
+      input.dispatchEvent(new Event('input', {bubbles: true}));
+      // 点击发送按钮
+      const sendBtn = document.querySelector('[data-testid=send-button], .send-button');
+      if (sendBtn) sendBtn.click();
+      // 等待响应
+      await new Promise(r => setTimeout(r, 3000));
+    }
+  }
+  return 'sent ' + messages.length + ' messages';
+})()"
+
+bsk wait-ms 5s
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c6.28-summarization.png
+```
+
+Assertions:
+- [ ] 长对话（10+ 轮）触发 SummarizationMiddleware 自动压缩
+- [ ] 压缩后的上下文保留关键信息（用户询问的主题、AI 给出的关键建议）
+- [ ] 压缩后 AI 仍能基于历史上下文给出连贯回答（如"正如之前讨论的..."）
+- [ ] 压缩过程不影响用户体验（无卡顿、无消息丢失）
+- [ ] 压缩事件在 ChainOfThought 中可见（如果有 UI 反馈）
+- [ ] `[console]` zero errors
+
+> **备注:** SummarizationMiddleware 的触发阈值由配置决定（通常是 token 数或消息数）。如果 10 轮不足以触发，可增加消息数或降低阈值配置。
+
+### C6.29 SubagentLimitMiddleware — ultra 模式子 agent 限制（#175, PR #184）
+
+**来源:** T15 — SubagentLimitMiddleware truncates excessive subagent task requests
+
+验证 ultra 模式下，当子 agent 调用次数超过限制时，SubagentLimitMiddleware 是否正确截断并返回友好提示。
+
+```
+# 切换到 ultra 模式
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+bsk click @eN --session <id>  # 打开模式选择器
+bsk snapshot --session <id>
+bsk click @eM --session <id>  # 选择 ultra 模式
+bsk wait-ms 1s
+
+# 发送一个可能需要多个子 agent 的复杂任务
+bsk fill @eN --value 深度研究我的资产负债结构，分析至少 5 个维度，每个维度给出 3 套方案 --session <id>
+bsk click @eM --session <id>
+bsk wait-ms 15s  # ultra 模式需要较长时间
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c6.29-subagent-limit.png
+```
+
+Assertions:
+- [ ] ultra 模式下，SubagentLimitMiddleware 生效（限制子 agent 调用次数）
+- [ ] 当子 agent 调用达到上限时，Middleware 截断多余的调用请求
+- [ ] 截断后返回友好的提示（如"已达到分析深度上限"）而非崩溃或无限循环
+- [ ] 截断前的子 agent 结果被正确收集和展示（SubtaskCard 列表）
+- [ ] 最终响应包含已完成的子 agent 结果汇总
+- [ ] `[console]` zero errors
+
+> **备注:** SubagentLimitMiddleware 的上限由配置决定（通常是 5-10 个子 agent）。此测试验证边界情况下的优雅降级。
+
+---
+
 ## Parity summary matrix
 
 | DeerFlow contract | Numina | Case | Notes |

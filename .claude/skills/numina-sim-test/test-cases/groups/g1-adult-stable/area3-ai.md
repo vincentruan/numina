@@ -508,3 +508,146 @@ Assertions:
 - [ ] AI 响应中引用的具体资产/负债名称与系统数据一致（无幻觉，如不会编造不存在的资产）
 - [ ] 如果用户询问具体资产详情（如"茅台股票多少钱"），AI 响应与 `/assets/:id` API 返回一致
 - [ ] `[console]` zero errors
+
+---
+
+## New cases — 工具进度事件
+
+### C3.24 tool.progress 事件展示（write_file 工具进度）
+
+**来源:** #188 — tool.progress events during write_file
+
+验证 write_file 工具在执行过程中是否向前端发送 tool.progress 事件，并在 UI 中展示进度反馈。
+
+```
+# 触发一个会使用 write_file 工具的 AI 任务（如 asset-report）
+bsk navigate ${BASE}ai/report --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+bsk click @eN --session <id>           # 开始分析
+bsk wait-ms 8s                         # 等待 step1 执行 write_file
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c3.24-tool-progress.png
+```
+
+Assertions:
+- [ ] 当 agent 调用 write_file 工具时，前端接收到 tool.progress 事件
+- [ ] tool.progress 事件在 UI 中展示进度反馈（如"正在写入文件..."或进度条）
+- [ ] 进度事件不影响正常的 SSE 流式体验（无卡顿、无重复渲染）
+- [ ] write_file 完成后，进度状态正确清理（不残留"进行中"标记）
+- [ ] `[console]` zero errors
+
+---
+
+## New cases — DeerFlow 特性同步 (#168-176)
+
+### C3.25 Chat sessionStorage 持久化（#175, PR #186）
+
+**来源:** T20 — Chat sessionStorage persistence
+
+验证 AI 对话流式状态是否持久化到 sessionStorage，使得刷新页面后能恢复流式进度而非丢失。
+
+```
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk fill @eN --value 帮我深度分析资产负债结构 --session <id>
+bsk click @eM --session <id>
+bsk wait-ms 2s  # 等待流式开始
+
+# 验证 sessionStorage 已写入流式状态
+bsk evaluate --session <id> "(async () => {
+  const keys = Object.keys(sessionStorage).filter(k => k.includes('chat') || k.includes('stream') || k.includes('thread'));
+  const hasStreamingState = keys.length > 0;
+  return JSON.stringify({hasStreamingState, keys: keys.slice(0, 5)});
+})()"
+
+# 刷新页面（模拟 F5）
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk wait-ms 3s
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c3.25-sessionstorage-recovery.png
+```
+
+Assertions:
+- [ ] 流式进行中，sessionStorage 包含流式状态键（thread_id、message_id 等）
+- [ ] 刷新后，页面从 sessionStorage 恢复之前的流式状态（不显示空白对话）
+- [ ] 若任务仍在运行：显示"任务仍在后台运行中" banner + 自动轮询恢复
+- [ ] 若任务已完成：从 checkpointer 加载完整对话历史
+- [ ] 恢复的对话包含之前所有的消息（用户消息 + AI 响应）
+- [ ] `[console]` zero errors
+
+> **前置:** 需要有一个正在运行的 AI 对话任务。如果流式已完成，sessionStorage 状态会被清理，此测试需重新触发。
+
+### C3.26 ToolSearch/Tool 动态提升（#176, PR #184）
+
+**来源:** T24 — ToolSearch/Tool Promotion via deferred MCP schema
+
+验证 MCP 工具的 schema 是否通过 `tool_search` 事件动态加载，而非在初始化时全量加载。
+
+```
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+
+# 发送一个需要使用 MCP 工具的请求
+bsk fill @eN --value 调用工具查看我的家庭资产概览 --session <id>
+bsk click @eM --session <id>
+bsk wait-ms 8s
+bsk snapshot --session <id>
+
+# 验证 tool_search 事件是否触发（通过 JavaScript 检查 SSE 事件）
+bsk evaluate --session <id> "(async () => {
+  // 检查是否有 tool_search 相关的状态或事件
+  const hasToolSearchEvent = window.__toolSearchEventFired || false;
+  const mcpToolsLoaded = window.__mcpToolsLoaded || [];
+  return JSON.stringify({hasToolSearchEvent, mcpToolsLoadedCount: mcpToolsLoaded.length});
+})()"
+```
+
+Assertions:
+- [ ] MCP 工具 schema 不在初始化时全量加载（减少初始加载时间）
+- [ ] 当 agent 需要使用某个 MCP 工具时，触发 `tool_search` 事件动态加载 schema
+- [ ] 动态加载的工具 schema 包含完整的参数定义（parameters、description）
+- [ ] 工具调用成功后，schema 被缓存供后续使用（不重复加载）
+- [ ] ChainOfThought 中正确展示工具调用过程（包括 schema 加载步骤）
+- [ ] `[console]` zero errors
+
+> **备注:** 此测试验证 DeerFlow 的 deferred MCP schema 机制。如果前端没有暴露 `__toolSearchEventFired` 等调试变量，可通过 Network 面板观察 MCP schema 请求时机。
+
+### C3.27 Task Continuity 工具 — thread_search 和 thread_read（#176, PR #184）
+
+**来源:** T25 — Task Continuity tools (thread_search + thread_read)
+
+验证新增的 `thread_search`（跨 thread 会话发现）和 `thread_read`（跨 thread 消息读取）工具是否正常工作。
+
+```
+# 前置：创建多个 thread 并发送不同话题的消息
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk fill @eN --value 我的房产投资计划 --session <id>
+bsk click @eM --session <id>
+bsk wait-ms 5s
+
+# 新建 thread，讨论另一个话题
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk click @eN --session <id>  # 新建 thread 按钮
+bsk wait-ms 1s
+bsk fill @eM --value 我的教育金储备方案 --session <id>
+bsk click @eK --session <id>
+bsk wait-ms 5s
+
+# 回到第一个 thread，测试 thread_search
+bsk navigate ${BASE}ai/chat?thread_id=<first-thread-id> --session <id> --wait-until networkidle
+bsk fill @eN --value 搜索我之前讨论的教育金话题 --session <id>
+bsk click @eM --session <id>
+bsk wait-ms 8s
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] `thread_search` 工具能搜索当前 family 下的所有 thread（按关键词、时间范围）
+- [ ] `thread_search` 返回匹配的 thread 列表（包含 thread_id、标题、摘要）
+- [ ] `thread_read` 工具能读取指定 thread 的消息历史（按 thread_id）
+- [ ] `thread_read` 返回的消息包含用户消息和 AI 响应（完整的对话上下文）
+- [ ] AI 能基于跨 thread 的信息给出连贯的回答（如"您之前讨论过教育金方案..."）
+- [ ] 工具调用在 ChainOfThought 中正确展示（thread_search / thread_read 步骤）
+- [ ] `[console]` zero errors
+
+> **备注:** 这两个工具用于增强 AI 的上下文连续性，使其能跨 thread 检索历史信息。如果工具未在 `chat` skill 的 `allowed-tools` 中，需先添加。
+
