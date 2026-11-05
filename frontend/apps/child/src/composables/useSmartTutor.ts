@@ -245,9 +245,7 @@ export function useSmartTutor() {
           },
           body: JSON.stringify({
             child_answer: answer,
-            question_id: activeQuestionId.value
-              ? Number(activeQuestionId.value)
-              : undefined,
+            question_id: activeQuestionId.value || undefined,
           }),
           signal: abortController.signal,
         },

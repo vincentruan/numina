@@ -38,6 +38,7 @@ from apps.backend.app.services.learning import (
     path_service,
     progress_service,
     session_service,
+    smart_tutor_service,
     stats_service,
     zone_service,
 )
@@ -61,9 +62,7 @@ from packages.db.models.learning.topic import LearningTopic
 router = APIRouter(prefix="/child/learning", tags=["learning-child"])
 
 
-def _json_text_field_equals(
-    json_column, key: str, value: str, engine
-):
+def _json_text_field_equals(json_column, key: str, value: str, engine):
     """Dialect-aware JSON text field equality filter.
 
     PostgreSQL uses ``column[key].astext``; SQLite uses ``json_extract``.
@@ -668,7 +667,9 @@ async def stream_assessment(
     except httpx.HTTPStatusError as e:
         _fdb = SessionLocal()
         try:
-            AITaskService.fail_task(task_id, f"agent trigger failed: {type(e).__name__}", _fdb)
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
+            )
         finally:
             _fdb.close()
         # Agent returned 409 Conflict — another run is already active on this thread.
@@ -676,17 +677,25 @@ async def stream_assessment(
         # state instead of a generic 503 error.
         if e.response.status_code == 409:
             raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}) from e
+        raise AppError(
+            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
+        ) from e
     except Exception as e:
         _fdb = SessionLocal()
         try:
-            AITaskService.fail_task(task_id, f"agent trigger failed: {type(e).__name__}", _fdb)
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
+            )
         finally:
             _fdb.close()
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}) from e
+        raise AppError(
+            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
+        ) from e
 
     # 5. Persist run_id on AITask + spawn lifecycle consumer (matches ai_report/finance_coach pattern)
-    AITaskService.extract_and_attach_run_id(task_id, result["content_location"], family_id)
+    AITaskService.extract_and_attach_run_id(
+        task_id, result["content_location"], family_id
+    )
 
     # 6. Subscribe to Redis Stream -> SSE
     shared_bridge = get_shared_bridge()
@@ -828,12 +837,6 @@ async def stream_smart_tutor(
 
     First call (question_id provided): begins guided problem-solving.
     Follow-up calls (child_answer provided): continues multi-turn dialogue.
-
-    Flow:
-    1. Validate session + question ownership
-    2. Build agent trigger (initial: question context; follow-up: child's answer)
-    3. Trigger agent via learning-smart-tutor app
-    4. Stream SSE response to frontend
     """
     from apps.backend.app.services.agent_client import AgentClient
     from apps.backend.app.services.ai_task_service import AITaskService
@@ -846,117 +849,35 @@ async def stream_smart_tutor(
     from apps.backend.app.services.learning.session_service import (
         get_thread_id_for_session,
     )
-    from packages.db.models.learning.question import Question
 
-    # 1. Validate ownership
-    session = session_service.get_session(db, session_id, child.id)
+    # Validate and load entities via service
+    is_follow_up = body is not None and body.child_answer is not None
+    question_id = body.question_id if body and body.question_id else None
+
+    session, question, topic = smart_tutor_service.validate_smart_tutor_request(
+        db=db,
+        session_id=session_id,
+        child=child,
+        question_id=question_id,
+        is_follow_up=is_follow_up,
+    )
+
     thread_id = get_thread_id_for_session(session_id)
     family_id = child.family_id
 
-    is_follow_up = body is not None and body.child_answer is not None
-
-    # 2. Load the question
-    question_id = body.question_id if body and body.question_id else None
-
-    if is_follow_up:
-        # Follow-up: reuse existing thread
-        if not session.thread_id:
-            raise AppError(ErrorCode.LEARNING_SESSION_NOT_FOUND)
-        thread_id = session.thread_id
-
-        # Find the question from the most recent tutoring step
-        # (the frontend should pass question_id, but we look up from the question)
-        question = (
-            db.query(Question)
-            .filter(Question.id == question_id)
-            .first()
-            if question_id
-            else None
-        )
-    else:
-        # Initial: validate question exists
-        if not question_id:
-            raise AppError(
-                ErrorCode.VALIDATION_ERROR,
-                details={"field": "question_id", "message": "question_id is required for initial call"},
-            )
-        question = (
-            db.query(Question)
-            .filter(Question.id == question_id)
-            .first()
-        )
-        if not question:
-            raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
-
-    # Load topic for context
-    taxonomy = get_effective_source_taxonomy(db, child.language)
-    topic = (
-        db.query(LearningTopic)
-        .filter(
-            LearningTopic.id == session.topic_id,
-            LearningTopic.source_taxonomy == taxonomy,
-        )
-        .first()
+    # Build agent payload via service
+    agent_body = smart_tutor_service.build_agent_payload(
+        session=session,
+        question=question,
+        topic=topic,
+        child=child,
+        session_id=session_id,
+        question_id=question_id,
+        child_answer=body.child_answer if body else None,
+        is_follow_up=is_follow_up,
     )
-    if not topic:
-        raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
 
-    # 3. Build agent trigger body
-    if is_follow_up:
-        assert body is not None  # narrowed by is_follow_up check
-        q_id = question_id or (question.id if question else 0)
-        agent_content = json.dumps(
-            {
-                "action": "continue_guidance",
-                "child_answer": body.child_answer,
-                "question_id": str(q_id),
-                "topic_id": str(topic.id),
-                "child_id": str(child.id),
-                "session_id": str(session_id),
-            },
-            ensure_ascii=False,
-        )
-    else:
-        assert question is not None  # loaded above; raises if missing
-        agent_content = json.dumps(
-            {
-                "action": "start_guidance",
-                "question_id": str(question.id),
-                "question_stem": question.stem,
-                "question_stem_zh": question.stem_zh,
-                "question_type": question.question_type,
-                "options": question.options,
-                "difficulty": question.difficulty,
-                "bloom_level": question.bloom_level,
-                "age_group": question.age_group,
-                "topic_id": str(topic.id),
-                "topic_name": topic.name,
-                "topic_name_zh": topic.name_zh,
-                "subject": topic.subject,
-                "child_id": str(child.id),
-                "child_name": child.display_name or child.username or "",
-                "session_id": str(session_id),
-            },
-            ensure_ascii=False,
-        )
-
-    agent_body = {
-        "family_id": str(family_id),
-        "user_id": str(child.id),
-        "input": {
-            "messages": [{"role": "user", "content": agent_content}],
-        },
-        "on_disconnect": "continue",
-        "metadata": {
-            "app": "learning-smart-tutor",
-            "session_id": str(session_id),
-            "question_id": str(question_id or (question.id if question else 0)),
-            "topic_id": str(topic.id),
-            "language": child.language or "zh-CN",
-        },
-    }
-
-    # 4. Create AITask record
+    # Create AITask record
     task = AITaskService.create_task(
         family_id=family_id,
         skill_id="learning-smart-tutor",
@@ -967,7 +888,7 @@ async def stream_smart_tutor(
     db.commit()
     task_id = str(task.id)
 
-    # 5. Trigger agent
+    # Trigger agent
     agent_client = AgentClient(family_id=str(family_id), user_id=str(child.id))
     try:
         result = await trigger_agent_run(
@@ -979,22 +900,32 @@ async def stream_smart_tutor(
     except httpx.HTTPStatusError as e:
         _fdb = SessionLocal()
         try:
-            AITaskService.fail_task(task_id, f"agent trigger failed: {type(e).__name__}", _fdb)
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
+            )
         finally:
             _fdb.close()
         if e.response.status_code == 409:
             raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}) from e
+        raise AppError(
+            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
+        ) from e
     except Exception as e:
         _fdb = SessionLocal()
         try:
-            AITaskService.fail_task(task_id, f"agent trigger failed: {type(e).__name__}", _fdb)
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
+            )
         finally:
             _fdb.close()
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}) from e
+        raise AppError(
+            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
+        ) from e
 
-    # 6. Persist run_id + spawn lifecycle consumer
-    AITaskService.extract_and_attach_run_id(task_id, result["content_location"], family_id)
+    # Persist run_id + spawn lifecycle consumer
+    AITaskService.extract_and_attach_run_id(
+        task_id, result["content_location"], family_id
+    )
 
     # Persist thread_id on initial call so follow-up turns can reuse it
     if not is_follow_up and not session.thread_id:

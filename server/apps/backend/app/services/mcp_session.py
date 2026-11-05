@@ -1207,8 +1207,10 @@ class MCPSession:
                         if not child:
                             data = {"error": "child_not_in_family"}
                         else:
-                            # Simple heuristic assessment of the answer
-                            # Full AI grading happens via the skill's LLM reasoning
+                            # Lightweight signal classification — not a correctness
+                            # judgement.  The LLM (Socratic skill) decides whether
+                            # the answer is right; we only tag structural signals
+                            # so the skill prompt has them as context.
                             answer_lower = answer_text.lower()
                             has_numbers = any(c.isdigit() for c in answer_text)
                             has_reasoning = any(
@@ -1226,12 +1228,10 @@ class MCPSession:
 
                             if is_empty_vague:
                                 quality = "no_response"
-                            elif has_reasoning and has_numbers:
-                                quality = "correct"  # likely on track
                             elif has_numbers or has_reasoning:
-                                quality = "partial"
+                                quality = "attempted"
                             else:
-                                quality = "partial"  # give benefit of the doubt
+                                quality = "attempted"
 
                             data = {
                                 "question_id": str(question_id),
