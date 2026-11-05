@@ -572,6 +572,76 @@ Assertions:
 - [ ] Step counter increments as tutoring progresses
 - [ ] `[console]` zero errors
 
+### C17.29 Smart Tutor — multi-round complete guidance flow
+
+> 验证完整的多轮苏格拉底引导流程：诊断 → 聚焦引导 → 验证 → 巩固。
+> 此测试需要与 AI 进行多轮交互，观察阶段转换和最终完成状态。
+
+```
+# Start session and observe the full flow through multiple phases
+bsk navigate "${CHILD_BASE}learning/smart-tutor/<session_id>?questionId=<question_id>&subject=math&ageGroup=mid" --session <id> --wait-until networkidle
+
+# Round 1: AI diagnosis phase — child gives initial (possibly wrong) answer
+bsk wait-ms --session <id> 3000
+bsk snapshot --session <id>
+bsk fill @eN --session <id> --value "我猜是 1/3"
+bsk click @eN --session <id>   # send button
+bsk wait-ms --session <id> 5000
+bsk snapshot --session <id>
+
+# Round 2: AI focused guidance — AI asks guiding question, child tries again
+bsk fill @eN --session <id> --value "因为分母要相同，所以应该是 2/6 + 1/6?"
+bsk click @eN --session <id>
+bsk wait-ms --session <id> 5000
+bsk snapshot --session <id>
+
+# Round 3: AI verification — child arrives at correct answer
+bsk fill @eN --session <id> --value "所以答案是 3/6，也就是 1/2！"
+bsk click @eN --session <id>
+bsk wait-ms --session <id> 5000
+bsk snapshot --session <id>
+
+# Round 4: AI consolidation — AI confirms and summarizes learning
+bsk wait-ms --session <id> 3000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.29-multi-round-flow.png
+```
+
+Assertions:
+- [ ] Phase indicator progresses through: diagnose → focused_guidance → verify → consolidate
+- [ ] AI does NOT give the answer directly in any round — always guides through questions
+- [ ] AI recognizes correct answer in Round 3 and provides positive reinforcement
+- [ ] AI summarizes the learning point in consolidation phase (e.g. "你学会了通分的方法！")
+- [ ] Step counter shows progression (e.g. "步骤 4/4" at end)
+- [ ] Final status shows completion state
+- [ ] `[console]` zero errors
+
+### C17.30 Smart Tutor — error pattern recognition and targeted hints
+
+> 验证 AI 能识别儿童的典型错误模式并提供针对性提示，而非简单重复解释。
+
+```
+# Start session with a question about fraction addition
+bsk navigate "${CHILD_BASE}learning/smart-tutor/<session_id>?questionId=<question_id>&subject=math&ageGroup=mid" --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 3000
+
+# Child makes a common misconception error (adding denominators)
+bsk snapshot --session <id>
+bsk fill @eN --session <id> --value "1/3 + 1/4 = 2/7，因为 1+1=2, 3+4=7"
+bsk click @eN --session <id>
+bsk wait-ms --session <id> 5000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.30-error-pattern.png
+```
+
+Assertions:
+- [ ] AI identifies the specific misconception (adding denominators instead of finding common denominator)
+- [ ] AI response addresses the misconception directly (e.g. "分母不能直接相加哦")
+- [ ] AI provides a targeted hint or counter-example (e.g. "想想看，1/2 + 1/2 等于 2/4 吗？")
+- [ ] AI does NOT simply repeat the original explanation
+- [ ] AI encourages the child to reconsider (growth mindset language)
+- [ ] `[console]` zero errors
+
 ---
 
 ## Quick Reference
@@ -606,3 +676,5 @@ Assertions:
 | C17.26 | Knowledge bridge | `/learning/smart-tutor/:id` | Prerequisite chain + broken link alert |
 | C17.27 | Tutor error | `/learning/smart-tutor/:id` | Friendly error + retry/back option |
 | C17.28 | Tutor SSE streaming | `/learning/smart-tutor/:id` | Incremental text + phase tracking |
+| C17.29 | Multi-round guidance | `/learning/smart-tutor/:id` | Full 4-phase flow: diagnose → consolidate |
+| C17.30 | Error pattern recognition | `/learning/smart-tutor/:id` | AI identifies misconception + targeted hint |

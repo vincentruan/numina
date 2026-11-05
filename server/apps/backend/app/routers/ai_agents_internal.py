@@ -38,12 +38,17 @@ def get_agent_config_by_name(
     """
     # System agents are family_id=0 (shared). Prefer a system match, then fall
     # back to the family's own custom agent.
+    # Guard against non-numeric family_id (e.g. test values like "fam-1") —
+    # only attempt numeric comparison when family_id is a valid snowflake ID.
+    filters = [AIAgent.agent_name == agent_name, AIAgent.family_id == 0]
+    if family_id.isdigit():
+        filters.append(AIAgent.family_id == int(family_id))
+        condition = filters[0] & (filters[1] | filters[2])
+    else:
+        condition = filters[0] & filters[1]
     agent = (
         db.query(AIAgent)
-        .filter(
-            AIAgent.agent_name == agent_name,
-            (AIAgent.family_id == 0) | (AIAgent.family_id == int(family_id)),
-        )
+        .filter(condition)
         .order_by(AIAgent.family_id.asc())  # system (0) first
         .first()
     )

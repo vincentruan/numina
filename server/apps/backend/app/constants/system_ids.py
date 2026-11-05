@@ -29,3 +29,7 @@ DASHBOARD_NARRATIVE_AGENT_ID: int = 100000000000010
 # with stale session data. soul_md is minimal (the tutoring contract lives in
 # skills/builtin/public/learning-tutor/SKILL.md).
 LEARNING_TUTOR_AGENT_ID: int = 100000000000011
+# Learning OS: learning-smart-tutor system agent (苏格拉底式智能解题).
+# Stateless stream_run agent — each run builds fresh Socratic tutoring context.
+# Added by Issue #191 for Smart Tutor feature.
+LEARNING_SMART_TUTOR_AGENT_ID: int = 100000000000012

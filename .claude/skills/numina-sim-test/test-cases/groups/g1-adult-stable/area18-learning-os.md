@@ -697,6 +697,66 @@ Assertions:
 
 ---
 
+## 9. 智能解题闭环 (Smart Tutor End-to-End — Issue #191)
+
+> **Why this section exists:** Issue #191 新增了「智能解题」(Smart Tutor) 功能，
+> 这是题目驱动的苏格拉底式引导。本节验证跨角色闭环：家长查看孩子解题记录、
+> 孩子完成智能解题、家长端看到学习进度更新。
+>
+> AI 必须启用；未启用则标记 `SKIP-AI`。
+
+### C18.29 Smart Tutor — end-to-end closed loop (parent assigns → child solves → parent reviews)
+
+> 验证完整的智能解题闭环流程。
+
+```
+# === PARENT SIDE: Check child's learning status ===
+bsk navigate ${BASE}baby/learning --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c18.29-e2e-parent-before.png
+
+# Note the child's current learning state (study minutes, progress counts)
+
+# === CHILD SIDE: Complete a Smart Tutor session ===
+# 1. Navigate to a question with Smart Tutor
+bsk navigate "${CHILD_BASE}learning/smart-tutor/<session_id>?questionId=<question_id>&subject=math&ageGroup=mid" --session <id> --wait-until networkidle
+
+# 2. Complete the tutoring flow (at least 3-4 exchanges)
+bsk wait-ms --session <id> 3000
+bsk snapshot --session <id>
+bsk fill @eN --session <id> --value "让我想想..."
+bsk click @eN --session <id>
+bsk wait-ms --session <id> 5000
+
+bsk fill @eN --session <id> --value "我觉得答案是 1/2"
+bsk click @eN --session <id>
+bsk wait-ms --session <id> 5000
+
+bsk fill @eN --session <id> --value "我理解了！"
+bsk click @eN --session <id>
+bsk wait-ms --session <id> 3000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c18.29-e2e-child-after.png
+
+# === PARENT SIDE: Verify progress updated ===
+# 3. Return to parent view
+bsk navigate ${BASE}baby/learning --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 2000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c18.29-e2e-parent-after.png
+```
+
+Assertions:
+- [ ] Parent's BabyLearningPage shows child's learning data before session
+- [ ] Child can complete Smart Tutor session (multiple exchanges)
+- [ ] AI provides Socratic guidance (not direct answers) during session
+- [ ] After session, parent's view reflects updated study minutes or progress
+- [ ] Learning activity is visible in parent's review/学习动态 section
+- [ ] Data consistency: child's session data is visible to parent (no data loss)
+- [ ] `[console]` zero errors
+
+---
+
 ## Quick Reference
 
 | Case | Feature | Route | Role | Key assertion |
@@ -729,3 +789,4 @@ Assertions:
 | C18.26 | Topic plan JSON structure | API | adult | Valid JSON with objectives/outline/exercises/assessment |
 | C18.27 | Topic plan age adaptation | API | adult | Duration/objectives depth varies by age_group |
 | C18.28 | Topic plan bilingual output | API | adult | `_zh` Chinese / `_en` English per locale |
+| C18.29 | Smart Tutor E2E | multi | both | Child solves → parent sees progress update |
