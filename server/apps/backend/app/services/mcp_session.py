@@ -748,7 +748,7 @@ class MCPSession:
                             data = {"error": "topic_not_found"}
                         else:
                             # Family-scope validation: child must belong to caller's family
-                            child = (
+                            child_user = (
                                 db.query(User)
                                 .filter(
                                     User.id == child_id,
@@ -756,7 +756,7 @@ class MCPSession:
                                 )
                                 .first()
                             )
-                            if not child:
+                            if not child_user:
                                 data = {"error": "child_not_in_family"}
                             else:
                                 progress = (
@@ -801,37 +801,37 @@ class MCPSession:
                                 "child_id": str(child_id),
                             }
                         else:
-                            query = db.query(LearningProgress).filter(
+                            profile_query = db.query(LearningProgress).filter(
                                 LearningProgress.child_id == child_id
                             )
                             if subject:
                                 # subject lives on LearningTopic; join to filter
-                                query = query.join(
+                                profile_query = profile_query.join(
                                     LearningTopic,
                                     LearningProgress.topic_id == LearningTopic.id,
                                 ).filter(LearningTopic.subject == subject)
-                            progresses = query.all()
+                            profile_progresses: list = profile_query.all()
 
                             data = {
                                 "child_id": str(child_id),
-                                "total_topics": len(progresses),
+                                "total_topics": len(profile_progresses),
                                 "mastered": sum(
-                                    1 for p in progresses if p.mastery_level == "mastered"
+                                    1 for p in profile_progresses if p.mastery_level == "mastered"
                                 ),
                                 "learning": sum(
-                                    1 for p in progresses if p.mastery_level == "learning"
+                                    1 for p in profile_progresses if p.mastery_level == "learning"
                                 ),
                                 "available": sum(
-                                    1 for p in progresses if p.mastery_level == "available"
+                                    1 for p in profile_progresses if p.mastery_level == "available"
                                 ),
                                 "review": sum(
-                                    1 for p in progresses if p.mastery_level == "review"
+                                    1 for p in profile_progresses if p.mastery_level == "review"
                                 ),
                                 "locked": sum(
-                                    1 for p in progresses if p.mastery_level == "locked"
+                                    1 for p in profile_progresses if p.mastery_level == "locked"
                                 ),
                                 "assessing": sum(
-                                    1 for p in progresses if p.mastery_level == "assessing"
+                                    1 for p in profile_progresses if p.mastery_level == "assessing"
                                 ),
                             }
                 elif name == "record_learning_result":
@@ -877,7 +877,7 @@ class MCPSession:
                         if not session:
                             data = {"error": "session_not_found"}
                         else:
-                            child = (
+                            session_child = (
                                 db.query(User)
                                 .filter(
                                     User.id == session.child_id,
@@ -885,7 +885,7 @@ class MCPSession:
                                 )
                                 .first()
                             )
-                            if not child:
+                            if not session_child:
                                 data = {"error": "session_not_in_family"}
                             else:
                                 rec = evaluation["recommendation"]
@@ -1243,35 +1243,35 @@ class MCPSession:
                             data = {"error": "child_not_in_family", "child_id": str(child_id)}
                         else:
                             # Step 1: Query progress rows with low mastery
-                            progress_query = db.query(LearningProgress).filter(
+                            wp_query = db.query(LearningProgress).filter(
                                 LearningProgress.child_id == child_id,
                                 LearningProgress.mastery_level.in_(
                                     ["available", "learning", "review"]
                                 ),
                             )
                             if subject:
-                                progress_query = progress_query.join(
+                                wp_query = wp_query.join(
                                     LearningTopic,
                                     LearningProgress.topic_id == LearningTopic.id,
                                 ).filter(LearningTopic.subject == subject)
-                            progresses = progress_query.limit(limit).all()
+                            wp_progresses: list[LearningProgress] = wp_query.limit(limit).all()
 
                             # Build result with mastery_level priority for sorting
                             _LEVEL_PRIORITY = {"available": 0, "learning": 1, "review": 2}
                             result_map: dict[int, dict] = {}
-                            for p in progresses:
-                                topic = (
+                            for wp in wp_progresses:
+                                wp_topic = (
                                     db.query(LearningTopic)
-                                    .filter(LearningTopic.id == p.topic_id)
+                                    .filter(LearningTopic.id == wp.topic_id)
                                     .first()
                                 )
-                                if topic:
-                                    result_map[p.topic_id] = {
-                                        "topic_id": str(p.topic_id),
-                                        "topic_key": topic.topic_key,
-                                        "name": topic.name,
-                                        "name_zh": topic.name_zh,
-                                        "mastery_level": p.mastery_level,
+                                if wp_topic:
+                                    result_map[wp.topic_id] = {
+                                        "topic_id": str(wp.topic_id),
+                                        "topic_key": wp_topic.topic_key,
+                                        "name": wp_topic.name,
+                                        "name_zh": wp_topic.name_zh,
+                                        "mastery_level": wp.mastery_level,
                                         "is_breakpoint": False,
                                     }
 
