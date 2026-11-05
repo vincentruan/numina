@@ -19,7 +19,7 @@ const { t } = useI18n()
 
 const sessionId = computed(() => route.params.sessionId as string)
 const questionId = computed(() => route.query.questionId as string)
-const subject = computed(() => (route.query.subject as string) || 'math')
+const subject = computed(() => (route.query.subject as string) || 'mathematics')
 const ageGroup = computed(() => (route.query.ageGroup as string) || 'mid')
 
 // Validate required params — redirect home if missing
