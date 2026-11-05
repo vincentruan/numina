@@ -384,6 +384,12 @@ async def start_run(
             app=app,
             reason="AI导师须经由后端触发端点，请勿直连 /runs/stream",
         )
+    if not internal and app == "learning-smart-tutor":
+        raise _app_rejected_error(
+            status_code=409,
+            app=app,
+            reason="智能解题教师须经由后端触发端点，请勿直连 /runs/stream",
+        )
     if not internal and app == "learning-topic-generator":
         raise _app_rejected_error(
             status_code=409,
@@ -399,6 +405,7 @@ async def start_run(
         and app != "dashboard-narrative"
         and app != "literacy-weekly-report"
         and app != "learning-tutor"
+        and app != "learning-smart-tutor"
         and app != "learning-topic-generator"
     ):
         raise _app_rejected_error(status_code=400, app=app, reason="未知的 app 值")

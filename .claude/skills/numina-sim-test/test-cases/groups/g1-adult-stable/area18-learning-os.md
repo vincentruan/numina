@@ -563,7 +563,7 @@ Assertions:
 # 1. Go to PresetPathsPage, assign a path
 bsk navigate ${BASE}baby/learning/preset-paths --session <id> --wait-until networkidle
 bsk snapshot --session <id>
-bsk click @eN --session <id>   # select a path
+bsk click @eN --session <id>   # select a paths
 bsk wait-ms --session <id> 500
 bsk click @eN --session <id>   # assign button
 bsk wait-ms --session <id> 2000
@@ -589,6 +589,110 @@ Assertions:
 - [ ] Child's knowledge map shows path topics in prerequisite order
 - [ ] Parent's "进行中的路径" shows path with progress (0/N initially)
 - [ ] Path progress updates as child completes topics
+- [ ] `[console]` zero errors
+
+---
+
+## 8. 课题方案生成 (Topic Plan Generator — Issue #190)
+
+> **Why this section exists:** Issue #190 新增了 `learning-topic-generator` skill，
+> 通过 `POST /api/v1/family/learning/topic-plan/generate` 触发 AI 生成
+> 结构化课题方案（JSON 输出：学习目标、教学大纲、前置知识、推荐练习、
+> 评估方式、分层教学策略）。目前是纯 API 功能，无前端 UI。
+> 测试以 API 调用 + 响应结构验证为主。
+>
+> AI 必须启用；未启用则标记 `SKIP-AI`。
+
+### C18.25 Topic plan generation — API triggers successfully
+
+> 验证课题方案生成 API 端点可以正常触发并返回 task_id。
+
+```bash
+# Trigger topic plan generation for a known taxonomy topic
+curl -s -X POST "${API_BASE}/family/learning/topic-plan/generate" \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"topic_key": "math.fraction.addition", "age_group": "mid"}' | jq '.'
+```
+
+Assertions:
+- [ ] API returns 200/202 with `{ "task_id": "...", "status": "pending" }` or similar
+- [ ] If topic_key not found → returns 404 with `LEARNING_TOPIC_NOT_FOUND` error code
+- [ ] If AI not enabled → returns appropriate error (not 500)
+- [ ] If invalid age_group → returns 422 validation error
+- [ ] `[console]` zero errors
+
+### C18.26 Topic plan output — JSON structure validation
+
+> 验证 AI 生成的课题方案 JSON 结构完整（等 task 完成后检查输出）。
+> **前置:** C18.25 已触发，等待 AI 生成完成（轮询 task 状态或等待 30-60s）。
+
+```bash
+# Wait for task to complete, then check the result
+sleep 30
+# Check task status via AI tasks list
+curl -s -H "$AUTH" "${API_BASE}/ai/tasks?skill_id=learning-topic-generator&limit=1" | jq '.data[0]'
+# Or check via SSE bridge consumer for the generated JSON
+```
+
+Assertions:
+- [ ] Task completes with status "completed" (not "failed" or "timeout")
+- [ ] Output is valid JSON (parseable, no markdown code fences around it)
+- [ ] JSON contains required top-level fields: `topic_key`, `subject`, `domain`, `age_group`, `name_zh`, `name_en`, `objectives`, `outline`, `prerequisites`, `recommended_exercises`, `assessment`
+- [ ] `objectives` array has ≥2 items, each with `bloom_level` (one of: remember/understand/apply/analyze/evaluate/create), `description_zh`, `description_en`, `measurable`
+- [ ] `outline` array has ≥3 sections, each with `order`, `title_zh`, `title_en`, `duration_min`, `key_points`, `activities`
+- [ ] `recommended_exercises` array has items with `type` (warm_up/guided_practice/independent_practice/challenge), `description_zh`, `estimated_time_min`, `difficulty`
+- [ ] `prerequisites` items have `topic_key`, `name_zh`, `importance` (required/recommended/optional)
+- [ ] `assessment` has both `formative` and `summative` arrays (non-empty)
+- [ ] `[console]` zero errors
+
+### C18.27 Topic plan — age-appropriate adaptation
+
+> 验证不同 age_group 生成的方案时长和内容深度不同。
+
+```bash
+# Generate for low age group
+curl -s -X POST "${API_BASE}/family/learning/topic-plan/generate" \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"topic_key": "math.fraction.addition", "age_group": "low"}' | jq '.task_id'
+
+# Generate for high age group (different thread_id due to age_group in hash)
+curl -s -X POST "${API_BASE}/family/learning/topic-plan/generate" \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"topic_key": "math.fraction.addition", "age_group": "high"}' | jq '.task_id'
+
+# Wait and compare results
+sleep 45
+```
+
+Assertions:
+- [ ] Low age_group: `total_duration_min` ≤ 20, objectives ≤ 3, simple language
+- [ ] Mid age_group: `total_duration_min` 25-35, objectives 3-5
+- [ ] High age_group: `total_duration_min` 35-45, objectives 4-6, may include abstract thinking
+- [ ] Low exercises are concrete and visual (games, hands-on)
+- [ ] High exercises include challenge and peer discussion elements
+- [ ] `[console]` zero errors
+
+### C18.28 Topic plan — locale-aware bilingual output
+
+> 验证 zh-CN locale 下 `_zh` 字段为中文、`_en` 字段为英文。
+
+```bash
+# Check the generated JSON from C18.26
+# Verify language correctness
+```
+
+Assertions:
+- [ ] `name_zh` contains Chinese characters (not English)
+- [ ] `name_en` contains English (not Chinese)
+- [ ] `description_zh` is a Chinese paragraph
+- [ ] All objective `description_zh` fields are in Chinese
+- [ ] All objective `description_en` fields are in English
+- [ ] Outline `title_zh` fields are in Chinese, `title_en` in English
+- [ ] Exercise descriptions follow the same bilingual pattern
+- [ ] No empty `_zh` fields when locale is zh-CN
 - [ ] `[console]` zero errors
 
 ---
@@ -621,3 +725,7 @@ Assertions:
 | C18.22 | Rejection banner | `/learning/topic/:id` | child | Weakness + relearn + practice |
 | C18.23 | E2E closed loop | multi | both | Assign → learn → review coherence |
 | C18.24 | Preset path lifecycle | multi | both | Preset assign → child see → parent track |
+| C18.25 | Topic plan API trigger | API | adult | POST returns task_id; 404 for unknown topic |
+| C18.26 | Topic plan JSON structure | API | adult | Valid JSON with objectives/outline/exercises/assessment |
+| C18.27 | Topic plan age adaptation | API | adult | Duration/objectives depth varies by age_group |
+| C18.28 | Topic plan bilingual output | API | adult | `_zh` Chinese / `_en` English per locale |

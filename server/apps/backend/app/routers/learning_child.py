@@ -29,6 +29,7 @@ from apps.backend.app.schemas.learning import (
     RecommendedTopicItem,
     SessionCreate,
     SessionResponse,
+    SmartTutorStreamRequest,
     TodayLearningResponse,
     TopicResponse,
 )
@@ -37,6 +38,7 @@ from apps.backend.app.services.learning import (
     path_service,
     progress_service,
     session_service,
+    smart_tutor_service,
     stats_service,
     zone_service,
 )
@@ -60,9 +62,7 @@ from packages.db.models.learning.topic import LearningTopic
 router = APIRouter(prefix="/child/learning", tags=["learning-child"])
 
 
-def _json_text_field_equals(
-    json_column, key: str, value: str, engine
-):
+def _json_text_field_equals(json_column, key: str, value: str, engine):
     """Dialect-aware JSON text field equality filter.
 
     PostgreSQL uses ``column[key].astext``; SQLite uses ``json_extract``.
@@ -667,7 +667,9 @@ async def stream_assessment(
     except httpx.HTTPStatusError as e:
         _fdb = SessionLocal()
         try:
-            AITaskService.fail_task(task_id, f"agent trigger failed: {type(e).__name__}", _fdb)
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
+            )
         finally:
             _fdb.close()
         # Agent returned 409 Conflict — another run is already active on this thread.
@@ -675,17 +677,25 @@ async def stream_assessment(
         # state instead of a generic 503 error.
         if e.response.status_code == 409:
             raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}) from e
+        raise AppError(
+            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
+        ) from e
     except Exception as e:
         _fdb = SessionLocal()
         try:
-            AITaskService.fail_task(task_id, f"agent trigger failed: {type(e).__name__}", _fdb)
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
+            )
         finally:
             _fdb.close()
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}) from e
+        raise AppError(
+            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
+        ) from e
 
     # 5. Persist run_id on AITask + spawn lifecycle consumer (matches ai_report/finance_coach pattern)
-    AITaskService.extract_and_attach_run_id(task_id, result["content_location"], family_id)
+    AITaskService.extract_and_attach_run_id(
+        task_id, result["content_location"], family_id
+    )
 
     # 6. Subscribe to Redis Stream -> SSE
     shared_bridge = get_shared_bridge()
@@ -808,3 +818,139 @@ async def get_session_history(
         "thread_id": thread_id,
         "messages": messages,
     }
+
+
+# ---------------------------------------------------------------------------
+# Smart Tutor — Socratic guided problem-solving (Issue #191)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/sessions/{session_id}/smart-tutor/stream")
+async def stream_smart_tutor(
+    session_id: int,
+    http_request: Request,
+    body: SmartTutorStreamRequest | None = None,
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Start or continue a Socratic smart-tutor session for a specific question.
+
+    First call (question_id provided): begins guided problem-solving.
+    Follow-up calls (child_answer provided): continues multi-turn dialogue.
+    """
+    from apps.backend.app.services.agent_client import AgentClient
+    from apps.backend.app.services.ai_task_service import AITaskService
+    from apps.backend.app.services.bridge_consumer import (
+        _spawn_lifecycle_consumer,
+        consume_task_stream,
+        get_shared_bridge,
+        trigger_agent_run,
+    )
+    from apps.backend.app.services.learning.session_service import (
+        get_thread_id_for_session,
+    )
+
+    # Validate and load entities via service
+    is_follow_up = body is not None and body.child_answer is not None
+    question_id = body.question_id if body and body.question_id else None
+
+    session, question, topic = smart_tutor_service.validate_smart_tutor_request(
+        db=db,
+        session_id=session_id,
+        child=child,
+        question_id=question_id,
+        is_follow_up=is_follow_up,
+    )
+
+    thread_id = get_thread_id_for_session(session_id)
+    family_id = child.family_id
+
+    # Build agent payload via service
+    agent_body = smart_tutor_service.build_agent_payload(
+        session=session,
+        question=question,
+        topic=topic,
+        child=child,
+        session_id=session_id,
+        question_id=question_id,
+        child_answer=body.child_answer if body else None,
+        is_follow_up=is_follow_up,
+    )
+
+    # Create AITask record
+    task = AITaskService.create_task(
+        family_id=family_id,
+        skill_id="learning-smart-tutor",
+        session_id=None,
+        db=db,
+    )
+    task.progress = {"learning_session_id": str(session_id)}
+    db.commit()
+    task_id = str(task.id)
+
+    # Trigger agent
+    agent_client = AgentClient(family_id=str(family_id), user_id=str(child.id))
+    try:
+        result = await trigger_agent_run(
+            agent_client=agent_client,
+            agent_url=f"/internal/gateway/runs/learning-smart-tutor/{thread_id}",
+            json_body=agent_body,
+            task_id=task_id,
+        )
+    except httpx.HTTPStatusError as e:
+        _fdb = SessionLocal()
+        try:
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
+            )
+        finally:
+            _fdb.close()
+        if e.response.status_code == 409:
+            raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
+        raise AppError(
+            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
+        ) from e
+    except Exception as e:
+        _fdb = SessionLocal()
+        try:
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
+            )
+        finally:
+            _fdb.close()
+        raise AppError(
+            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
+        ) from e
+
+    # Persist run_id + spawn lifecycle consumer
+    AITaskService.extract_and_attach_run_id(
+        task_id, result["content_location"], family_id
+    )
+
+    # Persist thread_id on initial call so follow-up turns can reuse it
+    if not is_follow_up and not session.thread_id:
+        session.thread_id = thread_id
+        db.commit()
+
+    shared_bridge = get_shared_bridge()
+    _spawn_lifecycle_consumer(
+        task_id=task_id,
+        family_id=family_id,
+        run_id=result["run_id"],
+        bridge=shared_bridge,
+    )
+
+    last_event_id = http_request.headers.get("Last-Event-ID")
+    stream_gen = consume_task_stream(
+        task_id=task_id,
+        family_id=family_id,
+        last_event_id=last_event_id,
+        run_id=result["run_id"],
+        bridge=shared_bridge,
+    )
+
+    return StreamingResponse(
+        stream_gen,
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no"},
+    )

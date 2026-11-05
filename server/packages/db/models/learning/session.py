@@ -30,11 +30,15 @@ class LearningSession(Base):
     ai_evaluation_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    progress_json: Mapped[str | None] = mapped_column(
+        Text, nullable=True, default="[]"
+    )
     started_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     # JSON accessor
     ai_evaluation: dict | None = json_text("ai_evaluation_json")
+    progress_steps: list | None = json_text("progress_json")
 
 
 class LearningAssessmentAttempt(Base):
