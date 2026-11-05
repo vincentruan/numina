@@ -129,6 +129,12 @@ const router = createRouter({
           meta: { hasSkeleton: true },
         },
         {
+          path: 'learning/smart-tutor/:sessionId',
+          name: 'SmartTutor',
+          component: () => import('@/pages/learning/SmartTutorPage.vue'),
+          meta: { hasSkeleton: true },
+        },
+        {
           path: 'manifesto/sign',
           name: 'ManifestoSigning',
           component: () => import('@/pages/ManifestoSigningPage.vue'),

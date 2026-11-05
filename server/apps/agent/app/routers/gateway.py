@@ -758,3 +758,75 @@ async def trigger_learning_tutor_run(
             "Content-Location": f"/internal/gateway/runs/learning-tutor/{thread_id}/{record.run_id}",
         },
     )
+
+
+class SmartTutorRunRequest(BaseModel):
+    """Request body for internal learning-smart-tutor run trigger."""
+
+    family_id: str
+    user_id: str | None = None
+    input: dict[str, Any] | None = None
+    on_disconnect: str = "continue"
+
+
+@router.post("/runs/learning-smart-tutor/{thread_id}")
+async def trigger_smart_tutor_run(
+    thread_id: str,
+    body: SmartTutorRunRequest,
+    request: Request,
+    _family_id: str = Depends(verify_service_token),
+) -> StreamingResponse:
+    """Trigger a learning-smart-tutor stream_run from the backend.
+
+    Socratic guided problem-solving with multi-turn dialogue support.
+    Uses app='learning-smart-tutor' via X-Agent-Token-authenticated endpoint.
+    """
+    _validate_path_segment(thread_id, "thread_id")
+
+    run_body = SimpleNamespace(
+        assistant_id=None,
+        input=body.input,
+        config=None,
+        metadata={"app": "learning-smart-tutor"},
+        on_disconnect=body.on_disconnect,
+        multitask_strategy="reject",
+    )
+
+    try:
+        record = await start_run(
+            run_body,
+            thread_id,
+            request,
+            body.family_id,
+            body.user_id,
+            internal=True,
+        )
+    except ConflictError:
+        logger.warning(
+            "[gateway] learning-smart-tutor ConflictError thread=%s — "
+            "another run is already active",
+            thread_id,
+        )
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": f"Thread {thread_id} already has an active run",
+            },
+        )
+    run_mgr = get_run_manager(request)
+
+    async def sse_generator():
+        bridge = await get_stream_bridge(request)
+        async for frame in sse_consumer(bridge, record, request, run_mgr):
+            yield frame
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Location": f"/internal/gateway/runs/learning-smart-tutor/{thread_id}/{record.run_id}",
+        },
+    )

@@ -248,6 +248,19 @@ class AssessStreamRequest(BaseModel):
     user_message: str | None = Field(default=None, max_length=4000)
 
 
+class SmartTutorStreamRequest(BaseModel):
+    """Request body for smart-tutor streaming endpoint.
+
+    First call: provide question_id to start a guided session.
+    Follow-up calls: provide child_answer to continue Socratic dialogue.
+    """
+
+    question_id: int | None = Field(default=None, description="Question to start tutoring on")
+    child_answer: str | None = Field(
+        default=None, max_length=2000, description="Child's answer for follow-up turns"
+    )
+
+
 # --- Session ---
 
 

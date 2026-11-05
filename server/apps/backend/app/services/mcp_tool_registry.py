@@ -412,6 +412,157 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=True,
     ),
+    # ── Smart-tutor skill (Issue #191 — Socratic guidance) ─────────────
+    "get_guided_question": MCPToolMeta(
+        name="get_guided_question",
+        description=(
+            "获取一道智能题的完整引导方案：题目内容、引导策略、常见错误模式。"
+            "不只是题目本身，还有教师引导计划。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "question_id": {"type": "integer", "description": "题目 ID"},
+                "child_id": {"type": "integer", "description": "孩子用户 ID"},
+                "topic_id": {"type": "integer", "description": "知识点 ID"},
+            },
+            "required": ["question_id", "child_id", "topic_id"],
+        },
+        allowed_roles=frozenset({"owner", "member", "child", "external_token"}),
+        requires_write=False,
+    ),
+    "submit_guided_answer": MCPToolMeta(
+        name="submit_guided_answer",
+        description=(
+            "提交孩子在苏格拉底引导过程中的一步回答。AI 判断理解程度并决定"
+            "下一步引导策略。返回诊断结果和建议的下一步引导方向。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "question_id": {"type": "integer", "description": "题目 ID"},
+                "child_id": {"type": "integer", "description": "孩子用户 ID"},
+                "session_id": {"type": "integer", "description": "学习会话 ID"},
+                "answer_text": {"type": "string", "description": "孩子的回答文本"},
+                "step_number": {
+                    "type": "integer",
+                    "description": "当前引导步骤编号（从1开始）",
+                },
+            },
+            "required": [
+                "question_id",
+                "child_id",
+                "session_id",
+                "answer_text",
+                "step_number",
+            ],
+        },
+        allowed_roles=frozenset({"owner", "member", "child", "external_token"}),
+        requires_write=False,
+    ),
+    "get_knowledge_bridge": MCPToolMeta(
+        name="get_knowledge_bridge",
+        description=(
+            "获取当前题目到前置知识的桥接路径。返回 prerequisite chain，"
+            "每个节点包含掌握状态，帮助教师找到真正的知识断点。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "topic_id": {"type": "integer", "description": "当前知识点 ID"},
+                "child_id": {"type": "integer", "description": "孩子用户 ID"},
+                "depth": {
+                    "type": "integer",
+                    "description": "回溯深度（默认2，最大3）",
+                    "default": 2,
+                },
+            },
+            "required": ["topic_id", "child_id"],
+        },
+        allowed_roles=frozenset({"owner", "member", "child", "external_token"}),
+        requires_write=False,
+    ),
+    "get_teacher_persona": MCPToolMeta(
+        name="get_teacher_persona",
+        description=(
+            "根据学科和年龄段获取教师人格配置。返回教学风格、语气、策略等。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "subject": {
+                    "type": "string",
+                    "description": "学科（math/chinese/english/science）",
+                },
+                "age_group": {
+                    "type": "string",
+                    "description": "年龄段（low/mid/high）",
+                    "enum": ["low", "mid", "high"],
+                },
+            },
+            "required": ["subject", "age_group"],
+        },
+        allowed_roles=frozenset({"owner", "member", "child", "external_token"}),
+        requires_write=False,
+    ),
+    "record_tutoring_step": MCPToolMeta(
+        name="record_tutoring_step",
+        description=(
+            "记录一次苏格拉底引导交互的步骤数据。包括引导阶段、孩子回答质量、"
+            "AI 策略评估。用于后续自适应选题和学情分析。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "integer", "description": "学习会话 ID"},
+                "question_id": {"type": "integer", "description": "题目 ID"},
+                "step_number": {"type": "integer", "description": "步骤编号"},
+                "phase": {
+                    "type": "string",
+                    "description": "引导阶段",
+                    "enum": [
+                        "diagnose",
+                        "focused_guidance",
+                        "prerequisite_retrace",
+                        "misconception_correction",
+                        "verify",
+                        "consolidate",
+                    ],
+                },
+                "child_response_quality": {
+                    "type": "string",
+                    "description": "孩子回答质量",
+                    "enum": ["correct", "partial", "incorrect", "no_response"],
+                },
+                "ai_strategy": {
+                    "type": "string",
+                    "description": "AI 使用的引导策略",
+                },
+                "next_phase": {
+                    "type": "string",
+                    "description": "下一步引导阶段",
+                    "enum": [
+                        "focused_guidance",
+                        "prerequisite_retrace",
+                        "misconception_correction",
+                        "verify",
+                        "consolidate",
+                        "end",
+                    ],
+                },
+            },
+            "required": [
+                "session_id",
+                "question_id",
+                "step_number",
+                "phase",
+                "child_response_quality",
+                "next_phase",
+            ],
+        },
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
+        requires_write=True,
+    ),
 }
 
 

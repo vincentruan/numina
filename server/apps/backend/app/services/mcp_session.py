@@ -1096,6 +1096,491 @@ class MCPSession:
                                     "coins_earned": coins_earned,
                                     "assessment_attempt_id": str(attempt.id),
                                 }
+                # ── Smart-tutor tools (Issue #191) ─────────────────────
+                elif name == "get_guided_question":
+                    from packages.db.models.learning.practice import PracticeAttempt
+                    from packages.db.models.learning.question import Question
+                    from packages.db.models.learning.topic import LearningTopic
+
+                    try:
+                        question_id = int(arguments["question_id"])
+                        child_id = int(arguments["child_id"])
+                        topic_id = int(arguments["topic_id"])
+                        if question_id <= 0 or child_id <= 0 or topic_id <= 0:
+                            raise ValueError("IDs must be positive integers")
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        # Family-scope validation
+                        child = (
+                            db.query(User)
+                            .filter(
+                                User.id == child_id,
+                                User.family_id == int(self._family_id),
+                            )
+                            .first()
+                        )
+                        if not child:
+                            data = {"error": "child_not_in_family"}
+                        else:
+                            question = (
+                                db.query(Question)
+                                .filter(Question.id == question_id)
+                                .first()
+                            )
+                            if not question:
+                                data = {"error": "question_not_found"}
+                            else:
+                                topic = (
+                                    db.query(LearningTopic)
+                                    .filter(LearningTopic.id == topic_id)
+                                    .first()
+                                )
+                                if not topic:
+                                    data = {"error": "topic_not_found"}
+                                else:
+                                    # Recent attempts for this question (error patterns)
+                                    recent_attempts = (
+                                        db.query(PracticeAttempt)
+                                        .filter(
+                                            PracticeAttempt.child_id == child_id,
+                                            PracticeAttempt.question_id == question_id,
+                                        )
+                                        .order_by(PracticeAttempt.created_at.desc())
+                                        .limit(5)
+                                        .all()
+                                    )
+                                    data = {
+                                        "question_id": str(question.id),
+                                        "topic_id": str(topic_id),
+                                        "stem": question.stem,
+                                        "stem_zh": question.stem_zh,
+                                        "question_type": question.question_type,
+                                        "options": question.options,
+                                        "difficulty": question.difficulty,
+                                        "bloom_level": question.bloom_level,
+                                        "age_group": question.age_group,
+                                        # Do NOT expose solution — Socratic method requires
+                                        # guiding the child, not giving answers directly
+                                        "topic_name": topic.name_zh or topic.name,
+                                        "topic_subject": topic.subject,
+                                        "recent_attempts": [
+                                            {
+                                                "is_correct": a.is_correct,
+                                                "answer": a.user_answer,
+                                                "attempt_number": a.attempt_number,
+                                            }
+                                            for a in recent_attempts
+                                        ],
+                                        "attempt_count": len(recent_attempts),
+                                    }
+                elif name == "submit_guided_answer":
+                    try:
+                        question_id = int(arguments["question_id"])
+                        child_id = int(arguments["child_id"])
+                        session_id = int(arguments["session_id"])
+                        step_number = int(arguments["step_number"])
+                        answer_text = str(arguments["answer_text"]).strip()
+                        if (
+                            question_id <= 0
+                            or child_id <= 0
+                            or session_id <= 0
+                            or step_number <= 0
+                        ):
+                            raise ValueError("Numeric IDs must be positive")
+                        if not answer_text:
+                            raise ValueError("answer_text must not be empty")
+                        if step_number > 20:
+                            raise ValueError("step_number exceeds maximum (20)")
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        # Family-scope validation
+                        child = (
+                            db.query(User)
+                            .filter(
+                                User.id == child_id,
+                                User.family_id == int(self._family_id),
+                            )
+                            .first()
+                        )
+                        if not child:
+                            data = {"error": "child_not_in_family"}
+                        else:
+                            # Simple heuristic assessment of the answer
+                            # Full AI grading happens via the skill's LLM reasoning
+                            answer_lower = answer_text.lower()
+                            has_numbers = any(c.isdigit() for c in answer_text)
+                            has_reasoning = any(
+                                kw in answer_lower
+                                for kw in ("因为", "所以", "我觉得", "由于", "because", "so", "i think")
+                            )
+                            is_question = answer_text.endswith(("?", "？"))
+                            is_empty_vague = answer_text in (
+                                "不知道",
+                                "不会",
+                                "?",
+                                "？",
+                                "idk",
+                            )
+
+                            if is_empty_vague:
+                                quality = "no_response"
+                            elif has_reasoning and has_numbers:
+                                quality = "correct"  # likely on track
+                            elif has_numbers or has_reasoning:
+                                quality = "partial"
+                            else:
+                                quality = "partial"  # give benefit of the doubt
+
+                            data = {
+                                "question_id": str(question_id),
+                                "session_id": str(session_id),
+                                "step_number": step_number,
+                                "answer_text": answer_text,
+                                "quality_assessment": quality,
+                                "has_reasoning": has_reasoning,
+                                "has_numbers": has_numbers,
+                                "is_question": is_question,
+                            }
+                elif name == "get_knowledge_bridge":
+                    from packages.db.models.learning.progress import LearningProgress
+                    from packages.db.models.learning.topic import (
+                        LearningDependency,
+                        LearningTopic,
+                    )
+
+                    try:
+                        topic_id = int(arguments["topic_id"])
+                        child_id = int(arguments["child_id"])
+                        depth = int(arguments.get("depth", 2))
+                        if topic_id <= 0 or child_id <= 0:
+                            raise ValueError("IDs must be positive")
+                        depth = max(1, min(depth, 3))  # clamp 1-3
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        child = (
+                            db.query(User)
+                            .filter(
+                                User.id == child_id,
+                                User.family_id == int(self._family_id),
+                            )
+                            .first()
+                        )
+                        if not child:
+                            data = {"error": "child_not_in_family"}
+                        else:
+                            # Build prerequisite chain via BFS
+                            chain = []
+                            visited = set()
+                            queue = [(topic_id, 0)]  # (topic_id, current_depth)
+
+                            while queue:
+                                current_id, current_depth = queue.pop(0)
+                                if current_id in visited or current_depth > depth:
+                                    continue
+                                visited.add(current_id)
+
+                                current_topic = (
+                                    db.query(LearningTopic)
+                                    .filter(LearningTopic.id == current_id)
+                                    .first()
+                                )
+                                progress = (
+                                    db.query(LearningProgress)
+                                    .filter_by(
+                                        child_id=child_id, topic_id=current_id
+                                    )
+                                    .first()
+                                )
+
+                                chain.append(
+                                    {
+                                        "topic_id": str(current_id),
+                                        "name": (
+                                            current_topic.name_zh or current_topic.name
+                                            if current_topic
+                                            else None
+                                        ),
+                                        "subject": (
+                                            current_topic.subject
+                                            if current_topic
+                                            else None
+                                        ),
+                                        "mastery_level": (
+                                            progress.mastery_level
+                                            if progress
+                                            else "locked"
+                                        ),
+                                        "depth": current_depth,
+                                        "is_current": current_id == topic_id,
+                                    }
+                                )
+
+                                # Find prerequisites
+                                if current_depth < depth:
+                                    prereqs = (
+                                        db.query(LearningDependency)
+                                        .filter(
+                                            LearningDependency.topic_id == current_id
+                                        )
+                                        .all()
+                                    )
+                                    for prereq in prereqs:
+                                        if prereq.prerequisite_id not in visited:
+                                            queue.append(
+                                                (prereq.prerequisite_id, current_depth + 1)
+                                            )
+
+                            # Find the first broken prerequisite (knowledge gap)
+                            broken_link = None
+                            for node in reversed(chain):
+                                if node["mastery_level"] in ("locked", "available"):
+                                    broken_link = node
+                                    break
+
+                            data = {
+                                "topic_id": str(topic_id),
+                                "child_id": str(child_id),
+                                "prerequisite_chain": chain,
+                                "broken_link": broken_link,
+                                "total_depth": depth,
+                            }
+                elif name == "get_teacher_persona":
+                    # Static persona configuration — no DB query needed
+                    _PERSONA_MATRIX = {
+                        ("math", "low"): {
+                            "style": "故事化具象型",
+                            "style_en": "Story-Concrete",
+                            "description": "用故事、动物和日常物品（苹果、积木、玩具）来讲解数学概念",
+                            "tone": "温暖、耐心、充满鼓励",
+                            "max_sentence_length": 15,
+                            "use_emoji": True,
+                            "strategies": [
+                                "visual_analogy",
+                                "story_problem",
+                                "hands_on_counting",
+                            ],
+                        },
+                        ("math", "mid"): {
+                            "style": "逻辑推理趣味型",
+                            "style_en": "Logic-Fun",
+                            "description": "通过谜题和挑战引入逻辑推理，把学习变成侦探游戏",
+                            "tone": "活泼、挑战性、引导思考",
+                            "max_sentence_length": 25,
+                            "use_emoji": False,
+                            "strategies": [
+                                "puzzle_framing",
+                                "multiple_solutions",
+                                "explain_reasoning",
+                            ],
+                        },
+                        ("math", "high"): {
+                            "style": "抽象证明方法论型",
+                            "style_en": "Abstract-Method",
+                            "description": "引导抽象推理和证明，尊重独立思考，引入数学方法论",
+                            "tone": "学术对话型、尊重、引导元认知",
+                            "max_sentence_length": 40,
+                            "use_emoji": False,
+                            "strategies": [
+                                "proof_guidance",
+                                "metacognition",
+                                "real_world_connection",
+                            ],
+                        },
+                        ("chinese", "low"): {
+                            "style": "感官体验型",
+                            "style_en": "Sensory-Experience",
+                            "description": "调动五感体验，用生动意象和情感共鸣来教语文",
+                            "tone": "感性、温柔、富有画面感",
+                            "max_sentence_length": 15,
+                            "use_emoji": True,
+                            "strategies": [
+                                "sensory_language",
+                                "emotional_connection",
+                                "read_aloud",
+                            ],
+                        },
+                        ("chinese", "mid"): {
+                            "style": "文本分析创意型",
+                            "style_en": "Text-Analysis-Creative",
+                            "description": "引导文本分析和创意表达，培养阅读理解和写作兴趣",
+                            "tone": "启发式、创意引导",
+                            "max_sentence_length": 25,
+                            "use_emoji": False,
+                            "strategies": [
+                                "text_analysis",
+                                "creative_expression",
+                                "vocabulary_context",
+                            ],
+                        },
+                        ("chinese", "high"): {
+                            "style": "文学鉴赏批判型",
+                            "style_en": "Literary-Critical",
+                            "description": "深度文学鉴赏和批判性思维，培养独立思考能力",
+                            "tone": "学术对话、思辨、尊重",
+                            "max_sentence_length": 40,
+                            "use_emoji": False,
+                            "strategies": [
+                                "literary_analysis",
+                                "critical_thinking",
+                                "cross_discipline",
+                            ],
+                        },
+                        ("english", "low"): {
+                            "style": "情境模拟型",
+                            "style_en": "Situation-Simulation",
+                            "description": "创设真实情境，在场景中自然习得英语",
+                            "tone": "活泼、重复、趣味",
+                            "max_sentence_length": 15,
+                            "use_emoji": True,
+                            "strategies": [
+                                "role_play",
+                                "repetition_variety",
+                                "tpr_commands",
+                            ],
+                        },
+                        ("english", "mid"): {
+                            "style": "阅读理解语法型",
+                            "style_en": "Reading-Comprehension-Grammar",
+                            "description": "通过阅读引导理解，在语境中探索语法规律",
+                            "tone": "引导式、pattern-based",
+                            "max_sentence_length": 25,
+                            "use_emoji": False,
+                            "strategies": [
+                                "comprehension_questions",
+                                "pattern_discovery",
+                                "word_families",
+                            ],
+                        },
+                        ("english", "high"): {
+                            "style": "写作训练文化型",
+                            "style_en": "Writing-Culture",
+                            "description": "引导写作训练和文化理解，培养英语表达能力",
+                            "tone": "对话式、文化引导",
+                            "max_sentence_length": 40,
+                            "use_emoji": False,
+                            "strategies": [
+                                "essay_structure",
+                                "cultural_context",
+                                "authentic_voice",
+                            ],
+                        },
+                        ("science", "low"): {
+                            "style": "观察好奇型",
+                            "style_en": "Observation-Curiosity",
+                            "description": "激发好奇心和观察力，用简单实验探索科学",
+                            "tone": "充满好奇、惊叹、引导观察",
+                            "max_sentence_length": 15,
+                            "use_emoji": True,
+                            "strategies": [
+                                "wonder_questions",
+                                "observation_prompts",
+                                "simple_experiments",
+                            ],
+                        },
+                        ("science", "mid"): {
+                            "style": "实验归纳型",
+                            "style_en": "Experiment-Induction",
+                            "description": "引导科学方法和归纳推理，培养系统性思维",
+                            "tone": "探索式、引导归纳",
+                            "max_sentence_length": 25,
+                            "use_emoji": False,
+                            "strategies": [
+                                "hypothesis_guide",
+                                "pattern_recognition",
+                                "variable_thinking",
+                            ],
+                        },
+                        ("science", "high"): {
+                            "style": "假设检验型",
+                            "style_en": "Hypothesis-Testing",
+                            "description": "严格的假设检验和数据分析，培养科学方法论",
+                            "tone": "严谨、学术、尊重",
+                            "max_sentence_length": 40,
+                            "use_emoji": False,
+                            "strategies": [
+                                "rigorous_hypothesis",
+                                "data_analysis",
+                                "literature_connection",
+                            ],
+                        },
+                    }
+
+                    subject = arguments.get("subject", "math").lower()
+                    age_group = arguments.get("age_group", "mid").lower()
+                    persona = _PERSONA_MATRIX.get((subject, age_group))
+
+                    if persona is None:
+                        # Fallback: use math persona for unknown subjects
+                        persona = _PERSONA_MATRIX.get(("math", age_group), _PERSONA_MATRIX[("math", "mid")])
+
+                    data = {
+                        "subject": subject,
+                        "age_group": age_group,
+                        **persona,
+                    }
+                elif name == "record_tutoring_step":
+                    from packages.db.models.learning.session import LearningSession
+
+                    try:
+                        session_id = int(arguments["session_id"])
+                        question_id = int(arguments["question_id"])
+                        step_number = int(arguments["step_number"])
+                        phase = arguments["phase"]
+                        child_response_quality = arguments["child_response_quality"]
+                        next_phase = arguments["next_phase"]
+                        if session_id <= 0 or question_id <= 0 or step_number <= 0:
+                            raise ValueError("Numeric IDs must be positive")
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        # Family-scope validation
+                        session = (
+                            db.query(LearningSession)
+                            .join(User, LearningSession.child_id == User.id)
+                            .filter(
+                                LearningSession.id == session_id,
+                                User.family_id == int(self._family_id),
+                            )
+                            .first()
+                        )
+                        if not session:
+                            data = {"error": "session_not_found"}
+                        else:
+                            # Store tutoring step data as JSON on the session's
+                            # progress field. We accumulate steps in a list.
+                            # This avoids a new DB migration for MVP.
+                            existing_steps_raw = session.progress_json
+                            try:
+                                existing_steps = json.loads(existing_steps_raw) if existing_steps_raw else []
+                                if not isinstance(existing_steps, list):
+                                    existing_steps = []
+                            except (json.JSONDecodeError, TypeError):
+                                existing_steps = []
+
+                            step_record = {
+                                "step": step_number,
+                                "phase": phase,
+                                "quality": child_response_quality,
+                                "next_phase": next_phase,
+                                "strategy": arguments.get("ai_strategy", ""),
+                                "question_id": str(question_id),
+                            }
+                            existing_steps.append(step_record)
+
+                            session.progress_json = json.dumps(existing_steps, ensure_ascii=False)
+                            db.commit()
+
+                            data = {
+                                "ok": True,
+                                "session_id": str(session_id),
+                                "step_number": step_number,
+                                "total_steps": len(existing_steps),
+                                "phase": phase,
+                                "next_phase": next_phase,
+                            }
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 
