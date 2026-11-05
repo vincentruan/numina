@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Query
@@ -784,7 +785,7 @@ class _TopicPlanGenerateRequest(BaseModel):
     """Request body for AI topic plan generation."""
 
     topic_key: str
-    age_group: str = "mid"  # low | mid | high
+    age_group: Literal["low", "mid", "high"] = "mid"
 
 
 @router.post("/topic-plan/generate")
@@ -887,7 +888,7 @@ async def generate_topic_plan(
         "input": {
             "messages": [{"role": "user", "content": agent_content}],
         },
-        "on_disconnect": "cancel",
+        "on_disconnect": "continue",
         "metadata": {
             "app": "learning-topic-generator",
             "topic_key": body.topic_key,

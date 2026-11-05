@@ -48,6 +48,13 @@ class TestSkillMd:
         assert "thinking: true" in frontmatter
         assert "max_tokens:" in frontmatter
 
+    def test_frontmatter_has_allowed_tools(self, skill_content):
+        """SKILL.md must declare allowed-tools (agent/AGENTS.md §Security Rules #6)."""
+        parts = skill_content.split("---", 2)
+        assert len(parts) >= 3
+        frontmatter = parts[1].strip()
+        assert "allowed-tools:" in frontmatter
+
     def test_trigger_phrases_present(self, skill_content):
         """Must have at least one trigger phrase."""
         assert "/learning-topic-generator" in skill_content
@@ -272,3 +279,35 @@ class TestBackendEndpoint:
         assert "_TopicPlanGenerateRequest" in content
         assert "generate_topic_plan" in content
         assert "learning-topic-generator" in content
+
+    def test_backend_uses_on_disconnect_continue(self):
+        """Backend trigger must use on_disconnect=continue — trigger_agent_run
+        closes the HTTP stream after extracting Content-Location, so 'cancel'
+        would abort the run within milliseconds (P0 review finding)."""
+        router_path = (
+            Path(__file__).resolve().parents[3]
+            / "apps"
+            / "backend"
+            / "app"
+            / "routers"
+            / "learning_family.py"
+        )
+        content = router_path.read_text(encoding="utf-8")
+        assert '"on_disconnect": "continue"' in content
+        # The topic-generator agent_body must NOT fall back to cancel
+        topic_gen_section = content[content.index("Learning Topic Generator") :]
+        cancel_in_topic_gen = '"on_disconnect": "cancel"' in topic_gen_section
+        assert not cancel_in_topic_gen
+
+    def test_backend_age_group_is_literal(self):
+        """age_group must be Literal-typed to reject invalid values."""
+        router_path = (
+            Path(__file__).resolve().parents[3]
+            / "apps"
+            / "backend"
+            / "app"
+            / "routers"
+            / "learning_family.py"
+        )
+        content = router_path.read_text(encoding="utf-8")
+        assert 'Literal["low", "mid", "high"]' in content

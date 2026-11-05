@@ -769,7 +769,10 @@ class LearningTopicGeneratorRunRequest(BaseModel):
     family_id: str
     user_id: str | None = None
     input: dict[str, Any] | None = None
-    on_disconnect: str = "cancel"
+    on_disconnect: str = "continue"
+    # Backend-injected metadata (language, topic_key, age_group) — spread into
+    # run metadata so the worker can localize the trigger message.
+    metadata: dict[str, Any] | None = None
 
 
 @router.post("/runs/learning-topic-generator/{thread_id}")
@@ -792,7 +795,7 @@ async def trigger_learning_topic_generator_run(
         assistant_id=None,
         input=body.input,
         config=None,
-        metadata={"app": "learning-topic-generator"},
+        metadata={"app": "learning-topic-generator", **(body.metadata or {})},
         on_disconnect=body.on_disconnect,
         multitask_strategy="reject",
     )

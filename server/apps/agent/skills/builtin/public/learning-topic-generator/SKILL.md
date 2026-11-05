@@ -8,6 +8,7 @@ trigger_phrases:
   - /learning-topic-generator
   - 生成学习课题
   - 课题方案生成
+allowed-tools: []
 thinking: true
 max_tokens: 12000
 ---
