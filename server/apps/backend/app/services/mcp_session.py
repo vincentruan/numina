@@ -1096,6 +1096,236 @@ class MCPSession:
                                     "coins_earned": coins_earned,
                                     "assessment_attempt_id": str(attempt.id),
                                 }
+                elif name == "get_taxonomy_topic":
+                    from apps.backend.app.services.learning import topic_service
+
+                    topic_key = arguments.get("topic_key", "")
+                    source_taxonomy = arguments.get("source_taxonomy")
+
+                    if not topic_key or not isinstance(topic_key, str):
+                        data = {"error": "invalid_arguments", "detail": "topic_key is required and must be a string"}
+                    else:
+                        topic = topic_service.get_topic_by_key(
+                            db, topic_key, source_taxonomy=source_taxonomy
+                        )
+                        if not topic:
+                            data = {"error": "topic_not_found", "topic_key": topic_key}
+                        else:
+                            data = {
+                                "topic_id": str(topic.id),
+                                "topic_key": topic.topic_key,
+                                "name": topic.name,
+                                "name_zh": topic.name_zh,
+                                "description": topic.description,
+                                "description_zh": topic.description_zh,
+                                "subject": topic.subject,
+                                "domain": topic.domain,
+                                "age_group": topic.age_group,
+                                "evidence_criteria": topic.evidence_json,
+                                "assessment_prompt": topic.assessment_prompt,
+                                "source_taxonomy": topic.source_taxonomy,
+                            }
+                elif name == "get_taxonomy_dependencies":
+                    from apps.backend.app.services.learning import topic_service
+
+                    topic_key = arguments.get("topic_key", "")
+
+                    if not topic_key or not isinstance(topic_key, str):
+                        data = {"error": "invalid_arguments", "detail": "topic_key is required"}
+                    else:
+                        topic = topic_service.get_topic_by_key(db, topic_key)
+                        if not topic:
+                            data = {"error": "topic_not_found", "topic_key": topic_key}
+                        else:
+                            graph = topic_service.get_topic_graph(
+                                db, topic.id, source_taxonomy=topic.source_taxonomy
+                            )
+                            prereqs = []
+                            if graph and "prerequisites" in graph:
+                                for p in graph["prerequisites"]:
+                                    prereqs.append({
+                                        "topic_id": str(p.get("id", "")),
+                                        "topic_key": p.get("topic_key", ""),
+                                        "name": p.get("name", ""),
+                                        "name_zh": p.get("name_zh", ""),
+                                        "strength": p.get("strength", "weak"),
+                                        "reason": p.get("reason", ""),
+                                    })
+                            data = {
+                                "topic_key": topic_key,
+                                "prerequisites": prereqs,
+                            }
+                elif name == "list_taxonomy_topics":
+                    from apps.backend.app.services.learning import topic_service
+
+                    subject = arguments.get("subject", "")
+                    domain = arguments.get("domain")
+                    age_group = arguments.get("age_group")
+                    limit = min(int(arguments.get("limit", 50)), 200)
+
+                    if not subject or not isinstance(subject, str):
+                        data = {"error": "invalid_arguments", "detail": "subject is required"}
+                    else:
+                        topics = topic_service.list_topics(
+                            db,
+                            subject=subject,
+                            domain=domain,
+                            age_group=age_group,
+                            limit=limit,
+                        )
+                        data = {
+                            "count": len(topics),
+                            "topics": [
+                                {
+                                    "topic_id": str(t.id),
+                                    "topic_key": t.topic_key,
+                                    "name": t.name,
+                                    "name_zh": t.name_zh,
+                                    "subject": t.subject,
+                                    "domain": t.domain,
+                                    "age_group": t.age_group,
+                                }
+                                for t in topics
+                            ],
+                        }
+                elif name == "validate_question":
+                    from apps.backend.app.services.learning import question_service
+
+                    try:
+                        topic_id = int(arguments["topic_id"])
+                        question_type = arguments["question_type"]
+                        stem = arguments["stem"]
+                        answer = arguments["answer"]
+                        age_group = arguments["age_group"]
+                        options = arguments.get("options")
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        errors = question_service.validate_question(
+                            topic_id=topic_id,
+                            question_type=question_type,
+                            stem=stem,
+                            answer=answer,
+                            age_group=age_group,
+                            db=db,
+                            options=options,
+                        )
+                        data = {
+                            "passed": len(errors) == 0,
+                            "errors": errors,
+                        }
+                elif name == "get_child_weak_points":
+                    from apps.backend.app.services.learning import zone_service
+                    from packages.db.models.learning.progress import LearningProgress
+                    from packages.db.models.learning.topic import LearningTopic
+
+                    try:
+                        child_id = int(arguments["child_id"])
+                        if child_id <= 0:
+                            raise ValueError("child_id must be a positive integer")
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        subject = arguments.get("subject")
+                        limit = min(int(arguments.get("limit", 10)), 100)
+
+                        # Family-scope validation
+                        child_in_family = (
+                            db.query(User.id)
+                            .filter(
+                                User.id == child_id,
+                                User.family_id == int(self._family_id),
+                                User.role == "child",
+                            )
+                            .first()
+                        )
+                        if not child_in_family:
+                            data = {"error": "child_not_in_family", "child_id": str(child_id)}
+                        else:
+                            # Step 1: Query progress rows with low mastery
+                            progress_query = db.query(LearningProgress).filter(
+                                LearningProgress.child_id == child_id,
+                                LearningProgress.mastery_level.in_(
+                                    ["available", "learning", "review"]
+                                ),
+                            )
+                            if subject:
+                                progress_query = progress_query.join(
+                                    LearningTopic,
+                                    LearningProgress.topic_id == LearningTopic.id,
+                                ).filter(LearningTopic.subject == subject)
+                            progresses = progress_query.limit(limit).all()
+
+                            # Build result with mastery_level priority for sorting
+                            _LEVEL_PRIORITY = {"available": 0, "learning": 1, "review": 2}
+                            result_map: dict[int, dict] = {}
+                            for p in progresses:
+                                topic = (
+                                    db.query(LearningTopic)
+                                    .filter(LearningTopic.id == p.topic_id)
+                                    .first()
+                                )
+                                if topic:
+                                    result_map[p.topic_id] = {
+                                        "topic_id": str(p.topic_id),
+                                        "topic_key": topic.topic_key,
+                                        "name": topic.name,
+                                        "name_zh": topic.name_zh,
+                                        "mastery_level": p.mastery_level,
+                                        "is_breakpoint": False,
+                                    }
+
+                            # Step 2: Get breakpoints from zone_service
+                            try:
+                                breakpoints = zone_service.find_breakpoint_topics(
+                                    db, child_id
+                                )
+                                for bp in breakpoints:
+                                    # Apply subject filter manually if specified
+                                    if subject:
+                                        bp_topic = (
+                                            db.query(LearningTopic)
+                                            .filter(LearningTopic.id == bp.topic_id)
+                                            .first()
+                                        )
+                                        if not bp_topic or bp_topic.subject != subject:
+                                            continue
+                                    if bp.topic_id not in result_map:
+                                        topic = (
+                                            db.query(LearningTopic)
+                                            .filter(LearningTopic.id == bp.topic_id)
+                                            .first()
+                                        )
+                                        if topic:
+                                            result_map[bp.topic_id] = {
+                                                "topic_id": str(bp.topic_id),
+                                                "topic_key": topic.topic_key,
+                                                "name": topic.name,
+                                                "name_zh": topic.name_zh,
+                                                "mastery_level": "available",
+                                                "is_breakpoint": True,
+                                            }
+                            except Exception:
+                                logger.warning(
+                                    "[mcp_session] find_breakpoint_topics failed "
+                                    "for child=%s (non-blocking)",
+                                    child_id,
+                                    exc_info=True,
+                                )
+
+                            # Step 3: Sort by mastery_level priority and limit
+                            items = sorted(
+                                result_map.values(),
+                                key=lambda x: _LEVEL_PRIORITY.get(
+                                    x["mastery_level"], 99
+                                ),
+                            )[:limit]
+
+                            data = {
+                                "child_id": str(child_id),
+                                "count": len(items),
+                                "weak_points": items,
+                            }
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 

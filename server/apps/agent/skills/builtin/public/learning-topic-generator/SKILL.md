@@ -1,14 +1,23 @@
 ---
 name: learning-topic-generator
 description: |
-  基于 os_taxonomy 分类体系，智能生成完整学习课题方案。
-  根据 subject/domain/age_group 自动派生合适的教学策略，
-  输出包含学习目标、课程大纲、前置知识链、推荐练习的结构化课题方案 JSON。
+  Use when generating a structured learning plan (课题方案) for a taxonomy topic,
+  or when parent/teacher requests a lesson plan for a specific knowledge point.
+  Triggers: 课题方案, 学习方案, topic plan, lesson plan, teaching plan.
 trigger_phrases:
   - /learning-topic-generator
   - 生成学习课题
   - 课题方案生成
-allowed-tools: []
+  - 学习方案
+  - topic plan
+allowed-tools:
+  - get_taxonomy_topic
+  - get_taxonomy_dependencies
+  - list_taxonomy_topics
+  - validate_question
+  - get_child_weak_points
+  - get_child_learning_profile
+  - record_learning_result
 thinking: true
 max_tokens: 12000
 ---
@@ -29,6 +38,24 @@ You will receive a message containing:
 - `evidence`: List of evidence criteria (what the learner should be able to demonstrate)
 - `prerequisites`: List of prerequisite topics with dependency strength and reason
 - `cluster_summary`: Cluster summary providing domain context
+- `locale`: User language preference (e.g., "zh-CN", "en-US"). Determines which language fields to populate.
+
+## Tool Usage
+
+Use these tools during plan generation to produce grounded, validated output:
+
+1. **Before generating objectives:** Call `get_taxonomy_topic` with the topic_key to verify the topic exists and retrieve its evidence criteria and assessment prompt.
+2. **When building prerequisites:** Call `get_taxonomy_dependencies` to get the dependency chain and identify required vs. recommended prerequisites.
+3. **When generating exercises:** Call `validate_question` to check each generated exercise for format correctness (stem non-empty, answer present, topic exists, type-specific fields).
+4. **If child_id is provided:** Call `get_child_weak_points` to identify the child's weak topics and adapt difficulty and topic focus accordingly.
+5. **For context:** Call `get_child_learning_profile` to understand the child's overall learning stats and mastery distribution.
+
+## Language-Aware Output
+
+Follow the user's `locale` to determine which language fields to populate:
+- **Chinese locale (zh-CN, zh-TW, etc.):** Populate all `_zh` fields with Chinese content. Populate `_en` fields with English translations.
+- **Non-Chinese locale:** Populate all `_en` fields with English content. `_zh` fields may be left empty.
+- Apply this rule to: `name_zh`/`name_en`, `description_zh`/`description_en`, all objective descriptions, outline titles, exercise descriptions, and assessment text.
 
 ## Output Format
 
@@ -131,5 +158,6 @@ Before outputting, verify:
 - [ ] prerequisites match the dependency data provided
 - [ ] exercises are age-appropriate and progressively difficult
 - [ ] total duration is reasonable for the age group
+- [ ] locale matches user preference (zh fields in Chinese for zh locale, en fields in English otherwise)
 - [ ] all text is in the correct language (zh fields in Chinese, en fields in English)
 - [ ] JSON is valid and complete

@@ -231,3 +231,77 @@ class TestValidateEvaluationSchema:
                     "overall_score": 0.5,
                 }
             )
+
+
+class TestTopicGeneratorToolRegistry:
+    """Verify 5 new learning-topic-generator tools are registered (Issue #190)."""
+
+    def test_get_taxonomy_topic_registered(self):
+        meta = get_tool("get_taxonomy_topic")
+        assert meta is not None
+        assert meta.name == "get_taxonomy_topic"
+        assert meta.requires_write is False
+        props = meta.input_schema.get("properties", {})
+        assert "topic_key" in props
+
+    def test_get_taxonomy_dependencies_registered(self):
+        meta = get_tool("get_taxonomy_dependencies")
+        assert meta is not None
+        assert meta.name == "get_taxonomy_dependencies"
+        assert meta.requires_write is False
+        props = meta.input_schema.get("properties", {})
+        assert "topic_key" in props
+
+    def test_list_taxonomy_topics_registered(self):
+        meta = get_tool("list_taxonomy_topics")
+        assert meta is not None
+        assert meta.name == "list_taxonomy_topics"
+        assert meta.requires_write is False
+        props = meta.input_schema.get("properties", {})
+        assert "subject" in props
+        assert set(meta.input_schema.get("required", [])) == {"subject"}
+
+    def test_validate_question_registered(self):
+        meta = get_tool("validate_question")
+        assert meta is not None
+        assert meta.name == "validate_question"
+        assert meta.requires_write is False
+        props = meta.input_schema.get("properties", {})
+        assert "topic_id" in props
+        assert "question_type" in props
+        assert "stem" in props
+        assert "answer" in props
+        # difficulty should NOT be required (matches actual service signature)
+        required = set(meta.input_schema.get("required", []))
+        assert "difficulty" not in required
+
+    def test_get_child_weak_points_registered(self):
+        meta = get_tool("get_child_weak_points")
+        assert meta is not None
+        assert meta.name == "get_child_weak_points"
+        assert meta.requires_write is False
+        props = meta.input_schema.get("properties", {})
+        assert "child_id" in props
+        assert "limit" in props
+        # limit should have a maximum constraint
+        limit_schema = props.get("limit", {})
+        assert limit_schema.get("maximum") == 100
+
+    def test_all_new_tools_owner_member_external(self):
+        """All new tools are read-only and allow external_token."""
+        for name in (
+            "get_taxonomy_topic",
+            "get_taxonomy_dependencies",
+            "list_taxonomy_topics",
+            "validate_question",
+            "get_child_weak_points",
+        ):
+            meta = get_tool(name)
+            assert meta is not None, f"{name} not registered"
+            assert meta.allowed_roles == frozenset(
+                {"owner", "member", "external_token"}
+            ), f"{name} roles mismatch"
+
+    def test_tool_count_total(self):
+        """Registry should have 21 tools (16 existing + 5 new)."""
+        assert len(TOOL_REGISTRY) == 21
