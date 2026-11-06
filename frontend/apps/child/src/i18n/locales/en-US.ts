@@ -557,6 +557,7 @@ export default {
       broken_link_hint: 'Knowledge gap found: {name} is not yet mastered, and it\'s key to understanding this problem',
       current_topic: 'Current',
       no_bridge_data: 'No knowledge graph data yet',
+      fallback_topic: 'prerequisite knowledge',
       // SocraticSteps phase labels
       phase_diagnose: 'Diagnose',
       phase_focused_guidance: 'Guide',

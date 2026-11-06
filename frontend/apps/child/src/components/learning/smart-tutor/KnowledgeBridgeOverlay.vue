@@ -64,7 +64,7 @@ const masteryLabel = (level: string): string => {
       <div v-if="bridge?.broken_link" class="knowledge-bridge__alert">
         <span>⚠️</span>
         {{ t('learning.smart_tutor.broken_link_hint', {
-          name: bridge.broken_link.name || '前置知识',
+          name: bridge.broken_link.name || t('learning.smart_tutor.fallback_topic'),
         }) }}
       </div>
 
@@ -122,7 +122,7 @@ const masteryLabel = (level: string): string => {
 }
 
 .knowledge-bridge__alert {
-  background: #fff3cd;
+  background: rgba(255, 193, 7, 0.12);
   border-radius: 8px;
   padding: 8px 12px;
   font-size: 13px;

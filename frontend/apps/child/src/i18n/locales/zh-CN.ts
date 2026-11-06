@@ -777,6 +777,7 @@ export default {
       broken_link_hint: '发现知识断点：{name} 还没有掌握，这是理解当前题目的关键',
       current_topic: '当前',
       no_bridge_data: '暂无知识图谱数据',
+      fallback_topic: '前置知识',
       // SocraticSteps phase labels
       phase_diagnose: '诊断',
       phase_focused_guidance: '引导',

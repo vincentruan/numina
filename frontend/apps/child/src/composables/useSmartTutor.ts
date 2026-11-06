@@ -185,6 +185,8 @@ export function useSmartTutor() {
     abortController = new AbortController()
 
     try {
+      // SSE streaming requires native fetch — axios doesn't support ReadableStream responses.
+      // This pattern is consistent with useLearningChat.ts, useReportStream.ts, etc.
       const response = await fetch(
         `/api/v1/child/learning/sessions/${sessionId}/smart-tutor/stream`,
         {
