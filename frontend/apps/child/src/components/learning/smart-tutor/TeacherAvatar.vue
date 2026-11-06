@@ -25,12 +25,12 @@ const { t } = useI18n()
 // Subject-based color and icon mapping
 const subjectConfig = computed(() => {
   const configs: Record<string, { color: string; emoji: string; labelKey: string }> = {
-    math: { color: '#4A90D9', emoji: '🧮', labelKey: 'learning.smart_tutor.teacher_math' },
+    mathematics: { color: '#4A90D9', emoji: '🧮', labelKey: 'learning.smart_tutor.teacher_math' },
     chinese: { color: '#D94A6B', emoji: '📖', labelKey: 'learning.smart_tutor.teacher_chinese' },
     english: { color: '#4AD97A', emoji: '🌍', labelKey: 'learning.smart_tutor.teacher_english' },
     science: { color: '#D9A34A', emoji: '🔬', labelKey: 'learning.smart_tutor.teacher_science' },
   }
-  return configs[props.subject] ?? configs.math!
+  return configs[props.subject] ?? configs.mathematics!
 })
 
 // Age-based style modifiers

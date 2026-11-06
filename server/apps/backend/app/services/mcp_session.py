@@ -1394,7 +1394,7 @@ class MCPSession:
                 elif name == "get_teacher_persona":
                     # Static persona configuration — no DB query needed
                     _PERSONA_MATRIX = {
-                        ("math", "low"): {
+                        ("mathematics", "low"): {
                             "style": "故事化具象型",
                             "style_en": "Story-Concrete",
                             "description": "用故事、动物和日常物品（苹果、积木、玩具）来讲解数学概念",
@@ -1407,7 +1407,7 @@ class MCPSession:
                                 "hands_on_counting",
                             ],
                         },
-                        ("math", "mid"): {
+                        ("mathematics", "mid"): {
                             "style": "逻辑推理趣味型",
                             "style_en": "Logic-Fun",
                             "description": "通过谜题和挑战引入逻辑推理，把学习变成侦探游戏",
@@ -1420,7 +1420,7 @@ class MCPSession:
                                 "explain_reasoning",
                             ],
                         },
-                        ("math", "high"): {
+                        ("mathematics", "high"): {
                             "style": "抽象证明方法论型",
                             "style_en": "Abstract-Method",
                             "description": "引导抽象推理和证明，尊重独立思考，引入数学方法论",
@@ -1552,13 +1552,13 @@ class MCPSession:
                         },
                     }
 
-                    subject = arguments.get("subject", "math").lower()
+                    subject = arguments.get("subject", "mathematics").lower()
                     age_group = arguments.get("age_group", "mid").lower()
                     persona = _PERSONA_MATRIX.get((subject, age_group))
 
                     if persona is None:
-                        # Fallback: use math persona for unknown subjects
-                        persona = _PERSONA_MATRIX.get(("math", age_group), _PERSONA_MATRIX[("math", "mid")])
+                        # Fallback: use mathematics persona for unknown subjects
+                        persona = _PERSONA_MATRIX.get(("mathematics", age_group), _PERSONA_MATRIX[("mathematics", "mid")])
 
                     data = {
                         "subject": subject,
