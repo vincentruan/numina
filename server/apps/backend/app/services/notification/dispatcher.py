@@ -357,6 +357,48 @@ def notify_learning_streak_3_failures(
     db.add(reminder)
 
 
+def notify_smart_tutor_completed(
+    db: Session,
+    family_id: int,
+    child_id: int,
+    topic_name: str,
+    total_steps: int,
+) -> None:
+    """Notify parent that child completed a Smart Tutor session.
+
+    Triggered when Smart Tutor phase transitions from consolidate to end.
+    Dedup: one notification per (family, child, topic) per hour.
+    """
+    child_user = db.query(User).filter(User.id == child_id).first()
+    if not child_user:
+        return
+
+    child_name = child_user.display_name or child_user.username or ""
+    title = f"AI 辅导完成：{topic_name}"
+    reminder_type = "smart_tutor_completed"
+
+    if check_reminder_dedup(db, family_id, reminder_type, title, hours=1):
+        return
+
+    body = f"{child_name} 完成了「{topic_name}」的 AI 辅导，共 {total_steps} 步。"
+
+    ensure_reminder(
+        db,
+        {
+            "family_id": family_id,
+            "reminder_type": reminder_type,
+            "title": title,
+            "body": body,
+            "severity": "info",
+            "template_vars": {
+                "child_name": child_name,
+                "topic_name": topic_name,
+                "total_steps": total_steps,
+            },
+        },
+    )
+
+
 def check_on_asset_write(db: Session, asset: Asset) -> None:
     """资产写入时实时检测大额消费冷静期。"""
     if not asset.purchase_price:

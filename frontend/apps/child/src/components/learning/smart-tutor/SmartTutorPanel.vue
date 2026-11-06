@@ -303,7 +303,7 @@ const effectiveAgeGroup = computed(() => persona.value?.age_group ?? props.ageGr
 }
 
 .smart-tutor-panel__bubble--user {
-  background: var(--color-primary, #0a0a0a);
+  background: var(--color-primary, var(--color-on-primary, #0a0a0a));
   color: var(--color-canvas, #fff);
   border-bottom-right-radius: 4px;
 }

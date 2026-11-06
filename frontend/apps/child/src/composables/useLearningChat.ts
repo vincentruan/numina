@@ -1,4 +1,11 @@
 // frontend/apps/child/src/composables/useLearningChat.ts
+/**
+ * SSE streaming composable for learning assessment/tutorial sessions.
+ *
+ * Uses native `fetch` for SSE streams because axios does not support
+ * streaming responses. Non-SSE calls (reconnect status, history) use
+ * the `http` axios wrapper for consistent error handling and auth.
+ */
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { readSSEStream, type SSEStreamHandlers } from '@numina/shared'

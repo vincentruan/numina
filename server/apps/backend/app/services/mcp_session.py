@@ -1639,6 +1639,41 @@ class MCPSession:
                                     "phase": phase,
                                     "next_phase": next_phase,
                                 }
+
+                                # Issue #196: Trigger parent notification when
+                                # Smart Tutor session completes (phase → end)
+                                if next_phase == "end":
+                                    try:
+                                        from apps.backend.app.services.notification.dispatcher import (
+                                            notify_smart_tutor_completed,
+                                        )
+                                        from packages.db.models.learning.topic import (
+                                            LearningTopic,
+                                        )
+
+                                        topic = (
+                                            db.query(LearningTopic)
+                                            .filter(LearningTopic.id == session.topic_id)
+                                            .first()
+                                        )
+                                        if topic:
+                                            topic_name = topic.name_zh or topic.name or ""
+                                            child_user = (
+                                                db.query(User)
+                                                .filter(User.id == session.child_id)
+                                                .first()
+                                            )
+                                            if child_user:
+                                                notify_smart_tutor_completed(
+                                                    db=db,
+                                                    family_id=int(self._family_id),
+                                                    child_id=session.child_id,
+                                                    topic_name=topic_name,
+                                                    total_steps=len(existing_steps),
+                                                )
+                                    except Exception:
+                                        # Notification failure should not break step recording
+                                        logger.warning("Smart tutor notification failed", exc_info=True)
                 elif name == "get_taxonomy_topic":
                     from apps.backend.app.services.learning import topic_service
 
@@ -2109,9 +2144,7 @@ class MCPSession:
                                 if not hint_type:
                                     if error_pattern == "concept":
                                         hint_type = "conceptual"
-                                    elif error_pattern == "computation":
-                                        hint_type = "procedural"
-                                    elif error_pattern == "reading":
+                                    elif error_pattern == "computation" or error_pattern == "reading":
                                         hint_type = "procedural"
                                     elif error_pattern in ("guessing", "unknown"):
                                         hint_type = "encouragement"

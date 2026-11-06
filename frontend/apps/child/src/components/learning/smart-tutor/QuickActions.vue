@@ -60,9 +60,7 @@ const { t } = useI18n()
       icon="chart-trending-o"
       :disabled="isStreaming"
       @click="emit('showKnowledgeMap')"
-    >
-      🗺️
-    </van-button>
+    />
   </div>
 </template>
 
