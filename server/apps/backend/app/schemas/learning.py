@@ -511,3 +511,29 @@ class AIReviewStatusResponse(BaseModel):
 
     ai_auto_pass_paused: bool
     consecutive_overrides: int
+
+
+# --- Smart Tutor (Parent View) ---
+
+
+class SmartTutorSessionResponse(SnowflakeBase):
+    """Smart Tutor session summary for parent review."""
+
+    session_id: int
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    subject: str
+    started_at: datetime
+    completed_at: datetime | None
+    final_phase: str | None
+    total_steps: int
+    misconceptions_detected: int
+    outcome: str | None
+
+
+class SmartTutorSessionDetailResponse(SmartTutorSessionResponse):
+    """Detailed Smart Tutor session with step-by-step records."""
+
+    steps: list[dict] = []
+    ai_evaluation: dict | None = None

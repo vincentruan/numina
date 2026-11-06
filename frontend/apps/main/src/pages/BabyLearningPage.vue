@@ -228,6 +228,50 @@
                 :loading="clusterMapLoading"
               />
             </van-collapse-item>
+
+            <!-- Module 6: Smart Tutor Sessions (Issue #194) -->
+            <van-collapse-item name="smartTutor">
+              <template #title>
+                <div class="collapse-title-row">
+                  <IIcon icon="mdi:school-outline" size="18" color="var(--van-info-color)" />
+                  <span>{{ t('learning.smartTutorSessions') }}</span>
+                  <span v-if="smartTutorSessions.length > 0" class="collapse-count">{{ smartTutorSessions.length }}</span>
+                </div>
+              </template>
+              <van-skeleton v-if="smartTutorLoading" :rows="2" :round="true" />
+              <template v-else>
+                <div v-if="smartTutorSessions.length === 0" class="module-empty">
+                  <EmptyState :description="t('learning.smartTutorNoSessions')" image-size="48" />
+                </div>
+                <template v-else>
+                  <div
+                    v-for="session in smartTutorSessions.slice(0, 5)"
+                    :key="session.session_id"
+                    class="smart-tutor-item"
+                  >
+                    <div class="smart-tutor-item-header">
+                      <span class="smart-tutor-topic">{{ session.topic_name_zh || session.topic_name }}</span>
+                      <van-tag
+                        :type="outcomeTagType(session.outcome)"
+                        size="medium"
+                      >
+                        {{ outcomeLabel(session.outcome) }}
+                      </van-tag>
+                    </div>
+                    <div class="smart-tutor-item-meta">
+                      <span>{{ session.subject }}</span>
+                      <span>{{ t('learning.smartTutorSteps', { count: session.total_steps }) }}</span>
+                      <span v-if="session.misconceptions_detected > 0" class="misconception-count">
+                        {{ t('learning.smartTutorMisconceptions', { count: session.misconceptions_detected }) }}
+                      </span>
+                    </div>
+                    <div class="smart-tutor-item-time">
+                      {{ formatSessionTime(session.started_at) }}
+                    </div>
+                  </div>
+                </template>
+              </template>
+            </van-collapse-item>
           </van-collapse>
         </template>
       </van-pull-refresh>
@@ -297,6 +341,7 @@ import {
   getPresetPaths,
   getChildMap,
   getTopicsBatch,
+  getChildSmartTutorSessions,
   type ChildLearningOverview,
   type ReviewItem,
   type PathResponse,
@@ -305,6 +350,7 @@ import {
   type ProgressResponse,
   type ProgressWithTopic,
   type TopicResponse,
+  type SmartTutorSessionResponse,
 } from '@/api/learning'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -328,6 +374,8 @@ const recommendationsLoading = ref(false)
 const reviewsLoading = ref(false)
 const presetPathsLoading = ref(false)
 const pathsLoading = ref(false)
+const smartTutorSessions = ref<SmartTutorSessionResponse[]>([])
+const smartTutorLoading = ref(false)
 const actioningId = ref<string | null>(null)
 const dnaGraphItems = ref<ProgressWithTopic[]>([])
 const dnaGraphLoading = ref(false)
@@ -409,6 +457,37 @@ function pathStatusLabel(status: string): string {
   }
 }
 
+// Smart Tutor session helpers
+function outcomeTagType(outcome: string | null): 'success' | 'warning' | 'danger' | 'default' {
+  switch (outcome) {
+    case 'completed': return 'success'
+    case 'needs_review': return 'warning'
+    case 'in_progress': return 'default'
+    case 'abandoned': return 'danger'
+    default: return 'default'
+  }
+}
+
+function outcomeLabel(outcome: string | null): string {
+  switch (outcome) {
+    case 'completed': return t('learning.smartTutorCompleted')
+    case 'needs_review': return t('learning.smartTutorNeedsReview')
+    case 'in_progress': return t('learning.smartTutorInProgress')
+    case 'abandoned': return t('learning.smartTutorAbandoned')
+    default: return outcome ?? ''
+  }
+}
+
+function formatSessionTime(isoString: string): string {
+  const date = new Date(isoString)
+  return date.toLocaleDateString(locale.value, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 // Recommendation helpers.
 // The backend emits Chinese reason labels (see RecommendationsPage.vue REASON_*
 // constants and ParentClusterMap.vue); comparing against English snake_case keys
@@ -482,6 +561,19 @@ async function loadPaths() {
   }
 }
 
+async function loadSmartTutorSessions() {
+  const childId = babyStore.selectedChildId
+  if (!childId) return
+  smartTutorLoading.value = true
+  try {
+    smartTutorSessions.value = await getChildSmartTutorSessions(childId)
+  } catch {
+    smartTutorSessions.value = []
+  } finally {
+    smartTutorLoading.value = false
+  }
+}
+
 // Shared progress rows from getChildMap — avoids duplicate fetch between DNA graph and cluster map
 const sharedProgressRows = ref<ProgressResponse[]>([])
 
@@ -543,7 +635,10 @@ async function loadChildDependentData() {
   } finally {
     dnaGraphLoading.value = false
   }
-  await loadRecommendations()
+  await Promise.all([
+    loadRecommendations(),
+    loadSmartTutorSessions(),
+  ])
   // Cluster map is loaded lazily when user switches to cluster view
 }
 
@@ -985,5 +1080,46 @@ onActivated(async () => {
 
 .view-mode-btn:active {
   opacity: 0.85;
+}
+
+/* Smart Tutor session items */
+.smart-tutor-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--separator, rgba(0, 0, 0, 0.06));
+}
+
+.smart-tutor-item:last-child {
+  border-bottom: none;
+}
+
+.smart-tutor-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.smart-tutor-topic {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.smart-tutor-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.smart-tutor-item-meta .misconception-count {
+  color: var(--van-warning-color);
+}
+
+.smart-tutor-item-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
 }
 </style>

@@ -30,6 +30,8 @@ from apps.backend.app.schemas.learning import (
     RecommendedTopicItem,
     ReviewItemResponse,
     ReviewOverrideRequest,
+    SmartTutorSessionDetailResponse,
+    SmartTutorSessionResponse,
     TopicResponse,
 )
 from apps.backend.app.services.learning import (
@@ -961,3 +963,191 @@ async def generate_topic_plan(
         "topic_key": body.topic_key,
         "age_group": body.age_group,
     }
+
+
+# ── Smart Tutor (Parent View, Issue #194) ────────────────────────────────────
+
+
+def _parse_smart_tutor_steps(session: LearningSession) -> tuple[list[dict], str | None, int]:
+    """Parse Smart Tutor session data from progress_json.
+
+    Returns:
+        Tuple of (steps, final_phase, misconceptions_count)
+    """
+    steps: list[dict] = []
+    final_phase: str | None = None
+    misconceptions = 0
+
+    if session.progress_json:
+        try:
+            raw_steps = json.loads(session.progress_json)
+            if isinstance(raw_steps, list):
+                steps = raw_steps
+                # Final phase is the next_phase of the last step
+                if steps:
+                    final_phase = steps[-1].get("next_phase")
+                # Count misconceptions (quality == "misconception")
+                misconceptions = sum(
+                    1 for s in steps if s.get("quality") == "misconception"
+                )
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return steps, final_phase, misconceptions
+
+
+def _determine_outcome(
+    session: LearningSession, final_phase: str | None
+) -> str | None:
+    """Determine session outcome based on completion state."""
+    if session.ended_at is None:
+        return "in_progress"
+    if final_phase == "end":
+        return "completed"
+    if session.score:
+        return "needs_review"
+    return "abandoned"
+
+
+@router.get(
+    "/children/{child_id}/smart-tutor/sessions",
+    response_model=list[SmartTutorSessionResponse],
+)
+def list_child_smart_tutor_sessions(
+    child_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get child's Smart Tutor sessions for parent review.
+
+    Returns session summaries with phase, step count, and outcome.
+    """
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    # Query sessions with Smart Tutor data (session_type = 'smart_tutor' or has progress_json)
+    sessions = (
+        db.query(LearningSession)
+        .filter(
+            LearningSession.child_id == child_id,
+            LearningSession.session_type == "smart_tutor",
+        )
+        .order_by(LearningSession.started_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    # Batch-fetch topic names
+    topic_ids = list({s.topic_id for s in sessions})
+    taxonomy = get_effective_source_taxonomy(db, user.language)
+    topics = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id.in_(topic_ids),
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .all()
+    ) if topic_ids else []
+    topic_map = {t.id: t for t in topics}
+
+    result = []
+    for s in sessions:
+        topic = topic_map.get(s.topic_id)
+        steps, final_phase, misconceptions = _parse_smart_tutor_steps(s)
+        outcome = _determine_outcome(s, final_phase)
+        result.append(
+            SmartTutorSessionResponse(
+                session_id=s.id,
+                topic_id=s.topic_id,
+                topic_name=topic.name if topic else "",
+                topic_name_zh=topic.name_zh if topic else None,
+                subject=topic.subject if topic else "",
+                started_at=s.started_at,
+                completed_at=s.ended_at,
+                final_phase=final_phase,
+                total_steps=len(steps),
+                misconceptions_detected=misconceptions,
+                outcome=outcome,
+            )
+        )
+    return result
+
+
+@router.get(
+    "/children/{child_id}/smart-tutor/sessions/{session_id}",
+    response_model=SmartTutorSessionDetailResponse,
+)
+def get_child_smart_tutor_session(
+    child_id: int,
+    session_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get detailed Smart Tutor session with step-by-step records.
+
+    Returns full session data including AI evaluation and step history.
+    """
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    # Load session
+    session = (
+        db.query(LearningSession)
+        .filter(
+            LearningSession.id == session_id,
+            LearningSession.child_id == child_id,
+            LearningSession.session_type == "smart_tutor",
+        )
+        .first()
+    )
+    if not session:
+        raise AppError(ErrorCode.LEARNING_SESSION_NOT_FOUND)
+
+    # Load topic
+    taxonomy = get_effective_source_taxonomy(db, user.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == session.topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
+
+    steps, final_phase, misconceptions = _parse_smart_tutor_steps(session)
+    outcome = _determine_outcome(session, final_phase)
+
+    # Parse AI evaluation if present
+    ai_eval = None
+    if session.ai_evaluation_json:
+        with contextlib.suppress(json.JSONDecodeError, TypeError):
+            ai_eval = json.loads(session.ai_evaluation_json)
+
+    return SmartTutorSessionDetailResponse(
+        session_id=session.id,
+        topic_id=session.topic_id,
+        topic_name=topic.name if topic else "",
+        topic_name_zh=topic.name_zh if topic else None,
+        subject=topic.subject if topic else "",
+        started_at=session.started_at,
+        completed_at=session.ended_at,
+        final_phase=final_phase,
+        total_steps=len(steps),
+        misconceptions_detected=misconceptions,
+        outcome=outcome,
+        steps=steps,
+        ai_evaluation=ai_eval,
+    )
