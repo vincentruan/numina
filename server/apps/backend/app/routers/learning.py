@@ -59,6 +59,7 @@ def _topic_to_response(topic: LearningTopic) -> dict:
         "standards": topic.standards or [],
         "ability_dimensions": topic.ability_dimensions,
         "curriculum_standards": topic.curriculum_standards,
+        "real_world_connections": topic.real_world_connections,
         "source_taxonomy": topic.source_taxonomy,
         "deprecated": topic.deprecated,
         # Expose raw fields so frontend can detect translation status
@@ -66,6 +67,7 @@ def _topic_to_response(topic: LearningTopic) -> dict:
         "description_zh": topic.description_zh,
         "evidence_zh": topic.evidence_zh,
         "assessment_prompt_zh": topic.assessment_prompt_zh,
+        "real_world_connections_zh": topic.real_world_connections_zh,
     }
 
 
@@ -248,6 +250,7 @@ async def translate_topic_endpoint(
         "description": topic.description or "",
         "evidence": topic.evidence or [],
         "assessment_prompt": topic.assessment_prompt or "",
+        "real_world_connections": topic.real_world_connections or [],
     }
 
     try:
@@ -269,6 +272,10 @@ async def translate_topic_endpoint(
     if translated.get("evidence_zh") is not None:
         topic.evidence_zh_json = json.dumps(translated["evidence_zh"], ensure_ascii=False)
     topic.assessment_prompt_zh = translated.get("assessment_prompt_zh")
+    if translated.get("real_world_connections_zh") is not None:
+        topic.real_world_connections_zh_json = json.dumps(
+            translated["real_world_connections_zh"], ensure_ascii=False
+        )
     db.flush()
 
     return {
@@ -276,6 +283,7 @@ async def translate_topic_endpoint(
         "description_zh": topic.description_zh,
         "evidence_zh": topic.evidence_zh,
         "assessment_prompt_zh": topic.assessment_prompt_zh,
+        "real_world_connections_zh": topic.real_world_connections_zh,
     }
 
 

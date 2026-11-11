@@ -53,6 +53,9 @@ class LearningTopic(Base):
     curriculum_standards_json: Mapped[str] = mapped_column(
         Text, nullable=True, default="[]"
     )
+    # Real-world connections: JSON array of {context, explanation, icon?, image_url?}
+    real_world_connections_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    real_world_connections_zh_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now()
     )
@@ -66,6 +69,8 @@ class LearningTopic(Base):
     standards: list = json_text("standards_json")
     ability_dimensions: list | None = json_text("ability_dimensions_json")
     curriculum_standards: list | None = json_text("curriculum_standards_json")
+    real_world_connections: list | None = json_text("real_world_connections_json")
+    real_world_connections_zh: list | None = json_text("real_world_connections_zh_json")
 
 
 class LearningDependency(Base):

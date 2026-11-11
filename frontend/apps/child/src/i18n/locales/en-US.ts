@@ -457,6 +457,9 @@ export default {
     noPendingAssignment: '⚠️ No pending assignment',
     attempts: '{count} attempts',
     evidence: 'Learning Goals',
+    realWorld: {
+      title: '🌍 This in the Real World',
+    },
     general: 'General',
     cluster: {
       empty: 'No learning content for this subject yet. Try another one!',
