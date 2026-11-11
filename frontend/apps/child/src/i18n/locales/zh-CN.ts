@@ -462,6 +462,15 @@ export default {
     realWorld: {
       title: '🌍 生活中的应用',
     },
+    discovery: {
+      challengeTitle: '你能解决这个问题吗？',
+      noWorry: '别担心——没有错误答案，试试看吧！',
+      tryIt: '让我试试！',
+      giveHint: '需要提示吗？',
+      hideHint: '隐藏提示',
+      whatYouDidIs: '你刚才做的，就是"{concept}"！',
+      keepGoing: '现在来练习吧',
+    },
     general: '综合',
     cluster: {
       empty: '这个学科暂时没有学习内容，试试其他学科吧！',
