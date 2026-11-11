@@ -277,3 +277,24 @@ async def translate_topic_endpoint(
         "evidence_zh": topic.evidence_zh,
         "assessment_prompt_zh": topic.assessment_prompt_zh,
     }
+
+
+# ── Coverage 5D Report ───────────────────────────────────────────────
+
+
+@router.get("/coverage/report")
+def get_coverage_5d_report(
+    subject: str | None = None,
+    user: User = Depends(get_current_user_or_child),
+    db: Session = Depends(get_db),
+):
+    """5D coverage report: weighted quality model across all subjects.
+
+    Returns per-subject aggregations plus a worklist of low-coverage topics
+    for the question_router to prioritize.
+    """
+    from apps.backend.app.services.learning.coverage_5d_service import (
+        get_coverage_report,
+    )
+
+    return get_coverage_report(db, subject=subject, family_id=user.family_id)

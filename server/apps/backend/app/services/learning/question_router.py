@@ -107,8 +107,16 @@ def generate_production_plan(
     gaps: list[dict],
     weekly_capacity: int = 200,
 ) -> list[ProductionTask]:
-    """Generate a production plan from gap report."""
-    sorted_gaps = sorted(gaps, key=lambda g: -g.get("prerequisite_value", 0))
+    """Generate a production plan from gap report.
+
+    Accepts both legacy gap format (sorted by prerequisite_value) and
+    5D worklist format (sorted by priority, with missing_difficulties/blooms).
+    """
+    # Sort by priority (5D) or prerequisite_value (legacy) descending
+    sorted_gaps = sorted(
+        gaps,
+        key=lambda g: -g.get("priority", g.get("prerequisite_value", 0)),
+    )
 
     plan = []
     remaining = weekly_capacity
@@ -118,6 +126,17 @@ def generate_production_plan(
             break
 
         routing = route(db, gap["topic_id"])
+
+        # Use 5D worklist hints if available
+        target_difficulty = gap.get("missing_difficulties", routing.target_difficulty)
+        target_bloom = gap.get("missing_blooms", routing.target_bloom)
+
+        # Fallback to router-computed targets if worklist didn't provide them
+        if not target_difficulty:
+            target_difficulty = routing.target_difficulty
+        if not target_bloom:
+            target_bloom = routing.target_bloom
+
         count = min(routing.recommended_count, remaining)
 
         plan.append(
@@ -125,8 +144,8 @@ def generate_production_plan(
                 topic_id=gap["topic_id"],
                 method=routing.method,
                 count=count,
-                target_difficulty=routing.target_difficulty,
-                target_bloom=routing.target_bloom,
+                target_difficulty=target_difficulty,
+                target_bloom=target_bloom,
             )
         )
         remaining -= count
