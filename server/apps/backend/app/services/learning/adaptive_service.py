@@ -6,6 +6,7 @@ from typing import Protocol
 
 from sqlalchemy import Float as sa_Float
 from sqlalchemy import Integer as sa_Integer
+from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
 from packages.core.logging import get_logger
@@ -182,6 +183,8 @@ def select_questions(
        - "review": prioritize previously-wrong questions (relax exclusion window)
        - "challenge": force harder questions (difficulty 4-5)
     4. Filter by topic, difficulty range, review_status=approved
+       Uses COALESCE(empirical_difficulty, difficulty) — empirical_difficulty
+       replaces author difficulty when sufficient attempt data exists (≥10 attempts).
     5. Exclude recently answered questions (last N days) — except review mode
     6. Random sample up to count
     """
@@ -218,10 +221,17 @@ def select_questions(
 
     exclude_set = set(exclude_question_ids) | recent_ids
 
+    # Use empirical_difficulty when available, fall back to author difficulty.
+    # COALESCE returns the first non-null value, so questions with ≥10 attempts
+    # (where empirical_difficulty is computed) use data-driven difficulty.
+    effective_difficulty = sa_func.coalesce(
+        Question.empirical_difficulty, Question.difficulty
+    )
+
     query = db.query(Question).filter(
         Question.topic_id == topic_id,
-        Question.difficulty >= min_diff,
-        Question.difficulty <= max_diff,
+        effective_difficulty >= min_diff,
+        effective_difficulty <= max_diff,
         Question.review_status == "approved",
     )
 

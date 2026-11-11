@@ -15,11 +15,12 @@ scheduler = AsyncIOScheduler()
 
 
 def setup_all_jobs() -> None:
-    """Register all 9 scheduled jobs."""
+    """Register all 10 scheduled jobs."""
     from apps.scheduler_worker.jobs import (
         audit_log_purge_job,
         auto_report_job,
         device_session_cleanup_job,
+        empirical_difficulty_job,
         family_backup_job,
         fetch_rates_job,
         file_sync_job,
@@ -200,6 +201,20 @@ def setup_all_jobs() -> None:
         coalesce=True,
     )
     logger.info("定时任务轮询已配置（每 60 秒）")
+
+    # Job 14: Empirical difficulty calculation — daily at 04:00
+    scheduler.add_job(
+        empirical_difficulty_job,
+        trigger="cron",
+        hour=4,
+        minute=0,
+        id="empirical_difficulty_daily",
+        name="empirical_difficulty_job",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("经验难度计算任务已配置（每日 04:00）")
 
     import os
 
