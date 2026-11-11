@@ -459,6 +459,9 @@ export default {
     noPendingAssignment: '⚠️ 没有待提交的任务',
     attempts: '{count} 次尝试',
     evidence: '学习目标',
+    realWorld: {
+      title: '🌍 生活中的应用',
+    },
     general: '综合',
     cluster: {
       empty: '这个学科暂时没有学习内容，试试其他学科吧！',

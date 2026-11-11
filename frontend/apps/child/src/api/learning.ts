@@ -11,6 +11,13 @@ export interface CurriculumStandard {
   code: string | null
 }
 
+export interface RealWorldConnection {
+  context: string
+  explanation: string
+  icon?: string | null
+  image_url?: string | null
+}
+
 export interface TopicResponse {
   id: string
   topic_key: string
@@ -34,6 +41,8 @@ export interface TopicResponse {
   deprecated: boolean
   source_taxonomy: string
   curriculum_standards: CurriculumStandard[] | null
+  real_world_connections?: RealWorldConnection[] | null
+  real_world_connections_zh?: RealWorldConnection[] | null
 }
 
 export interface ProgressResponse {

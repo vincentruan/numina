@@ -26,6 +26,15 @@ class CurriculumStandard(BaseModel):
     code: str | None = None
 
 
+class RealWorldConnection(BaseModel):
+    """A single real-world scenario showing how a topic is used in life."""
+
+    context: str
+    explanation: str
+    icon: str | None = None
+    image_url: str | None = None
+
+
 class TopicResponse(SnowflakeBase):
     id: int
     topic_key: str
@@ -47,6 +56,8 @@ class TopicResponse(SnowflakeBase):
     standards: list[str] = []
     ability_dimensions: list[str] | None
     curriculum_standards: list[CurriculumStandard] | None = None
+    real_world_connections: list[RealWorldConnection] | None = None
+    real_world_connections_zh: list[RealWorldConnection] | None = None
     source_taxonomy: str = "os-taxonomy"
     deprecated: bool
 

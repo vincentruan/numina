@@ -86,6 +86,9 @@
         </ul>
       </div>
 
+      <!-- Real-world connections (Issue #201) -->
+      <RealWorldConnections :connections="displayRealWorldConnections" />
+
       <!-- Learning path: prerequisites + dependents -->
       <div v-if="graphData?.prerequisites?.length" class="graph-section">
         <h3 class="section-title">{{ t('learning.prerequisites') }}</h3>
@@ -233,6 +236,7 @@ import {
 } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 import TopicHookQuestion from '@/components/learning/TopicHookQuestion.vue'
+import RealWorldConnections from '@/components/learning/RealWorldConnections.vue'
 import { hasChineseChars } from '@numina/shared'
 
 const { t, locale } = useI18n()
@@ -286,6 +290,14 @@ const displayEvidence = computed(() => {
   if (!topic.value) return []
   if (locale.value.startsWith('zh') && topic.value.evidence_zh) return topic.value.evidence_zh as string[]
   return topic.value.evidence
+})
+
+const displayRealWorldConnections = computed(() => {
+  if (!topic.value) return []
+  if (locale.value.startsWith('zh') && topic.value.real_world_connections_zh) {
+    return topic.value.real_world_connections_zh
+  }
+  return topic.value.real_world_connections ?? []
 })
 
 const firstResolvedStandard = computed(() => {
