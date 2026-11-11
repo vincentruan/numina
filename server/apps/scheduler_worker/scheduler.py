@@ -19,6 +19,7 @@ def setup_all_jobs() -> None:
     from apps.scheduler_worker.jobs import (
         audit_log_purge_job,
         auto_report_job,
+        bkt_calibration_job,
         device_session_cleanup_job,
         empirical_difficulty_job,
         family_backup_job,
@@ -215,6 +216,21 @@ def setup_all_jobs() -> None:
         coalesce=True,
     )
     logger.info("经验难度计算任务已配置（每日 04:00）")
+
+    # Job 15: Per-Skill BKT parameter calibration — weekly on Sunday at 03:00
+    scheduler.add_job(
+        bkt_calibration_job,
+        trigger="cron",
+        day_of_week="sun",
+        hour=3,
+        minute=0,
+        id="bkt_calibration_weekly",
+        name="bkt_calibration_job",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("BKT参数校准任务已配置（每周日 03:00）")
 
     import os
 
