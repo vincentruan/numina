@@ -537,3 +537,15 @@ class SmartTutorSessionDetailResponse(SmartTutorSessionResponse):
 
     steps: list[dict] = []
     ai_evaluation: dict | None = None
+
+
+class HookQuestionResponse(SnowflakeBase):
+    """Socratic curiosity hook question for topic entry."""
+
+    id: int
+    topic_id: int
+    question_text: str
+    question_text_zh: str | None = None
+    age_group: str
+    difficulty: str
+    review_status: str

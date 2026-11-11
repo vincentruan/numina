@@ -449,6 +449,10 @@ export default {
     todayRecommend: 'Today\'s Pick',
     startLearning: '🎓 Start Learning',
     submitAssignment: '📝 Submit for Review',
+    hook: {
+      skip: 'Skip, start directly',
+      thinkAbout: 'Think about it 🤔',
+    },
     submitSuccess: '✅ Submitted for review',
     noPendingAssignment: '⚠️ No pending assignment',
     attempts: '{count} attempts',

@@ -2,7 +2,7 @@
 
 import contextlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import httpx
 from fastapi import APIRouter, Depends, Query, Request
@@ -19,6 +19,7 @@ from apps.backend.app.schemas.learning import (
     BridgeResponse,
     ChildProgressOverview,
     ClusterResponse,
+    HookQuestionResponse,
     LearningStatsResponse,
     MapIndexItem,
     OnboardingCompleteResponse,
@@ -35,6 +36,7 @@ from apps.backend.app.schemas.learning import (
 )
 from apps.backend.app.services.learning import (
     assignment_service,
+    hook_service,
     path_service,
     progress_service,
     session_service,
@@ -356,6 +358,41 @@ def get_topic_detail(
     if not topic:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
     return topic
+
+
+def _child_age_group(child: User) -> str:
+    """Map child birthday to age group: low (≤7), mid (8-10), high (11+)."""
+    if child.birthday is None:
+        return "mid"
+    today = date.today()
+    age = today.year - child.birthday.year
+    if (today.month, today.day) < (child.birthday.month, child.birthday.day):
+        age -= 1
+    if age <= 7:
+        return "low"
+    if age <= 10:
+        return "mid"
+    return "high"
+
+
+@router.get(
+    "/topics/{topic_id}/hook",
+    response_model=HookQuestionResponse | None,
+)
+def get_topic_hook(
+    topic_id: int,
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Get the Socratic hook question for a topic, layered by child age.
+
+    Returns ``null`` when no hook question has been seeded for the topic.
+    """
+    age_group = _child_age_group(child)
+    hook = hook_service.get_hook_question(db, topic_id, age_group=age_group)
+    if hook is None:
+        return None
+    return hook
 
 
 @router.post("/sessions", response_model=SessionResponse, status_code=201)

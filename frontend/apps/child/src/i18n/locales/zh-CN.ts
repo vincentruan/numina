@@ -451,6 +451,10 @@ export default {
     todayRecommend: '今日推荐',
     startLearning: '🎓 开始学习',
     submitAssignment: '📝 提交审核',
+    hook: {
+      skip: '跳过，直接开始',
+      thinkAbout: '想一想 🤔',
+    },
     submitSuccess: '✅ 已提交审核',
     noPendingAssignment: '⚠️ 没有待提交的任务',
     attempts: '{count} 次尝试',

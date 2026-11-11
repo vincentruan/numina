@@ -50,6 +50,13 @@
         <p class="mastery-attempts">{{ t('learning.attempts', { count: progress.attempts }) }}</p>
       </div>
 
+      <!-- Socratic curiosity hook -->
+      <TopicHookQuestion
+        v-if="hookQuestion && !hookSkipped"
+        :question="hookQuestion"
+        @skip="hookSkipped = true"
+      />
+
       <!-- Description -->
       <div class="description-section">
         <p class="description-text">{{ displayDescription }}</p>
@@ -210,6 +217,7 @@ import { domainLabel as translateDomain } from '@/utils/domainLabel'
 import {
   getTopicDetail,
   getTopicGraph,
+  getTopicHook,
   getMyLearningMap,
   getMyAssignments,
   createSession,
@@ -221,8 +229,10 @@ import {
   type AssignmentResponse,
   type TopicGraphResponse,
   type SessionResponse,
+  type HookQuestionResponse,
 } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
+import TopicHookQuestion from '@/components/learning/TopicHookQuestion.vue'
 import { hasChineseChars } from '@numina/shared'
 
 const { t, locale } = useI18n()
@@ -249,6 +259,10 @@ const topic = ref<TopicResponse | null>(null)
 const progress = ref<ProgressResponse | null>(null)
 const allProgress = ref<ProgressResponse[]>([])
 const graphData = ref<TopicGraphResponse | null>(null)
+
+// Hook question state
+const hookQuestion = ref<HookQuestionResponse | null>(null)
+const hookSkipped = ref(false)
 
 // Difficulty dialog state
 const showDifficultyDialog = ref(false)
@@ -367,15 +381,18 @@ async function load() {
   loading.value = true
   error.value = ''
   errorIsNotFound.value = false
+  hookSkipped.value = false
   try {
-    const [topicDetail, progressList, graph] = await Promise.all([
+    const [topicDetail, progressList, graph, hook] = await Promise.all([
       getTopicDetail(topicId.value),
       getMyLearningMap(),
       getTopicGraph(topicId.value).catch(() => null),
+      getTopicHook(topicId.value).catch(() => null),
     ])
     topic.value = topicDetail
     allProgress.value = progressList
     graphData.value = graph
+    hookQuestion.value = hook
 
     // Find progress for this topic
     const topicProgress = progressList.find((p) => p.topic_id === topicId.value)
