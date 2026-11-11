@@ -57,6 +57,16 @@ export interface ProgressResponse {
   age_group?: string | null
 }
 
+export interface HookQuestionResponse {
+  id: string
+  topic_id: string
+  question_text: string
+  question_text_zh: string | null
+  age_group: string
+  difficulty: string
+  review_status: string
+}
+
 export interface AssignmentResponse {
   id: string
   family_id: string
@@ -195,6 +205,11 @@ export async function getMyAssignments(status?: string): Promise<AssignmentRespo
 
 export async function getTopicDetail(topicId: string): Promise<TopicResponse> {
   const res = await http.get(`/child/learning/topics/${topicId}`)
+  return res.data
+}
+
+export async function getTopicHook(topicId: string): Promise<HookQuestionResponse | null> {
+  const res = await http.get(`/child/learning/topics/${topicId}/hook`)
   return res.data
 }
 
