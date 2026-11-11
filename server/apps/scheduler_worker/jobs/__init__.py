@@ -932,3 +932,45 @@ def _record_failure(
         synchronize_session=False,
     )
     db.commit()
+
+
+# ── Job 14: Empirical difficulty calculation ──────────────────────────────────
+
+
+def empirical_difficulty_job() -> None:
+    """Calculate empirical difficulty from PracticeAttempt data and update Questions.
+
+    Runs daily. For each question with ≥10 attempts, computes a weighted
+    difficulty score from accuracy, response time, and retry rate, then
+    stores it in Question.empirical_difficulty.
+    """
+    from apps.backend.app.services.learning.difficulty_calculator import (  # noqa: PLC0415
+        batch_update_empirical_difficulty,
+        get_difficulty_stats,
+    )
+
+    db = SessionLocal()
+    try:
+        stats_before = get_difficulty_stats(db)
+        logger.info(
+            "经验难度计算开始: 总题目=%s, 已有经验难度=%s (%s%%)",
+            stats_before["total_questions"],
+            stats_before["with_empirical"],
+            stats_before["coverage_pct"],
+        )
+
+        result = batch_update_empirical_difficulty(db)
+
+        stats_after = get_difficulty_stats(db)
+        logger.info(
+            "经验难度计算完成: 更新=%s, 跳过=%s, 覆盖率=%s%% (前=%s%%)",
+            result["updated"],
+            result["skipped"],
+            stats_after["coverage_pct"],
+            stats_before["coverage_pct"],
+        )
+    except Exception:
+        logger.exception("经验难度计算任务失败")
+    finally:
+        db.close()
+
