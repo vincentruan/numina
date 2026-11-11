@@ -30,6 +30,8 @@ dependencies = [
     # Web Push notifications
     "pywebpush>=2.0.0",
     "croniter>=6.2.2",
+    # Symbolic math for expression equivalence checking (scoring service)
+    "sympy>=1.13.0",
 ]
 
 [project.optional-dependencies]
