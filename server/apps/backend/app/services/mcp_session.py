@@ -37,6 +37,15 @@ VALID_PHASE_TRANSITIONS: dict[str, set[str]] = {
     "CONSOLIDATE": set(),  # terminal phase
 }
 
+# Teach-back phase machine (Issue #216) — separate from VALID_PHASE_TRANSITIONS
+# to avoid the existing case-mismatch bug. Uses lowercase keys (matching wire).
+TEACH_BACK_PHASES: dict[str, set[str]] = {
+    "present_confusion": {"evaluate_explanation", "end"},
+    "evaluate_explanation": {"present_confusion", "resolve", "end"},
+    "resolve": {"end"},
+    "end": set(),
+}
+
 
 def _parse_date(value: Any) -> date | None:
     """Parse a YYYY-MM-DD string (or None) into a date; None/invalid → None."""
@@ -1674,6 +1683,142 @@ class MCPSession:
                                     except Exception:
                                         # Notification failure should not break step recording
                                         logger.warning("Smart tutor notification failed", exc_info=True)
+                elif name == "record_teach_back_turn":
+                    # Issue #216: record a teach-back turn (child explains to AI student)
+                    from apps.backend.app.services.learning import teach_back_grading
+                    from packages.db.models.learning.session import LearningSession
+
+                    try:
+                        session_id = int(arguments["session_id"])
+                        confusion_id = int(arguments["confusion_id"])
+                        child_explanation = str(arguments["child_explanation"])
+                        verdict = arguments["verdict"]
+                        phase = arguments["phase"]
+                        next_phase = arguments["next_phase"]
+                        extracted_expression = arguments.get("extracted_expression")
+                        expression_verdict = arguments.get("expression_verdict")
+                        reasoning_summary = arguments.get("reasoning_summary", "")
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        # Validate phase
+                        if phase not in TEACH_BACK_PHASES:
+                            data = {
+                                "error": "invalid_phase",
+                                "detail": f"Unknown teach-back phase: {phase}",
+                                "allowed_phases": list(TEACH_BACK_PHASES.keys()),
+                            }
+                        elif next_phase and next_phase not in TEACH_BACK_PHASES[phase]:
+                            data = {
+                                "error": "invalid_phase_transition",
+                                "detail": f"Transition {phase} → {next_phase} not allowed",
+                                "allowed_next_phases": sorted(TEACH_BACK_PHASES[phase]),
+                            }
+                        else:
+                            # Family-scope validation
+                            session = (
+                                db.query(LearningSession)
+                                .join(User, LearningSession.child_id == User.id)
+                                .filter(
+                                    LearningSession.id == session_id,
+                                    User.family_id == int(self._family_id),
+                                )
+                                .first()
+                            )
+                            if not session:
+                                data = {"error": "session_not_found"}
+                            else:
+                                # Append teach-back turn to progress_json
+                                existing_steps_raw = session.progress_json
+                                try:
+                                    existing_steps = json.loads(existing_steps_raw) if existing_steps_raw else []
+                                    if not isinstance(existing_steps, list):
+                                        existing_steps = []
+                                except (json.JSONDecodeError, TypeError):
+                                    existing_steps = []
+
+                                turn_record = {
+                                    "type": "teach_back_turn",
+                                    "confusion_id": confusion_id,
+                                    "child_explanation": child_explanation,
+                                    "verdict": verdict,
+                                    "extracted_expression": extracted_expression,
+                                    "expression_verdict": expression_verdict,
+                                    "reasoning_summary": reasoning_summary,
+                                    "phase": phase,
+                                    "next_phase": next_phase,
+                                }
+                                existing_steps.append(turn_record)
+
+                                session.progress_json = json.dumps(existing_steps, ensure_ascii=False)
+
+                                # Check if all confusions are hit (resolve phase)
+                                all_hit = all(
+                                    s.get("verdict") == "hit"
+                                    for s in existing_steps
+                                    if s.get("type") == "teach_back_turn"
+                                )
+                                unique_confusions = len({
+                                    s.get("confusion_id")
+                                    for s in existing_steps
+                                    if s.get("type") == "teach_back_turn" and s.get("verdict") == "hit"
+                                })
+                                from packages.db.models.learning.confusion import TopicConfusion
+                                total_confusions = db.query(TopicConfusion).filter(
+                                    TopicConfusion.topic_id == session.topic_id,
+                                    TopicConfusion.review_status == "approved",
+                                ).count()
+
+                                # Trigger success path if all confusions hit and entering resolve
+                                if all_hit and unique_confusions >= total_confusions and next_phase == "resolve":
+                                    from apps.backend.app.services.learning import progress_service
+                                    progress = db.query(LearningProgress).filter(
+                                        LearningProgress.child_id == session.child_id,
+                                        LearningProgress.topic_id == session.topic_id,
+                                    ).first()
+                                    if progress:
+                                        progress_service.apply_teach_back_success(db, progress)
+                                        session.ended_at = datetime.now(UTC)
+                                    teach_back_success = True
+                                else:
+                                    teach_back_success = False
+
+                                if next_phase == "end":
+                                    session.ended_at = datetime.now(UTC)
+
+                                db.commit()
+
+                                data = {
+                                    "ok": True,
+                                    "session_id": str(session_id),
+                                    "confusion_id": confusion_id,
+                                    "verdict": verdict,
+                                    "phase": phase,
+                                    "next_phase": next_phase,
+                                    "total_turns": len([s for s in existing_steps if s.get("type") == "teach_back_turn"]),
+                                    "all_confusions_hit": all_hit and unique_confusions >= total_confusions,
+                                    "teach_back_success": teach_back_success,
+                                }
+
+                                # Parent notification on success
+                                if teach_back_success:
+                                    try:
+                                        from apps.backend.app.services.notification.dispatcher import (
+                                            notify_teach_back_completed,
+                                        )
+                                        from packages.db.models.learning.topic import LearningTopic
+
+                                        topic = db.query(LearningTopic).filter(LearningTopic.id == session.topic_id).first()
+                                        if topic:
+                                            topic_name = topic.name_zh or topic.name or ""
+                                            notify_teach_back_completed(
+                                                db=db,
+                                                family_id=int(self._family_id),
+                                                child_id=session.child_id,
+                                                topic_name=topic_name,
+                                            )
+                                    except Exception:
+                                        logger.warning("Teach-back notification failed", exc_info=True)
                 elif name == "get_taxonomy_topic":
                     from apps.backend.app.services.learning import topic_service
 

@@ -563,6 +563,60 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=True,
     ),
+    # ── Teach-back skill (Issue #216) ───────────────────────────────────
+    "record_teach_back_turn": MCPToolMeta(
+        name="record_teach_back_turn",
+        description=(
+            "记录一次 teach-back（孩子教 AI）回合：孩子对某条困惑的解释、"
+            "判定结果（hit/miss）、提取的数学表达式。用于 transcript 落库与教学成功判定。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "integer", "description": "教学会话 ID"},
+                "confusion_id": {"type": "integer", "description": "困惑 ID (topic_confusions.id)"},
+                "child_explanation": {"type": "string", "description": "孩子的解释原文"},
+                "verdict": {
+                    "type": "string",
+                    "description": "判定结果",
+                    "enum": ["hit", "miss"],
+                },
+                "extracted_expression": {
+                    "type": "string",
+                    "description": "从孩子解释中提取的数学表达式（nullable）",
+                },
+                "expression_verdict": {
+                    "type": "string",
+                    "description": "SymPy 判定结果",
+                    "enum": ["true", "false", "null"],
+                },
+                "reasoning_summary": {
+                    "type": "string",
+                    "description": "LLM 判定推理摘要（一句话）",
+                },
+                "phase": {
+                    "type": "string",
+                    "description": "当前 teach-back 阶段",
+                    "enum": ["present_confusion", "evaluate_explanation", "resolve", "end"],
+                },
+                "next_phase": {
+                    "type": "string",
+                    "description": "下一阶段",
+                    "enum": ["present_confusion", "evaluate_explanation", "resolve", "end"],
+                },
+            },
+            "required": [
+                "session_id",
+                "confusion_id",
+                "child_explanation",
+                "verdict",
+                "phase",
+                "next_phase",
+            ],
+        },
+        allowed_roles=frozenset({"owner", "member", "external_token"}),
+        requires_write=True,
+    ),
     # ── Learning-topic-generator skill (Issue #190) ───────────────────
     "get_taxonomy_topic": MCPToolMeta(
         name="get_taxonomy_topic",
