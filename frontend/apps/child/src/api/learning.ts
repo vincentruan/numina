@@ -288,6 +288,50 @@ export async function getSubjectDependencies(subject: string): Promise<Dependenc
   return res.data
 }
 
+/** Slim topic index row — GET /learning/topics/index (browse UI). */
+export interface TopicIndexRow {
+  id: string
+  subject: string
+  domain: string
+  name: string | null
+  name_zh: string | null
+  age_group: string
+}
+
+/** Full subject → domain → topic index (lighter than full topic payloads). */
+export async function getTopicIndex(): Promise<TopicIndexRow[]> {
+  const res = await http.get('/learning/topics/index')
+  return res.data
+}
+
+// --- Knowledge Map Exploration (R11, R12) ---
+
+export interface MapExplorationCreate {
+  duration_ms: number
+  max_zoom_level: number
+  topic_selected: boolean
+  interaction_count: number
+  selected_topic_id?: string
+}
+
+export interface MapExplorationResponse {
+  id: string
+  duration_ms: number
+  max_zoom_level: number
+  topic_selected: boolean
+  interaction_count: number
+  selected_topic_id: string | null
+  created_at: string
+}
+
+/** Record one completed map visit (posted when the child leaves the map). */
+export async function recordMapExploration(
+  payload: MapExplorationCreate,
+): Promise<MapExplorationResponse> {
+  const res = await http.post('/child/learning/map/explorations', payload)
+  return res.data
+}
+
 /** Translate a topic's content to Chinese. Returns translated fields. */
 export async function translateTopic(topicId: string): Promise<{
   name_zh: string | null
