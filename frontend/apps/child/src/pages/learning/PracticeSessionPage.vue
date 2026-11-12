@@ -9,6 +9,15 @@
       <button class="btn-secondary" @click="load">{{ t('common.retry') }}</button>
     </div>
 
+    <!-- Phase 0: Discovery challenge intro (Issue #210 — try first, discover later) -->
+    <div v-else-if="phase === 'discovery' && challengeConfig" class="discovery-phase">
+      <DiscoveryChallengeIntro
+        :config="challengeConfig"
+        @complete="onDiscoveryComplete"
+        @request-tutor="onRequestTutor"
+      />
+    </div>
+
     <!-- Phase 1: mode selection -->
     <div v-else-if="phase === 'mode'" class="mode-phase">
       <h1 class="page-title">{{ displayTopicName }}</h1>
@@ -127,6 +136,7 @@ import PracticeQuestionCard from '@/components/learning/PracticeQuestionCard.vue
 import PracticeAnswerInput from '@/components/learning/PracticeAnswerInput.vue'
 import PracticeResultSummary from '@/components/learning/PracticeResultSummary.vue'
 import ManipulateObserveReflect from '@/components/learning/ManipulateObserveReflect.vue'
+import DiscoveryChallengeIntro from '@/components/learning/DiscoveryChallengeIntro.vue'
 import { createSession, getTopicDetail } from '@/api/learning'
 import { getChallengeForTopic } from '@/data/learning-challenge/fair-distribution'
 import type { ChallengeConfig } from '@/types/learning-challenge'
@@ -144,7 +154,7 @@ const error = ref('')
 const starting = ref(false)
 const submitting = ref(false)
 
-const phase = ref<'mode' | 'manipulate' | 'answering' | 'result'>('mode')
+const phase = ref<'discovery' | 'mode' | 'manipulate' | 'answering' | 'result'>('mode')
 const session = ref<PracticeSessionResponse | null>(null)
 const challengeConfig = ref<ChallengeConfig | null>(null)
 const challengeDiscoveryMessage = ref('')
@@ -204,9 +214,10 @@ async function startSession(count: number) {
     const challenge = getChallengeForTopic(await resolveTopicKey())
     if (challenge) {
       challengeConfig.value = challenge
-      phase.value = 'manipulate'
+      // Issue #210: Discovery-first flow — challenge is the entry point
+      phase.value = 'discovery'
     } else {
-      phase.value = 'answering'
+      phase.value = 'mode'
     }
   } catch (e: unknown) {
     const code = extractErrorCode(e)
@@ -296,6 +307,17 @@ async function doFinish() {
   } catch {
     error.value = t('practice.errors.finishFailed')
   }
+}
+
+/** Issue #210: After discovery challenge completes, move to mode selection */
+function onDiscoveryComplete() {
+  // Capture the challenge's discovery message for the result screen (R6)
+  if (challengeConfig.value) {
+    challengeDiscoveryMessage.value = locale.value.startsWith('zh')
+      ? challengeConfig.value.discoveryMessageZh
+      : challengeConfig.value.discoveryMessage
+  }
+  phase.value = 'mode'
 }
 
 function onChallengeComplete() {

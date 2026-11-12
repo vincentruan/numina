@@ -460,6 +460,15 @@ export default {
     realWorld: {
       title: '🌍 This in the Real World',
     },
+    discovery: {
+      challengeTitle: 'Can you solve this?',
+      noWorry: "Don't worry — there's no wrong answer. Just give it a try!",
+      tryIt: "Let me try!",
+      giveHint: 'Need a hint?',
+      hideHint: 'Hide hint',
+      whatYouDidIs: "What you just did is called '{concept}'!",
+      keepGoing: 'Now practice it',
+    },
     general: 'General',
     cluster: {
       empty: 'No learning content for this subject yet. Try another one!',

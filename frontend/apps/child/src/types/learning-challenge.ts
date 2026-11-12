@@ -42,6 +42,14 @@ interface ChallengeBase {
   discoveryMessage: string
   /** Discovery message (Chinese). */
   discoveryMessageZh: string
+  /**
+   * The concept name revealed after the discovery moment (English).
+   * E.g., "fractions", "symmetry", "equality"
+   * Shown as: "What you just did is called 'fractions'!"
+   */
+  conceptName?: string
+  /** Concept name (Chinese). */
+  conceptNameZh?: string
   /** Difficulty level 1-5. Maps to backend adaptive difficulty ranges. */
   difficulty: number
   /** Target age group: early (6-8), mid (8-10), late (10-12). */
