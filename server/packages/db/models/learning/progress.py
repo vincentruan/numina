@@ -45,6 +45,12 @@ class LearningProgress(Base):
     overridden_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     overridden_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Count of consecutive review / teach-back passes. Reset to 0 on review
+    #: failure; incremented on review pass or successful teach-back. Reaches
+    #: the "牢固掌握" threshold at 3.
+    consecutive_review_passes: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), onupdate=func.now()

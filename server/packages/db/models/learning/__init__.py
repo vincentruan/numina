@@ -1,3 +1,4 @@
+from packages.db.models.learning.confusion import TopicConfusion
 from packages.db.models.learning.hook import TopicHookQuestion
 from packages.db.models.learning.path import LearningPath, LearningPathItem
 from packages.db.models.learning.practice import PracticeAttempt, PracticeSession
@@ -16,5 +17,6 @@ __all__ = [
     "Question",
     "QuestionKnowledgePoint",
     "ChildLearningStats",
+    "TopicConfusion",
     "TopicHookQuestion",
 ]
