@@ -43,10 +43,12 @@ defineOptions({ name: 'DiagnosisCard' })
 
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import type { RecommendResponse } from '@/api/practice'
 
-// The diagnosis copy is rooted at practice.*, not learning.practice.*
-const { t, locale } = useI18n({ useScope: 'global' })
+// The diagnosis copy lives at practice.diagnosis.*, outside the per-page scope.
+const { t } = useI18n({ useScope: 'global' })
+const { topicDisplayName } = useLocalizedTopic()
 
 const props = defineProps<{
   candidate: RecommendResponse | null
@@ -61,18 +63,22 @@ defineEmits<{
 
 const prereqName = computed(() => {
   if (!props.candidate) return null
-  if (locale.value.startsWith('zh') && props.candidate.topic_name_zh) {
-    return props.candidate.topic_name_zh
-  }
-  return props.candidate.topic_name
+  return topicDisplayName({
+    name: props.candidate.topic_name,
+    name_zh: props.candidate.topic_name_zh,
+    description: '',
+    description_zh: null,
+  })
 })
 
-const targetName = computed(() => {
-  if (locale.value.startsWith('zh') && props.targetTopicNameZh) {
-    return props.targetTopicNameZh
-  }
-  return props.targetTopicName
-})
+const targetName = computed(() =>
+  topicDisplayName({
+    name: props.targetTopicName,
+    name_zh: props.targetTopicNameZh,
+    description: '',
+    description_zh: null,
+  }),
+)
 </script>
 
 <style scoped>

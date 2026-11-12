@@ -394,6 +394,7 @@ function startPrereqPractice(prereqTopicId: string) {
   router.push(`/learning/practice/${prereqTopicId}`)
 }
 
+/** Retry from the error state. */
 function load() {
   phase.value = 'mode'
   error.value = ''
@@ -510,6 +511,13 @@ onMounted(() => {
   );
   background-size: 200% 100%;
   animation: shimmer 1.2s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diagnosis-skeleton {
+    animation: none;
+    background: var(--color-canvas);
+  }
 }
 
 @keyframes shimmer {

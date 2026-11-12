@@ -29,6 +29,8 @@ from apps.backend.app.schemas.practice import (
 )
 from apps.backend.app.services.learning.adaptive_service import (
     BayesianKnowledgeTracingEstimator,
+    diagnose_weak_prerequisites,
+    find_weak_prerequisites,
     get_ability_dimensions,
     get_progress_trend,
     select_questions,
@@ -44,6 +46,7 @@ from apps.backend.app.services.learning.practice_service import (
 )
 from apps.backend.app.services.learning.progress_service import (
     get_or_create_progress,
+    get_unmet_prerequisites,
 )
 from apps.backend.app.services.learning.question_service import (
     get_coverage_stats,
@@ -396,32 +399,27 @@ def get_practice_recommendations(
 
     With ?diagnosis=true and a topic_id, runs the depth-2 prerequisite
     backtrace diagnosis and returns qualified weak prerequisites with the
-    diagnosis fields populated (depth, bkt_mastery, sample_size, is_diagnosis).
-    The impression record is written server-side for each qualified candidate.
+    diagnosis fields populated (depth, bkt_mastery, sample_size, is_diagnosis),
+    and commits one impression record per qualified candidate.
     """
     if diagnosis and topic_id is not None:
-        from apps.backend.app.services.learning.adaptive_service import (
-            diagnose_weak_prerequisites,
-            find_weak_prerequisites,
-        )
-
-        # The child is already shown, on this same page, the direct
-        # prerequisites they are weak on, so the diagnosis looks one layer
-        # further back through exactly those.
-        weak_direct = find_weak_prerequisites(db, topic_id, user.id)
-        weak_direct_ids = [p["topic_id"] for p in weak_direct]
-
+        # The child already sees their weak direct prerequisites on this page,
+        # so the diagnosis looks one layer further back through exactly those.
+        weak_direct_ids = [
+            p.id for p in get_unmet_prerequisites(db, topic_id, user.id)
+        ]
         candidates = diagnose_weak_prerequisites(
             db,
             topic_id=topic_id,
             child_id=user.id,
             lookback_topic_ids=weak_direct_ids,
         )
+        db.commit()
         return [
             RecommendResponse(
                 topic_id=r["topic_id"],
-                topic_name=r.get("topic_name") or "",
-                topic_name_zh=r.get("topic_name_zh"),
+                topic_name=r["topic_name"],
+                topic_name_zh=r["topic_name_zh"],
                 mastery_level=r["mastery_level"],
                 accuracy=r["accuracy"],
                 is_prerequisite=True,
@@ -434,10 +432,6 @@ def get_practice_recommendations(
             for r in candidates
         ]
     if topic_id:
-        from apps.backend.app.services.learning.adaptive_service import (
-            find_weak_prerequisites,
-        )
-
         weak_prereqs = find_weak_prerequisites(db, topic_id=topic_id, child_id=user.id)
         return [
             RecommendResponse(

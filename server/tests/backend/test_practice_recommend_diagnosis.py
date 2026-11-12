@@ -168,12 +168,6 @@ class TestDiagnosisEndpoint:
         db.add(child)
         db.flush()
 
-        # target → buffer (mastered) → cand (weak, 6 attempts, rule-based 0.25)
-        # The buffer is weak too, so it must appear as a prerequisite
-        # recommendation, and the diagnosis must resolve depth to the right
-        # values relative to it: cand is a direct prerequisite of the buffer,
-        # so cand itself is on the buffer's page, and the item returned here is
-        # still cand when the buffer is mastered.
         target = _topic(db, 2_000_001, "target")
         buffer = _topic(db, 2_000_004, "buffer")
         cand = _topic(db, 2_000_002, "cand")
@@ -181,7 +175,7 @@ class TestDiagnosisEndpoint:
         db.add(LearningDependency(topic_id=buffer.id, prerequisite_id=cand.id, strength="hard"))
         db.flush()
 
-        _session_and_attempts(db, child, target, 8, 0)  # rule-based 0.0: stuck
+        _session_and_attempts(db, child, target, 8, 0)
         db.add(LearningProgress(child_id=child.id, topic_id=target.id, mastery_level="learning"))
         _session_and_attempts(db, child, buffer, 8, 7)
         db.add(LearningProgress(child_id=child.id, topic_id=buffer.id, mastery_level="mastered"))
@@ -243,7 +237,7 @@ class TestDiagnosisEndpoint:
         _session_and_attempts(db, child, weak_direct, 6, 2)
         db.add(LearningProgress(child_id=child.id, topic_id=weak_direct.id, mastery_level="learning"))
         _question(db, weak_direct)
-        _session_and_attempts(db, child, below, 8, 0)  # clearly weakest
+        _session_and_attempts(db, child, below, 8, 0)
         db.add(LearningProgress(child_id=child.id, topic_id=below.id, mastery_level="learning"))
         _question(db, below)
         db.commit()
@@ -261,9 +255,6 @@ class TestDiagnosisEndpoint:
             )
             assert resp.status_code == 200, resp.text
             body = resp.json()["data"]
-            import logging
-            from apps.backend.app.services.learning.adaptive_service import find_weak_prerequisites, _progress_mastery_level
-            from apps.backend.app.services.learning.adaptive_service import diagnose_weak_prerequisites
             assert [i["topic_id"] for i in body] == [str(below.id)]
             assert body[0]["depth"] == 1
         finally:
@@ -293,7 +284,7 @@ class TestDiagnosisEndpoint:
 
         _session_and_attempts(db, child, target, 8, 0)
         db.add(LearningProgress(child_id=child.id, topic_id=target.id, mastery_level="learning"))
-        _session_and_attempts(db, child, weak_direct, 6, 2)  # same weak profile as cand
+        _session_and_attempts(db, child, weak_direct, 6, 2)
         db.add(LearningProgress(child_id=child.id, topic_id=weak_direct.id, mastery_level="learning"))
         _question(db, weak_direct)
         db.commit()

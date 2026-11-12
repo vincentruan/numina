@@ -334,6 +334,10 @@ def find_weak_prerequisites(
 DIAGNOSIS_MASTERY_THRESHOLD = 0.60
 DIAGNOSIS_CONFIG_VERSION = "v1"
 
+# Mastery levels a diagnosis candidate must not be in: mastered ends the search
+# for a gap, and locked would make the card's action fail to start a session.
+NON_CANDIDATE_MASTERY_LEVELS = frozenset({"mastered", "locked"})
+
 
 def diagnose_weak_prerequisites(
     db: Session,
@@ -362,14 +366,13 @@ def diagnose_weak_prerequisites(
     from collections import deque
 
     from packages.db.models.learning.diagnosis_impression import DiagnosisImpression
+    from packages.db.models.learning.progress import LearningProgress
     from packages.db.models.learning.topic import LearningDependency
 
     estimator = BayesianKnowledgeTracingEstimator()
 
-    # Gate: target itself must meet the trigger. Accepts the rule-based
-    # fallback at 3-4 attempts (per R2 — same 0.60 threshold applies to
-    # both estimator scales).
-    target_estimate = estimator.estimate(db, child_id, topic_id)
+    # Gate: the target itself must be stuck, i.e. have enough attempts and a
+    # low enough estimate. Both estimator classes share the threshold.
     target_attempts = (
         db.query(PracticeAttempt)
         .filter_by(child_id=child_id, topic_id=topic_id)
@@ -377,18 +380,22 @@ def diagnose_weak_prerequisites(
     )
     if target_attempts < RuleBasedMasteryEstimator.MIN_SAMPLE_SIZE:
         return []
-    if target_estimate >= DIAGNOSIS_MASTERY_THRESHOLD:
+    if estimator.estimate(db, child_id, topic_id) >= DIAGNOSIS_MASTERY_THRESHOLD:
         return []
 
     # Build the upstream adjacency (hard edges only) and the set of the
     # target's direct prerequisites, which the page already shows.
-    deps = db.query(LearningDependency).filter_by(strength="hard").all()
+    edges = (
+        db.query(LearningDependency.topic_id, LearningDependency.prerequisite_id)
+        .filter_by(strength="hard")
+        .all()
+    )
     topic_prereqs: dict[int, list[int]] = {}
-    for d in deps:
-        topic_prereqs.setdefault(d.topic_id, []).append(d.prerequisite_id)
+    for topic_ref, prereq_ref in edges:
+        topic_prereqs.setdefault(topic_ref, []).append(prereq_ref)
 
     direct_prereq_ids: set[int] = {
-        d.prerequisite_id for d in deps if d.topic_id == topic_id
+        prereq_ref for topic_ref, prereq_ref in edges if topic_ref == topic_id
     }
 
     # BFS upstream over hard edges, so a cycle terminates and a topic reached
@@ -423,14 +430,45 @@ def diagnose_weak_prerequisites(
         return []
 
     # Load all candidate topics once.
+    candidate_ids = list(candidate_map.keys())
     candidate_topics = {
         t.id: t
         for t in db.query(LearningTopic)
-        .filter(LearningTopic.id.in_(list(candidate_map.keys())))
+        .filter(LearningTopic.id.in_(candidate_ids))
         .all()
     }
 
-    # Filter and rank candidates.
+    # Batch the per-candidate lookups so the loop costs no per-topic queries.
+    progress_levels = {
+        p.topic_id: p.mastery_level
+        for p in db.query(LearningProgress)
+        .filter(
+            LearningProgress.child_id == child_id,
+            LearningProgress.topic_id.in_(candidate_ids),
+        )
+        .all()
+    }
+    attempts_by_topic: dict[int, list[bool]] = {}
+    for attempt in (
+        db.query(PracticeAttempt.topic_id, PracticeAttempt.is_correct)
+        .filter(
+            PracticeAttempt.child_id == child_id,
+            PracticeAttempt.topic_id.in_(candidate_ids),
+        )
+        .all()
+    ):
+        attempts_by_topic.setdefault(attempt.topic_id, []).append(attempt.is_correct)
+    topics_with_questions = {
+        q.topic_id
+        for q in db.query(Question.topic_id)
+        .filter(
+            Question.topic_id.in_(candidate_ids),
+            Question.review_status == "approved",
+        )
+        .distinct()
+        .all()
+    }
+
     results: list[dict] = []
     for cand_id, depth in candidate_map.items():
         topic = candidate_topics.get(cand_id)
@@ -439,46 +477,24 @@ def diagnose_weak_prerequisites(
         if cand_id in direct_prereq_ids or cand_id in skip_ids:
             continue
 
-        mastery_level = _progress_mastery_level(db, child_id, cand_id)
-        if mastery_level in {"mastered", "locked"}:
+        # No progress row yet means the topic is available, not mastered.
+        mastery_level = progress_levels.get(cand_id, "available")
+        if mastery_level in NON_CANDIDATE_MASTERY_LEVELS:
             continue
 
-        # ≥3 practice attempts (R3 zero-sample rule)
-        attempts = (
-            db.query(PracticeAttempt)
-            .filter_by(child_id=child_id, topic_id=cand_id)
-            .all()
-        )
-        attempt_count = len(attempts)
+        outcomes = attempts_by_topic.get(cand_id, [])
+        attempt_count = len(outcomes)
         if attempt_count < RuleBasedMasteryEstimator.MIN_SAMPLE_SIZE:
             continue
-        accuracy = sum(1 for a in attempts if a.is_correct) / attempt_count
+        accuracy = sum(1 for correct in outcomes if correct) / attempt_count
 
-        # BKT (falls back to rule-based when < 5 attempts — the class split
-        # for R4 ranking).
         mastery = estimator.estimate(db, child_id, cand_id)
         if mastery >= DIAGNOSIS_MASTERY_THRESHOLD:
             continue
 
-        # Practiceable-question guard (KTD15).
-        has_questions = (
-            db.query(Question.id)
-            .filter(
-                Question.topic_id == cand_id,
-                Question.review_status == "approved",
-            )
-            .first()
-            is not None
-        )
-        if not has_questions:
+        # The card's action must be able to start a session for this topic.
+        if cand_id not in topics_with_questions:
             continue
-
-        # Classifier for R4 ordering: BKT-class (5+ attempts) first, then
-        # rule-based (3-4 attempts). Within each class, mastery ascending,
-        # depth descending.
-        estimator_class = (
-            0 if attempt_count >= BayesianKnowledgeTracingEstimator.MIN_ATTEMPTS else 1
-        )
 
         results.append(
             {
@@ -490,16 +506,18 @@ def diagnose_weak_prerequisites(
                 "sample_size": attempt_count,
                 "mastery_level": mastery_level,
                 "accuracy": accuracy,
-                "estimator_class": estimator_class,
             }
         )
 
-    # Sort: estimator_class asc (BKT first), mastery asc, depth desc.
+    # More attempts means a better-evidenced recommendation, so BKT-scored
+    # candidates come first. Then weakest mastery, then the deeper (more
+    # root-cause) prerequisite.
+    bkt_min_attempts = BayesianKnowledgeTracingEstimator.MIN_ATTEMPTS
     results.sort(
         key=lambda r: (
-            int(r["estimator_class"]),
-            float(r["bkt_mastery"]),
-            -int(r["depth"]),
+            r["sample_size"] < bkt_min_attempts,
+            r["bkt_mastery"],
+            -r["depth"],
         )
     )
 
@@ -515,25 +533,9 @@ def diagnose_weak_prerequisites(
                 config_version=DIAGNOSIS_CONFIG_VERSION,
             )
         )
-    db.flush()  # keep transactional semantics; caller commits
+    db.flush()  # the router commits; flush surfaces constraint errors here
 
     return results
-
-
-def _progress_mastery_level(db: Session, child_id: int, topic_id: int) -> str:
-    """Return the stored mastery_level for (child, topic), defaulting to 'available'.
-
-    Mirrors get_or_create_progress's "no row yet → available" semantics without
-    creating the row — diagnosis is read-only.
-    """
-    from packages.db.models.learning.progress import LearningProgress
-
-    row = (
-        db.query(LearningProgress)
-        .filter_by(child_id=child_id, topic_id=topic_id)
-        .first()
-    )
-    return row.mastery_level if row is not None else "available"
 
 
 # --- Phase 6d: Explainable learning progress ---
