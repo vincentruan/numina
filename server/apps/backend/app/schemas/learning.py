@@ -272,6 +272,20 @@ class SmartTutorStreamRequest(BaseModel):
     )
 
 
+class TeachBackStreamRequest(BaseModel):
+    """Request body for teach-back streaming endpoint.
+
+    First call: provide topic_id to start a teach-back session on a mastered topic.
+    Follow-up calls: provide session_id + child_answer to continue.
+    """
+
+    topic_id: int | None = Field(default=None, description="Topic to teach back (initial call)")
+    session_id: int | None = Field(default=None, description="Session to continue (follow-up)")
+    child_answer: str | None = Field(
+        default=None, max_length=4000, description="Child's explanation for follow-up turns"
+    )
+
+
 # --- Session ---
 
 
