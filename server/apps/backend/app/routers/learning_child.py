@@ -1019,10 +1019,10 @@ async def stream_teach_back(
         get_shared_bridge,
         trigger_agent_run,
     )
+    from apps.backend.app.services.learning import teach_back_service
     from apps.backend.app.services.learning.session_service import (
         get_thread_id_for_session,
     )
-    from apps.backend.app.services.learning import teach_back_service
 
     is_follow_up = body is not None and body.child_answer is not None
     topic_id = body.topic_id if body and body.topic_id else None

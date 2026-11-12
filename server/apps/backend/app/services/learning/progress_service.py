@@ -391,8 +391,9 @@ def apply_teach_back_rewards(
 
     Returns dict with ``xp_awarded``, ``coins_awarded``, ``milestone`` keys.
     """
-    from packages.db.models.learning.topic import LearningTopic
     from packages.db.models.economy import CoinTransaction
+
+    from packages.db.models.learning.topic import LearningTopic
 
     result = {"xp_awarded": 0, "coins_awarded": 0, "milestone": None}
 

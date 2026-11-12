@@ -1685,7 +1685,6 @@ class MCPSession:
                                         logger.warning("Smart tutor notification failed", exc_info=True)
                 elif name == "record_teach_back_turn":
                     # Issue #216: record a teach-back turn (child explains to AI student)
-                    from apps.backend.app.services.learning import teach_back_grading
                     from packages.db.models.learning.session import LearningSession
 
                     try:
@@ -1763,7 +1762,9 @@ class MCPSession:
                                     for s in existing_steps
                                     if s.get("type") == "teach_back_turn" and s.get("verdict") == "hit"
                                 })
-                                from packages.db.models.learning.confusion import TopicConfusion
+                                from packages.db.models.learning.confusion import (
+                                    TopicConfusion,
+                                )
                                 total_confusions = db.query(TopicConfusion).filter(
                                     TopicConfusion.topic_id == session.topic_id,
                                     TopicConfusion.review_status == "approved",
@@ -1772,7 +1773,9 @@ class MCPSession:
                                 # Trigger success path if all confusions hit and entering resolve
                                 teach_back_rewards = None
                                 if all_hit and unique_confusions >= total_confusions and next_phase == "resolve":
-                                    from apps.backend.app.services.learning import progress_service
+                                    from apps.backend.app.services.learning import (
+                                        progress_service,
+                                    )
                                     progress = db.query(LearningProgress).filter(
                                         LearningProgress.child_id == session.child_id,
                                         LearningProgress.topic_id == session.topic_id,
@@ -1790,7 +1793,9 @@ class MCPSession:
                                         )
                                         # Record first_teach_back milestone
                                         try:
-                                            from apps.backend.app.services.milestones import _try_record_once_cached
+                                            from apps.backend.app.services.milestones import (
+                                                _try_record_once_cached,
+                                            )
                                             _try_record_once_cached(
                                                 db, session.child_id, int(self._family_id),
                                                 "first_teach_back", session_id,
@@ -1827,7 +1832,9 @@ class MCPSession:
                                         from apps.backend.app.services.notification.dispatcher import (
                                             notify_teach_back_completed,
                                         )
-                                        from packages.db.models.learning.topic import LearningTopic
+                                        from packages.db.models.learning.topic import (
+                                            LearningTopic,
+                                        )
 
                                         topic = db.query(LearningTopic).filter(LearningTopic.id == session.topic_id).first()
                                         if topic:
