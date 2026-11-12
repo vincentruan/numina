@@ -326,6 +326,193 @@ def find_weak_prerequisites(
     return results
 
 
+# --- Prerequisite backtrace diagnosis (issue #213) ---
+
+# Threshold for "stuck" detection. Applied uniformly to both estimator scales;
+# the BKT-eligible (5+ attempts) class ranks before the rule-based (3-4 attempts)
+# class — a recommendation backed by more evidence is safer to show a child.
+DIAGNOSIS_MASTERY_THRESHOLD = 0.60
+DIAGNOSIS_CONFIG_VERSION = "v1"
+
+
+def diagnose_weak_prerequisites(
+    db: Session, topic_id: int, child_id: int
+) -> list[dict]:
+    """Depth-2 prerequisite backtrace for a child stuck on a topic.
+
+    Returns qualified weak prerequisites (≥3 attempts, BKT below threshold,
+    mastery_level neither mastered nor locked, topic not deprecated, has
+    practiceable questions, not a direct unmet prerequisite of the target).
+    Ranked BKT-class first then rule-based, mastery ascending within each
+    class, depth descending within ties. Deduped by topic id at minimum depth.
+
+    Writes one DiagnosisImpression row per qualified candidate before returning.
+    Returns an empty list when the target itself does not meet the trigger
+    (≥3 attempts AND estimate below threshold).
+    """
+    from collections import deque
+
+    from packages.db.models.learning.diagnosis_impression import DiagnosisImpression
+    from packages.db.models.learning.topic import LearningDependency
+
+    estimator = BayesianKnowledgeTracingEstimator()
+
+    # Gate: target itself must meet the trigger. Accepts the rule-based
+    # fallback at 3-4 attempts (per R2 — same 0.60 threshold applies to
+    # both estimator scales).
+    target_estimate = estimator.estimate(db, child_id, topic_id)
+    target_attempts = (
+        db.query(PracticeAttempt)
+        .filter_by(child_id=child_id, topic_id=topic_id)
+        .count()
+    )
+    if target_attempts < RuleBasedMasteryEstimator.MIN_SAMPLE_SIZE:
+        return []
+    if target_estimate >= DIAGNOSIS_MASTERY_THRESHOLD:
+        return []
+
+    # Build upstream adjacency (only hard edges) and direct-unmet-prereq set.
+    deps = db.query(LearningDependency).filter_by(strength="hard").all()
+    topic_prereqs: dict[int, list[int]] = {}
+    for d in deps:
+        topic_prereqs.setdefault(d.topic_id, []).append(d.prerequisite_id)
+
+    direct_unmet_ids: set[int] = {
+        d.prerequisite_id
+        for d in deps
+        if d.topic_id == topic_id
+        and _progress_mastery_level(db, child_id, d.prerequisite_id) != "mastered"
+    }
+
+    # BFS to depth 2 with visited set. Dedupe by topic id at minimum depth.
+    visited: dict[int, int] = {topic_id: 0}
+    queue: deque[tuple[int, int]] = deque()
+    for p in topic_prereqs.get(topic_id, []):
+        if p not in visited:
+            visited[p] = 1
+            queue.append((p, 1))
+    while queue:
+        current, depth = queue.popleft()
+        if depth >= 2:
+            continue
+        for p in topic_prereqs.get(current, []):
+            if p in visited:
+                continue
+            visited[p] = depth + 1
+            queue.append((p, depth + 1))
+
+    candidate_map: dict[int, int] = {
+        tid: d for tid, d in visited.items() if tid != topic_id and d >= 1
+    }
+    if not candidate_map:
+        return []
+
+    # Load all candidate topics once.
+    candidate_topics = {
+        t.id: t
+        for t in db.query(LearningTopic)
+        .filter(LearningTopic.id.in_(list(candidate_map.keys())))
+        .all()
+    }
+
+    # Filter and rank candidates.
+    results: list[dict] = []
+    for cand_id, depth in candidate_map.items():
+        topic = candidate_topics.get(cand_id)
+        if topic is None or topic.deprecated:
+            continue
+        if cand_id in direct_unmet_ids:
+            continue
+
+        mastery_level = _progress_mastery_level(db, child_id, cand_id)
+        if mastery_level in {"mastered", "locked"}:
+            continue
+
+        # ≥3 practice attempts (R3 zero-sample rule)
+        attempt_count = (
+            db.query(PracticeAttempt)
+            .filter_by(child_id=child_id, topic_id=cand_id)
+            .count()
+        )
+        if attempt_count < RuleBasedMasteryEstimator.MIN_SAMPLE_SIZE:
+            continue
+
+        # BKT (falls back to rule-based when < 5 attempts — the class split
+        # for R4 ranking).
+        mastery = estimator.estimate(db, child_id, cand_id)
+        if mastery >= DIAGNOSIS_MASTERY_THRESHOLD:
+            continue
+
+        # Practiceable-question guard (KTD15).
+        has_questions = (
+            db.query(Question.id)
+            .filter(
+                Question.topic_id == cand_id,
+                Question.review_status == "approved",
+            )
+            .first()
+            is not None
+        )
+        if not has_questions:
+            continue
+
+        # Classifier for R4 ordering: BKT-class (5+ attempts) first, then
+        # rule-based (3-4 attempts). Within each class, mastery ascending,
+        # depth descending.
+        estimator_class = 0 if attempt_count >= BayesianKnowledgeTracingEstimator.MIN_ATTEMPTS else 1
+
+        results.append(
+            {
+                "topic_id": cand_id,
+                "topic_name": topic.name,
+                "topic_name_zh": topic.name_zh,
+                "depth": depth,
+                "bkt_mastery": mastery,
+                "sample_size": attempt_count,
+                "mastery_level": mastery_level,
+                "accuracy": 0.0,  # filled below if needed for parity
+                "estimator_class": estimator_class,
+            }
+        )
+
+    # Sort: estimator_class asc (BKT first), mastery asc, depth desc.
+    results.sort(
+        key=lambda r: (int(r["estimator_class"]), float(r["bkt_mastery"]), -int(r["depth"]))
+    )
+
+    # Write one DiagnosisImpression row per qualified candidate.
+    for r in results:
+        db.add(
+            DiagnosisImpression(
+                child_id=child_id,
+                target_topic_id=topic_id,
+                recommended_topic_id=r["topic_id"],
+                bkt_mastery=r["bkt_mastery"],
+                sample_size=r["sample_size"],
+                config_version=DIAGNOSIS_CONFIG_VERSION,
+            )
+        )
+    db.flush()  # keep transactional semantics; caller commits
+
+    return results
+
+
+def _progress_mastery_level(db: Session, child_id: int, topic_id: int) -> str:
+    """Return the stored mastery_level for (child, topic), defaulting to 'available'.
+
+    Mirrors get_or_create_progress's "no row yet → available" semantics without
+    creating the row — diagnosis is read-only.
+    """
+    from packages.db.models.learning.progress import LearningProgress
+
+    row = (
+        db.query(LearningProgress)
+        .filter_by(child_id=child_id, topic_id=topic_id)
+        .first()
+    )
+    return row.mastery_level if row is not None else "available"
+
+
 # --- Phase 6d: Explainable learning progress ---
 
 
