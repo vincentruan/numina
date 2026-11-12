@@ -1,17 +1,11 @@
 """Auto-grading service for practice answers."""
-import math
 
 from packages.core.logging import get_logger
+from apps.backend.app.services.learning.symbolic_equivalence import numeric_or_symbolic_eq
 
 logger = get_logger(__name__)
 
-_FLOAT_TOLERANCE = 1e-6
 _grade_unavailable_warned = False
-
-
-def _float_eq(a: float, b: float, *, rel_tol: float = 1e-4, abs_tol: float = _FLOAT_TOLERANCE) -> bool:
-    """Compare floats with tolerance (handles 0.1+0.2 style imprecision)."""
-    return math.isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol)
 
 
 def check_answer(
@@ -26,12 +20,8 @@ def check_answer(
     if question_type == "calculation":
         correct_val = correct_answer.get("answer")
         user_val = user_answer.get("answer")
-        if isinstance(correct_val, bool) or isinstance(user_val, bool):
-            # bool is an int subclass — compare strictly, don't coerce to float
-            return user_val == correct_val
-        if isinstance(correct_val, (int, float)) and isinstance(user_val, (int, float)):
-            return _float_eq(float(correct_val), float(user_val))
-        return user_val == correct_val
+        # Use symbolic equivalence with float fallback
+        return numeric_or_symbolic_eq(correct_val, user_val)
 
     if question_type == "fill_blank":
         correct_val = correct_answer.get("value")
