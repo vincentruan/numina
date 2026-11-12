@@ -186,6 +186,11 @@ export interface RecommendResponse {
   accuracy: number
   is_prerequisite: boolean
   prerequisite_of_topic_id: string | null
+  // Backtrace diagnosis fields — populated only on ?diagnosis=true responses
+  is_diagnosis?: boolean
+  depth?: number
+  bkt_mastery?: number
+  sample_size?: number
 }
 
 export async function getWeakTopics(
@@ -217,8 +222,11 @@ export async function getPracticeSessionDetail(
 
 export async function getPracticeRecommendations(
   topicId?: string,
+  diagnosis = false,
 ): Promise<RecommendResponse[]> {
-  const params = topicId ? { topic_id: topicId } : {}
+  const params: Record<string, string | boolean> = {}
+  if (topicId) params.topic_id = topicId
+  if (diagnosis) params.diagnosis = true
   const resp = await http.get('/practice/recommend', { params })
   return resp.data
 }
