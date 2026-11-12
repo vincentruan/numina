@@ -375,3 +375,96 @@ describe('KnowledgeOcean — analytics events (R11, R12)', () => {
     expect(wrapper.emitted('interacted')).toBeTruthy()
   })
 })
+
+describe('KnowledgeOcean — touch gestures do not block page scroll (I-2)', () => {
+  function touch(el: Element, type: string, points: Array<{ id: number; x: number; y: number }>) {
+    const touches = points.map(
+      (p) => new Touch({ identifier: p.id, target: el, clientX: p.x, clientY: p.y }),
+    )
+    const ev = new TouchEvent(type, { touches, cancelable: true, bubbles: true })
+    el.dispatchEvent(ev)
+    return ev
+  }
+
+  it('single-finger touchmove does NOT preventDefault — page scroll passes through', () => {
+    const wrapper = mountOcean()
+    const svg = wrapper.find('.knowledge-ocean').element as Element
+    touch(svg, 'touchstart', [{ id: 1, x: 100, y: 100 }])
+    const ev = touch(svg, 'touchmove', [{ id: 1, x: 100, y: 200 }])
+    expect(ev.defaultPrevented).toBe(false)
+  })
+
+  it('two-finger touchmove DOES preventDefault — blocks native zoom during pinch', () => {
+    const wrapper = mountOcean()
+    const svg = wrapper.find('.knowledge-ocean').element as Element
+    touch(svg, 'touchstart', [
+      { id: 1, x: 100, y: 100 },
+      { id: 2, x: 150, y: 100 },
+    ])
+    const ev = touch(svg, 'touchmove', [
+      { id: 1, x: 120, y: 100 },
+      { id: 2, x: 130, y: 100 },
+    ])
+    expect(ev.defaultPrevented).toBe(true)
+  })
+})
+
+describe('KnowledgeOcean — pinch suppresses the next tap preview (I-3)', () => {
+  function fireTouchEvent(
+    el: Element,
+    type: 'touchstart' | 'touchmove' | 'touchend',
+    touchPoints: Array<{ id: number; x: number; y: number }>,
+  ) {
+    const touches = touchPoints.map(
+      (p) => new Touch({ identifier: p.id, target: el, clientX: p.x, clientY: p.y }),
+    )
+    el.dispatchEvent(new TouchEvent(type, { touches, cancelable: true, bubbles: true }))
+  }
+
+  it('after a pinch-in, the next click on the same island does NOT open a preview', async () => {
+    const wrapper = mountOcean()
+    const math = wrapper
+      .findAll('.ocean-island')
+      .find((w) => w.attributes('data-island-id') === 'mathematics')!
+    // Pinch-in on the island
+    fireTouchEvent(math.element, 'touchstart', [
+      { id: 1, x: 100, y: 100 },
+      { id: 2, x: 160, y: 100 },
+    ])
+    fireTouchEvent(math.element, 'touchmove', [
+      { id: 1, x: 120, y: 100 },
+      { id: 2, x: 140, y: 100 },
+    ])
+    fireTouchEvent(math.element, 'touchend', [])
+    await nextTick()
+    // Clear events emitted by the pinch itself
+    wrapper.emitted('previewSubject')?.splice(0)
+    wrapper.emitted('selectSubject')?.splice(0)
+    // A synthetic click from the browser on the same island after pinch-in
+    await math.trigger('click')
+    expect(wrapper.emitted('previewSubject')).toBeFalsy()
+  })
+
+  it('after a pinch-in, a click on a DIFFERENT island still opens its preview', async () => {
+    const wrapper = mountOcean()
+    const math = wrapper
+      .findAll('.ocean-island')
+      .find((w) => w.attributes('data-island-id') === 'mathematics')!
+    fireTouchEvent(math.element, 'touchstart', [
+      { id: 1, x: 100, y: 100 },
+      { id: 2, x: 160, y: 100 },
+    ])
+    fireTouchEvent(math.element, 'touchmove', [
+      { id: 1, x: 120, y: 100 },
+      { id: 2, x: 140, y: 100 },
+    ])
+    fireTouchEvent(math.element, 'touchend', [])
+    await nextTick()
+    const science = wrapper
+      .findAll('.ocean-island')
+      .find((w) => w.attributes('data-island-id') === 'science')!
+    await science.trigger('click')
+    expect(wrapper.emitted('previewSubject')).toBeTruthy()
+    expect(wrapper.emitted('previewSubject')![0]).toEqual(['science'])
+  })
+})

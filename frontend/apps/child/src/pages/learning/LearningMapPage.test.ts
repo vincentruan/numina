@@ -275,7 +275,7 @@ describe('LearningMapPage — knowledge ocean default view (R1)', () => {
 
     expect(wrapper.findComponent({ name: 'KnowledgeOcean' }).exists()).toBe(true)
     // No view-mode toggle needed to see it — ocean is the default.
-    expect(wrapper.find('.view-mode-btn--active').text()).toContain('大陆')
+    expect(wrapper.find('.view-mode-btn--active').text()).toContain('海洋')
   })
 
   it('shows ocean islands for subjects the child has zero progress in (R2, AE1)', async () => {
@@ -404,4 +404,23 @@ describe('LearningMapPage — ocean preview and exploration wiring (R6, R8, R11)
     ocean.vm.$emit('zoomed', level)
     ocean.vm.$emit('interacted')
   }
+})
+
+describe('LearningMapPage — topic index fetch failure surfaces (M-1)', () => {
+  beforeEach(() => {
+    rows.push({ topic_id: 't1', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid' })
+    mockGetTopicIndex.mockRejectedValue(new Error('network down'))
+  })
+
+  it('shows the error state when the topic index fetch fails', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.find('.error-msg').exists()).toBe(true)
+  })
+
+  it('does NOT render the ocean when the topic index fails (R2 must not be silently unfulfilled)', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'KnowledgeOcean' }).exists()).toBe(false)
+  })
 })

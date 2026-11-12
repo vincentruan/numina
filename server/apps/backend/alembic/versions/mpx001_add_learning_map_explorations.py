@@ -14,6 +14,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from packages.db.session import UTCDateTime
+
 revision: str = "mpx001"
 down_revision: tuple[str, ...] = ("h0011q22r3s4", "rwc001")  # type: ignore[assignment]
 branch_labels: str | Sequence[str] | None = None
@@ -35,7 +37,7 @@ def upgrade() -> None:
             "interaction_count", sa.Integer, nullable=False, server_default=sa.text("0")
         ),
         sa.Column("selected_topic_id", sa.BigInteger, nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=False, server_default=sa.func.now()),
+        sa.Column("created_at", UTCDateTime(timezone=True), nullable=False, server_default=sa.func.now()),
     )
     op.create_index(
         "ix_learning_map_explorations_created_at",

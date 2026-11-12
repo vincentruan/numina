@@ -12,7 +12,7 @@
       role="application"
       :aria-label="t('learning.ocean.a11yLabel')"
       @touchstart.passive="onTouchStart"
-      @touchmove.prevent="onTouchMove"
+      @touchmove="onTouchMove"
       @touchend="onTouchEnd"
     >
       <!-- Sea (R7 — legible at every mastery ratio) -->
@@ -378,6 +378,12 @@ function isDoubleTap(target: string): boolean {
 }
 
 function onIslandTap(island: RenderedIsland) {
+  // A pinch-in on this island just ended — the browser's synthetic click
+  // would otherwise open a redundant preview. Consume the suppression.
+  if (suppressedTapIslandId === island.id) {
+    suppressedTapIslandId = null
+    return
+  }
   emit('interacted')
   if (isDoubleTap(`island:${island.id}`)) {
     emit('selectSubject', island.id)
@@ -422,12 +428,15 @@ interface PinchState {
   centerX: number
   centerY: number
   islandId: string | null
-  suppressTap: string | null
   target: EventTarget | null
 }
 
 let pinch: PinchState | null = null
 let pinchConsumed = false
+// A pinch-in on an island must not then fire a click-triggered preview on the
+// same island. We stash the island id here at touchend and consume it on the
+// next click.
+let suppressedTapIslandId: string | null = null
 
 function touchDistance(touches: TouchList): number {
   const dx = touches[0].clientX - touches[1].clientX
@@ -435,9 +444,21 @@ function touchDistance(touches: TouchList): number {
   return Math.sqrt(dx * dx + dy * dy)
 }
 
-function islandAtPoint(target: EventTarget | null): RenderedIsland | null {
-  if (!(target instanceof Element)) return null
-  const g = target.closest('.ocean-island')
+function islandAtPoint(
+  x: number,
+  y: number,
+  fallback: EventTarget | null,
+): RenderedIsland | null {
+  // Prefer elementFromPoint at the pinch center (correct on real devices when
+  // the two fingers straddle an island). Fall back to the touchstart target
+  // when elementFromPoint is unavailable or returns nothing (jsdom/happy-dom).
+  let el: Element | null = null
+  if (typeof document !== 'undefined' && typeof document.elementFromPoint === 'function') {
+    el = document.elementFromPoint(x, y)
+  }
+  if (!el && fallback instanceof Element) el = fallback
+  if (!el) return null
+  const g = el.closest('.ocean-island')
   if (!g) return null
   const id = g.getAttribute('data-island-id')
   return islands.value.find((i) => i.id === id) ?? null
@@ -451,13 +472,16 @@ function onTouchStart(e: TouchEvent) {
     centerX: (e.touches[0].clientX + e.touches[1].clientX) / 2,
     centerY: (e.touches[0].clientY + e.touches[1].clientY) / 2,
     islandId: null,
-    suppressTap: null,
     target: e.target,
   }
   pinchConsumed = false
 }
 
 function onTouchMove(e: TouchEvent) {
+  if (e.touches.length === 2) {
+    // Block the browser's native pinch-zoom during an in-app pinch gesture.
+    e.preventDefault()
+  }
   if (!pinch || e.touches.length !== 2) return
   const dist = touchDistance(e.touches)
   const ratio = dist / pinch.startDist
@@ -466,9 +490,9 @@ function onTouchMove(e: TouchEvent) {
     // Pinch-in — descend.
     pinchConsumed = true
     if (level.value === 'subject') {
-      const island = islandAtPoint(pinch.target)
+      const island = islandAtPoint(pinch.centerX, pinch.centerY, pinch.target)
       if (island) {
-        pinch.suppressTap = island.id
+        pinch.islandId = island.id
         emit('selectSubject', island.id)
         emit('zoomed', 1)
         emit('interacted')
@@ -488,6 +512,7 @@ function onTouchMove(e: TouchEvent) {
 }
 
 function onTouchEnd(_e: TouchEvent) {
+  if (pinch?.islandId) suppressedTapIslandId = pinch.islandId
   pinch = null
 }
 </script>
@@ -502,7 +527,7 @@ function onTouchEnd(_e: TouchEvent) {
   display: block;
   width: 100%;
   height: auto;
-  touch-action: none; /* we own pinch; browser must not zoom the page */
+  touch-action: pan-y; /* we own pinch; browser must not zoom the page */
   user-select: none;
   -webkit-user-select: none;
 }

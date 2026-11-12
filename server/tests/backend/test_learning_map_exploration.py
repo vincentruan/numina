@@ -181,3 +181,17 @@ class TestRecordExploration:
             },
         )
         assert resp.status_code in (401, 403)
+
+    def test_rejects_absurd_duration_ms(self, client, child_headers):
+        """M-3 — a buggy client posting a 100-day duration must not store nonsense."""
+        resp = client.post(
+            "/api/v1/child/learning/map/explorations",
+            headers=child_headers,
+            json={
+                "duration_ms": 100 * 24 * 60 * 60 * 1000,  # 100 days
+                "max_zoom_level": 0,
+                "topic_selected": False,
+                "interaction_count": 0,
+            },
+        )
+        assert resp.status_code == 422

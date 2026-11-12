@@ -36,7 +36,7 @@
               :class="{ 'view-mode-btn--active': viewMode === 'ocean' }"
               @click="viewMode = 'ocean'"
             >
-              {{ t('learning.graphMap.viewContinent') }}
+              {{ t('learning.graphMap.viewOcean') }}
             </button>
             <button
               class="view-mode-btn"
@@ -531,6 +531,7 @@ const previewDomain = computed(() => {
 // ── Exploration instrumentation (R11, R12) ──
 
 const exploration = ref<ReturnType<typeof useMapExploration> | null>(null)
+exploration.value = useMapExploration()
 
 // Today recommendation: pick first non-mastered topic
 const recommended = computed(() => {
@@ -554,9 +555,13 @@ async function load() {
     // ProgressResponse payload (evidence, standards, assessment_prompt, …).
     // The topic index is fetched alongside it so the ocean shows every
     // subject as an island even with zero progress (R2, AE1).
+    // The topic index is the authoritative subject list for the ocean (R2, AE1:
+    // every subject appears even with zero progress). A failure silently
+    // unfulfills R2, so propagate it into the error state — the child can retry
+    // via pull-to-refresh.
     const [progress, index] = await Promise.all([
       getMyLearningMapIndex(),
-      getTopicIndex().catch(() => [] as TopicIndexRow[]),
+      getTopicIndex(),
     ])
     progressList.value = progress
     topicIndex.value = index
