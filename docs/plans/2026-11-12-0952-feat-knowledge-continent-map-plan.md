@@ -72,7 +72,7 @@ The second is a missing invitation. A list of names has no pull — nothing in i
 
 - F1. First arrival at the map
   - **Trigger:** The child opens the learning map.
-  - **Steps:** The ocean renders with all subject islands in their fog states. The child pans and pinches; islands respond. The child taps an island and gets its preview. The child either descends to that subject's domains or leaves the map.
+  - **Steps:** The ocean renders with all subject islands in their fog states. The child pinches and taps; islands respond. The child taps an island and gets its preview. The child either descends to that subject's domains or leaves the map.
   - **Covered by:** R1, R2, R6, R7, R8, R11.
 
 - F2. Descending to a constellation
@@ -107,7 +107,7 @@ The second is a missing invitation. A list of names has no pull — nothing in i
 
 - AE4. Exploration that ends without a selection
   - **Covers R11, R12.**
-  - **Given** a child who pans, pinches, and previews several islands but selects no topic,
+  - **Given** a child who pinches, taps, and previews several islands but selects no topic,
   - **When** the child leaves the map,
   - **Then** the recorded exploration time and zoom depth are retained even though no topic selection occurred.
 
@@ -135,6 +135,7 @@ This plan covers the map surface only. It is one of several separately planned p
 - Topic content, practice sessions, the adaptive engine, and the knowledge graph's data are unchanged; this plan consumes their existing outputs.
 - Per-topic fog clearing is deferred. Fog responds to subject mastery only (R5).
 - Redesigning the map for desktop-first layouts is deferred; the map is designed for the child app's touch surface.
+- In-map pan (dragging to move the viewport) is deferred. Pinch and tap fully satisfy the current acceptance criteria; add pan only if UX testing shows the map needs a translate gesture beyond page scroll.
 - The existing list view's removal is not required by this plan. Whether it survives as a secondary view is deferred to planning.
 
 ### Dependencies / Assumptions
