@@ -305,7 +305,7 @@ def transition_to_mastered(
 ) -> LearningProgress:
     """Transition progress to 'mastered' state and update stability/review schedule."""
     validate_transition(progress.mastery_level, "mastered")
-    if completed_via not in ("ai_assessment", "parent_approval", "practice_session", "parent_override"):
+    if completed_via not in ("ai_assessment", "parent_approval", "practice_session", "parent_override", "teaching"):
         raise ValueError(f"Invalid completed_via: {completed_via}")
     now = datetime.now(UTC)
     progress.mastery_level = "mastered"
@@ -322,6 +322,60 @@ def transition_to_mastered(
         diff = 5 - quality
         progress.ease_factor = max(1.3, current_ease + 0.1 - diff * (0.08 + diff * 0.02))
     progress.next_review_at = compute_next_review(progress)
+    db.flush()
+    return progress
+
+
+def apply_teach_back_success(
+    db: Session,
+    progress: LearningProgress,
+    session_id: int | None = None,
+) -> LearningProgress:
+    """Apply teach-back success effects to an already-mastered progress row.
+
+    - Updates ``completed_via`` to ``'teaching'`` (most recent completion mechanism).
+    - Multiplies ``stability`` by 1.5× (capped at 30.0).
+    - Recomputes ``next_review_at`` with explicit 180-day cap (prevents
+      ``compute_next_review`` from producing century-scale intervals).
+    - Increments ``consecutive_review_passes`` (the "牢固掌握" counter).
+    - Creates a ``LearningAssessmentAttempt(assessment_type='teach_back')``
+      history record.
+    """
+    from datetime import timedelta
+
+    from packages.db.models.learning.session import LearningAssessmentAttempt
+
+    now = datetime.now(UTC)
+
+    # Update completed_via — teaching is now the most recent mastery mechanism
+    progress.completed_via = "teaching"
+
+    # Stability multiplier: 1.5× capped at 30.0 (matches update_stability cap)
+    current_stability = progress.stability or 1.0
+    progress.stability = min(current_stability * 1.5, 30.0)
+
+    # Recompute next_review_at with 180-day cap
+    computed_next = compute_next_review(progress)
+    cap = now + timedelta(days=180)
+    progress.next_review_at = min(computed_next, cap)
+
+    # Increment consecutive review passes
+    progress.consecutive_review_passes = (progress.consecutive_review_passes or 0) + 1
+
+    # Update last_practice_at
+    progress.last_practice_at = now
+
+    # Create history record
+    attempt = LearningAssessmentAttempt(
+        child_id=progress.child_id,
+        topic_id=progress.topic_id,
+        session_id=session_id,
+        assessment_type="teach_back",
+        score=1.0,  # teach-back success = perfect score
+        passed=True,
+    )
+    db.add(attempt)
+
     db.flush()
     return progress
 
