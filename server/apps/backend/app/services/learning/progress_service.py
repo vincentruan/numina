@@ -380,6 +380,81 @@ def apply_teach_back_success(
     return progress
 
 
+def apply_teach_back_rewards(
+    db: Session,
+    child_id: int,
+    family_id: int,
+    topic_id: int,
+    session_id: int | None = None,
+) -> dict:
+    """Award XP, coins, and check milestones for a successful teach-back.
+
+    Returns dict with ``xp_awarded``, ``coins_awarded``, ``milestone`` keys.
+    """
+    from packages.db.models.learning.topic import LearningTopic
+    from packages.db.models.economy import CoinTransaction
+
+    result = {"xp_awarded": 0, "coins_awarded": 0, "milestone": None}
+
+    # Resolve topic name for narrative
+    topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
+    topic_label = (topic.name_zh or topic.name or "learning") if topic else "learning"
+
+    # Award XP (25 for teach-back — highest tier)
+    try:
+        from apps.backend.app.services.learning import stats_service
+
+        xp_result = stats_service.award_xp(db, child_id, family_id, 25)
+        result["xp_awarded"] = xp_result.get("xp_awarded", 0)
+    except Exception:
+        logger.warning("Teach-back XP award failed", exc_info=True)
+
+    # Award coins (20 for teach-back, ref_id = attempt id for uniqueness)
+    try:
+        from packages.db.models.learning.session import LearningAssessmentAttempt
+
+        # Find the latest teach_back attempt for this session
+        attempt = (
+            db.query(LearningAssessmentAttempt)
+            .filter(
+                LearningAssessmentAttempt.child_id == child_id,
+                LearningAssessmentAttempt.topic_id == topic_id,
+                LearningAssessmentAttempt.assessment_type == "teach_back",
+                LearningAssessmentAttempt.passed == True,  # noqa: E712
+            )
+            .order_by(LearningAssessmentAttempt.created_at.desc())
+            .first()
+        )
+        if attempt:
+            txn = CoinTransaction(
+                family_id=family_id,
+                child_user_id=child_id,
+                amount=20,
+                transaction_type="learning_earn",
+                ref_id=attempt.id,
+                narrative=f"教你学会啦：{topic_label}",
+                narrative_emoji="🎓",
+            )
+            db.add(txn)
+            result["coins_awarded"] = 20
+    except Exception:
+        logger.warning("Teach-back coin award failed", exc_info=True)
+
+    # Check milestones (first_teach_back)
+    try:
+        from apps.backend.app.services.milestones import check_and_record_milestones
+
+        milestone = check_and_record_milestones(
+            db, child_id, family_id, {"teach_back": True, "topic_id": topic_id}
+        )
+        result["milestone"] = milestone
+    except Exception:
+        logger.warning("Teach-back milestone check failed", exc_info=True)
+
+    db.flush()
+    return result
+
+
 def recheck_prerequisites(
     db: Session, child_id: int, topic_id: int
 ) -> LearningProgress:

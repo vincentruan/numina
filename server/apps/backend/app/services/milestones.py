@@ -24,6 +24,7 @@ _audit_logger = logging.getLogger("audit.milestones")
 _ONCE_PER_CHILD = {
     "first_chore",
     "first_wish_realized",
+    "first_teach_back",
     "coins_50",
     "coins_200",
     "tasks_10",

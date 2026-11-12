@@ -996,6 +996,25 @@ def _parse_smart_tutor_steps(session: LearningSession) -> tuple[list[dict], str 
     return steps, final_phase, misconceptions
 
 
+def _parse_teach_back_steps(session: LearningSession) -> list[dict]:
+    """Parse teach-back turns from progress_json.
+
+    Returns list of teach_back_turn records (child explanation + verdict).
+    """
+    turns: list[dict] = []
+    if session.progress_json:
+        try:
+            raw_steps = json.loads(session.progress_json)
+            if isinstance(raw_steps, list):
+                turns = [
+                    s for s in raw_steps
+                    if isinstance(s, dict) and s.get("type") == "teach_back_turn"
+                ]
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return turns
+
+
 def _determine_outcome(
     session: LearningSession, final_phase: str | None
 ) -> str | None:
@@ -1151,3 +1170,66 @@ def get_child_smart_tutor_session(
         steps=steps,
         ai_evaluation=ai_eval,
     )
+
+
+@router.get(
+    "/children/{child_id}/teach-back/sessions/{session_id}",
+)
+def get_child_teach_back_session(
+    child_id: int,
+    session_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get detailed teach-back session transcript for parent review.
+
+    Issue #216. Returns the child's explanations and per-confusion verdicts.
+    """
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    # Load session
+    session = (
+        db.query(LearningSession)
+        .filter(
+            LearningSession.id == session_id,
+            LearningSession.child_id == child_id,
+            LearningSession.session_type == "teach_back",
+        )
+        .first()
+    )
+    if not session:
+        raise AppError(ErrorCode.LEARNING_SESSION_NOT_FOUND)
+
+    # Load topic
+    taxonomy = get_effective_source_taxonomy(db, user.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == session.topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
+
+    turns = _parse_teach_back_steps(session)
+    outcome = _determine_outcome(session, None)
+
+    return {
+        "session_id": str(session.id),
+        "topic_id": str(session.topic_id),
+        "topic_name": topic.name if topic else "",
+        "topic_name_zh": topic.name_zh if topic else None,
+        "subject": topic.subject if topic else "",
+        "started_at": session.started_at,
+        "completed_at": session.ended_at,
+        "outcome": outcome,
+        "total_turns": len(turns),
+        "turns": turns,
+    }

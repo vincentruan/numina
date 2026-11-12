@@ -1770,6 +1770,7 @@ class MCPSession:
                                 ).count()
 
                                 # Trigger success path if all confusions hit and entering resolve
+                                teach_back_rewards = None
                                 if all_hit and unique_confusions >= total_confusions and next_phase == "resolve":
                                     from apps.backend.app.services.learning import progress_service
                                     progress = db.query(LearningProgress).filter(
@@ -1777,8 +1778,27 @@ class MCPSession:
                                         LearningProgress.topic_id == session.topic_id,
                                     ).first()
                                     if progress:
-                                        progress_service.apply_teach_back_success(db, progress)
+                                        progress_service.apply_teach_back_success(db, progress, session_id=session_id)
                                         session.ended_at = datetime.now(UTC)
+                                        # Award XP, coins, check milestones
+                                        teach_back_rewards = progress_service.apply_teach_back_rewards(
+                                            db,
+                                            child_id=session.child_id,
+                                            family_id=int(self._family_id),
+                                            topic_id=session.topic_id,
+                                            session_id=session_id,
+                                        )
+                                        # Record first_teach_back milestone
+                                        try:
+                                            from apps.backend.app.services.milestones import _try_record_once_cached
+                                            _try_record_once_cached(
+                                                db, session.child_id, int(self._family_id),
+                                                "first_teach_back", session_id,
+                                                "teach_back_session",
+                                                set(),  # not cached in this path
+                                            )
+                                        except Exception:
+                                            logger.warning("first_teach_back milestone record failed", exc_info=True)
                                     teach_back_success = True
                                 else:
                                     teach_back_success = False
@@ -1798,6 +1818,7 @@ class MCPSession:
                                     "total_turns": len([s for s in existing_steps if s.get("type") == "teach_back_turn"]),
                                     "all_confusions_hit": all_hit and unique_confusions >= total_confusions,
                                     "teach_back_success": teach_back_success,
+                                    "teach_back_rewards": teach_back_rewards,
                                 }
 
                                 # Parent notification on success
