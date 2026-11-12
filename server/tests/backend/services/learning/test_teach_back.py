@@ -2,18 +2,19 @@
 
 import pytest
 
+from apps.backend.app.services.learning import teach_back_service
+from apps.backend.app.services.learning.progress_service import apply_teach_back_success
 from apps.backend.app.services.learning.teach_back_grading import (
     extract_expression,
     grade_expression,
 )
-from apps.backend.app.services.learning import teach_back_service
-from apps.backend.app.services.learning.progress_service import apply_teach_back_success
 from packages.db.models.learning.confusion import TopicConfusion
 from packages.db.models.learning.progress import LearningProgress
-from packages.db.models.learning.session import LearningAssessmentAttempt, LearningSession
+from packages.db.models.learning.session import (
+    LearningAssessmentAttempt,
+)
 from packages.db.models.learning.topic import LearningTopic
 from packages.db.models.user import User
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
