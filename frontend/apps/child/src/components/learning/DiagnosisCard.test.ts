@@ -108,6 +108,34 @@ describe('DiagnosisCard', () => {
     expect(wrapper.find('[data-test="diagnosis-card"]').exists()).toBe(false)
   })
 
+  it('has every diagnosis key in both locales', () => {
+    const keys = ['title', 'evidence', 'practiceFirst', 'continue']
+    for (const messages of [zhCN, enUS] as Record<string, unknown>[]) {
+      const diagnosis = (messages.practice as Record<string, unknown>).diagnosis as
+        | Record<string, string>
+        | undefined
+      expect(diagnosis, 'practice.diagnosis namespace').toBeTruthy()
+      for (const key of keys) {
+        expect(diagnosis?.[key], `practice.diagnosis.${key}`).toBeTruthy()
+      }
+    }
+  })
+
+  it('never shows the mastery number or depth to the child', () => {
+    const wrapper = mount(DiagnosisCard, {
+      props: {
+        candidate: { ...candidate, bkt_mastery: 0.35, depth: 2 },
+        targetTopicName: 'T',
+        targetTopicNameZh: '中',
+      },
+      global: { plugins: [i18n()] },
+    })
+    const text = wrapper.text()
+    expect(text).not.toContain('0.35')
+    expect(text).not.toContain('35%')
+    expect(text).not.toContain('2 层')
+  })
+
   it('has an aria-live polite region for screen readers', () => {
     const wrapper = mount(DiagnosisCard, {
       props: {

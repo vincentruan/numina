@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -137,12 +138,179 @@ class TestDiagnosisEndpoint:
             item = body[0]
             assert item["is_diagnosis"] is True
             assert item["is_prerequisite"] is True
-            assert item["depth"] == 2
+            # buffer is a direct prerequisite the child is weak on, so it is on
+            # the page as a prerequisite recommendation: cand is one layer
+            # further back than the page already shows.
+            assert item["depth"] == 1
             assert item["bkt_mastery"] is not None and item["bkt_mastery"] < 0.60
             assert item["sample_size"] == 6
             assert item["prerequisite_of_topic_id"] == str(target.id)
             after = db.query(DiagnosisImpression).filter_by(child_id=child.id).count()
             assert after - before == 1
+        finally:
+            client.app.dependency_overrides.clear()
+
+    def test_mastered_direct_pre_requisite_starts_the_backtrace_at_itself(
+        self, client: TestClient, auth_headers, db: Session
+    ):
+        """A mastered direct prerequisite is not a gap, so the backtrace starts
+        there and its weak prerequisite is depth 1 — one layer further back
+        than the page already shows."""
+        family = Family(name="F", invite_code="U34", created_by=1)
+        db.add(family)
+        db.flush()
+        child = User(
+            display_name="Child",
+            password_hash="x",
+            role="child",
+            family_id=family.id,
+        )
+        db.add(child)
+        db.flush()
+
+        # target → buffer (mastered) → cand (weak, 6 attempts, rule-based 0.25)
+        # The buffer is weak too, so it must appear as a prerequisite
+        # recommendation, and the diagnosis must resolve depth to the right
+        # values relative to it: cand is a direct prerequisite of the buffer,
+        # so cand itself is on the buffer's page, and the item returned here is
+        # still cand when the buffer is mastered.
+        target = _topic(db, 2_000_001, "target")
+        buffer = _topic(db, 2_000_004, "buffer")
+        cand = _topic(db, 2_000_002, "cand")
+        db.add(LearningDependency(topic_id=target.id, prerequisite_id=buffer.id, strength="hard"))
+        db.add(LearningDependency(topic_id=buffer.id, prerequisite_id=cand.id, strength="hard"))
+        db.flush()
+
+        _session_and_attempts(db, child, target, 8, 0)  # rule-based 0.0: stuck
+        db.add(LearningProgress(child_id=child.id, topic_id=target.id, mastery_level="learning"))
+        _session_and_attempts(db, child, buffer, 8, 7)
+        db.add(LearningProgress(child_id=child.id, topic_id=buffer.id, mastery_level="mastered"))
+        _question(db, buffer)
+        _session_and_attempts(db, child, cand, 6, 2)
+        db.add(LearningProgress(child_id=child.id, topic_id=cand.id, mastery_level="learning"))
+        _question(db, cand)
+        db.commit()
+
+        from apps.backend.app.auth.deps import get_current_user_or_child
+        from apps.backend.app.database import get_db
+
+        client.app.dependency_overrides[get_db] = lambda: db
+        client.app.dependency_overrides[get_current_user_or_child] = lambda: child
+        try:
+            resp = client.get(
+                "/api/v1/practice/recommend",
+                params={"topic_id": target.id, "diagnosis": True},
+                headers=auth_headers,
+            )
+            assert resp.status_code == 200, resp.text
+            body = resp.json()["data"]
+            assert len(body) == 1, body
+            item = body[0]
+            assert item["topic_id"] == str(cand.id)
+            assert item["depth"] == 1
+            assert item["accuracy"] == pytest.approx(2 / 6)
+            assert item["mastery_level"] == "learning"
+        finally:
+            client.app.dependency_overrides.clear()
+
+    def test_weak_direct_pre_requisite_is_its_own_layer(
+        self, client: TestClient, auth_headers, db: Session
+    ):
+        """When the direct prerequisite is itself weak it is on the page as a
+        prerequisite recommendation, so its prerequisites are the layer the
+        diagnosis reports — at depth 1, one back from what the page shows."""
+        family = Family(name="F", invite_code="U36", created_by=1)
+        db.add(family)
+        db.flush()
+        child = User(
+            display_name="Child",
+            password_hash="x",
+            role="child",
+            family_id=family.id,
+        )
+        db.add(child)
+        db.flush()
+
+        target = _topic(db, 2_000_001, "target")
+        weak_direct = _topic(db, 2_000_002, "weak_direct")
+        below = _topic(db, 2_000_003, "below")
+        db.add(LearningDependency(topic_id=target.id, prerequisite_id=weak_direct.id, strength="hard"))
+        db.add(LearningDependency(topic_id=weak_direct.id, prerequisite_id=below.id, strength="hard"))
+        db.flush()
+
+        _session_and_attempts(db, child, target, 8, 0)
+        db.add(LearningProgress(child_id=child.id, topic_id=target.id, mastery_level="learning"))
+        _session_and_attempts(db, child, weak_direct, 6, 2)
+        db.add(LearningProgress(child_id=child.id, topic_id=weak_direct.id, mastery_level="learning"))
+        _question(db, weak_direct)
+        _session_and_attempts(db, child, below, 8, 0)  # clearly weakest
+        db.add(LearningProgress(child_id=child.id, topic_id=below.id, mastery_level="learning"))
+        _question(db, below)
+        db.commit()
+
+        from apps.backend.app.auth.deps import get_current_user_or_child
+        from apps.backend.app.database import get_db
+
+        client.app.dependency_overrides[get_db] = lambda: db
+        client.app.dependency_overrides[get_current_user_or_child] = lambda: child
+        try:
+            resp = client.get(
+                "/api/v1/practice/recommend",
+                params={"topic_id": target.id, "diagnosis": True},
+                headers=auth_headers,
+            )
+            assert resp.status_code == 200, resp.text
+            body = resp.json()["data"]
+            import logging
+            from apps.backend.app.services.learning.adaptive_service import find_weak_prerequisites, _progress_mastery_level
+            from apps.backend.app.services.learning.adaptive_service import diagnose_weak_prerequisites
+            assert [i["topic_id"] for i in body] == [str(below.id)]
+            assert body[0]["depth"] == 1
+        finally:
+            client.app.dependency_overrides.clear()
+
+    def test_weak_direct_pre_requisite_is_excluded_from_diagnosis(
+        self, client: TestClient, auth_headers, db: Session
+    ):
+        """A direct prerequisite the child is weak on is shown by the existing
+        prerequisite guidance, so the diagnosis must not repeat it."""
+        family = Family(name="F", invite_code="U35", created_by=1)
+        db.add(family)
+        db.flush()
+        child = User(
+            display_name="Child",
+            password_hash="x",
+            role="child",
+            family_id=family.id,
+        )
+        db.add(child)
+        db.flush()
+
+        target = _topic(db, 2_000_001, "target")
+        weak_direct = _topic(db, 2_000_002, "weak_direct")
+        db.add(LearningDependency(topic_id=target.id, prerequisite_id=weak_direct.id, strength="hard"))
+        db.flush()
+
+        _session_and_attempts(db, child, target, 8, 0)
+        db.add(LearningProgress(child_id=child.id, topic_id=target.id, mastery_level="learning"))
+        _session_and_attempts(db, child, weak_direct, 6, 2)  # same weak profile as cand
+        db.add(LearningProgress(child_id=child.id, topic_id=weak_direct.id, mastery_level="learning"))
+        _question(db, weak_direct)
+        db.commit()
+
+        from apps.backend.app.auth.deps import get_current_user_or_child
+        from apps.backend.app.database import get_db
+
+        client.app.dependency_overrides[get_db] = lambda: db
+        client.app.dependency_overrides[get_current_user_or_child] = lambda: child
+        try:
+            resp = client.get(
+                "/api/v1/practice/recommend",
+                params={"topic_id": target.id, "diagnosis": True},
+                headers=auth_headers,
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.json()["data"] == []
         finally:
             client.app.dependency_overrides.clear()
 

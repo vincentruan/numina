@@ -45,7 +45,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { RecommendResponse } from '@/api/practice'
 
-const { t, locale } = useI18n()
+// The diagnosis copy is rooted at practice.*, not learning.practice.*
+const { t, locale } = useI18n({ useScope: 'global' })
 
 const props = defineProps<{
   candidate: RecommendResponse | null

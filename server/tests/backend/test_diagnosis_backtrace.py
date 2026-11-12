@@ -134,7 +134,8 @@ def _question(db: Session, topic: LearningTopic) -> Question:
 
 def test_ae1_depth2_candidate_is_top(db: Session, child: User):
     target = _topic(db, 200_001, "fractions_add")
-    # Direct unmet (R10 excludes)
+    # Direct prerequisite the child is weak on: shown on the page already, so
+    # the router passes it in as a lookback and the backtrace looks past it.
     direct_unmet = _topic(db, 200_002, "common_denom")
     # Depth-2 qualified
     depth2 = _topic(db, 200_003, "lcm")
@@ -153,10 +154,13 @@ def test_ae1_depth2_candidate_is_top(db: Session, child: User):
     _progress(db, child.id, depth2.id, "learning")
     _question(db, depth2)
 
-    results = diagnose_weak_prerequisites(db, target.id, child.id)
+    results = diagnose_weak_prerequisites(
+        db, target.id, child.id, lookback_topic_ids=[direct_unmet.id]
+    )
     assert len(results) == 1, f"expected 1 candidate, got {[r['topic_name'] for r in results]}"
     assert results[0]["topic_id"] == depth2.id
-    assert results[0]["depth"] == 2
+    # One layer back from the direct prerequisites the page already shows.
+    assert results[0]["depth"] == 1
     assert results[0]["sample_size"] == 4
 
 
@@ -222,9 +226,9 @@ def test_ae6_target_above_threshold_returns_empty(db: Session, child: User):
 def test_ae7_cycle_terminates(db: Session, child: User):
     """A→B (hard), B→A (hard cycle), B→C (hard). Target A.
 
-    B is at depth 1 but mastered (so the child can practice A) → B fails
-    R1(c) (mastery_level != 'mastered' nor 'locked'). C is at depth 2 via B
-    and qualified. The cycle A↔B terminates via visited-set without raising
+    B is a direct prerequisite but mastered → not a gap, so it is not on the
+    page and the backtrace starts at it. C, one layer back from B, is
+    qualified. The cycle A↔B terminates via the visited set without raising
     or producing duplicate entries.
     """
     a = _topic(db, 600_001, "A")
@@ -240,7 +244,7 @@ def test_ae7_cycle_terminates(db: Session, child: User):
     _session_and_attempts(db, child, b, n_attempts=8, correct=7)
     _progress(db, child.id, b.id, "mastered")
     _question(db, b)
-    # C is weak at depth 2 — qualified candidate
+    # C is weak one layer back from B — qualified candidate
     _session_and_attempts(db, child, c, n_attempts=5, correct=1)
     _progress(db, child.id, c.id, "learning")
     _question(db, c)
@@ -248,7 +252,7 @@ def test_ae7_cycle_terminates(db: Session, child: User):
     results = diagnose_weak_prerequisites(db, a.id, child.id)
     assert len(results) == 1
     assert results[0]["topic_id"] == c.id
-    assert results[0]["depth"] == 2
+    assert results[0]["depth"] == 1
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -301,20 +305,17 @@ def test_ae8_bkt_class_ranks_before_rule_based(db: Session, child: User):
 
 def test_diamond_dedupe_by_topic_id_at_min_depth(db: Session, child: User):
     """A diamond: target → middle (mastered), target → diamond_mastered (mastered),
-    middle → diamond_weak. diamond_weak is depth-2 via middle.
+    both pointing at diamond_weak.
 
-    To exercise the dedup path (same topic reachable at depth 1 and 2), the
-    plan's R10 exclusion means depth-1 must not be unmet — so we use a
-    'mastered' direct prereq as the path and a second direct mastered prereq
-    as a non-candidate depth-1, with the weak diamond topic at depth 2 only.
+    diamond_weak is reachable through two distinct paths at the same depth, so
+    it must be reported once.
     """
     target = _topic(db, 800_001, "target")
     middle = _topic(db, 800_002, "middle")
     diamond_mastered = _topic(db, 800_003, "diamond_mastered")
     diamond_weak = _topic(db, 800_004, "diamond_weak")
-    # Two depth-1 mastered prereqs so target can be practiced; the diamond_weak
-    # topic is reached via two distinct paths: middle → diamond_weak (depth 2)
-    # AND diamond_mastered → diamond_weak (depth 2). Not depth-1, so R10 doesn't exclude.
+    # Two mastered direct prereqs; diamond_weak is reached via two distinct
+    # paths: middle → diamond_weak and diamond_mastered → diamond_weak.
     _dep(db, target.id, middle.id)
     _dep(db, target.id, diamond_mastered.id)
     _dep(db, middle.id, diamond_weak.id)
@@ -334,7 +335,7 @@ def test_diamond_dedupe_by_topic_id_at_min_depth(db: Session, child: User):
     results = diagnose_weak_prerequisites(db, target.id, child.id)
     diamond_entries = [r for r in results if r["topic_id"] == diamond_weak.id]
     assert len(diamond_entries) == 1
-    assert diamond_entries[0]["depth"] == 2
+    assert diamond_entries[0]["depth"] == 1
 
 
 # ────────────────────────────────────────────────────────────────────────────

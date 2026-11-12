@@ -137,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onActivated } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { showFailToast } from 'vant'
@@ -399,17 +399,24 @@ function load() {
   error.value = ''
   session.value = null
   questions.value = []
-  diagnosisDismissed.value = false
-  diagnosisCandidate.value = null
-  targetTopicDetail.value = null
-  if (!hasFromDiagnosisMarker()) {
-    fetchDiagnosisAndTarget()
-  }
+  startDiagnosis()
 }
 
 function hasFromDiagnosisMarker(): boolean {
   const marker = route.query.fromDiagnosis
   return typeof marker === 'string' && marker.length > 0 && /^\d+$/.test(marker)
+}
+
+/** Fire the diagnosis request, unless this arrival was referred by the card itself. */
+function startDiagnosis() {
+  diagnosisDismissed.value = false
+  diagnosisCandidate.value = null
+  targetTopicDetail.value = null
+  if (hasFromDiagnosisMarker()) {
+    diagnosisLoading.value = false
+    return
+  }
+  fetchDiagnosisAndTarget()
 }
 
 async function fetchDiagnosisAndTarget() {
@@ -420,8 +427,7 @@ async function fetchDiagnosisAndTarget() {
       getTopicDetail(topicId.value),
     ])
     targetTopicDetail.value = { name: detail.name, name_zh: detail.name_zh }
-    const first = diagnosis.find((r) => r.is_diagnosis)
-    diagnosisCandidate.value = first ?? null
+    diagnosisCandidate.value = diagnosis.find((r) => r.is_diagnosis) ?? null
   } catch {
     // Per R8: silently omitted on failure (no retry, no error toast).
     diagnosisCandidate.value = null
@@ -431,12 +437,13 @@ async function fetchDiagnosisAndTarget() {
 }
 
 function onPracticeFirst() {
-  if (!diagnosisCandidate.value) return
-  resetSessionStateForNavigation()
+  const candidate = diagnosisCandidate.value
+  if (!candidate) return
+  const sourceTopicId = topicId.value
   router.push({
     name: route.name,
-    params: { topicId: diagnosisCandidate.value.topic_id },
-    query: { fromDiagnosis: topicId.value },
+    params: { topicId: candidate.topic_id },
+    query: { fromDiagnosis: sourceTopicId },
   })
 }
 
@@ -444,10 +451,9 @@ function onDiagnosisContinue() {
   diagnosisDismissed.value = true
 }
 
+/** Clear the previous topic's session state — the same route is reused for the
+ *  new topic, so without this the child lands mid-session on the new topic. */
 function resetSessionStateForNavigation() {
-  // Route-reuse reset: when pushing a different topic onto the same route,
-  // ensure no residual session/answering/result state lingers from the
-  // previous topic.
   phase.value = 'mode'
   session.value = null
   questions.value = []
@@ -459,33 +465,22 @@ function resetSessionStateForNavigation() {
   challengeConfig.value = null
   challengeDiscoveryMessage.value = ''
   error.value = ''
-  diagnosisCandidate.value = null
-  diagnosisDismissed.value = false
-  diagnosisLoading.value = false
-  targetTopicDetail.value = null
+  startDiagnosis()
 }
 
-// Re-fetch diagnosis on topic change (route reuse when navigating from card).
+// The page loads via onMounted only (the router renders no KeepAlive), and a
+// card referral reuses this component with a different topicId — watch-driven
+// re-fetching would duplicate the mount-time request.
 watch(
   () => route.params.topicId,
-  () => {
+  (next, prev) => {
+    if (next === prev) return
     resetSessionStateForNavigation()
-    if (!hasFromDiagnosisMarker()) {
-      fetchDiagnosisAndTarget()
-    }
   },
 )
 
 onMounted(() => {
-  if (!hasFromDiagnosisMarker()) {
-    fetchDiagnosisAndTarget()
-  }
-})
-
-onActivated(() => {
-  if (!hasFromDiagnosisMarker()) {
-    fetchDiagnosisAndTarget()
-  }
+  startDiagnosis()
 })
 
 </script>
@@ -501,9 +496,11 @@ onActivated(() => {
   color: var(--color-ink);
 }
 
+/* Matches DiagnosisCard's box (12px vertical padding, 3 lines of copy, 36px
+   action row) so swapping the skeleton for the card does not shift the CTA. */
 .diagnosis-skeleton {
   margin: 12px 16px;
-  height: 120px;
+  height: 132px;
   border-radius: 12px;
   background: linear-gradient(
     90deg,
@@ -511,6 +508,7 @@ onActivated(() => {
     var(--color-canvas) 50%,
     var(--color-surface-card) 100%
   );
+  background-size: 200% 100%;
   animation: shimmer 1.2s infinite;
 }
 

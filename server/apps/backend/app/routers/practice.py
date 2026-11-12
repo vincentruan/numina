@@ -402,10 +402,20 @@ def get_practice_recommendations(
     if diagnosis and topic_id is not None:
         from apps.backend.app.services.learning.adaptive_service import (
             diagnose_weak_prerequisites,
+            find_weak_prerequisites,
         )
 
+        # The child is already shown, on this same page, the direct
+        # prerequisites they are weak on, so the diagnosis looks one layer
+        # further back through exactly those.
+        weak_direct = find_weak_prerequisites(db, topic_id, user.id)
+        weak_direct_ids = [p["topic_id"] for p in weak_direct]
+
         candidates = diagnose_weak_prerequisites(
-            db, topic_id=topic_id, child_id=user.id
+            db,
+            topic_id=topic_id,
+            child_id=user.id,
+            lookback_topic_ids=weak_direct_ids,
         )
         return [
             RecommendResponse(
@@ -413,7 +423,7 @@ def get_practice_recommendations(
                 topic_name=r.get("topic_name") or "",
                 topic_name_zh=r.get("topic_name_zh"),
                 mastery_level=r["mastery_level"],
-                accuracy=0.0,
+                accuracy=r["accuracy"],
                 is_prerequisite=True,
                 prerequisite_of_topic_id=topic_id,
                 is_diagnosis=True,
