@@ -21,6 +21,8 @@ from apps.backend.app.schemas.learning import (
     ClusterResponse,
     HookQuestionResponse,
     LearningStatsResponse,
+    MapExplorationCreate,
+    MapExplorationResponse,
     MapIndexItem,
     OnboardingCompleteResponse,
     PathResponse,
@@ -56,6 +58,7 @@ from apps.backend.app.services.notification.dispatcher import (
     notify_learning_submitted_for_review,
 )
 from packages.db.models.learning.assignment import LearningAssignment
+from packages.db.models.learning.map_exploration import LearningMapExploration
 from packages.db.models.learning.path import LearningPath
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
@@ -185,6 +188,37 @@ def list_my_bridges(
     """List cross-subject bridge edges between cluster domains."""
     taxonomy = get_effective_source_taxonomy(db, child.language)
     return get_cross_subject_bridges(db, source_taxonomy=taxonomy, subject=subject)
+
+
+@router.post(
+    "/map/explorations",
+    response_model=MapExplorationResponse,
+    status_code=201,
+)
+def record_map_exploration(
+    payload: MapExplorationCreate,
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Record one knowledge-map visit (R11, R12).
+
+    Posted when the child leaves the map. A visit that ends with no topic
+    selection is still recorded, so exploration time and zoom depth survive
+    sessions that only browsed (AE4).
+    """
+    row = LearningMapExploration(
+        child_id=child.id,
+        family_id=child.family_id,
+        duration_ms=payload.duration_ms,
+        max_zoom_level=payload.max_zoom_level,
+        topic_selected=payload.topic_selected,
+        interaction_count=payload.interaction_count,
+        selected_topic_id=payload.selected_topic_id if payload.topic_selected else None,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return MapExplorationResponse.model_validate(row)
 
 
 @router.get("/assignments", response_model=list[AssignmentResponse])
