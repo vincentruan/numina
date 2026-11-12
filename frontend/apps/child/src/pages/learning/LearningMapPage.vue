@@ -297,6 +297,16 @@ const dependencyEdges = ref<DependencyEdge[]>([])
 const oceanSubject = ref('')
 const oceanDomain = ref('')
 
+/** Progress row by topic id — one pass, so domain/topic level lookups stay
+ *  O(1) instead of O(topics × progress) at 1600-topic scale. */
+const progressByTopicId = computed<Map<string, { mastery_level: string }>>(() => {
+  const map = new Map<string, { mastery_level: string }>()
+  for (const p of progressList.value) {
+    map.set(p.topic_id, { mastery_level: p.mastery_level })
+  }
+  return map
+})
+
 /** Subject mastery per subject key, from progress rows. */
 const masteryBySubject = computed<Map<string, { total: number; mastered: number }>>(() => {
   const bySubject = new Map<string, { total: number; mastered: number }>()
@@ -342,7 +352,7 @@ const oceanDomains = computed<OceanDomain[]>(() => {
     const domain = row.domain || '__other__'
     const entry = stats.get(domain) ?? { total: 0, mastered: 0 }
     entry.total++
-    const p = progressList.value.find((x) => x.topic_id === row.id)
+    const p = progressByTopicId.value.get(row.id)
     if (p?.mastery_level === 'mastered') entry.mastered++
     stats.set(domain, entry)
   }
@@ -365,7 +375,7 @@ const oceanTopics = computed<OceanTopic[]>(() => {
         row.subject === oceanSubject.value && (row.domain || '__other__') === oceanDomain.value,
     )
     .map((row) => {
-      const p = progressList.value.find((x) => x.topic_id === row.id)
+      const p = progressByTopicId.value.get(row.id)
       return {
         id: row.id,
         subject: row.subject,
