@@ -35,19 +35,8 @@
       </div>
     </div>
 
-    <!-- Phase 2: hands-on manipulation (U6) -->
-    <div v-else-if="phase === 'manipulate' && challengeConfig" class="manipulate-phase">
-      <ManipulateObserveReflect
-        :config="challengeConfig"
-        @complete="onChallengeComplete"
-        @request-tutor="onRequestTutor"
-      />
-    </div>
-
-    <!-- Phase 2 fallback: manipulate requested but no config → skip to answering -->
-
-    <!-- Phase 3: answering (also covers manipulate-without-config fallback) -->
-    <div v-else-if="phase === 'answering' || (phase === 'manipulate' && !challengeConfig)" class="answer-phase">
+    <!-- Phase 2: answering -->
+    <div v-else-if="phase === 'answering'" class="answer-phase">
       <van-progress
         :percentage="progressPercent"
         stroke-width="6"
@@ -116,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { showFailToast } from 'vant'
@@ -135,7 +124,6 @@ import {
 import PracticeQuestionCard from '@/components/learning/PracticeQuestionCard.vue'
 import PracticeAnswerInput from '@/components/learning/PracticeAnswerInput.vue'
 import PracticeResultSummary from '@/components/learning/PracticeResultSummary.vue'
-import ManipulateObserveReflect from '@/components/learning/ManipulateObserveReflect.vue'
 import DiscoveryChallengeIntro from '@/components/learning/DiscoveryChallengeIntro.vue'
 import { createSession, getTopicDetail } from '@/api/learning'
 import { getChallengeForTopic } from '@/data/learning-challenge/fair-distribution'
@@ -154,7 +142,7 @@ const error = ref('')
 const starting = ref(false)
 const submitting = ref(false)
 
-const phase = ref<'discovery' | 'mode' | 'manipulate' | 'answering' | 'result'>('mode')
+const phase = ref<'discovery' | 'mode' | 'answering' | 'result'>('mode')
 const session = ref<PracticeSessionResponse | null>(null)
 const challengeConfig = ref<ChallengeConfig | null>(null)
 const challengeDiscoveryMessage = ref('')
@@ -208,17 +196,10 @@ async function startSession(count: number) {
       error.value = t('practice.errors.noQuestions')
       return
     }
-    // Check if this topic has a hands-on challenge (U6).
-    // The route carries a snowflake topic id; challenges are keyed by topic_key,
-    // so resolve the key from the topic detail before looking up the config.
-    const challenge = getChallengeForTopic(await resolveTopicKey())
-    if (challenge) {
-      challengeConfig.value = challenge
-      // Issue #210: Discovery-first flow — challenge is the entry point
-      phase.value = 'discovery'
-    } else {
-      phase.value = 'mode'
-    }
+    // Challenge lookup has moved to page-entry time (resolveTopicChallenge on mount).
+    // startSession is called only from mode selection, so the challenge (if any) has
+    // already been completed — always advance directly to answering.
+    phase.value = 'answering'
   } catch (e: unknown) {
     const code = extractErrorCode(e)
     error.value = mapPracticeErrorCode(code)
@@ -247,6 +228,37 @@ async function resolveTopicKey(): Promise<string> {
     return ''
   }
 }
+
+/**
+ * KTD1: Resolve challenge on page entry (single-shot), before any session
+ * exists. Challenge topics enter discovery; challenge-less topics enter mode
+ * directly. This removes the challenge lookup from `startSession` which caused
+ * the #210 infinite loop (discovery → mode → startSession re-resolved the
+ * challenge → discovery again).
+ */
+async function resolveTopicChallenge() {
+  loading.value = true
+  error.value = ''
+  try {
+    const topicKey = await resolveTopicKey()
+    const challenge = getChallengeForTopic(topicKey)
+    if (challenge) {
+      challengeConfig.value = challenge
+      phase.value = 'discovery'
+    } else {
+      phase.value = 'mode'
+    }
+  } catch {
+    phase.value = 'mode'
+  } finally {
+    loading.value = false
+  }
+}
+
+// Resolve challenge once on mount — sets the initial phase (discovery or mode).
+onMounted(() => {
+  resolveTopicChallenge()
+})
 
 /** Map backend practice error codes to i18n keys */
 function mapPracticeErrorCode(code: string | null): string {
@@ -320,16 +332,6 @@ function onDiscoveryComplete() {
   phase.value = 'mode'
 }
 
-function onChallengeComplete() {
-  // Capture the challenge's discovery message for the result screen (R6)
-  if (challengeConfig.value) {
-    challengeDiscoveryMessage.value = locale.value.startsWith('zh')
-      ? challengeConfig.value.discoveryMessageZh
-      : challengeConfig.value.discoveryMessage
-  }
-  phase.value = 'answering'
-}
-
 /** After 2 failed attempts the child can ask the AI tutor (F3). The tutor
  *  route takes a session id, so create one for this topic first. */
 async function onRequestTutor() {
@@ -367,10 +369,13 @@ function startPrereqPractice(prereqTopicId: string) {
 }
 
 function load() {
-  phase.value = 'mode'
   error.value = ''
   session.value = null
   questions.value = []
+  challengeConfig.value = null
+  challengeDiscoveryMessage.value = ''
+  // Re-resolve challenge on retry — resets phase to discovery or mode
+  resolveTopicChallenge()
 }
 </script>
 
