@@ -33,6 +33,13 @@
           <div class="view-mode-toggle">
             <button
               class="view-mode-btn"
+              :class="{ 'view-mode-btn--active': viewMode === 'continent' }"
+              @click="viewMode = 'continent'"
+            >
+              {{ t('learning.graphMap.viewContinent') }}
+            </button>
+            <button
+              class="view-mode-btn"
               :class="{ 'view-mode-btn--active': viewMode === 'list' }"
               @click="viewMode = 'list'"
             >
@@ -47,8 +54,16 @@
             </button>
           </div>
 
+          <!-- Continent overview (default view — all subjects as continents) -->
+          <KnowledgeContinent
+            v-if="viewMode === 'continent'"
+            :continents="continents"
+            :selected-subject="selectedSubject"
+            @select="onSwitchSubject"
+          />
+
           <!-- Cluster map for selected subject -->
-          <div class="map-content">
+          <div v-else class="map-content">
             <ClusterMap
               v-if="viewMode === 'list'"
               :items="mapItems"
@@ -102,10 +117,13 @@ import type { ProgressWithTopic } from '@/api/learning'
 import SubjectTabs from '@/components/learning/SubjectTabs.vue'
 import type { SubjectTab } from '@/components/learning/SubjectTabs.vue'
 import ClusterMap from '@/components/learning/ClusterMap.vue'
+import KnowledgeContinent from '@/components/learning/KnowledgeContinent.vue'
+import type { ContinentSummary } from '@/components/learning/KnowledgeContinent.vue'
 import GraphMap from '@/components/learning/GraphMap.vue'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
+import { getContinentTheme } from '@/data/continentThemes'
 
 const { t } = useI18n()
 const { topicDisplayName, topicDescription } = useLocalizedTopic()
@@ -117,7 +135,7 @@ const loading = ref(true)
 const refreshing = ref(false)
 const error = ref('')
 const selectedSubject = ref('')
-const viewMode = ref<'list' | 'graph'>('list')
+const viewMode = ref<'continent' | 'list' | 'graph'>('continent')
 const progressList = ref<Array<{
   topic_id: string
   mastery_level: string
@@ -191,6 +209,37 @@ const subjectTabs = computed<SubjectTab[]>(() => {
     .filter(([, count]) => count > 0)
     .map(([subject, count]) => ({ subject, count }))
     .sort((a, b) => a.subject.localeCompare(b.subject))
+})
+
+/** Continent summaries for the KnowledgeContinent view (#208). */
+const continents = computed<ContinentSummary[]>(() => {
+  // Aggregate by subject: total count, mastered count, frontier flag
+  const bySubject = new Map<string, { total: number; mastered: number }>()
+  for (const p of progressList.value) {
+    const s = p.subject
+    if (!s) continue
+    const entry = bySubject.get(s) ?? { total: 0, mastered: 0 }
+    entry.total++
+    if (p.mastery_level === 'mastered') entry.mastered++
+    bySubject.set(s, entry)
+  }
+  // Frontiers: subjects with at least one non-mastered item
+  const frontierTopicSubject = nextTopic.value?.topic.subject
+  return subjectTabs.value.map((tab) => {
+    const stats = bySubject.get(tab.subject) ?? { total: 0, mastered: 0 }
+    const masteryRatio = stats.total > 0 ? stats.mastered / stats.total : 0
+    const theme = getContinentTheme(tab.subject)
+    return {
+      subject: tab.subject,
+      displayName: t(`learning.subject.${tab.subject}`, tab.subject),
+      icon: theme.icon,
+      itemCount: stats.total,
+      masteredCount: stats.mastered,
+      masteryRatio,
+      masteryPercent: Math.round(masteryRatio * 100),
+      isFrontier: tab.subject === frontierTopicSubject,
+    }
+  })
 })
 
 // Auto-select first subject if current selection is invalid

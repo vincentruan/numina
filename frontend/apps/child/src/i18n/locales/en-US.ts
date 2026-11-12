@@ -444,6 +444,10 @@ export default {
   },
   learning: {
     title: 'Knowledge Map',
+    continent: {
+      mastered: '{mastered}/{total} mastered',
+      explore: 'Explore',
+    },
     backToMap: '← Back to Map',
     empty: 'No learning content yet — ask your parents to assign some!',
     todayRecommend: 'Today\'s Pick',
@@ -501,6 +505,7 @@ export default {
       reasonReviewDue: 'Review due',
     },
     graphMap: {
+      viewContinent: 'Continents',
       viewList: 'List',
       viewGraph: 'Graph',
       layoutForce: 'Force',
