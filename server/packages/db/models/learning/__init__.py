@@ -1,4 +1,5 @@
 from packages.db.models.learning.hook import TopicHookQuestion
+from packages.db.models.learning.map_exploration import LearningMapExploration
 from packages.db.models.learning.path import LearningPath, LearningPathItem
 from packages.db.models.learning.practice import PracticeAttempt, PracticeSession
 from packages.db.models.learning.preset_path import PresetLearningPath
@@ -17,4 +18,5 @@ __all__ = [
     "QuestionKnowledgePoint",
     "ChildLearningStats",
     "TopicHookQuestion",
+    "LearningMapExploration",
 ]

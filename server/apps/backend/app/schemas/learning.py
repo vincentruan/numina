@@ -560,3 +560,32 @@ class HookQuestionResponse(SnowflakeBase):
     age_group: str
     difficulty: str
     review_status: str
+
+
+# --- Knowledge Map Exploration (R11, R12) ---
+
+
+class MapExplorationCreate(BaseModel):
+    """One completed map visit, posted when the child leaves the map."""
+
+    # Elapsed ms between map mount and first topic selection (R11).
+    # Upper bound = 7 days (604,800,000 ms); Postgres Integer is 4-byte (max
+    # ~24.8 days), so a buggy client posting larger values would otherwise
+    # trigger a DataError (500).
+    duration_ms: int = Field(ge=0, le=604_800_000)
+    # Deepest zoom level reached: 0 subject, 1 domain, 2 topic (R12).
+    max_zoom_level: int = Field(ge=0, le=2)
+    topic_selected: bool = False
+    # Pan/zoom/tap count — separates browsing from a drive-by (R12).
+    interaction_count: int = Field(ge=0, default=0)
+    selected_topic_id: int | None = None
+
+
+class MapExplorationResponse(SnowflakeBase):
+    id: int
+    duration_ms: int
+    max_zoom_level: int
+    topic_selected: bool
+    interaction_count: int
+    selected_topic_id: int | None = None
+    created_at: datetime
