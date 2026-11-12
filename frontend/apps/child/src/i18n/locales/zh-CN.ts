@@ -445,6 +445,10 @@ export default {
   },
   learning: {
     title: '知识地图',
+    continent: {
+      mastered: '已掌握 {mastered}/{total}',
+      explore: '探索',
+    },
     backToMap: '← 返回知识地图',
     empty: '还没有学习内容，让爸爸妈妈帮你布置吧！',
     topicNotFound: '知识点不存在或已下架',
@@ -494,6 +498,7 @@ export default {
       reasonReviewDue: '需要复习',
     },
     graphMap: {
+      viewContinent: '大陆',
       viewList: '列表',
       viewGraph: '图形',
       layoutForce: '力导向',

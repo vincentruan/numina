@@ -84,6 +84,13 @@ function mountPage() {
   return mount(LearningMapPage, { global: { plugins: [i18n] } })
 }
 
+/** Click the "list" view toggle so ClusterMap renders (default is continent view). */
+async function switchToListView(wrapper: ReturnType<typeof mountPage>) {
+  const listBtn = wrapper.findAll('.view-mode-btn').find((b) => b.text().includes('列表') || b.text().includes('List'))
+  if (listBtn) await listBtn.trigger('click')
+  await flushPromises()
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   rows.length = 0
@@ -106,6 +113,7 @@ describe('LearningMapPage — cluster map integration', () => {
     )
     const wrapper = mountPage()
     await flushPromises()
+    await switchToListView(wrapper)
 
     // Tabs come from the index alone — getClusters is not what builds them.
     const tabs = wrapper.findAll('.subject-tab')
@@ -204,6 +212,7 @@ describe('LearningMapPage — cluster map integration', () => {
     })
     const wrapper = mountPage()
     await flushPromises()
+    await switchToListView(wrapper)
 
     // A bridge to a subject the child has no progress in — no tab exists for it.
     wrapper.findComponent({ name: 'ClusterMap' }).vm.$emit('switchSubject', 'personal_social')
