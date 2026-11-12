@@ -100,11 +100,10 @@ class RuleBasedMasteryEstimator:
 class BayesianKnowledgeTracingEstimator:
     """Bayesian Knowledge Tracing (BKT) mastery estimator.
 
-    Uses the standard BKT model with per-topic belief state tracking:
-    - P(L₀): initial probability of knowing (default 0.1)
-    - P(T): probability of learning on each attempt (default 0.3)
-    - P(G): probability of guessing correctly when not knowing (default 0.25)
-    - P(S): probability of slipping (wrong answer when knowing) (default 0.1)
+    Uses the standard BKT model with per-topic belief state tracking.
+    Per-skill parameters (P(L0), P(T), P(G), P(S)) are fitted from data
+    via bkt_calibration.get_bkt_parameters() — topics with sufficient
+    attempt data get custom parameters; others use defaults.
 
     Falls back to RuleBasedMasteryEstimator when fewer than MIN_ATTEMPTS
     observations are available (< 5).
@@ -114,21 +113,35 @@ class BayesianKnowledgeTracingEstimator:
 
     def __init__(
         self,
-        p_l0: float = 0.1,
-        p_t: float = 0.3,
-        p_g: float = 0.25,
-        p_s: float = 0.1,
+        p_l0: float | None = None,
+        p_t: float | None = None,
+        p_g: float | None = None,
+        p_s: float | None = None,
     ):
-        self.p_l0 = p_l0
-        self.p_t = p_t
-        self.p_g = p_g
-        self.p_s = p_s
+        # Store global defaults (used when per-skill params unavailable)
+        self.default_p_l0 = p_l0 if p_l0 is not None else 0.1
+        self.default_p_t = p_t if p_t is not None else 0.3
+        self.default_p_g = p_g if p_g is not None else 0.25
+        self.default_p_s = p_s if p_s is not None else 0.1
+
+    def _get_params_for_topic(self, db: Session, topic_id: int) -> tuple[float, float, float, float]:
+        """Get BKT parameters for a topic, preferring per-skill fitted values."""
+        from apps.backend.app.services.learning.bkt_calibration import (
+            get_bkt_parameters,
+        )
+
+        params = get_bkt_parameters(db, topic_id)
+        if params.is_fitted:
+            return params.p_l0, params.p_t, params.p_g, params.p_s
+        # Use defaults
+        return self.default_p_l0, self.default_p_t, self.default_p_g, self.default_p_s
 
     def estimate(self, db: Session, child_id: int, topic_id: int) -> float:
         """Estimate mastery via Bayesian belief state update.
 
         Iterates through attempts chronologically, applying Bayes' rule
         after each observation, then projecting forward with P(T).
+        Uses per-skill calibrated parameters when available.
         """
         attempts = (
             db.query(PracticeAttempt)
@@ -141,23 +154,26 @@ class BayesianKnowledgeTracingEstimator:
             # Insufficient data — fallback to rule-based
             return RuleBasedMasteryEstimator().estimate(db, child_id, topic_id)
 
+        # Get per-skill parameters (fitted or defaults)
+        p_l0, p_t, p_g, p_s = self._get_params_for_topic(db, topic_id)
+
         # BKT forward algorithm
-        p_l = self.p_l0
+        p_l = p_l0
         for attempt in attempts:
             # Bayesian update: P(L|observation)
             if attempt.is_correct:
                 p_l_given_obs = (
-                    p_l * (1 - self.p_s)
-                    / (p_l * (1 - self.p_s) + (1 - p_l) * self.p_g)
+                    p_l * (1 - p_s)
+                    / (p_l * (1 - p_s) + (1 - p_l) * p_g)
                 )
             else:
                 p_l_given_obs = (
-                    p_l * self.p_s
-                    / (p_l * self.p_s + (1 - p_l) * (1 - self.p_g))
+                    p_l * p_s
+                    / (p_l * p_s + (1 - p_l) * (1 - p_g))
                 )
             # Transition: P(L_{n+1}) = P(L|obs) + (1 - P(L|obs)) * P(T)
             # Standard BKT: knowledge can only grow, never unlearn
-            p_l = p_l_given_obs + (1 - p_l_given_obs) * self.p_t
+            p_l = p_l_given_obs + (1 - p_l_given_obs) * p_t
 
         return p_l
 

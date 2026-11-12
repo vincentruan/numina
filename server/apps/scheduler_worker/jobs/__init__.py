@@ -974,3 +974,48 @@ def empirical_difficulty_job() -> None:
     finally:
         db.close()
 
+
+# ── Job 15: Per-Skill BKT parameter calibration ──────────────────────────────
+
+
+def bkt_calibration_job() -> None:
+    """Fit per-skill BKT parameters from PracticeAttempt data.
+
+    Runs weekly. For each topic with ≥20 attempts, fits individual BKT
+    parameters (P(L0), P(T), P(G), P(S)) and caches them for use by
+    BayesianKnowledgeTracingEstimator.
+    """
+    from apps.backend.app.services.learning.bkt_calibration import (  # noqa: PLC0415
+        batch_fit_parameters,
+        clear_cache,
+        get_fit_stats,
+    )
+
+    db = SessionLocal()
+    try:
+        stats_before = get_fit_stats(db)
+        logger.info(
+            "BKT参数校准开始: 有数据主题=%s, 已拟合=%s (%s%%)",
+            stats_before["total_topics_with_data"],
+            stats_before["fitted_topics"],
+            stats_before["coverage_pct"],
+        )
+
+        # Clear old cache and refit
+        clear_cache()
+        results = batch_fit_parameters(db)
+
+        stats_after = get_fit_stats(db)
+        fitted_count = sum(1 for p in results.values() if p.is_fitted)
+
+        logger.info(
+            "BKT参数校准完成: 拟合=%s, 覆盖率=%s%% (前=%s%%)",
+            fitted_count,
+            stats_after["coverage_pct"],
+            stats_before["coverage_pct"],
+        )
+    except Exception:
+        logger.exception("BKT参数校准任务失败")
+    finally:
+        db.close()
+
