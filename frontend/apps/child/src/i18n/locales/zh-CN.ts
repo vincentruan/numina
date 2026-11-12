@@ -984,6 +984,12 @@ export default {
     },
     prereqReview: '建议复习先修知识点',
     prereqReason: '正确率 {accuracy}%，建议先巩固',
+    diagnosis: {
+      title: '{name} 练得还不太稳',
+      evidence: '你练过 {count} 次，还没练熟。先巩固一下，{topic} 会更容易！',
+      practiceFirst: '先练 {name}',
+      continue: '继续练 {topic}',
+    },
   },
   empty: {
     noTasks: '今天没有任务，好好休息吧 🌟',

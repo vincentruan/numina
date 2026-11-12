@@ -21,6 +21,27 @@
     <!-- Phase 1: mode selection -->
     <div v-else-if="phase === 'mode'" class="mode-phase">
       <h1 class="page-title">{{ displayTopicName }}</h1>
+      <!-- Diagnosis skeleton while loading (reserved height per R8). -->
+      <div
+        v-if="diagnosisLoading && !diagnosisDismissed && !hasFromDiagnosisMarker()"
+        class="diagnosis-skeleton"
+        aria-hidden="true"
+        data-test="diagnosis-skeleton"
+      />
+      <!-- Diagnosis card (issue #213): inline above the CTA, dismissed per-mount. -->
+      <DiagnosisCard
+        v-else-if="
+          !diagnosisDismissed &&
+          !hasFromDiagnosisMarker() &&
+          diagnosisCandidate
+        "
+        :candidate="diagnosisCandidate"
+        :target-topic-name="targetTopicDetail?.name ?? null"
+        :target-topic-name-zh="targetTopicDetail?.name_zh ?? null"
+        data-test="diagnosis-card-wrapper"
+        @practice-first="onPracticeFirst"
+        @continue="onDiagnosisContinue"
+      />
       <div class="mode-list">
         <button
           v-for="m in modes"
@@ -116,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch, onMounted, onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { showFailToast } from 'vant'
@@ -137,6 +158,7 @@ import PracticeAnswerInput from '@/components/learning/PracticeAnswerInput.vue'
 import PracticeResultSummary from '@/components/learning/PracticeResultSummary.vue'
 import ManipulateObserveReflect from '@/components/learning/ManipulateObserveReflect.vue'
 import DiscoveryChallengeIntro from '@/components/learning/DiscoveryChallengeIntro.vue'
+import DiagnosisCard from '@/components/learning/DiagnosisCard.vue'
 import { createSession, getTopicDetail } from '@/api/learning'
 import { getChallengeForTopic } from '@/data/learning-challenge/fair-distribution'
 import type { ChallengeConfig } from '@/types/learning-challenge'
@@ -164,6 +186,12 @@ const lastAttempt = ref<PracticeAttemptResponse | null>(null)
 const feedbackShown = ref(false)
 const sessionResult = ref<PracticeResultResponse | null>(null)
 const recommendations = ref<RecommendResponse[]>([])
+
+// Diagnosis state (issue #213)
+const diagnosisCandidate = ref<RecommendResponse | null>(null)
+const diagnosisLoading = ref(false)
+const diagnosisDismissed = ref(false)
+const targetTopicDetail = ref<{ name: string | null; name_zh: string | null } | null>(null)
 
 const answerInputRef = ref<InstanceType<typeof PracticeAnswerInput> | null>(null)
 
@@ -371,7 +399,95 @@ function load() {
   error.value = ''
   session.value = null
   questions.value = []
+  diagnosisDismissed.value = false
+  diagnosisCandidate.value = null
+  targetTopicDetail.value = null
+  if (!hasFromDiagnosisMarker()) {
+    fetchDiagnosisAndTarget()
+  }
 }
+
+function hasFromDiagnosisMarker(): boolean {
+  const marker = route.query.fromDiagnosis
+  return typeof marker === 'string' && marker.length > 0 && /^\d+$/.test(marker)
+}
+
+async function fetchDiagnosisAndTarget() {
+  diagnosisLoading.value = true
+  try {
+    const [diagnosis, detail] = await Promise.all([
+      getPracticeRecommendations(topicId.value, true),
+      getTopicDetail(topicId.value),
+    ])
+    targetTopicDetail.value = { name: detail.name, name_zh: detail.name_zh }
+    const first = diagnosis.find((r) => r.is_diagnosis)
+    diagnosisCandidate.value = first ?? null
+  } catch {
+    // Per R8: silently omitted on failure (no retry, no error toast).
+    diagnosisCandidate.value = null
+  } finally {
+    diagnosisLoading.value = false
+  }
+}
+
+function onPracticeFirst() {
+  if (!diagnosisCandidate.value) return
+  resetSessionStateForNavigation()
+  router.push({
+    name: route.name,
+    params: { topicId: diagnosisCandidate.value.topic_id },
+    query: { fromDiagnosis: topicId.value },
+  })
+}
+
+function onDiagnosisContinue() {
+  diagnosisDismissed.value = true
+}
+
+function resetSessionStateForNavigation() {
+  // Route-reuse reset: when pushing a different topic onto the same route,
+  // ensure no residual session/answering/result state lingers from the
+  // previous topic.
+  phase.value = 'mode'
+  session.value = null
+  questions.value = []
+  currentIndex.value = 0
+  lastAttempt.value = null
+  feedbackShown.value = false
+  sessionResult.value = null
+  recommendations.value = []
+  challengeConfig.value = null
+  challengeDiscoveryMessage.value = ''
+  error.value = ''
+  diagnosisCandidate.value = null
+  diagnosisDismissed.value = false
+  diagnosisLoading.value = false
+  targetTopicDetail.value = null
+}
+
+// Re-fetch diagnosis on topic change (route reuse when navigating from card).
+watch(
+  () => route.params.topicId,
+  () => {
+    resetSessionStateForNavigation()
+    if (!hasFromDiagnosisMarker()) {
+      fetchDiagnosisAndTarget()
+    }
+  },
+)
+
+onMounted(() => {
+  if (!hasFromDiagnosisMarker()) {
+    fetchDiagnosisAndTarget()
+  }
+})
+
+onActivated(() => {
+  if (!hasFromDiagnosisMarker()) {
+    fetchDiagnosisAndTarget()
+  }
+})
+
 </script>
 
 <style scoped>
@@ -383,6 +499,28 @@ function load() {
   margin: 16px;
   font-size: 20px;
   color: var(--color-ink);
+}
+
+.diagnosis-skeleton {
+  margin: 12px 16px;
+  height: 120px;
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-card) 0%,
+    var(--color-canvas) 50%,
+    var(--color-surface-card) 100%
+  );
+  animation: shimmer 1.2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .mode-list {

@@ -764,6 +764,13 @@ export default {
     },
     prereqReview: 'Recommended Prerequisite Review',
     prereqReason: '{accuracy}% accuracy — review first',
+    diagnosis: {
+      title: '{name} needs a little more practice',
+      evidence:
+        "You've tried {count} times and it's not quite sticking yet. A quick review will make {topic} easier!",
+      practiceFirst: 'Practice {name} first',
+      continue: 'Keep practicing {topic}',
+    },
   },
   empty: {
     noTasks: 'No tasks today, enjoy your rest 🌟',
