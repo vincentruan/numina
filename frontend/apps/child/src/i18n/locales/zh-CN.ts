@@ -822,6 +822,20 @@ export default {
         smart_tutor_answer: '提交答案失败: {status}',
       },
     },
+    teach_back: {
+      title: '小老师时间',
+      welcome: '有一个好奇的朋友总是不明白这个知识点，你来当小老师，教教 TA 吧！',
+      start_btn: '开始教',
+      input_placeholder: '用你自己的话解释给 TA 听...',
+      send_btn: '发送',
+      verdict_hit: '解释对了',
+      verdict_miss: '再想想',
+      eureka: '哇！TA 终于明白了！你教得太棒了！',
+      error: {
+        start: '启动教学失败: {status}',
+        answer: '提交解释失败: {status}',
+      },
+    },
     progress: {
       title: '学习进度',
       studyTime: '学习时长',

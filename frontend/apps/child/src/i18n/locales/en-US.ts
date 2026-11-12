@@ -602,6 +602,20 @@ export default {
         smart_tutor_answer: 'Failed to submit answer: {status}',
       },
     },
+    teach_back: {
+      title: 'Little Teacher Time',
+      welcome: 'A curious friend just cannot get this topic. Be the teacher and explain it to them!',
+      start_btn: 'Start teaching',
+      input_placeholder: 'Explain it in your own words...',
+      send_btn: 'Send',
+      verdict_hit: 'Explained!',
+      verdict_miss: 'Think again',
+      eureka: 'Wow! They finally get it! You taught so well!',
+      error: {
+        start: 'Failed to start teach-back: {status}',
+        answer: 'Failed to submit explanation: {status}',
+      },
+    },
     progress: {
       title: 'Learning Progress',
       studyTime: 'Study Time',
