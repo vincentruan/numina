@@ -15,9 +15,9 @@
         <!-- Error state -->
         <div v-if="error" class="error-msg">{{ error }}</div>
 
-        <!-- Empty state -->
+        <!-- Empty state — only when there is nothing to explore at all -->
         <EmptyState
-          v-else-if="mapItems.length === 0"
+          v-else-if="mapItems.length === 0 && topicIndex.length === 0"
           :illustration="noRecordsSvg"
           :text="t('learning.empty')"
         />
@@ -33,8 +33,8 @@
           <div class="view-mode-toggle">
             <button
               class="view-mode-btn"
-              :class="{ 'view-mode-btn--active': viewMode === 'continent' }"
-              @click="viewMode = 'continent'"
+              :class="{ 'view-mode-btn--active': viewMode === 'ocean' }"
+              @click="viewMode = 'ocean'"
             >
               {{ t('learning.graphMap.viewContinent') }}
             </button>
@@ -54,12 +54,23 @@
             </button>
           </div>
 
-          <!-- Continent overview (default view — all subjects as continents) -->
-          <KnowledgeContinent
-            v-if="viewMode === 'continent'"
-            :continents="continents"
-            :selected-subject="selectedSubject"
-            @select="onSwitchSubject"
+          <!-- Knowledge ocean (default view — R1): three-level zoomable map -->
+          <KnowledgeOcean
+            v-if="viewMode === 'ocean'"
+            :subjects="oceanSubjects"
+            :domains="oceanDomains"
+            :topics="oceanTopics"
+            :edges="oceanEdges"
+            :selected-subject="oceanSubject"
+            :selected-domain="oceanDomain"
+            @preview-subject="onPreviewSubject"
+            @select-subject="onOceanSelectSubject"
+            @preview-domain="onPreviewDomain"
+            @select-domain="onOceanSelectDomain"
+            @select-topic="onOceanSelectTopic"
+            @zoom-out="onOceanZoomOut"
+            @zoomed="exploration?.recordZoom"
+            @interacted="exploration?.recordInteraction"
           />
 
           <!-- Cluster map for selected subject -->
@@ -98,6 +109,56 @@
           </div>
         </template>
       </van-pull-refresh>
+
+      <!-- Subject preview (R6/AE2 — a fogged island tap yields a preview,
+           never a refusal; the child can continue into the subject). -->
+      <van-popup
+        :show="!!previewSubjectId"
+        position="bottom"
+        round
+        :style="{ padding: '16px', maxWidth: '400px', margin: '0 auto' }"
+        @update:show="previewSubjectId = ''"
+      >
+        <div v-if="previewSubject" class="ocean-preview">
+          <div class="ocean-preview__header">
+            <span class="ocean-preview__icon">{{ previewSubject.icon }}</span>
+            <span class="ocean-preview__title">{{ previewSubject.displayName }}</span>
+          </div>
+          <p class="ocean-preview__stats">
+            {{ t('learning.ocean.previewMastered', {
+              mastered: previewSubject.masteredCount,
+              total: previewSubject.topicCount,
+            }) }}
+          </p>
+          <button class="ocean-preview__btn" @click="onOceanSelectSubject(previewSubject.id)">
+            {{ t('learning.ocean.exploreSubject', { subject: previewSubject.displayName }) }}
+          </button>
+        </div>
+      </van-popup>
+
+      <!-- Domain preview (R6 — same contract at region level). -->
+      <van-popup
+        :show="!!previewDomainRef"
+        position="bottom"
+        round
+        :style="{ padding: '16px', maxWidth: '400px', margin: '0 auto' }"
+        @update:show="previewDomainRef = null"
+      >
+        <div v-if="previewDomain" class="ocean-preview">
+          <div class="ocean-preview__header">
+            <span class="ocean-preview__title">{{ previewDomain.displayName }}</span>
+          </div>
+          <p class="ocean-preview__stats">
+            {{ t('learning.ocean.topics', { count: previewDomain.topicCount }) }}
+          </p>
+          <button
+            class="ocean-preview__btn"
+            @click="onOceanSelectDomain({ subject: previewDomain.subject, domain: previewDomain.domain })"
+          >
+            {{ t('learning.ocean.exploreDomain') }}
+          </button>
+        </div>
+      </van-popup>
     </template>
   </div>
 </template>
@@ -105,27 +166,40 @@
 <script setup lang="ts">
 defineOptions({ name: 'LearningMap' })
 
-import { ref, computed, watch, onMounted, onActivated, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onActivated, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useRecommendationPath } from '@/composables/useRecommendationPath'
-import { getMyLearningMapIndex, getTopicsBatch, type TopicResponse } from '@/api/learning'
+import { useMapExploration } from '@/composables/useMapExploration'
+import {
+  getMyLearningMapIndex,
+  getTopicsBatch,
+  getTopicIndex,
+  getSubjectDependencies,
+  type TopicResponse,
+  type TopicIndexRow,
+  type DependencyEdge,
+} from '@/api/learning'
 import type { ProgressWithTopic } from '@/api/learning'
 import SubjectTabs from '@/components/learning/SubjectTabs.vue'
 import type { SubjectTab } from '@/components/learning/SubjectTabs.vue'
 import ClusterMap from '@/components/learning/ClusterMap.vue'
-import KnowledgeContinent from '@/components/learning/KnowledgeContinent.vue'
-import type { ContinentSummary } from '@/components/learning/KnowledgeContinent.vue'
+import KnowledgeOcean from '@/components/learning/KnowledgeOcean.vue'
+import type {
+  OceanSubject,
+  OceanDomain,
+  OceanTopic,
+} from '@/components/learning/KnowledgeOcean.vue'
 import GraphMap from '@/components/learning/GraphMap.vue'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
 import { getContinentTheme } from '@/data/continentThemes'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { topicDisplayName, topicDescription } = useLocalizedTopic()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
@@ -135,7 +209,7 @@ const loading = ref(true)
 const refreshing = ref(false)
 const error = ref('')
 const selectedSubject = ref('')
-const viewMode = ref<'continent' | 'list' | 'graph'>('continent')
+const viewMode = ref<'ocean' | 'list' | 'graph'>('ocean')
 const progressList = ref<Array<{
   topic_id: string
   mastery_level: string
@@ -211,9 +285,20 @@ const subjectTabs = computed<SubjectTab[]>(() => {
     .sort((a, b) => a.subject.localeCompare(b.subject))
 })
 
-/** Continent summaries for the KnowledgeContinent view (#208). */
-const continents = computed<ContinentSummary[]>(() => {
-  // Aggregate by subject: total count, mastered count, frontier flag
+// ── Knowledge ocean data (#208) ──
+
+// Full topic index — subjects exist as islands even with zero progress (R2).
+const topicIndex = ref<TopicIndexRow[]>([])
+// Prerequisite edges per subject, loaded with the index (R9).
+const dependencyEdges = ref<DependencyEdge[]>([])
+
+// Ocean zoom state — separate from the list view's subject tab so the two
+// views do not fight over one selection.
+const oceanSubject = ref('')
+const oceanDomain = ref('')
+
+/** Subject mastery per subject key, from progress rows. */
+const masteryBySubject = computed<Map<string, { total: number; mastered: number }>>(() => {
   const bySubject = new Map<string, { total: number; mastered: number }>()
   for (const p of progressList.value) {
     const s = p.subject
@@ -223,24 +308,76 @@ const continents = computed<ContinentSummary[]>(() => {
     if (p.mastery_level === 'mastered') entry.mastered++
     bySubject.set(s, entry)
   }
-  // Frontiers: subjects with at least one non-mastered item
-  const frontierTopicSubject = nextTopic.value?.topic.subject
-  return subjectTabs.value.map((tab) => {
-    const stats = bySubject.get(tab.subject) ?? { total: 0, mastered: 0 }
-    const masteryRatio = stats.total > 0 ? stats.mastered / stats.total : 0
-    const theme = getContinentTheme(tab.subject)
-    return {
-      subject: tab.subject,
-      displayName: t(`learning.subject.${tab.subject}`, tab.subject),
-      icon: theme.icon,
-      itemCount: stats.total,
-      masteredCount: stats.mastered,
-      masteryRatio,
-      masteryPercent: Math.round(masteryRatio * 100),
-      isFrontier: tab.subject === frontierTopicSubject,
-    }
-  })
+  return bySubject
 })
+
+/** Islands for the ocean — every subject in the topic index (R2, AE1). */
+const oceanSubjects = computed<OceanSubject[]>(() => {
+  const countBySubject = new Map<string, number>()
+  for (const row of topicIndex.value) {
+    countBySubject.set(row.subject, (countBySubject.get(row.subject) ?? 0) + 1)
+  }
+  return Array.from(countBySubject.entries())
+    .map(([subject, topicCount]) => {
+      const stats = masteryBySubject.value.get(subject)
+      const theme = getContinentTheme(subject)
+      return {
+        id: subject,
+        terrain: theme.terrain,
+        displayName: t(`learning.subject.${subject}`, subject),
+        icon: theme.icon,
+        topicCount,
+        masteryRatio: stats && stats.total > 0 ? stats.mastered / stats.total : 0,
+      }
+    })
+    .sort((a, b) => a.displayName.localeCompare(b.displayName))
+})
+
+/** Regions for the zoomed-in subject (R4 domain level). */
+const oceanDomains = computed<OceanDomain[]>(() => {
+  if (!oceanSubject.value) return []
+  const stats = new Map<string, { total: number; mastered: number }>()
+  for (const row of topicIndex.value) {
+    if (row.subject !== oceanSubject.value) continue
+    const domain = row.domain || '__other__'
+    const entry = stats.get(domain) ?? { total: 0, mastered: 0 }
+    entry.total++
+    const p = progressList.value.find((x) => x.topic_id === row.id)
+    if (p?.mastery_level === 'mastered') entry.mastered++
+    stats.set(domain, entry)
+  }
+  return Array.from(stats.entries()).map(([domain, s]) => ({
+    id: `${oceanSubject.value}:${domain}`,
+    subject: oceanSubject.value,
+    domain,
+    displayName: domain === '__other__' ? t('learning.cluster.otherDomain') : domain,
+    topicCount: s.total,
+    masteryRatio: s.total > 0 ? s.mastered / s.total : 0,
+  }))
+})
+
+/** Topics of the zoomed-in domain (R4 topic level, R9 constellation input). */
+const oceanTopics = computed<OceanTopic[]>(() => {
+  if (!oceanSubject.value || !oceanDomain.value) return []
+  return topicIndex.value
+    .filter(
+      (row) =>
+        row.subject === oceanSubject.value && (row.domain || '__other__') === oceanDomain.value,
+    )
+    .map((row) => {
+      const p = progressList.value.find((x) => x.topic_id === row.id)
+      return {
+        id: row.id,
+        subject: row.subject,
+        domain: row.domain || '__other__',
+        displayName:
+          locale.value.startsWith('zh') && row.name_zh ? row.name_zh : row.name || row.id,
+        masteryLevel: p?.mastery_level ?? 'available',
+      }
+    })
+})
+
+const oceanEdges = computed(() => dependencyEdges.value)
 
 // Auto-select first subject if current selection is invalid
 watch(subjectTabs, (tabs) => {
@@ -282,6 +419,11 @@ watch(selectedSubject, (subject) => {
   void loadSubjectTopics(subject)
 })
 
+// Load prerequisite edges when the ocean zooms into a subject (R9).
+watch(oceanSubject, (subject) => {
+  if (subject) void loadDependenciesFor(subject)
+})
+
 // Bridge navigation: switch subject tab
 function onSwitchSubject(subject: string) {
   // Tabs are derived from the child's progress items, but bridge targets come
@@ -294,6 +436,91 @@ function onSwitchSubject(subject: string) {
   }
   showToast(t('learning.cluster.bridgeNoContent'))
 }
+
+// ── Ocean navigation + preview (R6, R8) ──
+
+/** Preview popup state — a tap on a fogged island/region yields this, never a refusal. */
+const previewSubjectId = ref('')
+const previewDomainRef = ref<{ subject: string; domain: string } | null>(null)
+
+function onPreviewSubject(subject: string) {
+  previewDomainRef.value = null
+  previewSubjectId.value = subject
+}
+
+function onOceanSelectSubject(subject: string) {
+  previewSubjectId.value = ''
+  oceanSubject.value = subject
+  oceanDomain.value = ''
+  // Load this subject's topic details for the recommendation card / list view parity.
+  void loadSubjectTopics(subject)
+}
+
+function onPreviewDomain(payload: { subject: string; domain: string }) {
+  previewSubjectId.value = ''
+  previewDomainRef.value = payload
+}
+
+function onOceanSelectDomain(payload: { subject: string; domain: string }) {
+  previewDomainRef.value = null
+  oceanSubject.value = payload.subject
+  oceanDomain.value = payload.domain
+}
+
+function onOceanSelectTopic(payload: { id: string }) {
+  exploration.value?.recordTopicSelection(payload.id)
+  onTopicClick(payload.id)
+}
+
+function onOceanZoomOut() {
+  if (oceanDomain.value) {
+    oceanDomain.value = ''
+  } else {
+    oceanSubject.value = ''
+  }
+}
+
+/** All subjects whose dependency edges we have loaded (loaded once with the index). */
+const loadedEdgeSubjects = new Set<string>()
+
+async function loadDependenciesFor(subject: string) {
+  if (!subject || loadedEdgeSubjects.has(subject)) return
+  loadedEdgeSubjects.add(subject)
+  try {
+    const edges = await getSubjectDependencies(subject)
+    dependencyEdges.value = [...dependencyEdges.value, ...edges]
+  } catch {
+    loadedEdgeSubjects.delete(subject) // retry on next visit
+  }
+}
+
+/** Subject summary for the preview popup. */
+const previewSubject = computed(() => {
+  if (!previewSubjectId.value) return null
+  const subject = oceanSubjects.value.find((s) => s.id === previewSubjectId.value)
+  if (!subject) return null
+  const stats = masteryBySubject.value.get(subject.id)
+  return {
+    ...subject,
+    masteredCount: stats?.mastered ?? 0,
+  }
+})
+
+/** Domain summary for the preview popup. */
+const previewDomain = computed(() => {
+  if (!previewDomainRef.value) return null
+  return (
+    oceanDomains.value.find(
+      (d) =>
+        d.subject === previewDomainRef.value!.subject &&
+        d.domain === previewDomainRef.value!.domain,
+    ) ?? null
+  )
+})
+
+// ── Exploration instrumentation (R11, R12) ──
+
+const exploration = ref<ReturnType<typeof useMapExploration> | null>(null)
 
 // Today recommendation: pick first non-mastered topic
 const recommended = computed(() => {
@@ -315,7 +542,14 @@ async function load() {
     // next_review_at, subject, domain, age_group) so the cluster map can
     // render subject tabs and mastery-coloured nodes without the heavy
     // ProgressResponse payload (evidence, standards, assessment_prompt, …).
-    progressList.value = await getMyLearningMapIndex()
+    // The topic index is fetched alongside it so the ocean shows every
+    // subject as an island even with zero progress (R2, AE1).
+    const [progress, index] = await Promise.all([
+      getMyLearningMapIndex(),
+      getTopicIndex().catch(() => [] as TopicIndexRow[]),
+    ])
+    progressList.value = progress
+    topicIndex.value = index
 
     await nextTick()
     const subject =
@@ -345,11 +579,19 @@ async function onRefresh() {
 
 onMounted(async () => {
   increment()
+  // R11: time-on-map starts at mount.
+  exploration.value = useMapExploration()
   try {
     await Promise.all([load(), refreshRecommendations()])
   } finally {
     decrement()
   }
+})
+
+// R11/R12: flush the exploration record when the child leaves the map.
+// AE4: flush posts even when no topic was selected.
+onUnmounted(() => {
+  exploration.value?.flush()
 })
 
 // R10/KTD4: re-fetch recommendation path when page re-activates from
@@ -416,6 +658,52 @@ onActivated(async () => {
   margin-bottom: 12px;
   font-family: Inter, sans-serif;
   font-size: 14px;
+}
+
+/* ── Ocean preview popup ── */
+
+.ocean-preview__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ocean-preview__icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.ocean-preview__title {
+  font-family: Inter, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.ocean-preview__stats {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  color: var(--color-body);
+  margin: 0 0 14px;
+}
+
+.ocean-preview__btn {
+  width: 100%;
+  background: var(--color-primary);
+  color: var(--color-on-dark);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.ocean-preview__btn:active {
+  transform: scale(0.97);
 }
 
 /* ── Recommendation card ── */

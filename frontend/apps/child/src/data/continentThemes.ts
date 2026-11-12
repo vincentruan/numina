@@ -1,9 +1,9 @@
 /**
  * Continent themes — visual identity for each subject area.
  *
- * Each subject is rendered as a "continent" on the knowledge map with its own
+ * Each subject is rendered as an "island" on the knowledge ocean map with its own
  * terrain type, color palette, and marker icon. These themes drive the
- * KnowledgeContinent view and the continent-canvas styling.
+ * KnowledgeOcean view and the continent-canvas styling.
  */
 
 export type Terrain = 'math' | 'science' | 'language' | 'social' | 'arts' | 'default'
@@ -27,7 +27,7 @@ export interface ContinentTheme {
  * Subject → continent theme metadata.
  *
  * Single source of truth for continent visual identity. Used by:
- * - KnowledgeContinent.vue (continent cards)
+ * - KnowledgeOcean.vue (subject islands on the ocean map)
  * - ClusterTerritory.vue (territory theming)
  * - ClusterMap.vue (continent-canvas background)
  */

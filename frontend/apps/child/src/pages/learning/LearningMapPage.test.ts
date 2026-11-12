@@ -22,6 +22,9 @@ vi.mock('@/api/learning', () => ({
   getTopicsBatch: vi.fn(),
   getClusters: vi.fn().mockResolvedValue([]),
   getBridges: vi.fn().mockResolvedValue([]),
+  getTopicIndex: vi.fn().mockResolvedValue([]),
+  getSubjectDependencies: vi.fn().mockResolvedValue([]),
+  recordMapExploration: vi.fn().mockResolvedValue({}),
 }))
 
 const mockRouterPush = vi.fn()
@@ -40,11 +43,18 @@ vi.mock('vant', () => ({
   showSuccessToast: (...args: unknown[]) => showToastMock(...args),
 }))
 
-import { getMyLearningMapIndex, getTopicsBatch } from '@/api/learning'
+import {
+  getMyLearningMapIndex,
+  getTopicsBatch,
+  getTopicIndex,
+  getSubjectDependencies,
+} from '@/api/learning'
 import LearningMapPage from './LearningMapPage.vue'
 
 const mockIndex = vi.mocked(getMyLearningMapIndex)
 const mockBatch = vi.mocked(getTopicsBatch)
+const mockGetTopicIndex = vi.mocked(getTopicIndex)
+const mockGetSubjectDependencies = vi.mocked(getSubjectDependencies)
 
 // --- Fixtures ---
 
@@ -238,4 +248,160 @@ describe('LearningMapPage — cluster map integration', () => {
 
     expect(wrapper.find('.error-msg').exists()).toBe(true)
   })
+})
+
+// --- Knowledge ocean (#208) ---
+
+describe('LearningMapPage — knowledge ocean default view (R1)', () => {
+  beforeEach(() => {
+    mockGetTopicIndex.mockImplementation(async () => [
+      { id: 't1', subject: 'mathematics', domain: 'Addition', name: 'Add', name_zh: '加', age_group: 'mid' },
+      { id: 't2', subject: 'mathematics', domain: 'Addition', name: 'Add more', name_zh: '再加', age_group: 'mid' },
+      { id: 't3', subject: 'science', domain: 'Forces', name: 'Push', name_zh: '推', age_group: 'mid' },
+    ])
+    mockGetSubjectDependencies.mockImplementation(async () => [
+      { topic_id: 't2', prerequisite_id: 't1', strength: 'hard' },
+    ])
+  })
+
+  it('renders the knowledge ocean as the default view (R1)', async () => {
+    rows.push(
+      { topic_id: 't1', mastery_level: 'mastered', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid' },
+      { topic_id: 't2', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid' },
+      { topic_id: 't3', mastery_level: 'available', next_review_at: null, subject: 'science', domain: 'Forces', age_group: 'mid' },
+    )
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.findComponent({ name: 'KnowledgeOcean' }).exists()).toBe(true)
+    // No view-mode toggle needed to see it — ocean is the default.
+    expect(wrapper.find('.view-mode-btn--active').text()).toContain('大陆')
+  })
+
+  it('shows ocean islands for subjects the child has zero progress in (R2, AE1)', async () => {
+    // Zero progress rows — only the topic index exists.
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const ocean = wrapper.findComponent({ name: 'KnowledgeOcean' })
+    expect(ocean.exists()).toBe(true)
+    const props = ocean.props() as unknown as { subjects: Array<{ id: string; masteryRatio: number }> }
+    // Islands from the topic index, not progress
+    expect(props.subjects.map((s) => s.id).sort()).toEqual(['mathematics', 'science'])
+    // All heavily veiled (AE1)
+    for (const s of props.subjects) {
+      expect(s.masteryRatio).toBe(0)
+    }
+  })
+
+  it('renders no empty state when progress is empty but topics exist (R2)', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.find('.ocean-sea').exists()).toBe(true)
+  })
+})
+
+describe('LearningMapPage — ocean preview and exploration wiring (R6, R8, R11)', () => {
+  beforeEach(() => {
+    mockGetTopicIndex.mockImplementation(async () => [
+      { id: 't1', subject: 'mathematics', domain: 'Addition', name: 'Add', name_zh: '加', age_group: 'mid' },
+      { id: 't2', subject: 'mathematics', domain: 'Addition', name: 'Add more', name_zh: '再加', age_group: 'mid' },
+      { id: 't3', subject: 'science', domain: 'Forces', name: 'Push', name_zh: '推', age_group: 'mid' },
+    ])
+    mockGetSubjectDependencies.mockImplementation(async () => [
+      { topic_id: 't2', prerequisite_id: 't1', strength: 'hard' },
+    ])
+    rows.push(
+      { topic_id: 't1', mastery_level: 'mastered', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid' },
+      { topic_id: 't2', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid' },
+      { topic_id: 't3', mastery_level: 'available', next_review_at: null, subject: 'science', domain: 'Forces', age_group: 'mid' },
+    )
+  })
+
+  it('shows a preview popup when an island is tapped (R6, AE2)', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const ocean = wrapper.findComponent({ name: 'KnowledgeOcean' })
+    ocean.vm.$emit('previewSubject', 'science')
+    await flushPromises()
+
+    expect(wrapper.find('.ocean-preview').exists()).toBe(true)
+    // Page mounts with locale zh-CN — display names follow the app language
+    expect(wrapper.find('.ocean-preview__title').text()).toBe('科学')
+  })
+
+  it('preview continue button descends into the subject (AE2)', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const ocean = wrapper.findComponent({ name: 'KnowledgeOcean' })
+    ocean.vm.$emit('previewSubject', 'science')
+    await flushPromises()
+
+    await wrapper.find('.ocean-preview__btn').trigger('click')
+    await flushPromises()
+
+    // Descended: the ocean now receives the selected subject
+    const props = ocean.props() as unknown as { selectedSubject: string }
+    expect(props.selectedSubject).toBe('science')
+    // Dependencies were loaded for the subject (R9)
+    expect(mockGetSubjectDependencies).toHaveBeenCalledWith('science')
+  })
+
+  it('double-tap descend passes dependency edges down for the constellation (R9)', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const ocean = wrapper.findComponent({ name: 'KnowledgeOcean' })
+    ocean.vm.$emit('selectSubject', 'mathematics')
+    await flushPromises()
+    ocean.vm.$emit('selectDomain', { subject: 'mathematics', domain: 'Addition' })
+    await flushPromises()
+
+    const props = ocean.props() as unknown as {
+      topics: Array<{ id: string }>
+      edges: Array<{ topic_id: string }>
+    }
+    expect(props.topics.map((t) => t.id).sort()).toEqual(['t1', 't2'])
+    expect(props.edges).toHaveLength(1)
+  })
+
+  it('topic selection navigates to the topic page (F2)', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const ocean = wrapper.findComponent({ name: 'KnowledgeOcean' })
+    ocean.vm.$emit('selectTopic', { id: 't2' })
+    await flushPromises()
+
+    expect(mockRouterPush).toHaveBeenCalledWith('/learning/topic/t2')
+  })
+
+  it('flushes exploration telemetry on unmount, even with no selection (R11, R12, AE4)', async () => {
+    const { recordMapExploration } = await import('@/api/learning')
+    const mockRecord = vi.mocked(recordMapExploration)
+    mockRecord.mockClear()
+    mockRecord.mockResolvedValue({} as never)
+
+    const wrapper = mountPage()
+    await flushPromises()
+    oceanZoomViaEvents(wrapper, 1)
+    wrapper.unmount()
+    await flushPromises()
+
+    expect(mockRecord).toHaveBeenCalledTimes(1)
+    const payload = mockRecord.mock.calls[0][0]
+    expect(payload.topic_selected).toBe(false)
+    expect(payload.max_zoom_level).toBe(1)
+  })
+
+  function oceanZoomViaEvents(
+    wrapper: ReturnType<typeof mountPage>,
+    level: number,
+  ) {
+    const ocean = wrapper.findComponent({ name: 'KnowledgeOcean' })
+    ocean.vm.$emit('zoomed', level)
+    ocean.vm.$emit('interacted')
+  }
 })
