@@ -385,6 +385,7 @@ def get_practice_session_detail(
 @router.get("/recommend", response_model=list[RecommendResponse])
 def get_practice_recommendations(
     topic_id: int | None = None,
+    diagnosis: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
 ):
@@ -392,7 +393,36 @@ def get_practice_recommendations(
 
     If topic_id is provided, checks for weak prerequisites of that topic.
     Otherwise, returns the child's overall weakest topics.
+
+    With ?diagnosis=true and a topic_id, runs the depth-2 prerequisite
+    backtrace diagnosis and returns qualified weak prerequisites with the
+    diagnosis fields populated (depth, bkt_mastery, sample_size, is_diagnosis).
+    The impression record is written server-side for each qualified candidate.
     """
+    if diagnosis and topic_id is not None:
+        from apps.backend.app.services.learning.adaptive_service import (
+            diagnose_weak_prerequisites,
+        )
+
+        candidates = diagnose_weak_prerequisites(
+            db, topic_id=topic_id, child_id=user.id
+        )
+        return [
+            RecommendResponse(
+                topic_id=r["topic_id"],
+                topic_name=r.get("topic_name") or "",
+                topic_name_zh=r.get("topic_name_zh"),
+                mastery_level=r["mastery_level"],
+                accuracy=0.0,
+                is_prerequisite=True,
+                prerequisite_of_topic_id=topic_id,
+                is_diagnosis=True,
+                depth=r["depth"],
+                bkt_mastery=r["bkt_mastery"],
+                sample_size=r["sample_size"],
+            )
+            for r in candidates
+        ]
     if topic_id:
         from apps.backend.app.services.learning.adaptive_service import (
             find_weak_prerequisites,
