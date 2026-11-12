@@ -354,9 +354,14 @@ def apply_teach_back_success(
     current_stability = progress.stability or 1.0
     progress.stability = min(current_stability * 1.5, 30.0)
 
-    # Recompute next_review_at with 180-day cap
-    computed_next = compute_next_review(progress)
+    # Recompute next_review_at with explicit 180-day cap. compute_next_review
+    # can overflow on very large stability (ease ** (stability-2)), so compute
+    # the cap first and guard the interval computation.
     cap = now + timedelta(days=180)
+    try:
+        computed_next = compute_next_review(progress)
+    except (OverflowError, ValueError):
+        computed_next = cap
     progress.next_review_at = min(computed_next, cap)
 
     # Increment consecutive review passes
