@@ -8,31 +8,13 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { fogOpacityForRatio } from '@/utils/continentFog'
 
 const props = defineProps<{
   masteryRatio: number
 }>()
 
-/**
- * Map mastery ratio to fog opacity (KTD3):
- * 0% mastered → 0.7 (mostly obscured)
- * 1-49% → 0.4 (dimmed)
- * 50-79% → 0.15 (lightly veiled)
- * 80%+ → 0 (fully clear)
- */
-function computeFogOpacity(ratio: number): number {
-  const clamped = Math.max(0, Math.min(1, ratio))
-  // 80%+ → fully clear
-  if (clamped >= 0.8) return 0
-  // 50-79% → lightly veiled
-  if (clamped >= 0.5) return 0.15
-  // 1-49% → dimmed
-  if (clamped > 0) return 0.4
-  // 0% → mostly obscured
-  return 0.7
-}
-
-const fogOpacity = computed(() => computeFogOpacity(props.masteryRatio))
+const fogOpacity = computed(() => fogOpacityForRatio(props.masteryRatio))
 </script>
 
 <style scoped>
