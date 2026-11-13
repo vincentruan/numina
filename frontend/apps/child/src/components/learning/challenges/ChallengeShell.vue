@@ -10,8 +10,13 @@
 
     <!-- Feedback bar -->
     <div class="challenge-feedback">
-      <div v-if="feedbackMessage" class="challenge-feedback__message" :class="feedbackClass">
-        {{ feedbackMessage }}
+      <div
+        v-if="feedbackMessage"
+        class="challenge-feedback__message"
+        :class="feedbackClass"
+      >
+        <span class="challenge-feedback__glyph" aria-hidden="true">{{ feedbackGlyph }}</span>
+        <span>{{ feedbackMessage }}</span>
       </div>
       <div v-else class="challenge-feedback__status">
         {{ statusText }}
@@ -32,7 +37,7 @@
         {{ t('learning.challenge.askTutor') }}
       </button>
       <button
-        v-if="completed"
+        v-if="completed || allowEarlyContinue"
         class="challenge-next-btn"
         @click="$emit('continue')"
       >
@@ -45,17 +50,24 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { ChallengeConfig } from '@/types/learning-challenge'
+import type { ChallengeConfig, ChallengeVerdict } from '@/types/learning-challenge'
 
 defineOptions({ name: 'ChallengeShell' })
 
 const props = defineProps<{
   config: ChallengeConfig
   feedbackMessage: string
-  feedbackIsCorrect: boolean
+  /** Three-state verdict. `correct` completes; `close` and `wrong` allow retry. */
+  feedbackVerdict: ChallengeVerdict | null
   hasAnyPlacement: boolean
   completed: boolean
   showTutorSuggestion: boolean
+  /**
+   * True once the child has retried enough times that continuing without a
+   * correct verdict should be allowed. Keeps a child who keeps landing `close`
+   * from being stuck on the challenge with no way forward.
+   */
+  allowEarlyContinue?: boolean
   statusText: string
 }>()
 
@@ -71,11 +83,36 @@ const isZh = computed(() => locale.value.startsWith('zh'))
 const scenarioText = computed(() =>
   isZh.value ? props.config.scenarioZh : props.config.scenario,
 )
-const feedbackClass = computed(() =>
-  props.feedbackIsCorrect
-    ? 'challenge-feedback__message--correct'
-    : 'challenge-feedback__message--wrong',
-)
+
+const feedbackClass = computed(() => {
+  switch (props.feedbackVerdict) {
+    case 'correct':
+      return 'challenge-feedback__message--correct'
+    case 'close':
+      return 'challenge-feedback__message--close'
+    case 'wrong':
+      return 'challenge-feedback__message--wrong'
+    default:
+      return ''
+  }
+})
+
+/**
+ * Non-color cue so close/wrong stay distinguishable for a child with
+ * color-vision deficiency. Each verdict has its own glyph.
+ */
+const feedbackGlyph = computed(() => {
+  switch (props.feedbackVerdict) {
+    case 'correct':
+      return '✓'
+    case 'close':
+      return '≈'
+    case 'wrong':
+      return '✗'
+    default:
+      return ''
+  }
+})
 </script>
 
 <style scoped>
@@ -118,11 +155,29 @@ const feedbackClass = computed(() =>
   border-radius: var(--radius-md);
   text-align: center;
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.challenge-feedback__glyph {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .challenge-feedback__message--correct {
   background: rgba(var(--color-brand-mint-rgb), 0.2);
   color: var(--color-ink);
+}
+
+/* Close: a near miss, deliberately distinct from both success and failure.
+   Uses an ochre tint plus the ≈ glyph so it stays readable without color. */
+.challenge-feedback__message--close {
+  background: rgba(var(--color-brand-ochre-rgb), 0.16);
+  color: var(--color-ink);
+  border: 1px dashed var(--color-brand-ochre);
 }
 
 .challenge-feedback__message--wrong {

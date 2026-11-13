@@ -2,10 +2,11 @@
   <ChallengeShell
     :config="config"
     :feedback-message="feedbackMessage"
-    :feedback-is-correct="feedbackIsCorrect"
+    :feedback-verdict="feedbackVerdict"
     :has-any-placement="hasAnyPlacement"
     :completed="completed"
     :show-tutor-suggestion="showTutorSuggestion"
+    :allow-early-continue="allowEarlyContinue"
     :status-text="statusText"
     @check="checkAnswer"
     @continue="onContinue"
@@ -49,7 +50,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { OrderChallenge } from '@/types/learning-challenge'
+import type { OrderChallenge, ChallengeVerdict } from '@/types/learning-challenge'
 import ChallengeShell from './ChallengeShell.vue'
 
 defineOptions({ name: 'OrderChallenge' })
@@ -74,7 +75,7 @@ const sequence = reactive<(string | null)[]>(
 )
 const completed = ref(false)
 const feedbackMessage = ref('')
-const feedbackIsCorrect = ref(false)
+const feedbackVerdict = ref<ChallengeVerdict | null>(null)
 const attemptCount = ref(0)
 
 // ── Session persistence (AE5) ──
@@ -86,7 +87,7 @@ interface PersistedState {
   attemptCount: number
   completed: boolean
   feedbackMessage: string
-  feedbackIsCorrect: boolean
+  feedbackVerdict: ChallengeVerdict | null
 }
 
 function restoreState() {
@@ -103,7 +104,7 @@ function restoreState() {
     attemptCount.value = saved.attemptCount ?? 0
     completed.value = saved.completed ?? false
     feedbackMessage.value = saved.feedbackMessage ?? ''
-    feedbackIsCorrect.value = saved.feedbackIsCorrect ?? false
+    feedbackVerdict.value = saved.feedbackVerdict ?? null
   } catch {
     // Storage unavailable
   }
@@ -120,7 +121,7 @@ function clearState() {
 restoreState()
 
 watch(
-  [sequence, attemptCount, completed, feedbackMessage, feedbackIsCorrect],
+  [sequence, attemptCount, completed, feedbackMessage, feedbackVerdict],
   () => {
     try {
       const state: PersistedState = {
@@ -128,7 +129,7 @@ watch(
         attemptCount: attemptCount.value,
         completed: completed.value,
         feedbackMessage: feedbackMessage.value,
-        feedbackIsCorrect: feedbackIsCorrect.value,
+        feedbackVerdict: feedbackVerdict.value,
       }
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state))
     } catch {
@@ -159,6 +160,11 @@ const statusText = computed(() =>
 )
 
 const showTutorSuggestion = computed(() =>
+  attemptCount.value >= 2 && !completed.value,
+)
+
+/** KTD2: after two retries the child may continue without a correct verdict. */
+const allowEarlyContinue = computed(() =>
   attemptCount.value >= 2 && !completed.value,
 )
 
@@ -204,7 +210,7 @@ function onContinue() {
 function checkAnswer() {
   attemptCount.value++
   const result = evaluateOrder()
-  feedbackIsCorrect.value = result.isCorrect
+  feedbackVerdict.value = result.isCorrect ? 'correct' : 'wrong'
   if (result.isCorrect) {
     completed.value = true
     feedbackMessage.value = isZh.value
