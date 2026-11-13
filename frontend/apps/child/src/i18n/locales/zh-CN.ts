@@ -309,6 +309,7 @@ export default {
   milestone: {
     first_chore: '完成第一个任务',
     first_wish_realized: '第一个心愿实现',
+    first_teach_back: '第一次当小老师',
     coins_50: '累计获得50⭐',
     coins_200: '累计获得200⭐',
     streak_7: '连续打卡7天',
@@ -317,6 +318,7 @@ export default {
     titles: {
       first_chore: '第一个家务！',
       first_wish_realized: '第一个心愿实现！',
+      first_teach_back: '小老师上线！',
       coins_50: '攒到50颗星星币！',
       coins_200: '攒到200颗星星币！',
       streak_7: '连续打卡7天！',
@@ -327,6 +329,7 @@ export default {
     descs: {
       first_chore: '你完成了人生第一个家务，太棒了！',
       first_wish_realized: '你的努力换来了心愿成真！',
+      first_teach_back: '你把学会的知识教给了 AI，教是最好的学！',
       coins_50: '继续加油，更多心愿等着你！',
       coins_200: '你是理财小达人！',
       streak_7: '一周不间断，获得1.5倍奖励！',
@@ -337,6 +340,7 @@ export default {
     icons: {
       first_chore: '🌟',
       first_wish_realized: '🎁',
+      first_teach_back: '🎓',
       coins_50: '💰',
       coins_200: '🏆',
       streak_7: '🔥',

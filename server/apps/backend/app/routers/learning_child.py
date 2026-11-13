@@ -1115,8 +1115,17 @@ async def stream_teach_back(
         bridge=shared_bridge,
     )
 
+    # Prepend a custom event with session_id so the frontend can capture it
+    # immediately, before the first tool_result (#4: break session_id deadlock)
+    import json as _json
+
+    async def _with_session_id():
+        yield f"event: custom\ndata: {_json.dumps({'type': 'session_created', 'session_id': str(session.id)})}\n\n"
+        async for chunk in stream_gen:
+            yield chunk
+
     return StreamingResponse(
-        stream_gen,
+        _with_session_id(),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )

@@ -614,7 +614,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
                 "next_phase",
             ],
         },
-        allowed_roles=frozenset({"owner", "member", "external_token"}),
+        allowed_roles=frozenset({"owner", "member"}),
         requires_write=True,
     ),
     # ── Learning-topic-generator skill (Issue #190) ───────────────────

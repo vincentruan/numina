@@ -44,14 +44,14 @@ class TopicConfusion(Base):
         index=True,
     )
     #: Order within a topic's confusion list (0-indexed).
-    sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     #: What the AI student "doesn't get" — shown to the child.
     confusion_text: Mapped[str] = mapped_column(Text, nullable=False)
     #: Chinese translation (nullable for future i18n).
     confusion_text_zh: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: Age group this confusion targets (mirrors LearningTopic.age_group).
     age_group: Mapped[str] = mapped_column(
-        String(10), nullable=False, default="mid"
+        String(10), nullable=False, default="mid", server_default="mid"
     )
     #: LLM grading rubric — instructions for judging whether the child's
     #: explanation hits this confusion's core concept.

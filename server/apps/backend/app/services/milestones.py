@@ -210,9 +210,23 @@ def _check_milestones(
     ):
             triggered.append("first_wish_realized")
 
+    # 5. first_teach_back — triggered by teach-back context (#33)
+    teach_back_session_id = context.get("teach_back_session_id")
+    if teach_back_session_id is not None and _try_record_once_cached(
+        db,
+        child_user_id,
+        family_id,
+        "first_teach_back",
+        teach_back_session_id,
+        "teach_back_session",
+        existing_once_per_child,
+    ):
+        triggered.append("first_teach_back")
+
     # Return the most notable milestone for the UI toast (priority order)
     _priority = [
         "first_chore",
+        "first_teach_back",
         "streak_3",
         "streak_7",
         "streak_14",

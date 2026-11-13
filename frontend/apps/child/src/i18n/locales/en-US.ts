@@ -308,6 +308,7 @@ export default {
   milestone: {
     first_chore: 'Completed first task',
     first_wish_realized: 'First wish realized',
+    first_teach_back: 'First time as a little teacher',
     coins_50: 'Earned 50 ⭐ total',
     coins_200: 'Earned 200 ⭐ total',
     streak_7: '7-day streak',
@@ -316,6 +317,7 @@ export default {
     titles: {
       first_chore: 'First Task Done!',
       first_wish_realized: 'First Wish Realized!',
+      first_teach_back: 'Little Teacher Online!',
       coins_50: 'Saved 50 Star Coins!',
       coins_200: 'Saved 200 Star Coins!',
       streak_7: '7-Day Streak!',
@@ -326,6 +328,7 @@ export default {
     descs: {
       first_chore: 'You completed your very first task, amazing!',
       first_wish_realized: 'Your hard work made a wish come true!',
+      first_teach_back: 'You taught what you learned to the AI — teaching is the best way to learn!',
       coins_50: 'Keep going, more wishes are waiting!',
       coins_200: 'You\'re a saving superstar!',
       streak_7: 'One week straight, earning 1.5× rewards!',
@@ -336,6 +339,7 @@ export default {
     icons: {
       first_chore: '🌟',
       first_wish_realized: '🎁',
+      first_teach_back: '🎓',
       coins_50: '💰',
       coins_200: '🏆',
       streak_7: '🔥',

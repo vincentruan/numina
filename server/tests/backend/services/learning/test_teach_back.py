@@ -144,6 +144,11 @@ class TestApplyTeachBackSuccess:
         assert result.stability == pytest.approx(3.0)  # 2.0 * 1.5
         assert result.consecutive_review_passes == 1
         assert result.next_review_at is not None
+        # #49: the 180-day cap and the 30.0 stability ceiling are the guard rails
+        # that keep R1's next-revisit trigger reachable — assert both.
+        from datetime import UTC, datetime, timedelta
+
+        assert result.next_review_at <= datetime.now(UTC) + timedelta(days=180)
 
         # History record created
         attempt = (
@@ -156,6 +161,27 @@ class TestApplyTeachBackSuccess:
         )
         assert attempt is not None
         assert attempt.passed is True
+
+    def test_next_review_capped_at_180_days(self, db, child_user, topic):
+        """A high-stability, high-ease row must not produce a century-scale interval."""
+        from datetime import UTC, datetime, timedelta
+
+        progress = LearningProgress(
+            child_id=child_user["id"],
+            topic_id=topic.id,
+            mastery_level="mastered",
+            stability=30.0,
+            ease_factor=2.5,
+            consecutive_review_passes=0,
+        )
+        db.add(progress)
+        db.flush()
+
+        result = apply_teach_back_success(db, progress)
+
+        assert result.stability == 30.0
+        assert result.next_review_at is not None
+        assert result.next_review_at <= datetime.now(UTC) + timedelta(days=180)
 
     def test_stability_capped_at_30(self, db, child_user, topic):
         progress = LearningProgress(
@@ -234,8 +260,16 @@ class TestTeachBackService:
         assert session.topic_id == topic.id
 
     def test_validate_rejects_non_mastered(self, db, child_user, topic):
+        """A real pilot topic that is not mastered is rejected for the mastery reason.
+
+        #46: the previous fixture used a non-pilot topic, so this passed because of
+        the pilot-scope guard rather than the mastery guard. Put a pilot topic key
+        on the fixture so only the mastery check can reject.
+        """
         child = db.query(User).filter(User.id == child_user["id"]).first()
-        # Topic not mastered
+        topic.topic_key = next(iter(teach_back_service._PILOT_TOPIC_KEYS))
+        db.flush()
+
         progress = LearningProgress(
             child_id=child_user["id"],
             topic_id=topic.id,
@@ -246,10 +280,14 @@ class TestTeachBackService:
 
         from apps.backend.app.errors import AppError
 
-        with pytest.raises(AppError):
+        with pytest.raises(AppError) as exc_info:
             teach_back_service.validate_teach_back_request(
                 db=db, child=child, topic_id=topic.id
             )
+        details = getattr(exc_info.value, "details", None) or {}
+        assert "mastered" in str(details), (
+            f"expected the mastery guard to reject, got {details!r}"
+        )
 
     def test_validate_rejects_non_pilot_topic(self, db, child_user):
         child = db.query(User).filter(User.id == child_user["id"]).first()

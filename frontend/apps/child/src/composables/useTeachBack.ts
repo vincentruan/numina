@@ -13,14 +13,14 @@ export type TeachBackPhase =
   | 'end'
 
 export interface TeachBackConfusion {
-  id: number
+  id: string
   sequence: number
   text: string
   text_zh: string | null
 }
 
 export interface TeachBackTurn {
-  confusion_id: number
+  confusion_id: string
   child_explanation: string
   verdict: 'hit' | 'miss'
   extracted_expression: string | null
@@ -80,18 +80,33 @@ export function useTeachBack() {
       onCustom(data: unknown) {
         const payload = data as Record<string, unknown>
         const type = payload?.type as string | undefined
+        // Capture session_id from the prepended session_created event (#4)
+        if (type === 'session_created' && typeof payload.session_id === 'string') {
+          activeSessionId.value = payload.session_id
+          return
+        }
         if (type === 'tool_result') {
-          const result = payload.result as Record<string, unknown> | undefined
+          // Backend publishes the tool payload under `content` (see run_pipeline.py
+          // tool_result synthesis), not `result`. Parse it when it is a JSON string.
+          let result: Record<string, unknown> | undefined
+          if (typeof payload.content === 'string') {
+            try {
+              result = JSON.parse(payload.content) as Record<string, unknown>
+            } catch {
+              result = undefined
+            }
+          } else if (payload.content && typeof payload.content === 'object') {
+            result = payload.content as Record<string, unknown>
+          }
           if (payload.tool_name === 'record_teach_back_turn' && result) {
-            // Capture the session id from the first turn (backend creates it
-            // server-side on the initial call and echoes it back here)
+            // Fallback: also capture session_id from tool result
             if (typeof result.session_id === 'string' && !activeSessionId.value) {
               activeSessionId.value = result.session_id
             }
             // Extract teach-back turn + verdict from the tool result
             if (typeof result.child_explanation === 'string') {
               const turn: TeachBackTurn = {
-                confusion_id: result.confusion_id as number,
+                confusion_id: String(result.confusion_id),
                 child_explanation: result.child_explanation as string,
                 verdict: result.verdict as 'hit' | 'miss',
                 extracted_expression:
@@ -167,7 +182,7 @@ export function useTeachBack() {
             'Accept': 'text/event-stream',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ topic_id: Number(topicId) }),
+          body: JSON.stringify({ topic_id: topicId }),
           signal: abortController.signal,
         },
       )
@@ -216,7 +231,7 @@ export function useTeachBack() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            session_id: Number(activeSessionId.value),
+            session_id: activeSessionId.value,
             child_answer: explanation,
           }),
           signal: abortController.signal,

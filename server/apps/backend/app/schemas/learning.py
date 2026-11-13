@@ -564,6 +564,21 @@ class SmartTutorSessionDetailResponse(SmartTutorSessionResponse):
     ai_evaluation: dict | None = None
 
 
+class TeachBackSessionDetailResponse(SnowflakeBase):
+    """Detailed teach-back session with turn-by-turn transcript (#8)."""
+
+    session_id: int
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None = None
+    subject: str
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    outcome: str | None = None
+    total_turns: int = 0
+    turns: list[dict] = []
+
+
 class HookQuestionResponse(SnowflakeBase):
     """Socratic curiosity hook question for topic entry."""
 

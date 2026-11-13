@@ -32,6 +32,7 @@ from apps.backend.app.schemas.learning import (
     ReviewOverrideRequest,
     SmartTutorSessionDetailResponse,
     SmartTutorSessionResponse,
+    TeachBackSessionDetailResponse,
     TopicResponse,
 )
 from apps.backend.app.services.learning import (
@@ -1174,6 +1175,7 @@ def get_child_smart_tutor_session(
 
 @router.get(
     "/children/{child_id}/teach-back/sessions/{session_id}",
+    response_model=TeachBackSessionDetailResponse,
 )
 def get_child_teach_back_session(
     child_id: int,
@@ -1219,7 +1221,8 @@ def get_child_teach_back_session(
     )
 
     turns = _parse_teach_back_steps(session)
-    outcome = _determine_outcome(session, None)
+    last_phase = turns[-1].get("next_phase") if turns else None
+    outcome = _determine_outcome(session, last_phase)
 
     return {
         "session_id": str(session.id),

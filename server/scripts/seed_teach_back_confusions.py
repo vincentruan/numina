@@ -53,7 +53,7 @@ SAMPLE_CONFUSIONS: dict[str, list[dict]] = {
             "confusion_text": "What does it mean to 'simplify' a fraction? Can't I just leave 4/8 as it is?",
             "confusion_text_zh": "'化简'分数是什么意思？我不能直接把 4/8 留在那吗？",
             "rubric": "The child should explain that simplifying means finding an equivalent fraction with the smallest possible numbers. You divide both numerator and denominator by their greatest common factor. 4/8 = 1/2 because both 4 and 8 are divisible by 4.",
-            "expected_expression": "4/8 = 1/2",
+            "expected_expression": "1/2",
         },
     ],
     "mt_ndGqFPWyen": [  # Fractions of a whole
@@ -69,7 +69,7 @@ SAMPLE_CONFUSIONS: dict[str, list[dict]] = {
             "confusion_text": "Can a fraction be bigger than 1? Like 5/4?",
             "confusion_text_zh": "分数能大于 1 吗？比如 5/4？",
             "rubric": "The child should explain that yes, fractions can be bigger than 1 — these are called improper fractions. 5/4 means you have 5 parts when each whole is divided into 4 parts. It's more than one whole. 5/4 = 1 and 1/4.",
-            "expected_expression": "5/4 > 1",
+            "expected_expression": None,
         },
     ],
     "mt_FP-mjXaq3B": [  # Equivalent fractions (age 8+)
@@ -78,7 +78,7 @@ SAMPLE_CONFUSIONS: dict[str, list[dict]] = {
             "confusion_text": "Are 1/2 and 2/4 really the same? They look different!",
             "confusion_text_zh": "1/2 和 2/4 真的相等吗？它们看起来不一样啊！",
             "rubric": "The child should explain that equivalent fractions represent the same amount, just divided differently. If you multiply or divide both the numerator and denominator by the same number, you get an equivalent fraction. 1/2 × 2/2 = 2/4. Or visually: half a pizza is the same as 2 quarters of a pizza.",
-            "expected_expression": "1/2 = 2/4",
+            "expected_expression": "2/4",
         },
         {
             "sequence": 1,
@@ -92,7 +92,7 @@ SAMPLE_CONFUSIONS: dict[str, list[dict]] = {
             "confusion_text": "Why do we need equivalent fractions? Can't I just work with the fractions as they are?",
             "confusion_text_zh": "我们为什么需要等值分数？我不能直接用原来的分数吗？",
             "rubric": "The child should explain that equivalent fractions are essential for adding/subtracting fractions with different denominators. You need to convert them to have a common denominator first. For example, 1/2 + 1/3 requires converting to 3/6 + 2/6.",
-            "expected_expression": "1/2 + 1/3 = 3/6 + 2/6 = 5/6",
+            "expected_expression": "1/2 + 1/3 = 5/6",
         },
     ],
 }
@@ -111,9 +111,10 @@ def seed_confusions() -> None:
                 print(f"WARNING: topic_key '{topic_key}' not found, skipping")
                 continue
 
-            # Delete existing confusions for this topic (idempotent)
+            # Delete existing confusions for this topic (idempotent) — scoped by age_group (#38)
             db.query(TopicConfusion).filter(
-                TopicConfusion.topic_id == topic.id
+                TopicConfusion.topic_id == topic.id,
+                TopicConfusion.age_group == "mid",
             ).delete()
 
             # Insert new confusions with review_status='approved'

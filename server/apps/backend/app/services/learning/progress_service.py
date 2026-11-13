@@ -292,9 +292,13 @@ def update_sm2_after_session(progress: LearningProgress, score: float) -> None:
         progress.ease_factor = max(1.3, current_ease + 0.1 - diff * (0.08 + diff * 0.02))
         # Advance stability (acts as repetition counter)
         progress.stability = (progress.stability or 1.0) + 1
+        # Advance consecutive review passes (#32)
+        progress.consecutive_review_passes = (progress.consecutive_review_passes or 0) + 1
     else:
         # Reset: interval goes back to 1, ease_factor unchanged
         progress.stability = 1.0
+        # Reset consecutive review passes on failure (#32)
+        progress.consecutive_review_passes = 0
 
 
 def transition_to_mastered(
@@ -396,8 +400,6 @@ def apply_teach_back_rewards(
 
     Returns dict with ``xp_awarded``, ``coins_awarded``, ``milestone`` keys.
     """
-    from packages.db.models.economy import CoinTransaction
-
     from packages.db.models.learning.topic import LearningTopic
 
     result = {"xp_awarded": 0, "coins_awarded": 0, "milestone": None}
@@ -446,12 +448,13 @@ def apply_teach_back_rewards(
     except Exception:
         logger.warning("Teach-back coin award failed", exc_info=True)
 
-    # Check milestones (first_teach_back)
+    # Check milestones (first_teach_back) via unified path (#33/#45)
     try:
         from apps.backend.app.services.milestones import check_and_record_milestones
 
         milestone = check_and_record_milestones(
-            db, child_id, family_id, {"teach_back": True, "topic_id": topic_id}
+            db, child_id, family_id,
+            {"teach_back_session_id": session_id, "topic_id": topic_id},
         )
         result["milestone"] = milestone
     except Exception:
