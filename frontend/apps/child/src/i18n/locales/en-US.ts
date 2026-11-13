@@ -694,6 +694,51 @@ export default {
       balanceLeft: 'Left side',
       balanceRight: 'Right side',
       balanceTotal: 'Total: {value}',
+      // Shared close-verdict copy (a near miss reads differently from a failure)
+      verdictClose: 'So close! Adjust a little and try again.',
+      pattern: {
+        hintClose: 'Almost! Think about how the shapes repeat.',
+        hintWrong: 'Look at the first few again and find the pattern.',
+        hintIncomplete: 'Pick an answer before checking.',
+      },
+      puzzle: {
+        hintClose: 'Just one piece off — check which one is misplaced.',
+        hintWrong: 'A few pieces are wrong. Try matching them by shape and size.',
+        hintIncomplete: 'Place all the pieces before checking.',
+      },
+      estimate: {
+        step: 'Adjust',
+        hintClose: 'Very close! Fine-tune it a little more.',
+        hintWrong: 'That is quite far off. Try a different order of magnitude.',
+      },
+      connect: {
+        hintClose: 'Only one pair left — look at how they relate.',
+        hintWrong: 'Some pairs are wrong. Check the relationship between them.',
+        hintIncomplete: 'Connect every pair before checking.',
+      },
+      spotTheMistake: {
+        hintClose: 'Very close! The mistake is near the line you picked.',
+        hintWrong: 'Work through it again and see which step goes wrong.',
+        hintIncomplete: 'Tap the line you think is wrong first.',
+      },
+      drawGrid: {
+        hintClose: 'Just one cell off — compare with the task again.',
+        hintWrong: 'Still quite different from the target. Follow the task and try again.',
+        hintIncomplete: 'Fill in your shape before checking.',
+      },
+    },
+    rush: {
+      entry: '60-second Sprint',
+      entryHint: 'You have mastered this — try a speed round',
+      exit: 'Exit',
+      countdown: '{seconds}s left',
+      score: 'Score',
+      scoreValue: '{correct} points',
+      timeLeft: 'Finished early — {seconds}s to spare!',
+      loading: 'Getting questions ready…',
+      errorLoading: 'Could not load questions. Try again.',
+      retry: 'Retry',
+      finished: 'Sprint complete!',
     },
     difficultyWarning: {
       ageTitle: 'Difficulty Warning',
