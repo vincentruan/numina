@@ -32,7 +32,26 @@
           <span class="mode-name">{{ m.label }}</span>
           <span class="mode-count">{{ m.count }}</span>
         </button>
+        <!-- Rush entry — only when the child has mastered the topic (R11/R12) -->
+        <button
+          v-if="topicMastery === 'mastered'"
+          class="mode-btn mode-btn--rush"
+          @click="phase = 'rush'"
+        >
+          <span class="mode-name">{{ t('learning.rush.entry') }}</span>
+          <span class="mode-count">{{ t('learning.rush.entryHint') }}</span>
+        </button>
       </div>
+    </div>
+
+    <!-- Rush timed review (R11/R12) — independent non-scoring path -->
+    <div v-else-if="phase === 'rush'" class="rush-phase">
+      <RushMode
+        :topic-id="topicId"
+        :duration-seconds="60"
+        @exit="phase = 'mode'"
+        @retry="phase = 'mode'"
+      />
     </div>
 
     <!-- Phase 2: answering -->
@@ -125,7 +144,8 @@ import PracticeQuestionCard from '@/components/learning/PracticeQuestionCard.vue
 import PracticeAnswerInput from '@/components/learning/PracticeAnswerInput.vue'
 import PracticeResultSummary from '@/components/learning/PracticeResultSummary.vue'
 import DiscoveryChallengeIntro from '@/components/learning/DiscoveryChallengeIntro.vue'
-import { createSession, getTopicDetail } from '@/api/learning'
+import RushMode from '@/components/learning/RushMode.vue'
+import { createSession, getMyLearningMap, getTopicDetail } from '@/api/learning'
 import { getChallengeForTopic } from '@/data/learning-challenge/fair-distribution'
 import type { ChallengeConfig } from '@/types/learning-challenge'
 
@@ -142,7 +162,7 @@ const error = ref('')
 const starting = ref(false)
 const submitting = ref(false)
 
-const phase = ref<'discovery' | 'mode' | 'answering' | 'result'>('mode')
+const phase = ref<'discovery' | 'mode' | 'answering' | 'result' | 'rush'>('mode')
 const session = ref<PracticeSessionResponse | null>(null)
 const challengeConfig = ref<ChallengeConfig | null>(null)
 const challengeDiscoveryMessage = ref('')
@@ -152,6 +172,8 @@ const lastAttempt = ref<PracticeAttemptResponse | null>(null)
 const feedbackShown = ref(false)
 const sessionResult = ref<PracticeResultResponse | null>(null)
 const recommendations = ref<RecommendResponse[]>([])
+/** Mastery level for the current topic — drives the Rush entry button. */
+const topicMastery = ref<string>('available')
 
 const answerInputRef = ref<InstanceType<typeof PracticeAnswerInput> | null>(null)
 
@@ -235,12 +257,18 @@ async function resolveTopicKey(): Promise<string> {
  * directly. This removes the challenge lookup from `startSession` which caused
  * the #210 infinite loop (discovery → mode → startSession re-resolved the
  * challenge → discovery again).
+ *
+ * Also fetches the topic's mastery level so the Rush entry button can render
+ * only for mastered topics (R11).
  */
 async function resolveTopicChallenge() {
   loading.value = true
   error.value = ''
   try {
-    const topicKey = await resolveTopicKey()
+    const [topicKey, progressList] = await Promise.all([
+      resolveTopicKey(),
+      getMyLearningMap().catch(() => []),
+    ])
     const challenge = getChallengeForTopic(topicKey)
     if (challenge) {
       challengeConfig.value = challenge
@@ -248,6 +276,8 @@ async function resolveTopicChallenge() {
     } else {
       phase.value = 'mode'
     }
+    const progress = progressList.find((p) => p.topic_id === topicId.value)
+    topicMastery.value = progress?.mastery_level ?? 'available'
   } catch {
     phase.value = 'mode'
   } finally {
