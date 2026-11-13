@@ -4,8 +4,12 @@
 from packages.domain.question_templates import (  # noqa: F401
     chinese_literacy,
     chinese_pinyin,
+    computing,
     english_grammar,
     english_vocabulary,
+    history,
+    learning_to_learn,
+    life_skills,
     math_arithmetic,
     math_decimal,
     math_estimation,
@@ -15,6 +19,7 @@ from packages.domain.question_templates import (  # noqa: F401
     math_patterns,
     math_statistics,
     math_word_problems,
+    personal_social,
     science_life,
     science_matter,
 )
