@@ -11,6 +11,10 @@ import OrderChallenge from './OrderChallenge.vue'
 import BalanceChallenge from './BalanceChallenge.vue'
 import PatternChallenge from './PatternChallenge.vue'
 import SpotTheMistakeChallenge from './SpotTheMistakeChallenge.vue'
+import PuzzleChallenge from './PuzzleChallenge.vue'
+import ConnectChallenge from './ConnectChallenge.vue'
+import EstimateChallenge from './EstimateChallenge.vue'
+import DrawGridChallenge from './DrawGridChallenge.vue'
 
 /** Type → component mapping. Add entries as new interaction types are created. */
 const CHALLENGE_COMPONENTS: Record<string, Component> = {
@@ -20,6 +24,10 @@ const CHALLENGE_COMPONENTS: Record<string, Component> = {
   balance: BalanceChallenge,
   pattern: PatternChallenge,
   'spot-the-mistake': SpotTheMistakeChallenge,
+  puzzle: PuzzleChallenge,
+  connect: ConnectChallenge,
+  estimate: EstimateChallenge,
+  'draw-grid': DrawGridChallenge,
 }
 
 /**
