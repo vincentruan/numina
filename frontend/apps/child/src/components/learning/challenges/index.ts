@@ -9,6 +9,8 @@ import DistributeChallenge from './DistributeChallenge.vue'
 import ClassifyChallenge from './ClassifyChallenge.vue'
 import OrderChallenge from './OrderChallenge.vue'
 import BalanceChallenge from './BalanceChallenge.vue'
+import PatternChallenge from './PatternChallenge.vue'
+import SpotTheMistakeChallenge from './SpotTheMistakeChallenge.vue'
 
 /** Type → component mapping. Add entries as new interaction types are created. */
 const CHALLENGE_COMPONENTS: Record<string, Component> = {
@@ -16,6 +18,8 @@ const CHALLENGE_COMPONENTS: Record<string, Component> = {
   classify: ClassifyChallenge,
   order: OrderChallenge,
   balance: BalanceChallenge,
+  pattern: PatternChallenge,
+  'spot-the-mistake': SpotTheMistakeChallenge,
 }
 
 /**
