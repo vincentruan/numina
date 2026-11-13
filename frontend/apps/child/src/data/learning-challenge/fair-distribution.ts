@@ -52,7 +52,7 @@ export const fairDistributionChallenge: DistributeChallenge = {
  * carries a snowflake topic id, so the caller resolves the key first via
  * `getTopicDetail(topicId)`.
  */
-const TOPIC_CHALLENGE_MAP: Record<string, string> = {
+export const TOPIC_CHALLENGE_MAP: Record<string, string> = {
   // Distribute — 理解分数
   mt_IHipFGTFEY: 'fair-distribution-cookies',
   // Order — 比较分数 / 缺失数字问题
@@ -67,7 +67,7 @@ const TOPIC_CHALLENGE_MAP: Record<string, string> = {
 }
 
 /** All registered challenge configs, keyed by id. */
-const CHALLENGE_CONFIGS: Record<string, ChallengeConfig> = {
+export const CHALLENGE_CONFIGS: Record<string, ChallengeConfig> = {
   'fair-distribution-cookies': fairDistributionChallenge,
   'order-fractions': orderFractionsChallenge,
   'order-numbers-small': orderNumbersChallenge,
