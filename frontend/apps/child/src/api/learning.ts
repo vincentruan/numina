@@ -324,11 +324,15 @@ export interface MapExplorationResponse {
   created_at: string
 }
 
-/** Record one completed map visit (posted when the child leaves the map). */
+/** Record one completed map visit (posted when the child leaves the map).
+ *  #11: the beacon is fire-and-forget telemetry, so opt out of the offline
+ *  queue to avoid duplicate rows on replay and a spurious pending-sync badge. */
 export async function recordMapExploration(
   payload: MapExplorationCreate,
 ): Promise<MapExplorationResponse> {
-  const res = await http.post('/child/learning/map/explorations', payload)
+  const res = await http.post('/child/learning/map/explorations', payload, {
+    _skipOfflineQueue: true,
+  })
   return res.data
 }
 

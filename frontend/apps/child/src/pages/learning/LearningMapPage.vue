@@ -69,8 +69,8 @@
             @select-domain="onOceanSelectDomain"
             @select-topic="onOceanSelectTopic"
             @zoom-out="onOceanZoomOut"
-            @zoomed="exploration?.recordZoom"
-            @interacted="exploration?.recordInteraction"
+            @zoomed="exploration.recordZoom"
+            @interacted="exploration.recordInteraction"
           />
 
           <!-- Cluster map for selected subject -->
@@ -111,11 +111,17 @@
       </van-pull-refresh>
 
       <!-- Subject preview (R6/AE2 — a fogged island tap yields a preview,
-           never a refusal; the child can continue into the subject). -->
+           never a refusal; the child can continue into the subject).
+           overlay=false (#2 fix): a dimming scrim intercepts the second tap of
+           an R8 double-tap, so we drop the overlay and rely on swipe-to-dismiss
+           or the Explore button. teleport="body" matches the popup-clipping
+           learning in docs/solutions/ui-bugs/action-sheet-clipped-in-transformed-container.md. -->
       <van-popup
         :show="!!previewSubjectId"
         position="bottom"
         round
+        :overlay="false"
+        teleport="body"
         :style="{ padding: '16px', maxWidth: '400px', margin: '0 auto' }"
         @update:show="previewSubjectId = ''"
       >
@@ -136,11 +142,14 @@
         </div>
       </van-popup>
 
-      <!-- Domain preview (R6 — same contract at region level). -->
+      <!-- Domain preview (R6 — same contract at region level).
+           overlay=false for the same #2 fix as the subject preview. -->
       <van-popup
         :show="!!previewDomainRef"
         position="bottom"
         round
+        :overlay="false"
+        teleport="body"
         :style="{ padding: '16px', maxWidth: '400px', margin: '0 auto' }"
         @update:show="previewDomainRef = null"
       >
@@ -198,6 +207,7 @@ import RoleShimmer from '@/components/RoleShimmer.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
 import { getContinentTheme } from '@/data/continentThemes'
+import { domainLabel } from '@/utils/domainLabel'
 
 const { t, locale } = useI18n()
 const { topicDisplayName, topicDescription } = useLocalizedTopic()
@@ -289,8 +299,6 @@ const subjectTabs = computed<SubjectTab[]>(() => {
 
 // Full topic index — subjects exist as islands even with zero progress (R2).
 const topicIndex = ref<TopicIndexRow[]>([])
-// Prerequisite edges per subject, loaded with the index (R9).
-const dependencyEdges = ref<DependencyEdge[]>([])
 
 // Ocean zoom state — separate from the list view's subject tab so the two
 // views do not fight over one selection.
@@ -307,16 +315,18 @@ const progressByTopicId = computed<Map<string, { mastery_level: string }>>(() =>
   return map
 })
 
-/** Subject mastery per subject key, from progress rows. */
+/** Subject mastery per subject key. Denominator is the topic index (so the
+ *  island fog and the preview caption share one set — #10 fix: previously
+ *  `masteryBySubject` counted only progress rows, producing '1/50 mastered'
+ *  next to a fully clear island). */
 const masteryBySubject = computed<Map<string, { total: number; mastered: number }>>(() => {
   const bySubject = new Map<string, { total: number; mastered: number }>()
-  for (const p of progressList.value) {
-    const s = p.subject
-    if (!s) continue
-    const entry = bySubject.get(s) ?? { total: 0, mastered: 0 }
+  for (const row of topicIndex.value) {
+    const entry = bySubject.get(row.subject) ?? { total: 0, mastered: 0 }
     entry.total++
-    if (p.mastery_level === 'mastered') entry.mastered++
-    bySubject.set(s, entry)
+    const p = progressByTopicId.value.get(row.id)
+    if (p?.mastery_level === 'mastered') entry.mastered++
+    bySubject.set(row.subject, entry)
   }
   return bySubject
 })
@@ -360,7 +370,7 @@ const oceanDomains = computed<OceanDomain[]>(() => {
     id: `${oceanSubject.value}:${domain}`,
     subject: oceanSubject.value,
     domain,
-    displayName: domain === '__other__' ? t('learning.cluster.otherDomain') : domain,
+    displayName: domainLabel(t, domain),
     topicCount: s.total,
     masteryRatio: s.total > 0 ? s.mastered / s.total : 0,
   }))
@@ -387,7 +397,11 @@ const oceanTopics = computed<OceanTopic[]>(() => {
     })
 })
 
-const oceanEdges = computed(() => dependencyEdges.value)
+const oceanEdges = computed<DependencyEdge[]>(() => {
+  const out: DependencyEdge[] = []
+  for (const edges of edgesBySubject.value.values()) out.push(...edges)
+  return out
+})
 
 // Auto-select first subject if current selection is invalid
 watch(subjectTabs, (tabs) => {
@@ -478,7 +492,7 @@ function onOceanSelectDomain(payload: { subject: string; domain: string }) {
 }
 
 function onOceanSelectTopic(payload: { id: string }) {
-  exploration.value?.recordTopicSelection(payload.id)
+  exploration.recordTopicSelection(payload.id)
   onTopicClick(payload.id)
 }
 
@@ -490,17 +504,21 @@ function onOceanZoomOut() {
   }
 }
 
-/** All subjects whose dependency edges we have loaded (loaded once with the index). */
-const loadedEdgeSubjects = new Set<string>()
+/** Edges by subject, keyed so we can invalidate per subject on refresh.
+ *  #5 fix: previously a single `loadedEdgeSubjects` Set + append-only
+ *  `dependencyEdges` array could never be cleared, so after pull-to-refresh
+ *  the prerequisite lines stayed from the previous fetch while the fog updated. */
+const edgesBySubject = ref<Map<string, DependencyEdge[]>>(new Map())
 
 async function loadDependenciesFor(subject: string) {
-  if (!subject || loadedEdgeSubjects.has(subject)) return
-  loadedEdgeSubjects.add(subject)
+  if (!subject || edgesBySubject.value.has(subject)) return
   try {
     const edges = await getSubjectDependencies(subject)
-    dependencyEdges.value = [...dependencyEdges.value, ...edges]
+    const next = new Map(edgesBySubject.value)
+    next.set(subject, edges)
+    edgesBySubject.value = next
   } catch {
-    loadedEdgeSubjects.delete(subject) // retry on next visit
+    // retry on next visit
   }
 }
 
@@ -529,9 +547,10 @@ const previewDomain = computed(() => {
 })
 
 // ── Exploration instrumentation (R11, R12) ──
-
-const exploration = ref<ReturnType<typeof useMapExploration> | null>(null)
-exploration.value = useMapExploration()
+// #16 fix: construct once in setup. The previous version rebuilt the
+// composable in onMounted (discarding the setup-time instance) and wrapped
+// it in a ref for no reason; the ref forced `?.` at every call site.
+const exploration = useMapExploration()
 
 // Today recommendation: pick first non-mastered topic
 const recommended = computed(() => {
@@ -588,14 +607,13 @@ async function onRefresh() {
   loadedSubjects.value = new Set()
   inflightSubjects.clear()
   topicMap.value = new Map()
+  edgesBySubject.value = new Map()
   await Promise.all([load(), refreshRecommendations()])
   refreshing.value = false
 }
 
 onMounted(async () => {
   increment()
-  // R11: time-on-map starts at mount.
-  exploration.value = useMapExploration()
   try {
     await Promise.all([load(), refreshRecommendations()])
   } finally {
@@ -606,7 +624,7 @@ onMounted(async () => {
 // R11/R12: flush the exploration record when the child leaves the map.
 // AE4: flush posts even when no topic was selected.
 onUnmounted(() => {
-  exploration.value?.flush()
+  exploration.flush()
 })
 
 // R10/KTD4: re-fetch recommendation path when page re-activates from
@@ -618,6 +636,14 @@ onActivated(async () => {
   loadedSubjects.value = new Set()
   inflightSubjects.clear()
   topicMap.value = new Map()
+  edgesBySubject.value = new Map()
+  // #L-1: clearing edgesBySubject does not re-fire the oceanSubject watcher
+  // (the value is unchanged), so the topic-level constellation would keep
+  // rendering without prerequisite edges. Re-fetch for the current subject.
+  if (oceanSubject.value) void loadDependenciesFor(oceanSubject.value)
+  // #L-2: re-arm the visit tracker — a reactivation is a new visit, so the
+  // timer and counters must restart instead of carrying the previous visit's.
+  exploration.start()
   await Promise.all([load(), refreshRecommendations()])
 })
 </script>

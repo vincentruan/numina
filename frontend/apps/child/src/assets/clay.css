@@ -150,6 +150,18 @@
   --continent-fog-color: #e8e0d0;
   --continent-fog-transition: opacity 0.6s ease;
 
+  /* Knowledge ocean tokens (#15) */
+  --ocean-sea-color: #cfe8f5;
+  --ocean-wave-color: rgba(255, 255, 255, 0.55);
+  --ocean-land-color: #e8d9a8;
+  --ocean-land-border: #c9b37e;
+  --ocean-fog-color: #b8c4d0;
+  --ocean-label-color: #16324a;
+  --ocean-label-muted: #4a6a80;
+  --ocean-label-outline: rgba(255, 255, 255, 0.85);
+  --constellation-edge-color: rgba(70, 96, 128, 0.45);
+  --constellation-label-outline: rgba(255, 255, 255, 0.8);
+
   /* Challenge interaction tokens (U5) */
   --challenge-object-bg: var(--color-surface-card);
   --challenge-object-active: rgba(var(--color-brand-ochre-rgb), 0.2);
@@ -260,6 +272,18 @@
 
   --continent-fog-color: #1a2a2a;
   --continent-fog-transition: opacity 0.6s ease;
+
+  /* Knowledge ocean tokens (dark) */
+  --ocean-sea-color: #10222e;
+  --ocean-wave-color: rgba(255, 255, 255, 0.12);
+  --ocean-land-color: #2c3e33;
+  --ocean-land-border: #46604e;
+  --ocean-fog-color: #b8c4d0;
+  --ocean-label-color: #f0ece0;
+  --ocean-label-muted: #a8b8c0;
+  --ocean-label-outline: rgba(10, 26, 26, 0.85);
+  --constellation-edge-color: rgba(180, 200, 220, 0.35);
+  --constellation-label-outline: rgba(10, 26, 26, 0.8);
 
   /* Challenge interaction tokens (dark mode) */
   --challenge-object-bg: var(--color-surface-card);

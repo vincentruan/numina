@@ -6,7 +6,6 @@
       computed; zoom changes which is legible, never what exists.
     -->
     <svg
-      ref="svgRef"
       class="knowledge-ocean"
       :viewBox="`0 0 ${VIEW_W} ${VIEW_H}`"
       role="application"
@@ -140,10 +139,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { layoutIslands } from '@/utils/islandLayout'
 import { fogOpacityForRatio } from '@/utils/continentFog'
+import { mulberry32, hashString } from '@/utils/seededPrng'
 import TopicConstellation from './TopicConstellation.vue'
 
 export interface OceanSubject {
@@ -228,7 +228,7 @@ const subjectDisplayName = computed(() => {
 
 // ── Subject level: islands (R3 — organic layout from relationships) ──
 
-export interface RenderedIsland {
+interface RenderedIsland {
   id: string
   terrain: string
   displayName: string
@@ -241,20 +241,15 @@ export interface RenderedIsland {
 
 /** Organic blob silhouette around (0,0), deterministic per island. */
 function islandSilhouette(seed: string, radiusPx: number): string {
-  // Cheap deterministic angle from the id.
-  let hash = 0
-  for (let i = 0; i < seed.length; i++) {
-    hash = (hash * 31 + seed.charCodeAt(i)) | 0
-  }
-  const rng = (n: number) => {
-    const x = Math.sin(hash + n * 127.1) * 43758.5453
-    return x - Math.floor(x)
-  }
+  // #6 fix: one seeded-RNG implementation across the feature. Both the hash
+  // and the PRNG come from seededPrng, so silhouette shape and island
+  // position stay stable together when the seed algorithm changes.
+  const rng = mulberry32(hashString(seed))
   const points: Array<[number, number]> = []
   const bumps = 8
   for (let i = 0; i < bumps; i++) {
     const angle = (i / bumps) * Math.PI * 2
-    const r = radiusPx * (0.75 + rng(i) * 0.5)
+    const r = radiusPx * (0.75 + rng() * 0.5)
     points.push([Math.cos(angle) * r, Math.sin(angle) * r * 0.8])
   }
   // Closed smooth path through the points (Catmull-Rom → bezier).
@@ -293,7 +288,7 @@ const islands = computed<RenderedIsland[]>(() => {
 
 // ── Domain level: regions ──
 
-export interface RenderedRegion {
+interface RenderedRegion {
   id: string
   subject: string
   domain: string
@@ -421,8 +416,6 @@ function onZoomOut() {
 // sequence: a single-finger tap bubbles to click; a completed pinch with a
 // target island suppresses the pending tap.
 
-const svgRef = ref<SVGSVGElement | null>(null)
-
 interface PinchState {
   startDist: number
   centerX: number
@@ -535,12 +528,12 @@ function onTouchEnd(_e: TouchEvent) {
 /* ── Sea ── */
 
 .ocean-sea {
-  fill: var(--ocean-sea-color, #cfe8f5);
+  fill: var(--ocean-sea-color);
 }
 
 .ocean-wave {
   fill: none;
-  stroke: var(--ocean-wave-color, rgba(255, 255, 255, 0.55));
+  stroke: var(--ocean-wave-color);
   stroke-width: 2;
   stroke-linecap: round;
 }
@@ -553,8 +546,8 @@ function onTouchEnd(_e: TouchEvent) {
 }
 
 .ocean-island__land {
-  fill: var(--ocean-land-color, #e8d9a8);
-  stroke: var(--ocean-land-border, #c9b37e);
+  fill: var(--ocean-land-color);
+  stroke: var(--ocean-land-border);
   stroke-width: 1.5;
 }
 
@@ -567,7 +560,7 @@ function onTouchEnd(_e: TouchEvent) {
 /* Fog veil — opacity bound inline from mastery (R5); pointer-events none so
    it never blocks taps (R6). */
 .ocean-island__fog {
-  fill: var(--ocean-fog-color, #b8c4d0);
+  fill: var(--ocean-fog-color);
   pointer-events: none;
   transition: opacity 0.4s ease;
 }
@@ -583,9 +576,9 @@ function onTouchEnd(_e: TouchEvent) {
   font-family: Inter, sans-serif;
   font-size: 13px;
   font-weight: 600;
-  fill: var(--ocean-label-color, #16324a);
+  fill: var(--ocean-label-color);
   paint-order: stroke;
-  stroke: rgba(255, 255, 255, 0.85);
+  stroke: var(--ocean-label-outline);
   stroke-width: 3px;
   pointer-events: none;
 }
@@ -620,7 +613,7 @@ function onTouchEnd(_e: TouchEvent) {
 .ocean-region--math .ocean-region__land { fill: #f2dfa7; }
 
 .ocean-region__fog {
-  fill: var(--ocean-fog-color, #b8c4d0);
+  fill: var(--ocean-fog-color);
   pointer-events: none;
   transition: opacity 0.4s ease;
 }
@@ -629,14 +622,14 @@ function onTouchEnd(_e: TouchEvent) {
   font-family: Inter, sans-serif;
   font-size: 12px;
   font-weight: 600;
-  fill: var(--ocean-label-color, #16324a);
+  fill: var(--ocean-label-color);
   pointer-events: none;
 }
 
 .ocean-region__count {
   font-family: Inter, sans-serif;
   font-size: 10px;
-  fill: var(--ocean-label-muted, #4a6a80);
+  fill: var(--ocean-label-muted);
   pointer-events: none;
 }
 
@@ -653,7 +646,8 @@ function onTouchEnd(_e: TouchEvent) {
   top: 8px;
   left: 8px;
   padding: 6px 12px;
-  min-height: 32px;
+  min-height: 44px;
+  min-width: 44px;
   border: none;
   border-radius: 16px;
   background: var(--color-surface-card, #ffffff);
@@ -671,38 +665,5 @@ function onTouchEnd(_e: TouchEvent) {
   font-family: Inter, sans-serif;
   font-size: 12px;
   color: var(--color-muted, #6a6a6a);
-}
-
-/* ── Dark mode ── */
-
-[data-theme='dark'] .ocean-sea {
-  fill: #10222e;
-}
-
-[data-theme='dark'] .ocean-wave {
-  stroke: rgba(255, 255, 255, 0.12);
-}
-
-[data-theme='dark'] .ocean-island__land {
-  fill: #2c3e33;
-  stroke: #46604e;
-}
-
-[data-theme='dark'] .ocean-island__label {
-  fill: #f0ece0;
-  stroke: rgba(10, 26, 26, 0.85);
-}
-
-[data-theme='dark'] .ocean-region__land {
-  fill: #2c3e33;
-  stroke: #46604e;
-}
-
-[data-theme='dark'] .ocean-region__label {
-  fill: #f0ece0;
-}
-
-[data-theme='dark'] .ocean-region__count {
-  fill: #a8b8c0;
 }
 </style>
