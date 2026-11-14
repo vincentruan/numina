@@ -19,7 +19,7 @@ def _gen_expressing_feelings(params: dict) -> GeneratedQuestion:
         difficulty=1,
         bloom_level="apply",
         topic_key="mt_kvrvpQris4",
-        age_group="early",
+        age_group="low",
         options=[
             {"key": "A", "text": "I feel sad because my friend left.", "text_zh": "朋友走了，我觉得难过。"},
             {"key": "B", "text": "Go away!", "text_zh": "走开！"},

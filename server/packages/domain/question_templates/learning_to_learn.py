@@ -19,7 +19,7 @@ def _gen_asking_for_help(params: dict) -> GeneratedQuestion:
         difficulty=1,
         bloom_level="apply",
         topic_key="mt_mvXufozy2s",
-        age_group="early",
+        age_group="low",
         options=[
             {"key": "A", "text": "Read the question slowly and underline the part you do not understand.", "text_zh": "慢慢读题，把你看不懂的地方画出来。"},
             {"key": "B", "text": "Skip it and never ask.", "text_zh": "跳过，永远不问。"},

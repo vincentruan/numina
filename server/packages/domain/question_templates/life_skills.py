@@ -19,6 +19,6 @@ def _gen_buyers_sellers(params: dict) -> GeneratedQuestion:
         difficulty=1,
         bloom_level="apply",
         topic_key="mt_SbEaQnMQoD",
-        age_group="early",
+        age_group="low",
         solution={"steps": ["Spend 3 + 2 = 5.", "10 - 5 = 5 left."]},
     )
