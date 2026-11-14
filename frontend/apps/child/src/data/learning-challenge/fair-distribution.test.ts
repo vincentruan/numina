@@ -53,7 +53,7 @@ describe('getChallengeForTopic (U6)', () => {
       'mt_IfEgu0X449',
       'mt_XuHmIn2xje',
       'mt_ezc2m_0dzN',
-      'mt_skYly2Qm01',
+      'mt_zd0YkB3xNj',
       'mt_zHnOGwHIEz',
       'mt_vJUa62bxeR',
     ]
