@@ -205,7 +205,27 @@ def record_map_exploration(
     Posted when the child leaves the map. A visit that ends with no topic
     selection is still recorded, so exploration time and zoom depth survive
     sessions that only browsed (AE4).
+
+    #17 hygiene: when the client claims a topic was selected, resolve it
+    against the child-visible taxonomy before storing. A bogus, deprecated
+    or foreign-taxonomy id is stored as null so the beacon never 4xxs, but
+    future analytics readers cannot attribute a selection to a topic the
+    child never legitimately touched.
     """
+    selected_topic_id: int | None = None
+    if payload.topic_selected and payload.selected_topic_id is not None:
+        taxonomy = get_effective_source_taxonomy(db, child.language)
+        topic = (
+            db.query(LearningTopic)
+            .filter(
+                LearningTopic.id == payload.selected_topic_id,
+                LearningTopic.source_taxonomy == taxonomy,
+                LearningTopic.deprecated == False,  # noqa: E712
+            )
+            .first()
+        )
+        if topic is not None:
+            selected_topic_id = topic.id
     row = LearningMapExploration(
         child_id=child.id,
         family_id=child.family_id,
@@ -213,7 +233,7 @@ def record_map_exploration(
         max_zoom_level=payload.max_zoom_level,
         topic_selected=payload.topic_selected,
         interaction_count=payload.interaction_count,
-        selected_topic_id=payload.selected_topic_id if payload.topic_selected else None,
+        selected_topic_id=selected_topic_id,
     )
     db.add(row)
     db.commit()

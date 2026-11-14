@@ -577,8 +577,13 @@ class MapExplorationCreate(BaseModel):
     max_zoom_level: int = Field(ge=0, le=2)
     topic_selected: bool = False
     # Pan/zoom/tap count — separates browsing from a drive-by (R12).
-    interaction_count: int = Field(ge=0, default=0)
-    selected_topic_id: int | None = None
+    # Upper bound is the Postgres 4-byte Integer max; the same cap the
+    # duration_ms comment already points at, matching the DataError-500 class.
+    interaction_count: int = Field(ge=0, le=2_147_483_647, default=0)
+    # Upper bound is the Postgres BigInteger max (signed 8-byte). The frontend
+    # sends this as a Snowflake string (numeric, well within range); the bound
+    # is a guard against a hostile or buggy client posting past the column.
+    selected_topic_id: int | None = Field(default=None, ge=0, le=9_223_372_036_854_775_807)
 
 
 class MapExplorationResponse(SnowflakeBase):

@@ -131,6 +131,27 @@ class TestRecordExploration:
         assert resp.status_code == 201, resp.text
         assert resp.json()["data"]["selected_topic_id"] is None
 
+    def test_nulls_bogus_selected_topic_id(self, client, child_headers):
+        """#17 — a topic id the taxonomy cannot resolve is stored as null.
+
+        The beacon must never 4xx (fire-and-forget), so the router nulls the
+        field instead of rejecting. This keeps future analytics readers from
+        attributing a selection to a topic the child never legitimately touched.
+        """
+        resp = client.post(
+            "/api/v1/child/learning/map/explorations",
+            headers=child_headers,
+            json={
+                "duration_ms": 1000,
+                "max_zoom_level": 2,
+                "topic_selected": True,
+                "interaction_count": 1,
+                "selected_topic_id": "999999999999999999",
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["selected_topic_id"] is None
+
     def test_rejects_unknown_zoom_level(self, client, child_headers):
         resp = client.post(
             "/api/v1/child/learning/map/explorations",
@@ -192,6 +213,35 @@ class TestRecordExploration:
                 "max_zoom_level": 0,
                 "topic_selected": False,
                 "interaction_count": 0,
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_rejects_interaction_count_over_column_cap(self, client, child_headers):
+        """#1 — interaction_count must reject values past the 4-byte Integer cap."""
+        resp = client.post(
+            "/api/v1/child/learning/map/explorations",
+            headers=child_headers,
+            json={
+                "duration_ms": 1000,
+                "max_zoom_level": 0,
+                "topic_selected": False,
+                "interaction_count": 2**31,  # one past the 4-byte Integer max
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_rejects_selected_topic_id_over_column_cap(self, client, child_headers):
+        """#1 — selected_topic_id must reject values past the 8-byte BigInteger cap."""
+        resp = client.post(
+            "/api/v1/child/learning/map/explorations",
+            headers=child_headers,
+            json={
+                "duration_ms": 1000,
+                "max_zoom_level": 0,
+                "topic_selected": True,
+                "interaction_count": 0,
+                "selected_topic_id": 2**63,  # one past the 8-byte BigInteger max
             },
         )
         assert resp.status_code == 422
