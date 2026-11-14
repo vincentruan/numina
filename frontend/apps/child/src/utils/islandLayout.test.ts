@@ -53,6 +53,18 @@ describe('layoutIslands (R3 organic + relationship-aware)', () => {
     expect(a.positions).toEqual(b.positions)
   })
 
+  it('#9 — output is a pure function of the subject set, regardless of input order', () => {
+    // R3/F3 need positions to be stable across visits; `oceanSubjects` sorts by
+    // i18n displayName, so a locale switch reorders the array. A layout that
+    // depends on input order would move every island on locale change.
+    const reversed = [...SAMPLE_SUBJECTS].reverse()
+    const a = layoutIslands(SAMPLE_SUBJECTS)
+    const b = layoutIslands(reversed)
+    const byId = (xs: typeof a.positions) =>
+      [...xs].sort((x, y) => x.id.localeCompare(y.id))
+    expect(byId(a.positions)).toEqual(byId(b.positions))
+  })
+
   it('produces different layouts for different subject sets', () => {
     const subset = SAMPLE_SUBJECTS.slice(0, 4)
     const a = layoutIslands(SAMPLE_SUBJECTS)

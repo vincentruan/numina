@@ -13,7 +13,7 @@
       :key="node.id"
       class="topic-constellation__node"
       :class="[
-        `topic-constellation__node--${masteryClass(node.masteryLevel)}`,
+        `topic-constellation__node--${masteryStatus({ mastery_level: node.masteryLevel })}`,
         { 'topic-constellation__node--isolated': !node.connected },
       ]"
       :transform="`translate(${node.x * viewWidth}, ${node.y * viewHeight})`"
@@ -36,6 +36,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { layoutConstellation } from '@/utils/constellationLayout'
+import { masteryStatus } from '@/utils/masteryStatus'
 
 export interface ConstellationTopic {
   id: string
@@ -96,18 +97,12 @@ const edgePaths = computed(() => {
     .filter((p): p is { from: string; to: string; path: string } => p !== null)
 })
 
-function masteryClass(level: string): string {
-  if (level === 'mastered') return 'mastered'
-  if (level === 'learning' || level === 'assessing') return 'learning'
-  if (level === 'locked') return 'locked'
-  return 'available'
-}
 </script>
 
 <style scoped>
 .topic-constellation__edge {
   fill: none;
-  stroke: var(--constellation-edge-color, rgba(70, 96, 128, 0.45));
+  stroke: var(--constellation-edge-color);
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
   pointer-events: none;
@@ -127,7 +122,7 @@ function masteryClass(level: string): string {
 
 .topic-constellation__node--mastered .topic-constellation__star {
   fill: var(--color-brand-ochre, #e8b94a);
-  stroke: var(--color-brand-touchable, #e8b94a);
+  stroke: var(--color-brand-ochre);
 }
 
 .topic-constellation__node--learning .topic-constellation__star {
@@ -137,7 +132,7 @@ function masteryClass(level: string): string {
 
 .topic-constellation__node--locked .topic-constellation__star {
   fill: var(--color-body, #3a3a3a);
-  stroke: var(--trigger-available-color, #3a3a3a);
+  stroke: var(--color-body);
   opacity: 0.75;
 }
 
@@ -155,17 +150,8 @@ function masteryClass(level: string): string {
   font-size: 9px;
   fill: var(--color-ink, #0a0a0a);
   paint-order: stroke;
-  stroke: rgba(255, 255, 255, 0.8);
+  stroke: var(--constellation-label-outline);
   stroke-width: 2px;
   pointer-events: none;
-}
-
-[data-theme='dark'] .topic-constellation__edge {
-  stroke: rgba(180, 200, 220, 0.35);
-}
-
-[data-theme='dark'] .topic-constellation__label {
-  fill: #f0ece0;
-  stroke: rgba(10, 26, 26, 0.8);
 }
 </style>

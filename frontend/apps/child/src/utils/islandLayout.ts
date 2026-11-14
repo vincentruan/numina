@@ -24,27 +24,7 @@ export interface IslandLayout {
   positions: IslandPosition[]
 }
 
-// Mulberry32 seeded PRNG — deterministic, fast, 32-bit state.
-function mulberry32(seed: number): () => number {
-  return function () {
-    seed |= 0
-    seed = (seed + 0x6d2b79f5) | 0
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-// Deterministic hash of a string → 32-bit seed.
-function hashString(s: string): number {
-  let hash = 0
-  for (let i = 0; i < s.length; i++) {
-    const char = s.charCodeAt(i)
-    hash = (hash << 5) - hash + char
-    hash |= 0
-  }
-  return hash >>> 0
-}
+import { mulberry32, hashString } from './seededPrng'
 
 // Golden angle in radians (≈ 137.508°) — ensures even angular distribution.
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
@@ -80,6 +60,13 @@ export function layoutIslands(subjects: IslandSubject[]): IslandLayout {
     if (!families.has(s.terrain)) families.set(s.terrain, [])
     families.get(s.terrain)!.push(s)
   }
+  // #9 fix: deterministic layout regardless of input order — sort members
+  // within each family by id, and iterate families in sorted-key order, so
+  // the shared PRNG stream consumes identically for the same subject set.
+  for (const members of families.values()) {
+    members.sort((a, b) => a.id.localeCompare(b.id))
+  }
+  const sortedFamilyEntries = [...families.entries()].sort(([a], [b]) => a.localeCompare(b))
 
   // Place family centers on a circle.
   const familyCenters = new Map<string, { x: number; y: number }>()
@@ -96,7 +83,7 @@ export function layoutIslands(subjects: IslandSubject[]): IslandLayout {
   // Place each subject within its family cluster.
   const maxTopicCount = Math.max(...subjects.map((s) => s.topicCount), 1)
   const positions: IslandPosition[] = []
-  for (const [terrain, members] of families.entries()) {
+  for (const [terrain, members] of sortedFamilyEntries) {
     const center = familyCenters.get(terrain)!
     for (const subject of members) {
       const angle = rng() * 2 * Math.PI

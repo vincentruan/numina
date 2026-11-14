@@ -70,6 +70,7 @@ import type { Core } from 'cytoscape'
 import type { ProgressWithTopic, DependencyEdge } from '@/api/learning'
 import { getSubjectDependencies } from '@/api/learning'
 import { domainLabel as translateDomain } from '@/utils/domainLabel'
+import { masteryStatus, type MasteryStatus } from '@/utils/masteryStatus'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -320,22 +321,6 @@ function shortName(item: ProgressWithTopic): string {
 }
 
 // ── Mastery status (matches TopicNode logic) ──
-
-type MasteryStatus = 'mastered' | 'learning' | 'available' | 'locked' | 'review'
-
-function masteryStatus(item: ProgressWithTopic): MasteryStatus {
-  const level = item.mastery_level
-  if (level === 'mastered') {
-    if (item.next_review_at) {
-      const reviewDate = new Date(item.next_review_at)
-      if (reviewDate <= new Date()) return 'review'
-    }
-    return 'mastered'
-  }
-  if (level === 'learning' || level === 'assessing') return 'learning'
-  if (level === 'locked') return 'locked'
-  return 'available'
-}
 
 function isFrontierTopic(item: ProgressWithTopic): boolean {
   const level = item.mastery_level

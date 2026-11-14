@@ -26,6 +26,7 @@ defineOptions({ name: 'TopicNode' })
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProgressWithTopic } from '@/api/learning'
+import { masteryStatus as computeMasteryStatus, type MasteryStatus } from '@/utils/masteryStatus'
 
 const { locale } = useI18n()
 
@@ -38,21 +39,7 @@ defineEmits<{
   tap: [item: ProgressWithTopic]
 }>()
 
-type MasteryStatus = 'mastered' | 'learning' | 'available' | 'locked' | 'review'
-
-const masteryStatus = computed<MasteryStatus>(() => {
-  const level = props.item.mastery_level
-  if (level === 'mastered') {
-    if (props.item.next_review_at) {
-      const reviewDate = new Date(props.item.next_review_at)
-      if (reviewDate <= new Date()) return 'review'
-    }
-    return 'mastered'
-  }
-  if (level === 'learning' || level === 'assessing') return 'learning'
-  if (level === 'locked') return 'locked'
-  return 'available'
-})
+const masteryStatus = computed<MasteryStatus>(() => computeMasteryStatus(props.item))
 
 function topicDisplayName(topic: ProgressWithTopic['topic']): string {
   if (locale.value.startsWith('zh') && topic.name_zh) return topic.name_zh
