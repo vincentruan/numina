@@ -243,30 +243,36 @@ def finish_practice_session(
     # Calculate score (flush only — no commit yet)
     result = finish_session(db=db, session_id=session_id, child_id=user.id)
 
+    # Rush sessions are independent, non-scoring review runs (R13b): do NOT
+    # trigger the mastery-update state machine. Skipping update_progress_from_session
+    # keeps a Rush from advancing a topic's mastery_level or moving the mastered gate.
+    is_rush = session.session_mode == "rush"
+
     # Update progress state machine
     mastery_changed = False
     new_mastery_level = None
-    try:
-        from apps.backend.app.services.learning.practice_progress_integration import (
-            update_progress_from_session,
-        )
+    if not is_rush:
+        try:
+            from apps.backend.app.services.learning.practice_progress_integration import (
+                update_progress_from_session,
+            )
 
-        progress_result = update_progress_from_session(
-            db=db, session_id=session_id, child_id=user.id
-        )
-        mastery_changed = progress_result["mastery_changed"]
-        new_mastery_level = progress_result["new_mastery_level"]
-    except Exception:
-        logger.warning(
-            "Progress integration failed for session %s — rolling back",
-            session_id,
-            exc_info=True,
-        )
-        db.rollback()
-        raise AppError(
-            ErrorCode.PRACTICE_SESSION_NOT_FOUND,
-            details="Failed to finalize session",
-        ) from None
+            progress_result = update_progress_from_session(
+                db=db, session_id=session_id, child_id=user.id
+            )
+            mastery_changed = progress_result["mastery_changed"]
+            new_mastery_level = progress_result["new_mastery_level"]
+        except Exception:
+            logger.warning(
+                "Progress integration failed for session %s — rolling back",
+                session_id,
+                exc_info=True,
+            )
+            db.rollback()
+            raise AppError(
+                ErrorCode.PRACTICE_SESSION_NOT_FOUND,
+                details="Failed to finalize session",
+            ) from None
 
     # Award XP and coins if mastery changed
     xp_earned = 0

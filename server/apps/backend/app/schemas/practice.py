@@ -12,7 +12,7 @@ from apps.backend.app.schemas.base import SnowflakeBase
 
 class SessionCreateRequest(BaseModel):
     topic_id: int
-    session_mode: Literal["practice", "review", "challenge"] = "practice"
+    session_mode: Literal["practice", "review", "challenge", "rush"] = "practice"
     count: int = Field(default=5, ge=1, le=20)
 
 
