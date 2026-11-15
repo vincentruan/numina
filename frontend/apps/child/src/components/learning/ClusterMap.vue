@@ -129,6 +129,7 @@ import PrerequisiteGuidance from './PrerequisiteGuidance.vue'
 import NextUpCard from './NextUpCard.vue'
 import PathOverlay from './PathOverlay.vue'
 import { domainLabel as translateDomain } from '@/utils/domainLabel'
+import { masteryStatus } from '@/utils/masteryStatus'
 import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
 import { useClusterTerritories } from '@/composables/useClusterTerritories'
@@ -431,17 +432,6 @@ watch(territories, async () => {
 }, { flush: 'post' })
 
 // ── Tap handlers (U3) ──
-
-function masteryStatus(item: ProgressWithTopic): string {
-  const level = item.mastery_level
-  if (level === 'mastered') {
-    if (item.next_review_at && new Date(item.next_review_at) <= new Date()) return 'review'
-    return 'mastered'
-  }
-  if (level === 'learning' || level === 'assessing') return 'learning'
-  if (level === 'locked') return 'locked'
-  return 'available'
-}
 
 function onTopicTap(item: ProgressWithTopic) {
   const status = masteryStatus(item)

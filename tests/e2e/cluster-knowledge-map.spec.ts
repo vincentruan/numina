@@ -27,9 +27,17 @@ test.describe('Cluster Knowledge Map', () => {
     await loginAsChild(page, PARENT_USER, PARENT_PASS, CHILD_NAME, CHILD_PIN)
   })
 
-  test('AE1: renders subject tabs and cluster territories with mastery nodes', async ({ page }) => {
+  /** The learning map defaults to the ocean view (R1); these specs cover the
+   *  list view, so switch to it after navigation. */
+  async function gotoListView(page: import('@playwright/test').Page) {
     await page.goto('/child/learning')
     await page.waitForLoadState('networkidle')
+    await page.locator('.view-mode-btn', { hasText: /List|列表/ }).click()
+    await page.waitForLoadState('networkidle')
+  }
+
+  test('AE1: renders subject tabs and cluster territories with mastery nodes', async ({ page }) => {
+    await gotoListView(page)
 
     // Subject tabs present
     const tabs = page.locator('.subject-tab')
@@ -55,8 +63,7 @@ test.describe('Cluster Knowledge Map', () => {
   })
 
   test('AE2: tapping a practice-eligible node routes to practice action', async ({ page }) => {
-    await page.goto('/child/learning')
-    await page.waitForLoadState('networkidle')
+    await gotoListView(page)
 
     // Find an available/learning node (practice-eligible)
     const practiceNode = page
@@ -75,8 +82,7 @@ test.describe('Cluster Knowledge Map', () => {
   })
 
   test('AE3: tapping a locked node opens prerequisite guidance sheet', async ({ page }) => {
-    await page.goto('/child/learning')
-    await page.waitForLoadState('networkidle')
+    await gotoListView(page)
 
     const lockedNode = page.locator('.topic-node--locked').first()
     if ((await lockedNode.count()) === 0) {
@@ -96,8 +102,7 @@ test.describe('Cluster Knowledge Map', () => {
   })
 
   test('AE4: bridge badge switches to target subject', async ({ page }) => {
-    await page.goto('/child/learning')
-    await page.waitForLoadState('networkidle')
+    await gotoListView(page)
 
     // Bridges exist only for some subjects — find a subject tab that renders
     // at least one bridge badge before asserting navigation.
@@ -150,8 +155,7 @@ test.describe('Cluster Knowledge Map', () => {
   })
 
   test('AE5: progress bar and frontier marker render', async ({ page }) => {
-    await page.goto('/child/learning')
-    await page.waitForLoadState('networkidle')
+    await gotoListView(page)
 
     // Progress bar present with mastered/total text
     const progressText = page.locator('.cluster-map__progress-text')
@@ -172,8 +176,7 @@ test.describe('Cluster Knowledge Map', () => {
 
   test('responsive: map is usable at 375px width', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 })
-    await page.goto('/child/learning')
-    await page.waitForLoadState('networkidle')
+    await gotoListView(page)
 
     const territories = page.locator('.cluster-territory')
     await expect(territories.first()).toBeVisible({ timeout: 10_000 })

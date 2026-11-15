@@ -51,6 +51,19 @@
           :zone="todayLearning.current_zone"
         />
         <TodayLearningCard :data="todayLearning" />
+        <!-- Castle entry — a direct path so the child can open it unprompted (R10, F3) -->
+        <button
+          type="button"
+          class="castle-entry"
+          data-test="home-castle-entry"
+          @click="router.push('/learning/castle')"
+        >
+          <span class="castle-entry__icon" aria-hidden="true">🏰</span>
+          <span class="castle-entry__text">
+            <span class="castle-entry__title">{{ t('learning.castle.entryTitle') }}</span>
+            <span class="castle-entry__cta">{{ t('learning.castle.entryCta') }}</span>
+          </span>
+        </button>
       </div>
 
     <!-- Today's chores — read-only preview; tap a card to manage on the Tasks page -->
@@ -497,6 +510,41 @@ watch(todayChores, (next) => {
 
 /* ── Sections ── */
 .section { margin-bottom: var(--space-lg); }
+
+/* Castle entry card (R10) */
+.castle-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 16px);
+  background: var(--color-surface-card);
+  text-align: left;
+  cursor: pointer;
+}
+.castle-entry:active {
+  transform: scale(0.97);
+}
+.castle-entry__icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.castle-entry__text {
+  display: flex;
+  flex-direction: column;
+}
+.castle-entry__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.castle-entry__cta {
+  font-size: 12px;
+  color: var(--color-muted);
+}
 .section-head {
   display: flex;
   align-items: center;

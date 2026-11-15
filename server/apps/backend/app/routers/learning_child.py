@@ -17,10 +17,13 @@ from apps.backend.app.schemas.learning import (
     AssessStreamRequest,
     AssignmentResponse,
     BridgeResponse,
+    CastleIndexResponse,
     ChildProgressOverview,
     ClusterResponse,
     HookQuestionResponse,
     LearningStatsResponse,
+    MapExplorationCreate,
+    MapExplorationResponse,
     MapIndexItem,
     OnboardingCompleteResponse,
     PathResponse,
@@ -59,6 +62,7 @@ from apps.backend.app.services.notification.dispatcher import (
     notify_learning_submitted_for_review,
 )
 from packages.db.models.learning.assignment import LearningAssignment
+from packages.db.models.learning.map_exploration import LearningMapExploration
 from packages.db.models.learning.path import LearningPath
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
@@ -179,6 +183,70 @@ def list_my_clusters(
     )
 
 
+# ---------------------------------------------------------------------------
+# Knowledge Castle (U2)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/castle/index", response_model=CastleIndexResponse)
+def my_castle_index(
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Return aggregated castle data for the child's knowledge castle view.
+
+    Scope = in-range topics (by age) ∪ first-mastered topics.
+    Towers = subjects; floors = domains; windows = review_due + recommended.
+    Zero-progress children get empty tower skeletons (200, never 404).
+    """
+    from apps.backend.app.services.learning.castle_service import get_castle_index
+
+    data = get_castle_index(db, child.id, child.family_id, child.language)
+    return CastleIndexResponse(
+        towers=[_tower_to_schema(t) for t in data.towers],
+        windows=[_window_to_schema(w) for w in data.windows],
+        streak_days=data.streak_days,
+    )
+
+
+def _tower_to_schema(tower):
+    from apps.backend.app.schemas.learning import (
+        CastleFloorSchema,
+        CastleTowerSchema,
+    )
+
+    return CastleTowerSchema(
+        subject=tower.subject,
+        mastered_count=tower.mastered_count,
+        learning_count=tower.learning_count,
+        review_due_count=tower.review_due_count,
+        total_count=tower.total_count,
+        floors=[
+            CastleFloorSchema(
+                domain=f.domain,
+                mastered_count=f.mastered_count,
+                learning_count=f.learning_count,
+                review_due_count=f.review_due_count,
+                total_count=f.total_count,
+            )
+            for f in tower.floors
+        ],
+    )
+
+
+def _window_to_schema(window):
+    from apps.backend.app.schemas.learning import CastleWindowSchema
+
+    return CastleWindowSchema(
+        topic_id=window.topic_id,
+        topic_name=window.topic_name,
+        topic_name_zh=window.topic_name_zh,
+        reason=window.reason,
+        subject=window.subject,
+        domain=window.domain,
+    )
+
+
 @router.get("/bridges", response_model=list[BridgeResponse])
 def list_my_bridges(
     subject: str | None = Query(None),
@@ -188,6 +256,57 @@ def list_my_bridges(
     """List cross-subject bridge edges between cluster domains."""
     taxonomy = get_effective_source_taxonomy(db, child.language)
     return get_cross_subject_bridges(db, source_taxonomy=taxonomy, subject=subject)
+
+
+@router.post(
+    "/map/explorations",
+    response_model=MapExplorationResponse,
+    status_code=201,
+)
+def record_map_exploration(
+    payload: MapExplorationCreate,
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Record one knowledge-map visit (R11, R12).
+
+    Posted when the child leaves the map. A visit that ends with no topic
+    selection is still recorded, so exploration time and zoom depth survive
+    sessions that only browsed (AE4).
+
+    #17 hygiene: when the client claims a topic was selected, resolve it
+    against the child-visible taxonomy before storing. A bogus, deprecated
+    or foreign-taxonomy id is stored as null so the beacon never 4xxs, but
+    future analytics readers cannot attribute a selection to a topic the
+    child never legitimately touched.
+    """
+    selected_topic_id: int | None = None
+    if payload.topic_selected and payload.selected_topic_id is not None:
+        taxonomy = get_effective_source_taxonomy(db, child.language)
+        topic = (
+            db.query(LearningTopic)
+            .filter(
+                LearningTopic.id == payload.selected_topic_id,
+                LearningTopic.source_taxonomy == taxonomy,
+                LearningTopic.deprecated == False,  # noqa: E712
+            )
+            .first()
+        )
+        if topic is not None:
+            selected_topic_id = topic.id
+    row = LearningMapExploration(
+        child_id=child.id,
+        family_id=child.family_id,
+        duration_ms=payload.duration_ms,
+        max_zoom_level=payload.max_zoom_level,
+        topic_selected=payload.topic_selected,
+        interaction_count=payload.interaction_count,
+        selected_topic_id=selected_topic_id,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return MapExplorationResponse.model_validate(row)
 
 
 @router.get("/assignments", response_model=list[AssignmentResponse])
