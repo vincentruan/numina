@@ -541,11 +541,11 @@ onMounted(() => {
   color: var(--color-ink);
 }
 
-/* Matches DiagnosisCard's box (12px vertical padding, 3 lines of copy, 36px
+/* Matches DiagnosisCard's box (12px vertical padding, 3 lines of copy, 44px
    action row) so swapping the skeleton for the card does not shift the CTA. */
 .diagnosis-skeleton {
   margin: 12px 16px;
-  height: 132px;
+  height: 140px;
   border-radius: 12px;
   background: linear-gradient(
     90deg,

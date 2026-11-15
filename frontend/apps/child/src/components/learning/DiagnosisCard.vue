@@ -109,7 +109,7 @@ const targetName = computed(() =>
 }
 .diagnosis-card__btn {
   flex: 1 1 0;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 12px;
   border-radius: 8px;
   font-size: 14px;

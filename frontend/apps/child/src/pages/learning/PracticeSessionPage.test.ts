@@ -178,6 +178,26 @@ describe('PracticeSessionPage — prerequisite diagnosis', () => {
 
     expect(getPracticeRecommendations).toHaveBeenCalledTimes(1)
   })
+
+  it('resets session state for the new topic when the route is reused (R13)', async () => {
+    getPracticeRecommendations.mockResolvedValue([weakPrereq])
+    const wrapper = mountPage()
+    await flushPromises()
+
+    // Reuse the same component instance for the referred prerequisite, as the
+    // card's "practice X first" navigation does.
+    await wrapper.find('[data-test="practice-first-btn"]').trigger('click')
+    routeState.params.topicId = '1001'
+    await flushPromises()
+
+    // No residual state from the previous topic: the page is back at mode
+    // selection with no session, questions, or result carried over.
+    expect(wrapper.findAll('.mode-btn').length).toBeGreaterThan(0)
+    expect(wrapper.find('.page-title').exists()).toBe(true)
+    expect(wrapper.find('[data-test="question-card"]').exists()).toBe(false)
+    // The diagnosis is re-evaluated for the newly opened topic.
+    expect(getPracticeRecommendations).toHaveBeenLastCalledWith('1001', true)
+  })
 })
 
 // --- U1: #210 stage-flow regression tests ---
