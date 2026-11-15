@@ -21,6 +21,27 @@
     <!-- Phase 1: mode selection -->
     <div v-else-if="phase === 'mode'" class="mode-phase">
       <h1 class="page-title">{{ displayTopicName }}</h1>
+      <!-- Diagnosis skeleton while loading (reserved height per R8). -->
+      <div
+        v-if="diagnosisLoading && !diagnosisDismissed && !hasFromDiagnosisMarker()"
+        class="diagnosis-skeleton"
+        aria-hidden="true"
+        data-test="diagnosis-skeleton"
+      />
+      <!-- Diagnosis card (issue #213): inline above the CTA, dismissed per-mount. -->
+      <DiagnosisCard
+        v-else-if="
+          !diagnosisDismissed &&
+          !hasFromDiagnosisMarker() &&
+          diagnosisCandidate
+        "
+        :candidate="diagnosisCandidate"
+        :target-topic-name="targetTopicDetail?.name ?? null"
+        :target-topic-name-zh="targetTopicDetail?.name_zh ?? null"
+        data-test="diagnosis-card-wrapper"
+        @practice-first="onPracticeFirst"
+        @continue="onDiagnosisContinue"
+      />
       <div class="mode-list">
         <button
           v-for="m in modes"
@@ -124,7 +145,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { showFailToast } from 'vant'
@@ -145,6 +166,7 @@ import PracticeAnswerInput from '@/components/learning/PracticeAnswerInput.vue'
 import PracticeResultSummary from '@/components/learning/PracticeResultSummary.vue'
 import DiscoveryChallengeIntro from '@/components/learning/DiscoveryChallengeIntro.vue'
 import RushMode from '@/components/learning/RushMode.vue'
+import DiagnosisCard from '@/components/learning/DiagnosisCard.vue'
 import { createSession, getMyLearningMap, getTopicDetail } from '@/api/learning'
 import { getChallengeForTopic } from '@/data/learning-challenge/fair-distribution'
 import type { ChallengeConfig } from '@/types/learning-challenge'
@@ -174,6 +196,12 @@ const sessionResult = ref<PracticeResultResponse | null>(null)
 const recommendations = ref<RecommendResponse[]>([])
 /** Mastery level for the current topic — drives the Rush entry button. */
 const topicMastery = ref<string>('available')
+
+// Diagnosis state (issue #213)
+const diagnosisCandidate = ref<RecommendResponse | null>(null)
+const diagnosisLoading = ref(false)
+const diagnosisDismissed = ref(false)
+const targetTopicDetail = ref<{ name: string | null; name_zh: string | null } | null>(null)
 
 const answerInputRef = ref<InstanceType<typeof PracticeAnswerInput> | null>(null)
 
@@ -398,6 +426,7 @@ function startPrereqPractice(prereqTopicId: string) {
   router.push(`/learning/practice/${prereqTopicId}`)
 }
 
+/** Retry from the error state. */
 function load() {
   error.value = ''
   session.value = null
@@ -406,7 +435,90 @@ function load() {
   challengeDiscoveryMessage.value = ''
   // Re-resolve challenge on retry — resets phase to discovery or mode
   resolveTopicChallenge()
+  startDiagnosis()
 }
+
+function hasFromDiagnosisMarker(): boolean {
+  const marker = route.query.fromDiagnosis
+  return typeof marker === 'string' && marker.length > 0 && /^\d+$/.test(marker)
+}
+
+/** Fire the diagnosis request, unless this arrival was referred by the card itself. */
+function startDiagnosis() {
+  diagnosisDismissed.value = false
+  diagnosisCandidate.value = null
+  targetTopicDetail.value = null
+  if (hasFromDiagnosisMarker()) {
+    diagnosisLoading.value = false
+    return
+  }
+  fetchDiagnosisAndTarget()
+}
+
+async function fetchDiagnosisAndTarget() {
+  diagnosisLoading.value = true
+  try {
+    const [diagnosis, detail] = await Promise.all([
+      getPracticeRecommendations(topicId.value, true),
+      getTopicDetail(topicId.value),
+    ])
+    targetTopicDetail.value = { name: detail.name, name_zh: detail.name_zh }
+    diagnosisCandidate.value = diagnosis.find((r) => r.is_diagnosis) ?? null
+  } catch {
+    // Per R8: silently omitted on failure (no retry, no error toast).
+    diagnosisCandidate.value = null
+  } finally {
+    diagnosisLoading.value = false
+  }
+}
+
+function onPracticeFirst() {
+  const candidate = diagnosisCandidate.value
+  if (!candidate) return
+  const sourceTopicId = topicId.value
+  router.push({
+    name: route.name,
+    params: { topicId: candidate.topic_id },
+    query: { fromDiagnosis: sourceTopicId },
+  })
+}
+
+function onDiagnosisContinue() {
+  diagnosisDismissed.value = true
+}
+
+/** Clear the previous topic's session state — the same route is reused for the
+ *  new topic, so without this the child lands mid-session on the new topic. */
+function resetSessionStateForNavigation() {
+  phase.value = 'mode'
+  session.value = null
+  questions.value = []
+  currentIndex.value = 0
+  lastAttempt.value = null
+  feedbackShown.value = false
+  sessionResult.value = null
+  recommendations.value = []
+  challengeConfig.value = null
+  challengeDiscoveryMessage.value = ''
+  error.value = ''
+  startDiagnosis()
+}
+
+// The page loads via onMounted only (the router renders no KeepAlive), and a
+// card referral reuses this component with a different topicId — watch-driven
+// re-fetching would duplicate the mount-time request.
+watch(
+  () => route.params.topicId,
+  (next, prev) => {
+    if (next === prev) return
+    resetSessionStateForNavigation()
+  },
+)
+
+onMounted(() => {
+  startDiagnosis()
+})
+
 </script>
 
 <style scoped>
@@ -418,6 +530,38 @@ function load() {
   margin: 16px;
   font-size: 20px;
   color: var(--color-ink);
+}
+
+/* Matches DiagnosisCard's box (12px vertical padding, 3 lines of copy, 36px
+   action row) so swapping the skeleton for the card does not shift the CTA. */
+.diagnosis-skeleton {
+  margin: 12px 16px;
+  height: 132px;
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-card) 0%,
+    var(--color-canvas) 50%,
+    var(--color-surface-card) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diagnosis-skeleton {
+    animation: none;
+    background: var(--color-canvas);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .mode-list {

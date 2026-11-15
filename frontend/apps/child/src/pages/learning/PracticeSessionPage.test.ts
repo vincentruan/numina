@@ -1,104 +1,188 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import type { QuestionResponse } from '@/api/practice'
-import type { TopicResponse } from '@/api/learning'
-import type { ChallengeConfig } from '@/types/learning-challenge'
+import { reactive } from 'vue'
 import zhCN from '@/i18n/locales/zh-CN'
 import enUS from '@/i18n/locales/en-US'
 
-// --- Mocks ---
+const push = vi.fn()
+const routeState = reactive({
+  params: { topicId: '2001' } as Record<string, string>,
+  query: {} as Record<string, string>,
+})
 
-vi.mock('@/api/practice', () => ({
-  createPracticeSession: vi.fn(),
-  batchGetQuestions: vi.fn(),
-  submitPracticeAnswer: vi.fn(),
-  finishPracticeSession: vi.fn(),
-  getPracticeRecommendations: vi.fn().mockResolvedValue([]),
+vi.mock('vue-router', () => ({
+  useRoute: () => routeState,
+  useRouter: () => ({ push, back: vi.fn() }),
 }))
 
+const getPracticeRecommendations = vi.fn()
+const createPracticeSession = vi.fn()
+const batchGetQuestionsMock = vi.fn().mockResolvedValue([])
+
 vi.mock('@/api/learning', () => ({
-  getTopicDetail: vi.fn(),
+  getTopicDetail: vi.fn().mockResolvedValue({
+    id: '2001',
+    topic_key: 'fractions-addition',
+    name: 'Fractions Addition',
+    name_zh: '分数加法',
+  }),
+  // Required by the page's entry-time challenge/mastery resolution; without
+  // it the Promise.all rejects and the page falls back to mode selection.
+  getMyLearningMap: vi.fn().mockResolvedValue([]),
   createSession: vi.fn(),
 }))
 
+vi.mock('@/api/practice', () => ({
+  getPracticeRecommendations: (...args: unknown[]) => getPracticeRecommendations(...args),
+  createPracticeSession: (...args: unknown[]) => createPracticeSession(...args),
+  batchGetQuestions: (...args: unknown[]) => batchGetQuestionsMock(...args),
+  submitPracticeAnswer: vi.fn(),
+  finishPracticeSession: vi.fn(),
+}))
+
+const { getChallengeForTopicMock } = vi.hoisted(() => ({
+  getChallengeForTopicMock: vi.fn().mockReturnValue(null),
+}))
+
 vi.mock('@/data/learning-challenge/fair-distribution', () => ({
-  getChallengeForTopic: vi.fn(),
+  getChallengeForTopic: (...args: unknown[]) => getChallengeForTopicMock(...args),
 }))
 
-const mockRouterPush = vi.fn()
-vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { topicId: 'topic-1' } }),
-  useRouter: () => ({ push: mockRouterPush, back: vi.fn() }),
-}))
+const { default: PracticeSessionPage } = await import('./PracticeSessionPage.vue')
 
-import { createPracticeSession, batchGetQuestions } from '@/api/practice'
-import { getTopicDetail } from '@/api/learning'
-import { getChallengeForTopic } from '@/data/learning-challenge/fair-distribution'
-
-const mockCreateSession = vi.mocked(createPracticeSession)
-const mockBatchGet = vi.mocked(batchGetQuestions)
-const mockGetTopicDetail = vi.mocked(getTopicDetail)
-const mockGetChallenge = vi.mocked(getChallengeForTopic)
-
-// --- Helpers ---
-
-function baseTopic(overrides: Partial<TopicResponse> = {}): TopicResponse {
-  return {
-    id: 'topic-1',
-    topic_key: 'math.fractions.understanding',
-    topic_type: 'concept',
-    subject: 'mathematics',
-    domain: 'number-sense',
-    name: 'Fraction Understanding',
-    name_zh: '分数理解',
-    description: 'Learn fractions',
-    description_zh: '学习分数',
-    age_range_start: 8,
-    age_range_end: 10,
-    age_group: 'child',
-    centrality: 0.5,
-    evidence: [],
-    evidence_zh: [],
-    assessment_prompt: null,
-    assessment_prompt_zh: null,
-    standards: [],
-    ability_dimensions: null,
-    deprecated: false,
-    source_taxonomy: 'beijing',
-    curriculum_standards: null,
-    real_world_connections: null,
-    real_world_connections_zh: null,
-    ...overrides,
-  }
+function mountPage() {
+  const i18n = createI18n({
+    legacy: false,
+    locale: 'zh-CN',
+    fallbackLocale: 'en-US',
+    messages: { 'zh-CN': zhCN, 'en-US': enUS },
+  })
+  return mount(PracticeSessionPage, {
+    global: {
+      plugins: [i18n],
+      stubs: {
+        RoleShimmer: true,
+        // Stub the challenge/answering children so phase assertions read the
+        // page's own markup instead of deep child rendering.
+        DiscoveryChallengeIntro: {
+          name: 'DiscoveryChallengeIntro',
+          template: '<div class="discovery-phase" />',
+          emits: ['complete', 'request-tutor'],
+        },
+        PracticeQuestionCard: { template: '<div class="pq-card-stub" />' },
+        PracticeAnswerInput: { template: '<div class="pai-stub" />' },
+        VanProgress: { template: '<div />' },
+      },
+    },
+  })
 }
 
-function baseQuestion(overrides: Partial<QuestionResponse> = {}): QuestionResponse {
-  return {
-    id: 'q-1',
-    topic_id: 'topic-1',
-    question_type: 'multiple_choice',
-    stem: 'What is 1/2 + 1/2?',
-    stem_zh: null,
-    options: [
-      { key: 'A', text: '1' },
-      { key: 'B', text: '2' },
-    ],
-    answer: { selected: 'A' },
-    solution: null,
-    difficulty: 2,
-    bloom_level: 'apply',
-    source: 'template',
-    review_status: 'approved',
-    age_group: 'mid',
-    parameters: null,
-    times_used: 0,
-    correct_count: 0,
-    ...overrides,
-  }
+const weakPrereq = {
+  topic_id: '1001',
+  topic_name: 'Common Denominator',
+  topic_name_zh: '通分',
+  mastery_level: 'learning',
+  accuracy: 0,
+  is_prerequisite: true,
+  prerequisite_of_topic_id: '2001',
+  is_diagnosis: true,
+  depth: 2,
+  bkt_mastery: 0.35,
+  sample_size: 5,
 }
 
-function baseChallengeConfig(overrides: Record<string, unknown> = {}): ChallengeConfig {
+describe('PracticeSessionPage — prerequisite diagnosis', () => {
+  beforeEach(() => {
+    push.mockReset()
+    getPracticeRecommendations.mockReset()
+    createPracticeSession.mockReset()
+    routeState.params.topicId = '2001'
+    routeState.query = {}
+  })
+
+  it('requests the diagnosis once on load and renders the card above the mode buttons', async () => {
+    getPracticeRecommendations.mockResolvedValue([weakPrereq])
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(getPracticeRecommendations).toHaveBeenCalledTimes(1)
+    expect(getPracticeRecommendations).toHaveBeenCalledWith('2001', true)
+    const card = wrapper.find('[data-test="diagnosis-card-wrapper"]')
+    expect(card.exists()).toBe(true)
+    expect(card.text()).toContain('通分')
+    expect(card.text()).toContain('分数加法')
+    expect(wrapper.findAll('.mode-btn').length).toBeGreaterThan(0)
+  })
+
+  it('reserves the card height with a skeleton while the request is in flight', async () => {
+    let resolve!: (v: unknown[]) => void
+    getPracticeRecommendations.mockReturnValue(new Promise((r) => (resolve = r)))
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="diagnosis-skeleton"]').exists()).toBe(true)
+    resolve([weakPrereq])
+    await flushPromises()
+    expect(wrapper.find('[data-test="diagnosis-skeleton"]').exists()).toBe(false)
+  })
+
+  it('silently omits the card when the request fails', async () => {
+    getPracticeRecommendations.mockRejectedValue(new Error('401'))
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="diagnosis-card-wrapper"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="diagnosis-skeleton"]').exists()).toBe(false)
+    expect(wrapper.findAll('.mode-btn').length).toBeGreaterThan(0)
+    expect(getPracticeRecommendations).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the card for this mount after "continue anyway"', async () => {
+    getPracticeRecommendations.mockResolvedValue([weakPrereq])
+    const wrapper = mountPage()
+    await flushPromises()
+
+    await wrapper.find('[data-test="continue-btn"]').trigger('click')
+    expect(wrapper.find('[data-test="diagnosis-card-wrapper"]').exists()).toBe(false)
+    expect(getPracticeRecommendations).toHaveBeenCalledTimes(1)
+  })
+
+  it('navigates to the prerequisite with the fromDiagnosis marker', async () => {
+    getPracticeRecommendations.mockResolvedValue([weakPrereq])
+    const wrapper = mountPage()
+    await flushPromises()
+
+    await wrapper.find('[data-test="practice-first-btn"]').trigger('click')
+    expect(push).toHaveBeenCalledTimes(1)
+    expect(push.mock.calls[0][0]).toMatchObject({
+      params: { topicId: '1001' },
+      query: { fromDiagnosis: '2001' },
+    })
+  })
+
+  it('does not request the diagnosis when arriving with a valid fromDiagnosis marker', async () => {
+    routeState.query = { fromDiagnosis: '2001' }
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(getPracticeRecommendations).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="diagnosis-card-wrapper"]').exists()).toBe(false)
+  })
+
+  it('requests the diagnosis when the fromDiagnosis marker is not numeric', async () => {
+    routeState.query = { fromDiagnosis: 'abc' }
+    getPracticeRecommendations.mockResolvedValue([])
+    mountPage()
+    await flushPromises()
+
+    expect(getPracticeRecommendations).toHaveBeenCalledTimes(1)
+  })
+})
+
+// --- U1: #210 stage-flow regression tests ---
+
+function baseChallengeConfig() {
   return {
     id: 'test-challenge',
     topicId: 'math.fractions.understanding',
@@ -115,58 +199,40 @@ function baseChallengeConfig(overrides: Record<string, unknown> = {}): Challenge
       { id: 'c', label: 'C', icon: '🔴' },
     ],
     correctOrder: ['a', 'b', 'c'],
-    ...overrides,
-  } as unknown as ChallengeConfig
+  } as unknown as import('@/types/learning-challenge').ChallengeConfig
 }
 
-function i18n(locale: string) {
-  return createI18n({
-    legacy: false,
-    locale,
-    fallbackLocale: 'en-US',
-    messages: { 'zh-CN': zhCN, 'en-US': enUS },
-  })
-}
-
-async function mountPage() {
-  const { default: PracticeSessionPage } = await import('./PracticeSessionPage.vue')
-  const wrapper = mount(PracticeSessionPage, {
-    global: {
-      plugins: [i18n('en-US')],
-      stubs: {
-        RoleShimmer: { template: '<div class="role-shimmer-stub" />' },
-        VanProgress: { template: '<div class="van-progress-stub" />', props: ['percentage', 'strokeWidth'] },
-        PracticeQuestionCard: { template: '<div class="pq-card-stub" />' },
-        PracticeAnswerInput: { template: '<div class="pai-stub" />' },
-        PracticeResultSummary: { template: '<div class="prs-stub" />' },
-        ManipulateObserveReflect: {
-          template: '<div class="mor-stub" />',
-          emits: ['complete', 'requestTutor'],
-        },
-        DiscoveryChallengeIntro: {
-          name: 'DiscoveryChallengeIntro',
-          template: '<div class="dci-stub" />',
-          emits: ['complete', 'request-tutor'],
-        },
-      },
-    },
-  })
-  await flushPromises()
-  return wrapper
-}
-
-// --- Tests ---
-
-describe('PracticeSessionPage — #210 stage-flow regression (R1)', () => {
+describe('PracticeSessionPage — #210 stage-flow regression', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    mockGetTopicDetail.mockResolvedValue(baseTopic())
-    mockCreateSession.mockResolvedValue({
+    push.mockReset()
+    createPracticeSession.mockReset()
+    batchGetQuestionsMock.mockReset()
+    batchGetQuestionsMock.mockResolvedValue([
+      {
+        id: 'q-1',
+        topic_id: '2001',
+        question_type: 'multiple_choice',
+        stem: 'Q1?',
+        stem_zh: null,
+        options: [{ key: 'A', text: 'A' }],
+        answer: { answer: 'A' },
+        solution: null,
+        difficulty: 1,
+        bloom_level: 'apply',
+        source: 'template',
+        review_status: 'approved',
+        age_group: 'mid',
+        parameters: null,
+        times_used: 0,
+        correct_count: 0,
+      },
+    ])
+    createPracticeSession.mockResolvedValue({
       id: 'session-1',
       child_id: 'child-1',
-      topic_id: 'topic-1',
+      topic_id: '2001',
       session_mode: 'practice',
-      question_ids: ['q-1', 'q-2'],
+      question_ids: ['q-1'],
       started_at: '2026-01-01T00:00:00Z',
       ended_at: null,
       total_score: null,
@@ -174,64 +240,50 @@ describe('PracticeSessionPage — #210 stage-flow regression (R1)', () => {
       source: 'adaptive',
       learning_progress_id: null,
     })
-    mockBatchGet.mockResolvedValue([baseQuestion({ id: 'q-1' }), baseQuestion({ id: 'q-2' })])
   })
 
-  it('no-challenge topic: picking a mode advances to answering directly (not stuck on mode page)', async () => {
-    // No challenge configured for this topic
-    mockGetChallenge.mockReturnValue(null)
+  it('no-challenge topic: picking a mode advances directly to answering', async () => {
+    getChallengeForTopicMock.mockReturnValue(null)
+    const wrapper = mountPage()
+    await flushPromises()
 
-    const wrapper = await mountPage()
-
-    // Initial phase should be 'mode' (mode-selection screen visible)
     expect(wrapper.find('.mode-phase').exists()).toBe(true)
 
-    // Click a mode button → startSession(5)
     const modeBtns = wrapper.findAll('.mode-btn')
     expect(modeBtns.length).toBeGreaterThan(0)
     await modeBtns[0].trigger('click')
     await flushPromises()
 
-    // After startSession with no challenge: should advance to 'answering' (R1 fix)
-    // Current BUG: stays on 'mode' (no reaction)
     expect(wrapper.find('.answer-phase').exists()).toBe(true)
     expect(wrapper.find('.mode-phase').exists()).toBe(false)
-    expect(mockCreateSession).toHaveBeenCalledTimes(1)
+    expect(createPracticeSession).toHaveBeenCalledTimes(1)
   })
 
   it('challenge topic: discovery → mode → answering does not re-enter discovery', async () => {
-    // Challenge configured
-    mockGetChallenge.mockReturnValue(baseChallengeConfig())
-
-    const wrapper = await mountPage()
-
-    // Initial phase should be 'mode' (current bug: challenge resolved only inside startSession)
-    // After the fix (KTD1): challenge resolved on page entry → phase='discovery' immediately
-    // Either initial state works for this test — the key assertion is the flow below.
+    getChallengeForTopicMock.mockReturnValue(baseChallengeConfig())
+    const wrapper = mountPage()
     await flushPromises()
 
-    // Simulate discovery flow: DiscoveryChallengeIntro emits 'complete'
-    const dciStub = wrapper.findComponent({ name: 'DiscoveryChallengeIntro' })
-    if (dciStub.exists()) {
-      await dciStub.vm.$emit('complete')
-      await flushPromises()
-      // After discovery complete → should be on mode selection
-      expect(wrapper.find('.mode-phase').exists()).toBe(true)
-    }
+    // Initial phase: discovery (challenge resolved on mount)
+    expect(wrapper.find('.discovery-phase').exists()).toBe(true)
 
-    // Pick a mode → startSession(5)
-    // Reset mock to track the second call count
-    mockCreateSession.mockClear()
-    mockBatchGet.mockClear()
+    // Complete discovery
+    const dci = wrapper.findComponent({ name: 'DiscoveryChallengeIntro' })
+    await dci.vm.$emit('complete')
+    await flushPromises()
 
+    // Should now be in mode selection
+    expect(wrapper.find('.mode-phase').exists()).toBe(true)
+
+    // Pick a mode
+    createPracticeSession.mockClear()
     const modeBtns = wrapper.findAll('.mode-btn')
     await modeBtns[0].trigger('click')
     await flushPromises()
 
-    // After startSession: should advance to 'answering' directly, NOT re-enter 'discovery'
-    // Current BUG: re-enters 'discovery' (infinite loop)
+    // Should advance to answering, NOT re-enter discovery
     expect(wrapper.find('.answer-phase').exists()).toBe(true)
     expect(wrapper.find('.discovery-phase').exists()).toBe(false)
-    expect(mockCreateSession).toHaveBeenCalledTimes(1)
+    expect(createPracticeSession).toHaveBeenCalledTimes(1)
   })
 })

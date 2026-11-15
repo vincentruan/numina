@@ -10,9 +10,9 @@ import enUS from '@/i18n/locales/en-US'
 vi.mock('@/api/learning', () => ({
   getTopicDetail: vi.fn(),
   getTopicGraph: vi.fn().mockResolvedValue(null),
+  getTopicHook: vi.fn().mockResolvedValue(null),
   getMyLearningMap: vi.fn().mockResolvedValue([]),
   getMyAssignments: vi.fn().mockResolvedValue([]),
-  getTopicHook: vi.fn().mockResolvedValue(null),
   createSession: vi.fn(),
   submitAssignment: vi.fn(),
   translateTopic: vi.fn(),
