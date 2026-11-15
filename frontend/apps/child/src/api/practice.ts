@@ -78,7 +78,7 @@ export interface PracticeResultResponse {
 
 export interface PracticeSessionCreate {
   topic_id: string
-  session_mode?: 'practice' | 'review' | 'challenge'
+  session_mode?: 'practice' | 'review' | 'challenge' | 'rush'
   count?: number
 }
 

@@ -914,6 +914,51 @@ export default {
       balanceLeft: '左边',
       balanceRight: '右边',
       balanceTotal: '合计：{value}',
+      // 三态反馈通用文案（接近 = 差一点，与错误区分）
+      verdictClose: '很接近了，再调整一下试试！',
+      pattern: {
+        hintClose: '差一点！想想这些图形是按什么顺序重复的。',
+        hintWrong: '再看看前面几个，找出它们的变化规律。',
+        hintIncomplete: '先选一个答案再检查。',
+      },
+      puzzle: {
+        hintClose: '只差一块了，检查一下哪块放错了位置。',
+        hintWrong: '有几块放错了，试着按形状大小来拼。',
+        hintIncomplete: '把碎片都放上去再检查。',
+      },
+      estimate: {
+        step: '调整',
+        hintClose: '非常接近！再微调一点点。',
+        hintWrong: '差得有点多，先估一个数量级看看吧。',
+      },
+      connect: {
+        hintClose: '只差一组了，再看看它们的对应关系。',
+        hintWrong: '有几组连错了，检查一下它们的关系。',
+        hintIncomplete: '把所有配对都连上再检查。',
+      },
+      spotTheMistake: {
+        hintClose: '很接近！错误就在你选的这一行附近。',
+        hintWrong: '再仔细算一算，看看哪一步出了问题。',
+        hintIncomplete: '先点选你认为出错的那一行。',
+      },
+      drawGrid: {
+        hintClose: '只差一格了，对照题目再检查一下。',
+        hintWrong: '和目标形状还差别很大，照着题目再画一遍。',
+        hintIncomplete: '先涂出你想要的形状再检查。',
+      },
+    },
+    rush: {
+      entry: '60 秒冲刺',
+      entryHint: '已掌握，来挑战速度吧',
+      exit: '退出',
+      countdown: '剩余 {seconds} 秒',
+      score: '得分',
+      scoreValue: '{correct} 分',
+      timeLeft: '提前完成，还剩 {seconds} 秒！',
+      loading: '正在准备题目…',
+      errorLoading: '题目没准备好，再试一次吧',
+      retry: '重试',
+      finished: '冲刺结束！',
     },
     difficultyWarning: {
       ageTitle: '难度提示',
