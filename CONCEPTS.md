@@ -51,3 +51,14 @@ A virtual User row (`role='external_token'`) created per family to represent ext
 
 ### MCP API Token
 A family-scoped, long-lived credential (`mcp_` prefix + random string) that authenticates external MCP client connections to the backend's public SSE endpoint. One active token per family; stored as hash only (plaintext shown once at generation). Two-level access control: `allow_external` gates read-only tool access, `allow_write` (default off) gates write tools. Supports expiration, rotation (old token immediately invalidated), and soft revocation. Distinct from the internal agent JWT (`X-Agent-Token`, 5-min TTL) — the API Token is for external clients that cannot obtain or refresh JWTs.
+
+## Learning
+
+### teach-back session
+A distinct `LearningSession` variant (`session_type='teach_back'`) in which a child who has already `mastered` a pilot topic explains the concept back to an AI student persona. The session is triggered on the child's next revisit of a mastered pilot topic (review-due bucket or map click), runs over the existing `learning-smart-tutor` app with payload `action: "start_teach_back"`, and carries its own phase machine (`present_confusion` → `evaluate_explanation` → `resolve_or_probe`) declared in a separate `TEACH_BACK_PHASES` dict rather than the tutor's `VALID_PHASE_TRANSITIONS`. On success, the progress row's `completed_via` is updated to `'teaching'` and a `LearningAssessmentAttempt(assessment_type='teach_back')` history record is written; failure never demotes `mastery_level`.
+
+### preset confusion list
+A hand-authored list of 2–4 misconceptions per pilot topic, stored in the `topic_confusions` table (modeled on `topic_hook_questions`). Each row carries `confusion_text`, `rubric` (LLM grading rubric), `expected_expression` (SymPy comparison target, nullable), and `review_status` — only rows with `review_status='approved'` are visible to the teach-back flow, which is the enforcement mechanism that blocks runtime-LLM-generated confusions. Keyed by `(topic_id, age_group, sequence)`.
+
+### dual-track validation
+The teach-back grading mechanism that routes each child explanation through two parallel checks: math expressions extracted from the explanation (regex fallback + LLM-structured output) are compared against the confusion's `expected_expression` via `numeric_or_symbolic_eq`; conceptual reasoning is judged by the teach-back LLM skill itself against the confusion's `rubric`, with verdict emitted as a `record_teach_back_turn` tool call. The server persists the verdict; it does not independently call an LLM.

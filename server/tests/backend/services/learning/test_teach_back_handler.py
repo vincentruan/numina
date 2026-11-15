@@ -472,3 +472,236 @@ async def test_wrong_child_rejected(mock_db):
 
         payload = json.loads(result[0].text)
         assert payload["error"] == "session_not_found"
+
+
+# ---------------------------------------------------------------------------
+# Deterministic SymPy gate (#4/#6)
+# ---------------------------------------------------------------------------
+
+
+def _setup_full_turn(mock_db, session, confusion, total=1, progress=None):
+    """Configure mock_db.query for a complete turn: session, confusion, count, progress."""
+    calls = {"n": 0}
+
+    def query_side_effect(model):
+        calls["n"] += 1
+        n = calls["n"]
+        mock_q = MagicMock()
+        if n == 1:
+            mock_q.join.return_value = mock_q
+            mock_q.filter.return_value = mock_q
+            mock_q.first.return_value = session
+            return mock_q
+        if n == 2:
+            mock_q.filter.return_value = mock_q
+            mock_q.first.return_value = confusion
+            return mock_q
+        if n == 3:
+            mock_q.filter.return_value = mock_q
+            mock_q.count.return_value = total
+            return mock_q
+        mock_q.filter.return_value = mock_q
+        mock_q.first.return_value = progress
+        return mock_q
+
+    mock_db.query = query_side_effect
+
+
+@pytest.mark.asyncio
+async def test_sympy_false_downgrades_model_hit(mock_db):
+    """A model-reported hit is downgraded to miss when SymPy says the expression is wrong."""
+    session = _make_session(progress_json="[]")
+    confusion = _make_confusion(confusion_id=10, expected_expression="3/4")
+    _setup_full_turn(mock_db, session, confusion, total=1)
+
+    sl_patch, gu_patch, mock_user = _patch_mcp(mock_db)
+    with sl_patch as mock_sl, gu_patch as mock_gu:
+        mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+        mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+        mock_gu.return_value = mock_user
+
+        mcp = _make_mcp_session()
+        result = await mcp.call_tool("record_teach_back_turn", {
+            "session_id": "1",
+            "confusion_id": "10",
+            "child_explanation": "1/4 + 2/4 = 3/8",
+            "extracted_expression": "1/4 + 2/4 = 3/8",
+            "verdict": "hit",
+            "phase": "evaluate_explanation",
+            "next_phase": "resolve",
+        })
+
+        payload = json.loads(result[0].text)
+        assert payload["verdict"] == "miss"
+        assert payload["expression_verdict"] == "false"
+        assert payload["all_confusions_hit"] is False
+        assert payload["teach_back_success"] is False
+        # The stored turn must also carry the downgraded verdict.
+        stored = json.loads(session.progress_json)
+        assert stored[-1]["verdict"] == "miss"
+        assert stored[-1]["expression_verdict"] == "false"
+
+
+@pytest.mark.asyncio
+async def test_sympy_true_keeps_hit_and_completes(mock_db):
+    """A model-reported hit stays a hit when SymPy confirms the expression."""
+    session = _make_session(progress_json="[]")
+    confusion = _make_confusion(confusion_id=10, expected_expression="3/4")
+    progress = _make_progress()
+    _setup_full_turn(mock_db, session, confusion, total=1, progress=progress)
+
+    sl_patch, gu_patch, mock_user = _patch_mcp(mock_db)
+    with sl_patch as mock_sl, gu_patch as mock_gu:
+        mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+        mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+        mock_gu.return_value = mock_user
+
+        with patch(
+            "apps.backend.app.services.learning.progress_service.apply_teach_back_success"
+        ), patch(
+            "apps.backend.app.services.learning.progress_service.apply_teach_back_rewards",
+            return_value={"xp_awarded": 25, "coins_awarded": 20, "milestone": None},
+        ):
+            mcp = _make_mcp_session()
+            result = await mcp.call_tool("record_teach_back_turn", {
+                "session_id": "1",
+                "confusion_id": "10",
+                "child_explanation": "1/4 + 2/4 = 3/4",
+                "extracted_expression": "1/4 + 2/4 = 3/4",
+                "verdict": "hit",
+                "phase": "evaluate_explanation",
+                "next_phase": "resolve",
+            })
+
+    payload = json.loads(result[0].text)
+    assert payload["verdict"] == "hit"
+    assert payload["expression_verdict"] == "true"
+    assert payload["all_confusions_hit"] is True
+    assert payload["teach_back_success"] is True
+
+
+@pytest.mark.asyncio
+async def test_no_expected_expression_leaves_verdict_untouched(mock_db):
+    """Concept-only confusions have no SymPy anchor; the model verdict stands."""
+    session = _make_session(progress_json="[]")
+    confusion = _make_confusion(confusion_id=10, expected_expression=None)
+    _setup_full_turn(mock_db, session, confusion, total=2)
+
+    sl_patch, gu_patch, mock_user = _patch_mcp(mock_db)
+    with sl_patch as mock_sl, gu_patch as mock_gu:
+        mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+        mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+        mock_gu.return_value = mock_user
+
+        mcp = _make_mcp_session()
+        result = await mcp.call_tool("record_teach_back_turn", {
+            "session_id": "1",
+            "confusion_id": "10",
+            "child_explanation": "because the denominator is the number of parts",
+            "verdict": "hit",
+            "phase": "evaluate_explanation",
+            "next_phase": "present_confusion",
+        })
+
+    payload = json.loads(result[0].text)
+    assert payload["verdict"] == "hit"
+    assert payload["expression_verdict"] is None
+
+
+# ---------------------------------------------------------------------------
+# Return payload contract (#5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_return_dict_carries_frontend_fields(mock_db):
+    """The return dict carries the fields useTeachBack gates its turn parsing on."""
+    session = _make_session(progress_json="[]")
+    confusion = _make_confusion(confusion_id=10, expected_expression=None)
+    _setup_full_turn(mock_db, session, confusion, total=2)
+
+    sl_patch, gu_patch, mock_user = _patch_mcp(mock_db)
+    with sl_patch as mock_sl, gu_patch as mock_gu:
+        mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+        mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+        mock_gu.return_value = mock_user
+
+        mcp = _make_mcp_session()
+        result = await mcp.call_tool("record_teach_back_turn", {
+            "session_id": "1",
+            "confusion_id": "10",
+            "child_explanation": "the denominator stays the same",
+            "verdict": "hit",
+            "phase": "evaluate_explanation",
+            "next_phase": "present_confusion",
+            "reasoning_summary": "child explained the denominator rule",
+        })
+
+    payload = json.loads(result[0].text)
+    assert payload["child_explanation"] == "the denominator stays the same"
+    assert "extracted_expression" in payload
+    assert payload["reasoning_summary"] == "child explained the denominator rule"
+
+
+# ---------------------------------------------------------------------------
+# Success flag honesty (#14)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_success_false_when_progress_row_missing(mock_db):
+    """teach_back_success stays False when the progress row cannot be found."""
+    session = _make_session(progress_json="[]")
+    confusion = _make_confusion(confusion_id=10, expected_expression=None)
+    _setup_full_turn(mock_db, session, confusion, total=1, progress=None)
+
+    sl_patch, gu_patch, mock_user = _patch_mcp(mock_db)
+    with sl_patch as mock_sl, gu_patch as mock_gu:
+        mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+        mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+        mock_gu.return_value = mock_user
+
+        mcp = _make_mcp_session()
+        result = await mcp.call_tool("record_teach_back_turn", {
+            "session_id": "1",
+            "confusion_id": "10",
+            "child_explanation": "explanation",
+            "verdict": "hit",
+            "phase": "evaluate_explanation",
+            "next_phase": "resolve",
+        })
+
+    payload = json.loads(result[0].text)
+    assert payload["all_confusions_hit"] is True
+    assert payload["teach_back_success"] is False
+
+
+# ---------------------------------------------------------------------------
+# Phase machine guard (#18)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_invalid_phase_transition_rejected(mock_db):
+    """present_confusion -> resolve is not an allowed transition."""
+    mock_db.query.return_value = MagicMock()
+
+    sl_patch, gu_patch, mock_user = _patch_mcp(mock_db)
+    with sl_patch as mock_sl, gu_patch as mock_gu:
+        mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+        mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+        mock_gu.return_value = mock_user
+
+        mcp = _make_mcp_session()
+        result = await mcp.call_tool("record_teach_back_turn", {
+            "session_id": "1",
+            "confusion_id": "10",
+            "child_explanation": "test",
+            "verdict": "hit",
+            "phase": "present_confusion",
+            "next_phase": "resolve",
+        })
+
+    payload = json.loads(result[0].text)
+    assert payload["error"] == "invalid_phase_transition"
+

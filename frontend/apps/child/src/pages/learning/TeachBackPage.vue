@@ -8,7 +8,7 @@
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import TeachBackPanel from '@/components/learning/smart-tutor/TeachBackPanel.vue'
 
@@ -25,7 +25,7 @@ const ageGroup = computed(() => (route.query.ageGroup as string) || 'mid')
 const isValid = computed(() => !!topicId.value)
 
 if (!isValid.value) {
-  showToast(t('learning.teach_back.error.start', { status: 400 }))
+  showFailToast(t('learning.teach_back.error.start', { status: 400 }))
   router.replace({ name: 'ChildHome' })
 }
 </script>

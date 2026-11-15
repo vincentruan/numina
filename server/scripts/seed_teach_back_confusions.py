@@ -111,11 +111,14 @@ def seed_confusions() -> None:
                 print(f"WARNING: topic_key '{topic_key}' not found, skipping")
                 continue
 
-            # Delete existing confusions for this topic (idempotent) — scoped by age_group (#38)
+            # Delete only confusions in the seeded sequence set so hand-curated
+            # pending/rejected rows outside the seeded set are preserved (#15 review fix).
+            seeded_sequences = [c["sequence"] for c in confusions]
             db.query(TopicConfusion).filter(
                 TopicConfusion.topic_id == topic.id,
                 TopicConfusion.age_group == "mid",
-            ).delete()
+                TopicConfusion.sequence.in_(seeded_sequences),
+            ).delete(synchronize_session=False)
 
             # Insert new confusions with review_status='approved'
             for c in confusions:

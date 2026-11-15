@@ -585,11 +585,6 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
                     "type": "string",
                     "description": "从孩子解释中提取的数学表达式（nullable）",
                 },
-                "expression_verdict": {
-                    "type": "string",
-                    "description": "SymPy 判定结果",
-                    "enum": ["true", "false", "null"],
-                },
                 "reasoning_summary": {
                     "type": "string",
                     "description": "LLM 判定推理摘要（一句话）",

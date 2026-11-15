@@ -328,7 +328,8 @@ def record_teach_back_turn(
         }
 
     # Deterministic SymPy track: the backend computes the expression verdict and
-    # overwrites anything the model claimed, so a wrong expression cannot pass.
+    # downgrades the model's claimed verdict when the SymPy check fails, so a
+    # wrong expression cannot be counted as a hit (#4 review fix).
     if extracted_expression is None:
         extracted_expression = extract_expression(child_explanation)
     computed_verdict = None
@@ -339,6 +340,10 @@ def record_teach_back_turn(
     expression_verdict = (
         str(computed_verdict).lower() if computed_verdict is not None else None
     )
+    # Deterministic override: when SymPy says the expression is wrong, the
+    # stored verdict becomes 'miss' regardless of the model's claim.
+    if computed_verdict is False and verdict == "hit":
+        verdict = "miss"
 
     existing_steps = _load_turns(session)
     existing_steps.append(
@@ -405,7 +410,9 @@ def record_teach_back_turn(
             )
             db.commit()
             _notify_parent(db, family_id, session, notify_teach_back_completed)
-        teach_back_success = True
+            # Only mark success when the progress row was actually found and
+            # the reinforcement was applied (#14 review fix).
+            teach_back_success = True
 
     if next_phase == "end":
         session.ended_at = datetime.now(UTC)
@@ -420,6 +427,10 @@ def record_teach_back_turn(
         "expression_verdict": expression_verdict,
         "phase": phase,
         "next_phase": next_phase,
+        # Fields the frontend composable keys its turn rendering on (#5 review fix).
+        "child_explanation": child_explanation,
+        "extracted_expression": extracted_expression,
+        "reasoning_summary": reasoning_summary,
         "total_turns": sum(
             1 for s in existing_steps if s.get("type") == TEACH_BACK_TURN_TYPE
         ),

@@ -119,6 +119,26 @@ class TestGradeExpression:
     def test_no_child(self):
         assert grade_expression("3/4", None) is None
 
+    def test_equation_form_matches_bare_value(self):
+        """The extractor captures equations; they must grade against a bare value."""
+        assert grade_expression("3/4", "1/4 + 2/4 = 3/4") is True
+
+    def test_equation_form_with_wrong_result(self):
+        assert grade_expression("3/4", "1/4 + 2/4 = 3/8") is False
+
+    def test_expected_may_itself_be_an_equation(self):
+        """Seed rows store full equations as the expected expression."""
+        assert grade_expression("1/4 + 2/4 = 3/4", "1/4 + 2/4 = 3/4") is True
+
+    def test_prose_yields_unknown_not_false(self):
+        """Free text must never read as a wrong answer — that would downgrade a hit."""
+        assert grade_expression("3/4", "嗯我不确定") is None
+        assert grade_expression("3/4", "the denominator stays the same") is None
+
+    def test_equivalent_fractions(self):
+        assert grade_expression("1/2", "2/4") is True
+        assert grade_expression("2/6", "1/3") is True
+
 
 # ---------------------------------------------------------------------------
 # Progress update

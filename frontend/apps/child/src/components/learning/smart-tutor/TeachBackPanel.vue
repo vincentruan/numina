@@ -190,7 +190,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--van-border-color, #ebedf0);
+  border-bottom: 1px solid var(--color-border, var(--van-border-color, #ebedf0));
 }
 
 .teach-back-panel__title {
@@ -218,7 +218,7 @@ onUnmounted(() => {
 }
 
 .teach-back-panel__welcome-text {
-  color: #646566;
+  color: var(--color-body, #646566);
   margin-bottom: 20px;
   line-height: 1.6;
 }
@@ -244,14 +244,14 @@ onUnmounted(() => {
 }
 
 .teach-back-panel__bubble--assistant {
-  background: #f2f3f5;
-  color: #323233;
+  background: var(--color-surface-card, #fff);
+  color: var(--color-ink, #0a0a0a);
   border-top-left-radius: 2px;
 }
 
 .teach-back-panel__bubble--user {
-  background: #1989fa;
-  color: #fff;
+  background: var(--color-primary, var(--color-on-primary, #0a0a0a));
+  color: var(--color-canvas, #fffaf0);
   border-top-right-radius: 2px;
 }
 
@@ -270,18 +270,18 @@ onUnmounted(() => {
 
 .teach-back-panel__verdict-badge--hit {
   background: #e8f8ee;
-  color: #07c160;
+  color: var(--color-success, #07c160);
 }
 
 .teach-back-panel__verdict-badge--miss {
   background: #fff2f0;
-  color: #ee0a24;
+  color: var(--color-danger, #ee0a24);
 }
 
 .teach-back-panel__verdict-expr {
   font-family: monospace;
   font-size: 12px;
-  color: #969799;
+  color: var(--color-body, #969799);
 }
 
 .teach-back-panel__typing {
@@ -293,7 +293,7 @@ onUnmounted(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #969799;
+  background: var(--color-body, #969799);
   animation: blink 1.4s infinite both;
 }
 
@@ -323,14 +323,14 @@ onUnmounted(() => {
 .teach-back-panel__eureka-text {
   font-size: 16px;
   font-weight: 600;
-  color: #07c160;
+  color: var(--color-success, #07c160);
 }
 
 .teach-back-panel__error {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #ee0a24;
+  color: var(--color-danger, #ee0a24);
   font-size: 14px;
   padding: 8px 4px;
 }
@@ -339,7 +339,7 @@ onUnmounted(() => {
   display: flex;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid var(--van-border-color, #ebedf0);
+  border-top: 1px solid var(--color-border, var(--van-border-color, #ebedf0));
   align-items: center;
 }
 </style>

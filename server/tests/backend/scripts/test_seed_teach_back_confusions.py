@@ -181,3 +181,35 @@ class TestSeedMissingTopic:
         """No pilot topics on disk -> warn, do not raise."""
         _run_seed(seed_module, db)
         assert db.query(TopicConfusion).count() == 0
+
+
+class TestSeedSequenceScoping:
+    def test_hand_curated_row_outside_seeded_sequences_survives(
+        self, seed_module, pilot_topics, db
+    ):
+        """Re-seed must not destroy hand-curated rows at unseeded sequences (#15)."""
+        topic = pilot_topics[0]
+        seeded_sequences = {
+            c["sequence"]
+            for c in seed_module.SAMPLE_CONFUSIONS[topic.topic_key]
+        }
+        curated_seq = max(seeded_sequences) + 100
+        curated = TopicConfusion(
+            topic_id=topic.id,
+            sequence=curated_seq,
+            confusion_text="A hand-curated pending confusion",
+            age_group="mid",
+            rubric="hand-written rubric",
+            review_status="pending",
+        )
+        db.add(curated)
+        db.flush()
+        curated_id = curated.id
+
+        _run_seed(seed_module, db)
+
+        survived = db.get(TopicConfusion, curated_id)
+        assert survived is not None, (
+            "seed deleted a hand-curated confusion outside the seeded sequence set"
+        )
+        assert survived.review_status == "pending"

@@ -239,4 +239,151 @@ describe('useTeachBack', () => {
     expect(api.teachBackSuccess.value).toBe(true)
     scope.stop()
   })
+  // -------------------------------------------------------------------------
+  // Follow-up contract (#8) — only session_id + child_answer are required
+  // -------------------------------------------------------------------------
+
+  it('submits a follow-up with only session_id and child_answer in the body', async () => {
+    const { scope, api } = makeScope()
+    await api.startTeachBack('379460684699668480')
+    handlersRef.current!.onCustom({
+      type: 'session_created',
+      session_id: '379460684699668481',
+    })
+    await nextTick()
+
+    fetchMock.mockClear()
+    await api.submitExplanation('the denominator stays the same')
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+    expect(body).toEqual({
+      session_id: '379460684699668481',
+      child_answer: 'the denominator stays the same',
+    })
+    scope.stop()
+  })
+
+  it('submits a follow-up even after reset() clears the topic id', async () => {
+    // reset() drops both ids, so re-establish only the session id the way a
+    // resumed client would (session_created replay) and confirm the guard does
+    // not key on the topic id.
+    const { scope, api } = makeScope()
+    await api.startTeachBack('379460684699668480')
+    handlersRef.current!.onCustom({
+      type: 'session_created',
+      session_id: '379460684699668482',
+    })
+    await nextTick()
+
+    fetchMock.mockClear()
+    await api.submitExplanation('still explaining')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    scope.stop()
+  })
+
+  // -------------------------------------------------------------------------
+  // Error / gap / disconnect / reset paths
+  // -------------------------------------------------------------------------
+
+  it('surfaces a stream error and stops streaming', async () => {
+    const { scope, api } = makeScope()
+    await api.startTeachBack('379460684699668480')
+    api.status.value = 'streaming'
+
+    handlersRef.current!.onError({ message: 'stream blew up' })
+    await nextTick()
+
+    expect(api.error.value).toBe('stream blew up')
+    expect(api.status.value).toBe('error')
+    scope.stop()
+  })
+
+  it('falls back to the i18n message when the error payload has none', async () => {
+    const { scope, api } = makeScope()
+    await api.startTeachBack('379460684699668480')
+    api.status.value = 'streaming'
+
+    handlersRef.current!.onError({})
+    await nextTick()
+
+    expect(api.error.value).toBe('learning.error.stream')
+    scope.stop()
+  })
+
+  it('reports a gap as a recoverable error', async () => {
+    const { scope, api } = makeScope()
+    await api.startTeachBack('379460684699668480')
+    api.status.value = 'streaming'
+
+    handlersRef.current!.onGap()
+    await nextTick()
+
+    expect(api.error.value).toBe('learning.error.gap_recovery')
+    expect(api.status.value).toBe('error')
+    scope.stop()
+  })
+
+  it('reset() clears every piece of turn state', async () => {
+    const { scope, api } = makeScope()
+    await api.startTeachBack('379460684699668480')
+    handlersRef.current!.onCustom({
+      type: 'tool_result',
+      tool_name: 'record_teach_back_turn',
+      content: JSON.stringify({
+        ok: true,
+        session_id: '379460684699668481',
+        confusion_id: 10,
+        verdict: 'hit',
+        phase: 'evaluate_explanation',
+        next_phase: 'present_confusion',
+        child_explanation: 'explained',
+        all_confusions_hit: true,
+        teach_back_success: true,
+      }),
+    })
+    await nextTick()
+    expect(api.turns.value).toHaveLength(1)
+
+    api.reset()
+    await nextTick()
+
+    expect(api.turns.value).toEqual([])
+    expect(api.messages.value).toEqual([])
+    expect(api.allConfusionsHit.value).toBe(false)
+    expect(api.teachBackSuccess.value).toBe(false)
+    expect(api.error.value).toBeNull()
+    expect(api.status.value).toBe('idle')
+    expect(api.currentPhase.value).toBe('present_confusion')
+    scope.stop()
+  })
+
+  it('disconnect() aborts the in-flight request', async () => {
+    const { scope, api } = makeScope()
+    // Hold the fetch open so an abort controller is live when disconnect runs.
+    let capturedSignal: AbortSignal | undefined
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      capturedSignal = init.signal as AbortSignal
+      return new Promise(() => {})
+    })
+
+    void api.startTeachBack('379460684699668480')
+    await nextTick()
+    expect(capturedSignal?.aborted).toBe(false)
+
+    api.disconnect()
+    expect(capturedSignal?.aborted).toBe(true)
+    scope.stop()
+  })
+
+  it('does not surface an error when the caller aborts deliberately', async () => {
+    const { scope, api } = makeScope()
+    fetchMock.mockRejectedValue(
+      Object.assign(new Error('aborted'), { name: 'AbortError' }),
+    )
+
+    await api.startTeachBack('379460684699668480')
+
+    expect(api.error.value).toBeNull()
+    scope.stop()
+  })
 })

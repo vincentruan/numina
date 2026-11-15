@@ -402,7 +402,11 @@ def apply_teach_back_rewards(
     """
     from packages.db.models.learning.topic import LearningTopic
 
-    result = {"xp_awarded": 0, "coins_awarded": 0, "milestone": None}
+    result: dict = {
+        "xp_awarded": 0,
+        "coins_awarded": 0,
+        "milestone": None,
+    }
 
     # Resolve topic name for narrative
     topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
@@ -421,8 +425,10 @@ def apply_teach_back_rewards(
     try:
         from packages.db.models.learning.session import LearningAssessmentAttempt
 
-        # Find the latest teach_back attempt for this session
-        attempt = (
+        # Find the teach_back attempt for this session (scoped to the current
+        # session to avoid collisions across sessions on the same topic —
+        # #11 review fix).
+        attempt_query = (
             db.query(LearningAssessmentAttempt)
             .filter(
                 LearningAssessmentAttempt.child_id == child_id,
@@ -430,9 +436,12 @@ def apply_teach_back_rewards(
                 LearningAssessmentAttempt.assessment_type == "teach_back",
                 LearningAssessmentAttempt.passed == True,  # noqa: E712
             )
-            .order_by(LearningAssessmentAttempt.created_at.desc())
-            .first()
         )
+        if session_id is not None:
+            attempt_query = attempt_query.filter(
+                LearningAssessmentAttempt.session_id == session_id
+            )
+        attempt = attempt_query.order_by(LearningAssessmentAttempt.created_at.desc()).first()
         if attempt:
             txn = CoinTransaction(
                 family_id=family_id,
@@ -447,6 +456,9 @@ def apply_teach_back_rewards(
             result["coins_awarded"] = 20
     except Exception:
         logger.warning("Teach-back coin award failed", exc_info=True)
+        # Roll back the partial coin add so the outer session stays usable
+        # for the next commit (#11 review fix).
+        db.rollback()
 
     # Check milestones (first_teach_back) via unified path (#33/#45)
     try:

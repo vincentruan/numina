@@ -206,7 +206,10 @@ export function useTeachBack() {
 
   /** Submit the child's explanation for the current confusion. */
   async function submitExplanation(explanation: string) {
-    if (!explanation.trim() || !activeTopicId.value || !activeSessionId.value) return
+    // Follow-up contract requires only session_id + child_answer (#8 review fix):
+    // the backend does not need topic_id on follow-ups, so only the active
+    // session id is required to proceed.
+    if (!explanation.trim() || !activeSessionId.value) return
     if (!canSendAnswer.value) return
 
     messages.value.push({
