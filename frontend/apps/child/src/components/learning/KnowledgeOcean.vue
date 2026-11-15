@@ -141,6 +141,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { DependencyEdge } from '@/api/learning'
 import { layoutIslands } from '@/utils/islandLayout'
 import { fogOpacityForRatio } from '@/utils/continentFog'
 import { mulberry32, hashString } from '@/utils/seededPrng'
@@ -172,11 +173,8 @@ export interface OceanTopic {
   masteryLevel: string
 }
 
-export interface OceanDependencyEdge {
-  topic_id: string
-  prerequisite_id: string
-  strength: string | null
-}
+/** Prerequisite edge — same shape the API returns; aliased for local readability. */
+export type OceanDependencyEdge = DependencyEdge
 
 const props = defineProps<{
   subjects: OceanSubject[]
@@ -551,11 +549,11 @@ function onTouchEnd(_e: TouchEvent) {
   stroke-width: 1.5;
 }
 
-.ocean-island--math .ocean-island__land { fill: #f2dfa7; }
-.ocean-island--science .ocean-island__land { fill: #bfe3cf; }
-.ocean-island--language .ocean-island__land { fill: #f5cfc5; }
-.ocean-island--social .ocean-island__land { fill: #e8d0b3; }
-.ocean-island--arts .ocean-island__land { fill: #e3d1f0; }
+.ocean-island--math .ocean-island__land { fill: var(--ocean-land-math); }
+.ocean-island--science .ocean-island__land { fill: var(--ocean-land-science); }
+.ocean-island--language .ocean-island__land { fill: var(--ocean-land-language); }
+.ocean-island--social .ocean-island__land { fill: var(--ocean-land-social); }
+.ocean-island--arts .ocean-island__land { fill: var(--ocean-land-arts); }
 
 /* Fog veil — opacity bound inline from mastery (R5); pointer-events none so
    it never blocks taps (R6). */

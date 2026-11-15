@@ -33,7 +33,7 @@ describe('useMapExploration (R11, R12, AE4)', () => {
   it('starts timing at mount', () => {
     const getApi = mountHost()
     const api = getApi()
-    expect(api.startedAt).not.toBeNull()
+    expect(api.startedAt.value).toBeTypeOf('number')
   })
 
   it('records a topic selection exactly once, with elapsed duration (R11)', () => {
@@ -50,7 +50,7 @@ describe('useMapExploration (R11, R12, AE4)', () => {
     expect(call.topic_selected).toBe(true)
     expect(call.selected_topic_id).toBe('topic-1')
     expect(call.max_zoom_level).toBe(0) // no zoom recorded yet
-    expect(call.interaction_count).toBe(1) // the selection itself
+    expect(call.interaction_count).toBe(0) // no interactions before selection
     vi.useRealTimers()
   })
 
@@ -79,9 +79,9 @@ describe('useMapExploration (R11, R12, AE4)', () => {
     const api = getApi()
     api.recordInteraction()
     api.recordInteraction()
-    api.recordTopicSelection('t') // +1 (selection counts)
+    api.recordTopicSelection('t') // interactions already counted by recordInteraction
     const call = mockRecord.mock.calls[0][0]
-    expect(call.interaction_count).toBe(3)
+    expect(call.interaction_count).toBe(2)
   })
 
   it('flushes on leave with topic_selected=false when no selection happened (AE4)', async () => {

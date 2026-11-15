@@ -64,7 +64,7 @@ export function useMapExploration(): MapExplorationApi {
       duration_ms: durationMs,
       max_zoom_level: maxZoomLevel.value,
       topic_selected: true,
-      interaction_count: interactionCount.value + 1, // the selection counts as an interaction
+      interaction_count: interactionCount.value, // interaction already counted by recordInteraction
       selected_topic_id: topicId,
     }).catch(() => {})
   }

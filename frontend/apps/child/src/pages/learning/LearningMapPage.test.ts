@@ -237,6 +237,7 @@ describe('LearningMapPage — cluster map integration', () => {
     await flushPromises()
 
     expect(wrapper.find('.learning-map-page').exists()).toBe(true)
+    expect(wrapper.find('.empty-state').exists()).toBe(true)
     expect(wrapper.findAll('.subject-tab')).toHaveLength(0)
     expect(mockBatch).not.toHaveBeenCalled()
   })
@@ -297,6 +298,7 @@ describe('LearningMapPage — knowledge ocean default view (R1)', () => {
   it('renders no empty state when progress is empty but topics exist (R2)', async () => {
     const wrapper = mountPage()
     await flushPromises()
+    expect(wrapper.find('.empty-state').exists()).toBe(false)
     expect(wrapper.find('.ocean-sea').exists()).toBe(true)
   })
 })

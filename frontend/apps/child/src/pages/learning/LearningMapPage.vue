@@ -175,7 +175,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'LearningMap' })
 
-import { ref, computed, watch, onMounted, onActivated, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onActivated, onDeactivated, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
@@ -187,6 +187,7 @@ import {
   getMyLearningMapIndex,
   getTopicsBatch,
   getTopicIndex,
+  refreshTopicIndex,
   getSubjectDependencies,
   type TopicResponse,
   type TopicIndexRow,
@@ -608,6 +609,9 @@ async function onRefresh() {
   inflightSubjects.clear()
   topicMap.value = new Map()
   edgesBySubject.value = new Map()
+  // #F14: the taxonomy index is cached module-level; drop it so an explicit
+  // refresh actually picks up any taxonomy change.
+  refreshTopicIndex()
   await Promise.all([load(), refreshRecommendations()])
   refreshing.value = false
 }
@@ -623,6 +627,11 @@ onMounted(async () => {
 
 // R11/R12: flush the exploration record when the child leaves the map.
 // AE4: flush posts even when no topic was selected.
+// With KeepAlive caching, onDeactivated fires on tab switch; onUnmounted on
+// component destruction. Both paths flush.
+onDeactivated(() => {
+  exploration.flush()
+})
 onUnmounted(() => {
   exploration.flush()
 })
@@ -631,7 +640,14 @@ onUnmounted(() => {
 // KeepAlive cache (e.g. after returning from practice).
 // Also re-fetch the progress index so ClusterMap can detect frontier changes
 // (new topic became the recommendation after practice updated mastery).
+// Note: onActivated fires on first mount too (inside KeepAlive), so the
+// hasActivated guard prevents the data re-fetch from running twice on init.
+let hasActivated = false
 onActivated(async () => {
+  if (!hasActivated) {
+    hasActivated = true
+    return // first activation coincides with onMounted — skip, onMounted handles it
+  }
   // Drop per-subject caches so the progress re-fetch pulls fresh topic detail.
   loadedSubjects.value = new Set()
   inflightSubjects.clear()

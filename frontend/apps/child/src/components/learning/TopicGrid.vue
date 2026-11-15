@@ -13,7 +13,7 @@
           class="topic-card"
           :class="{
             [`topic-card--${masteryStatus(item)}`]: true,
-            'topic-card--review-due': isReviewDue(item),
+            'topic-card--review-due': masteryStatus(item) === 'review',
             'topic-card--rejected': isRejected(item),
           }"
           @click="$emit('topicClick', item.topic.id)"
@@ -55,10 +55,6 @@ const props = defineProps<{
 defineEmits<{
   topicClick: [topicId: string]
 }>()
-
-function isReviewDue(item: ProgressWithTopic): boolean {
-  return item.mastery_level === 'mastered' && item.next_review_at !== null && new Date(item.next_review_at) <= new Date()
-}
 
 function isRejected(item: ProgressWithTopic): boolean {
   return item.mastery_level === 'parent_review'

@@ -298,10 +298,30 @@ export interface TopicIndexRow {
   age_group: string
 }
 
-/** Full subject → domain → topic index (lighter than full topic payloads). */
+/** Full subject → domain → topic index (lighter than full topic payloads).
+ *
+ *  #F14: the taxonomy is static reference data (~267 KB) that every map visit
+ *  needs. Cache the in-flight promise at module level so concurrent and
+ *  repeat calls share one request; `refreshTopicIndex()` drops it for
+ *  pull-to-refresh. */
+let topicIndexPromise: Promise<TopicIndexRow[]> | null = null
+
 export async function getTopicIndex(): Promise<TopicIndexRow[]> {
-  const res = await http.get('/learning/topics/index')
-  return res.data
+  if (!topicIndexPromise) {
+    topicIndexPromise = http
+      .get('/learning/topics/index')
+      .then((res) => res.data as TopicIndexRow[])
+      .catch((err) => {
+        topicIndexPromise = null // don't cache a failure
+        throw err
+      })
+  }
+  return topicIndexPromise
+}
+
+/** Drop the cached taxonomy index so the next call refetches. */
+export function refreshTopicIndex(): void {
+  topicIndexPromise = null
 }
 
 // --- Knowledge Map Exploration (R11, R12) ---

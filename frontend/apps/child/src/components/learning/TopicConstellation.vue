@@ -23,6 +23,7 @@
       @click="$emit('selectTopic', { id: node.id })"
       @keydown.enter="$emit('selectTopic', { id: node.id })"
     >
+      <circle class="topic-constellation__hit" r="22" />
       <circle class="topic-constellation__star" r="11" />
       <text
         class="topic-constellation__label"
@@ -35,6 +36,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { DependencyEdge } from '@/api/learning'
 import { layoutConstellation } from '@/utils/constellationLayout'
 import { masteryStatus } from '@/utils/masteryStatus'
 
@@ -44,11 +46,8 @@ export interface ConstellationTopic {
   masteryLevel: string
 }
 
-export interface ConstellationEdge {
-  topic_id: string
-  prerequisite_id: string
-  strength: string | null
-}
+/** Prerequisite edge — the API shape, not redeclared locally. */
+export type ConstellationEdge = DependencyEdge
 
 const props = defineProps<{
   topics: ConstellationTopic[]
@@ -111,6 +110,11 @@ const edgePaths = computed(() => {
 .topic-constellation__node {
   cursor: pointer;
   outline: none;
+}
+
+.topic-constellation__hit {
+  fill: transparent;
+  pointer-events: all;
 }
 
 .topic-constellation__star {

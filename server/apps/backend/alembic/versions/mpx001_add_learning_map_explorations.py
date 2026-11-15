@@ -23,6 +23,10 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.has_table(bind, "learning_map_explorations"):
+        return  # already present (fresh-DB bootstrap via align_schema)
+
     op.create_table(
         "learning_map_explorations",
         sa.Column("id", sa.BigInteger, primary_key=True),
@@ -48,6 +52,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    if not bind.dialect.has_table(bind, "learning_map_explorations"):
+        return
     op.drop_index(
         "ix_learning_map_explorations_created_at",
         table_name="learning_map_explorations",

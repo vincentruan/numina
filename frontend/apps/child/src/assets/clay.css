@@ -159,6 +159,11 @@
   --ocean-label-color: #16324a;
   --ocean-label-muted: #4a6a80;
   --ocean-label-outline: rgba(255, 255, 255, 0.85);
+  --ocean-land-math: #f2dfa7;
+  --ocean-land-science: #bfe3cf;
+  --ocean-land-language: #f5cfc5;
+  --ocean-land-social: #e8d0b3;
+  --ocean-land-arts: #e3d1f0;
   --constellation-edge-color: rgba(70, 96, 128, 0.45);
   --constellation-label-outline: rgba(255, 255, 255, 0.8);
 
@@ -282,6 +287,11 @@
   --ocean-label-color: #f0ece0;
   --ocean-label-muted: #a8b8c0;
   --ocean-label-outline: rgba(10, 26, 26, 0.85);
+  --ocean-land-math: #4a4230;
+  --ocean-land-science: #2f4438;
+  --ocean-land-language: #4a3430;
+  --ocean-land-social: #43392c;
+  --ocean-land-arts: #3d3348;
   --constellation-edge-color: rgba(180, 200, 220, 0.35);
   --constellation-label-outline: rgba(10, 26, 26, 0.8);
 

@@ -18,15 +18,15 @@ export interface ConstellationNode {
   connected: boolean
 }
 
-export interface ConstellationEdge {
+/** Laid-out edge between two topic ids (normalized-space: no SVG data). */
+export interface LaidOutEdge {
   from: string
   to: string
-  path: string // SVG path data (cubic bezier)
 }
 
 export interface ConstellationLayout {
   nodes: ConstellationNode[]
-  edges: ConstellationEdge[]
+  edges: LaidOutEdge[]
 }
 
 import { mulberry32, hashString } from './seededPrng'
@@ -126,14 +126,9 @@ export function layoutConstellation(topics: string[], edges: TopicEdge[]): Const
     })
   }
 
-  // Build edge paths (cubic bezier).
-  const nodePositions = new Map(nodes.map((n) => [n.id, n]))
-  const edgeLayouts: ConstellationEdge[] = validEdges.map((e) => {
-    const from = nodePositions.get(e.from)!
-    const to = nodePositions.get(e.to)!
-    const midX = (from.x + to.x) / 2
-    const path = `M ${from.x} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x} ${to.y}`
-    return { from: e.from, to: e.to, path }
+  // Build edge references.
+  const edgeLayouts: LaidOutEdge[] = validEdges.map((e) => {
+    return { from: e.from, to: e.to }
   })
 
   return { nodes, edges: edgeLayouts }
