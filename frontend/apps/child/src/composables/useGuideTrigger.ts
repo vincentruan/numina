@@ -1,9 +1,12 @@
 import http from '@/api/index'
 
 // Extend AxiosRequestConfig to support our custom skip-auth-redirect flag
+// and the offline-queue opt-out (fire-and-forget beacons that must not drive
+// the pending-sync badge or produce duplicate rows on retry — see #11).
 declare module 'axios' {
   interface AxiosRequestConfig {
     _skipAuthRedirect?: boolean
+    _skipOfflineQueue?: boolean
   }
 }
 

@@ -54,7 +54,7 @@ http.interceptors.response.use(
     return response
   },
   async (error) => {
-    const originalRequest = error.config as { method?: string; url?: string; data?: unknown; _retry?: boolean; _skipAuthRedirect?: boolean } | undefined
+    const originalRequest = error.config as { method?: string; url?: string; data?: unknown; _retry?: boolean; _skipAuthRedirect?: boolean; _skipOfflineQueue?: boolean } | undefined
 
     if (axios.isAxiosError(error) && error.response?.status === 401 && !originalRequest?._retry) {
       const url = originalRequest?.url ?? ''
@@ -111,10 +111,13 @@ http.interceptors.response.use(
       }
     }
 
-    // Enqueue non-GET mutations for later sync when network is unavailable
+    // Enqueue non-GET mutations for later sync when network is unavailable.
+    // Callers that opt out (fire-and-forget beacons, e.g. #11) pass
+    // `{ _skipOfflineQueue: true }` to avoid duplicate rows on replay and
+    // to keep telemetry from raising the pending-sync badge.
     if (!error.response || error.message?.includes('Network Error')) {
       const method = originalRequest?.method?.toUpperCase()
-      if (method && method !== 'GET') {
+      if (method && method !== 'GET' && !originalRequest?._skipOfflineQueue) {
         import('@/utils/offlineQueue').then(({ enqueue }) => {
           enqueue({
             method: method as 'POST' | 'PATCH' | 'DELETE',

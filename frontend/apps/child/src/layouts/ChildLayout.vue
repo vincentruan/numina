@@ -42,6 +42,7 @@ const cachedTabs = ref<string[]>([
   'ChildLedger',
   'ChildWishes',
   'ChildTreasures',
+  'LearningMap',
 ])
 </script>
 

@@ -562,6 +562,39 @@ class HookQuestionResponse(SnowflakeBase):
     review_status: str
 
 
+# --- Knowledge Map Exploration (R11, R12) ---
+
+
+class MapExplorationCreate(BaseModel):
+    """One completed map visit, posted when the child leaves the map."""
+
+    # Elapsed ms between map mount and first topic selection (R11).
+    # Upper bound = 7 days (604,800,000 ms); Postgres Integer is 4-byte (max
+    # ~24.8 days), so a buggy client posting larger values would otherwise
+    # trigger a DataError (500).
+    duration_ms: int = Field(ge=0, le=604_800_000)
+    # Deepest zoom level reached: 0 subject, 1 domain, 2 topic (R12).
+    max_zoom_level: int = Field(ge=0, le=2)
+    topic_selected: bool = False
+    # Pan/zoom/tap count — separates browsing from a drive-by (R12).
+    # Upper bound is the Postgres 4-byte Integer max; the same cap the
+    # duration_ms comment already points at, matching the DataError-500 class.
+    interaction_count: int = Field(ge=0, le=2_147_483_647, default=0)
+    # Upper bound is the Postgres BigInteger max (signed 8-byte). The frontend
+    # sends this as a Snowflake string (numeric, well within range); the bound
+    # is a guard against a hostile or buggy client posting past the column.
+    selected_topic_id: int | None = Field(default=None, ge=0, le=9_223_372_036_854_775_807)
+
+
+class MapExplorationResponse(SnowflakeBase):
+    id: int
+    duration_ms: int
+    max_zoom_level: int
+    topic_selected: bool
+    interaction_count: int
+    selected_topic_id: int | None = None
+    created_at: datetime
+
 # ---------------------------------------------------------------------------
 # Knowledge Castle (U2)
 # ---------------------------------------------------------------------------
