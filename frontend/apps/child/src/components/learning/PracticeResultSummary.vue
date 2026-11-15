@@ -27,6 +27,17 @@
       </div>
     </div>
 
+    <!-- First mastery: castle CTA carrying ?new=<topicId> for the brick-drop (R5, F1) -->
+    <button
+      v-if="showCastleCta"
+      type="button"
+      class="btn-castle"
+      data-test="castle-cta"
+      @click="goToCastle"
+    >
+      {{ t('learning.castle.viewYourCastle') }}
+    </button>
+
     <div class="result-actions">
       <button class="btn-secondary" @click="$emit('again')">
         {{ t('practice.result.again') }}
@@ -41,17 +52,32 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import type { PracticeResultResponse } from '@/api/practice'
 
 const props = defineProps<{
   result: PracticeResultResponse
   /** Discovery message from a completed hands-on challenge (R6). */
   challengeDiscovery?: string
+  /** Topic just practiced — required for the castle CTA's ?new= param. */
+  topicId?: string
+  /** True only when THIS session first pushed the topic to 'mastered'. */
+  isFirstMastery?: boolean
 }>()
 
 defineEmits<{ again: []; back: [] }>()
 
 const { t } = useI18n()
+const router = useRouter()
+
+const showCastleCta = computed(
+  () => Boolean(props.isFirstMastery) && Boolean(props.topicId),
+)
+
+function goToCastle(): void {
+  if (!props.topicId) return
+  router.push(`/learning/castle?new=${props.topicId}`)
+}
 
 const scorePercent = computed(() => Math.round(props.result.total_score * 100))
 
@@ -63,6 +89,8 @@ const discoveryEmoji = computed(() => {
 })
 
 const discoveryText = computed(() => {
+  // First mastery speaks in castle terms — the primary feedback (R5, AE2).
+  if (showCastleCta.value) return t('learning.castle.brickDropped')
   // Challenge discovery message takes priority (R6 — concept-specific)
   if (props.challengeDiscovery) return props.challengeDiscovery
   if (props.result.mastery_changed) return t('practice.result.discoveryMastery')
@@ -161,6 +189,22 @@ const hasRewards = computed(() =>
 .btn-primary {
   background: var(--color-primary);
   color: var(--color-canvas);
+}
+
+/* Castle CTA — the primary action on first mastery (R5, F1) */
+.btn-castle {
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: 10px;
+  border: none;
+  border-radius: 14px;
+  background: var(--color-brand-ochre, #e8b94a);
+  color: var(--color-ink);
+  font-size: 16px;
+  font-weight: 600;
+}
+.btn-castle:active {
+  transform: scale(0.97);
 }
 
 .btn-secondary {

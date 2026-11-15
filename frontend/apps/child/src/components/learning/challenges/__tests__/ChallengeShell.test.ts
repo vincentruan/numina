@@ -39,7 +39,7 @@ function mountShell(props: Record<string, unknown> = {}) {
     props: {
       config: makeConfig(),
       feedbackMessage: '',
-      feedbackIsCorrect: false,
+      feedbackVerdict: null,
       hasAnyPlacement: false,
       completed: false,
       showTutorSuggestion: false,
@@ -69,7 +69,7 @@ describe('ChallengeShell', () => {
       props: {
         config: makeConfig(),
         feedbackMessage: '',
-        feedbackIsCorrect: false,
+        feedbackVerdict: null,
         hasAnyPlacement: false,
         completed: false,
         showTutorSuggestion: false,
@@ -92,14 +92,36 @@ describe('ChallengeShell', () => {
   })
 
   it('shows feedback message when present', () => {
-    const wrapper = mountShell({ feedbackMessage: 'Almost there!', feedbackIsCorrect: false })
-    expect(wrapper.find('.challenge-feedback__message').text()).toBe('Almost there!')
+    const wrapper = mountShell({ feedbackMessage: 'Almost there!', feedbackVerdict: 'wrong' })
+    expect(wrapper.find('.challenge-feedback__message').text()).toContain('Almost there!')
     expect(wrapper.find('.challenge-feedback__message--wrong').exists()).toBe(true)
   })
 
-  it('shows correct feedback styling when isCorrect is true', () => {
-    const wrapper = mountShell({ feedbackMessage: 'Great job!', feedbackIsCorrect: true })
+  it('shows correct feedback styling when verdict is correct', () => {
+    const wrapper = mountShell({ feedbackMessage: 'Great job!', feedbackVerdict: 'correct' })
     expect(wrapper.find('.challenge-feedback__message--correct').exists()).toBe(true)
+  })
+
+  it('renders a distinct close verdict, not correct or wrong', () => {
+    const wrapper = mountShell({ feedbackMessage: 'So close!', feedbackVerdict: 'close' })
+    expect(wrapper.find('.challenge-feedback__message--close').exists()).toBe(true)
+    expect(wrapper.find('.challenge-feedback__message--correct').exists()).toBe(false)
+    expect(wrapper.find('.challenge-feedback__message--wrong').exists()).toBe(false)
+  })
+
+  it('gives each verdict its own non-color glyph', () => {
+    const correct = mountShell({ feedbackMessage: 'Yes!', feedbackVerdict: 'correct' })
+    const close = mountShell({ feedbackMessage: 'Close!', feedbackVerdict: 'close' })
+    const wrong = mountShell({ feedbackMessage: 'No.', feedbackVerdict: 'wrong' })
+
+    const glyph = (w: ReturnType<typeof mountShell>) =>
+      w.find('.challenge-feedback__glyph').text()
+
+    expect(glyph(correct)).toBe('✓')
+    expect(glyph(close)).toBe('≈')
+    expect(glyph(wrong)).toBe('✗')
+    // All three differ — the cue survives without color
+    expect(new Set([glyph(correct), glyph(close), glyph(wrong)]).size).toBe(3)
   })
 
   it('renders check button when not completed', () => {
