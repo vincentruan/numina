@@ -37,6 +37,10 @@ VALID_PHASE_TRANSITIONS: dict[str, set[str]] = {
     "CONSOLIDATE": set(),  # terminal phase
 }
 
+# Teach-back's phase machine lives in teach_back_service.TEACH_BACK_PHASES
+# (Issue #216) — it is deliberately separate from VALID_PHASE_TRANSITIONS and
+# owned by the service that enforces it.
+
 
 def _parse_date(value: Any) -> date | None:
     """Parse a YYYY-MM-DD string (or None) into a date; None/invalid → None."""
@@ -1674,6 +1678,28 @@ class MCPSession:
                                     except Exception:
                                         # Notification failure should not break step recording
                                         logger.warning("Smart tutor notification failed", exc_info=True)
+                elif name == "record_teach_back_turn":
+                    # Issue #216: record a teach-back turn (child explains to AI student).
+                    # All logic lives in teach_back_service so it is testable in isolation.
+                    from apps.backend.app.services.learning import teach_back_service
+
+                    try:
+                        data = teach_back_service.record_teach_back_turn(
+                            db,
+                            family_id=int(self._family_id),
+                            caller_user_id=int(self._caller_user_id),
+                            session_id=int(arguments["session_id"]),
+                            confusion_id=int(arguments["confusion_id"]),
+                            child_explanation=str(arguments["child_explanation"]),
+                            verdict=arguments["verdict"],
+                            phase=arguments["phase"],
+                            next_phase=arguments["next_phase"],
+                            extracted_expression=arguments.get("extracted_expression"),
+                            reasoning_summary=arguments.get("reasoning_summary", ""),
+                        )
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+
                 elif name == "get_taxonomy_topic":
                     from apps.backend.app.services.learning import topic_service
 

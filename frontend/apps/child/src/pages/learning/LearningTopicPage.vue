@@ -163,6 +163,14 @@
         <button class="btn-secondary" @click="goToPractice">
           {{ t('practice.startPractice') }}
         </button>
+        <!-- Teach-back entry: only for mastered topics (Issue #216) -->
+        <button
+          v-if="isMastered"
+          class="btn-secondary"
+          @click="goToTeachBack"
+        >
+          {{ t('learning.teach_back.start_btn') }}
+        </button>
         <button class="btn-secondary" :disabled="submitting" @click="onSubmitAssignment">
           {{ submitting ? t('common.loading') : t('learning.submitAssignment') }}
         </button>
@@ -364,6 +372,17 @@ function goBack() {
 
 function goToPractice() {
   router.push(`/learning/practice/${topicId.value}`)
+}
+
+/** True when this topic has been mastered — enables the teach-back entry. */
+const isMastered = computed(() => progress.value?.mastery_level === 'mastered')
+
+function goToTeachBack() {
+  const subject = (topic.value?.subject as string) || 'mathematics'
+  const ageGroup = (topic.value?.age_group as string) || 'mid'
+  router.push(
+    `/learning/teach-back/${topicId.value}?subject=${subject}&ageGroup=${ageGroup}`,
+  )
 }
 
 function getProgressLevel(topicIdStr: string): string {

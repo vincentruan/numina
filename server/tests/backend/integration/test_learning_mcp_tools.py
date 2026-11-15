@@ -6,12 +6,13 @@ rejects malformed LLM output.
 """
 
 import pytest
+
+from apps.backend.app.services.mcp_session import _validate_evaluation_schema
 from apps.backend.app.services.mcp_tool_registry import (
     TOOL_REGISTRY,
     get_tool,
     validate_registry,
 )
-from apps.backend.app.services.mcp_session import _validate_evaluation_schema
 
 
 class TestLearningToolRegistry:
@@ -353,5 +354,5 @@ class TestTopicGeneratorToolRegistry:
             assert "child" in meta.allowed_roles, f"{name} should allow child role"
 
     def test_tool_count_total(self):
-        """Registry should have 28 tools (21 existing + 5 smart tutor + 2 adaptive)."""
-        assert len(TOOL_REGISTRY) == 28
+        """Registry should have 29 tools (21 existing + 5 smart tutor + 2 adaptive + 1 teach-back)."""
+        assert len(TOOL_REGISTRY) == 29

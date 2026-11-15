@@ -149,7 +149,7 @@ from apps.backend.app.routers import learning as learning_router
 from apps.backend.app.routers import learning_child as learning_child_router
 from apps.backend.app.routers import learning_family as learning_family_router
 from apps.backend.app.routers import learning_preset as learning_preset_router
-from apps.backend.app.routers import practice as practice_router
+from apps.backend.app.routers import learning_teach_back as learning_teach_back_router
 from apps.backend.app.routers import literacy_child as literacy_child_router
 from apps.backend.app.routers import literacy_parent as literacy_parent_router
 from apps.backend.app.routers import manifesto as manifesto_router
@@ -161,6 +161,7 @@ from apps.backend.app.routers import (
 )
 from apps.backend.app.routers import notification_config as notification_config_router
 from apps.backend.app.routers import notification_push as notification_push_router
+from apps.backend.app.routers import practice as practice_router
 from apps.backend.app.routers import reminders as reminders_router
 from apps.backend.app.routers import rental_contracts as rental_contracts_router
 from apps.backend.app.routers import shared as shared_router
@@ -686,6 +687,7 @@ app.include_router(shared_router.router, prefix="/api/v1")
 app.include_router(learning_router.router, prefix="/api/v1")
 app.include_router(learning_family_router.router, prefix="/api/v1")
 app.include_router(learning_child_router.router, prefix="/api/v1")
+app.include_router(learning_teach_back_router.router, prefix="/api/v1")
 app.include_router(learning_preset_router.router, prefix="/api/v1")
 app.include_router(practice_router.router, prefix="/api/v1")
 

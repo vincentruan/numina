@@ -272,6 +272,20 @@ class SmartTutorStreamRequest(BaseModel):
     )
 
 
+class TeachBackStreamRequest(BaseModel):
+    """Request body for teach-back streaming endpoint.
+
+    First call: provide topic_id to start a teach-back session on a mastered topic.
+    Follow-up calls: provide session_id + child_answer to continue.
+    """
+
+    topic_id: int | None = Field(default=None, description="Topic to teach back (initial call)")
+    session_id: int | None = Field(default=None, description="Session to continue (follow-up)")
+    child_answer: str | None = Field(
+        default=None, max_length=4000, description="Child's explanation for follow-up turns"
+    )
+
+
 # --- Session ---
 
 
@@ -548,6 +562,21 @@ class SmartTutorSessionDetailResponse(SmartTutorSessionResponse):
 
     steps: list[dict] = []
     ai_evaluation: dict | None = None
+
+
+class TeachBackSessionDetailResponse(SnowflakeBase):
+    """Detailed teach-back session with turn-by-turn transcript (#8)."""
+
+    session_id: int
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None = None
+    subject: str
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    outcome: str | None = None
+    total_turns: int = 0
+    turns: list[dict] = []
 
 
 class HookQuestionResponse(SnowflakeBase):

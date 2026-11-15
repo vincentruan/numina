@@ -309,6 +309,7 @@ export default {
   milestone: {
     first_chore: '完成第一个任务',
     first_wish_realized: '第一个心愿实现',
+    first_teach_back: '第一次当小老师',
     coins_50: '累计获得50⭐',
     coins_200: '累计获得200⭐',
     streak_7: '连续打卡7天',
@@ -317,6 +318,7 @@ export default {
     titles: {
       first_chore: '第一个家务！',
       first_wish_realized: '第一个心愿实现！',
+      first_teach_back: '小老师上线！',
       coins_50: '攒到50颗星星币！',
       coins_200: '攒到200颗星星币！',
       streak_7: '连续打卡7天！',
@@ -327,6 +329,7 @@ export default {
     descs: {
       first_chore: '你完成了人生第一个家务，太棒了！',
       first_wish_realized: '你的努力换来了心愿成真！',
+      first_teach_back: '你把学会的知识教给了 AI，教是最好的学！',
       coins_50: '继续加油，更多心愿等着你！',
       coins_200: '你是理财小达人！',
       streak_7: '一周不间断，获得1.5倍奖励！',
@@ -337,6 +340,7 @@ export default {
     icons: {
       first_chore: '🌟',
       first_wish_realized: '🎁',
+      first_teach_back: '🎓',
       coins_50: '💰',
       coins_200: '🏆',
       streak_7: '🔥',
@@ -849,6 +853,20 @@ export default {
       error: {
         smart_tutor_start: '启动智能导师失败: {status}',
         smart_tutor_answer: '提交答案失败: {status}',
+      },
+    },
+    teach_back: {
+      title: '小老师时间',
+      welcome: '有一个好奇的朋友总是不明白这个知识点，你来当小老师，教教 TA 吧！',
+      start_btn: '开始教',
+      input_placeholder: '用你自己的话解释给 TA 听...',
+      send_btn: '发送',
+      verdict_hit: '解释对了',
+      verdict_miss: '再想想',
+      eureka: '哇！TA 终于明白了！你教得太棒了！',
+      error: {
+        start: '启动教学失败: {status}',
+        answer: '提交解释失败: {status}',
       },
     },
     progress: {

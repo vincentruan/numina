@@ -54,6 +54,8 @@ class TestRegistryContents:
             # Issue #191: adaptive question selection + hint generation
             "select_adaptive_question",
             "generate_hint",
+            # Issue #216: teach-back tool
+            "record_teach_back_turn",
         }
         assert set(TOOL_REGISTRY.keys()) == expected_names
 
@@ -83,13 +85,13 @@ class TestGetTool:
 class TestListToolsForRole:
     def test_list_tools_for_role_owner(self):
         tools = list_tools_for_role("owner")
-        # 10 existing + 3 travel + 3 learning + 5 topic-generator + 5 smart-tutor + 2 adaptive tools
-        assert len(tools) == 28
+        # 10 existing + 3 travel + 3 learning + 5 topic-generator + 5 smart-tutor + 2 adaptive + 1 teach-back tools
+        assert len(tools) == 29
         assert all(isinstance(t, MCPToolMeta) for t in tools)
 
     def test_list_tools_for_role_member(self):
         tools = list_tools_for_role("member")
-        assert len(tools) == 28
+        assert len(tools) == 29
 
     def test_list_tools_for_role_child(self):
         tools = list_tools_for_role("child")

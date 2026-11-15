@@ -47,6 +47,9 @@ from apps.backend.app.services.learning import (
     stats_service,
     zone_service,
 )
+from apps.backend.app.services.learning.agent_stream import (
+    stream_learning_agent_sse,
+)
 from apps.backend.app.services.learning.recommendation_service import (
     generate_recommendation_path,
 )
@@ -994,14 +997,6 @@ async def stream_smart_tutor(
     First call (question_id provided): begins guided problem-solving.
     Follow-up calls (child_answer provided): continues multi-turn dialogue.
     """
-    from apps.backend.app.services.agent_client import AgentClient
-    from apps.backend.app.services.ai_task_service import AITaskService
-    from apps.backend.app.services.bridge_consumer import (
-        _spawn_lifecycle_consumer,
-        consume_task_stream,
-        get_shared_bridge,
-        trigger_agent_run,
-    )
     from apps.backend.app.services.learning.session_service import (
         get_thread_id_for_session,
     )
@@ -1019,7 +1014,6 @@ async def stream_smart_tutor(
     )
 
     thread_id = get_thread_id_for_session(session_id)
-    family_id = child.family_id
 
     # Build agent payload via service
     agent_body = smart_tutor_service.build_agent_payload(
@@ -1033,80 +1027,17 @@ async def stream_smart_tutor(
         is_follow_up=is_follow_up,
     )
 
-    # Create AITask record
-    task = AITaskService.create_task(
-        family_id=family_id,
-        skill_id="learning-smart-tutor",
-        session_id=None,
-        db=db,
-    )
-    task.progress = {"learning_session_id": str(session_id)}
-    db.commit()
-    task_id = str(task.id)
-
-    # Trigger agent
-    agent_client = AgentClient(family_id=str(family_id), user_id=str(child.id))
-    try:
-        result = await trigger_agent_run(
-            agent_client=agent_client,
-            agent_url=f"/internal/gateway/runs/learning-smart-tutor/{thread_id}",
-            json_body=agent_body,
-            task_id=task_id,
-        )
-    except httpx.HTTPStatusError as e:
-        _fdb = SessionLocal()
-        try:
-            AITaskService.fail_task(
-                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
-            )
-        finally:
-            _fdb.close()
-        if e.response.status_code == 409:
-            raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
-        raise AppError(
-            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
-        ) from e
-    except Exception as e:
-        _fdb = SessionLocal()
-        try:
-            AITaskService.fail_task(
-                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
-            )
-        finally:
-            _fdb.close()
-        raise AppError(
-            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
-        ) from e
-
-    # Persist run_id + spawn lifecycle consumer
-    AITaskService.extract_and_attach_run_id(
-        task_id, result["content_location"], family_id
-    )
-
     # Persist thread_id on initial call so follow-up turns can reuse it
     if not is_follow_up and not session.thread_id:
         session.thread_id = thread_id
         db.commit()
 
-    shared_bridge = get_shared_bridge()
-    _spawn_lifecycle_consumer(
-        task_id=task_id,
-        family_id=family_id,
-        run_id=result["run_id"],
-        bridge=shared_bridge,
-    )
-
-    last_event_id = http_request.headers.get("Last-Event-ID")
-    stream_gen = consume_task_stream(
-        task_id=task_id,
-        family_id=family_id,
-        last_event_id=last_event_id,
-        run_id=result["run_id"],
-        bridge=shared_bridge,
-    )
-
-    return StreamingResponse(
-        stream_gen,
-        media_type="text/event-stream",
-        headers={"X-Accel-Buffering": "no"},
+    return await stream_learning_agent_sse(
+        http_request=http_request,
+        db=db,
+        thread_id=thread_id,
+        agent_body=agent_body,
+        family_id=child.family_id,
+        child=child,
+        learning_session_id=session_id,
     )

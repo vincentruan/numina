@@ -1,3 +1,4 @@
+from packages.db.models.learning.confusion import TopicConfusion
 from packages.db.models.learning.diagnosis_impression import DiagnosisImpression
 from packages.db.models.learning.hook import TopicHookQuestion
 from packages.db.models.learning.map_exploration import LearningMapExploration
@@ -18,6 +19,7 @@ __all__ = [
     "Question",
     "QuestionKnowledgePoint",
     "ChildLearningStats",
+    "TopicConfusion",
     "TopicHookQuestion",
     "LearningMapExploration",
 

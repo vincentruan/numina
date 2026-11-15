@@ -62,6 +62,8 @@ async def test_list_tools_returns_all_tools():
         # Issue #191: adaptive question selection + hint generation
         "select_adaptive_question",
         "generate_hint",
+        # Issue #216: teach-back tool
+        "record_teach_back_turn",
     }
 
 
