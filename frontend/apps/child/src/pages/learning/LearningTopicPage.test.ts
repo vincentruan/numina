@@ -12,6 +12,7 @@ vi.mock('@/api/learning', () => ({
   getTopicGraph: vi.fn().mockResolvedValue(null),
   getMyLearningMap: vi.fn().mockResolvedValue([]),
   getMyAssignments: vi.fn().mockResolvedValue([]),
+  getTopicHook: vi.fn().mockResolvedValue(null),
   createSession: vi.fn(),
   submitAssignment: vi.fn(),
   translateTopic: vi.fn(),
