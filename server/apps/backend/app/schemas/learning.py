@@ -560,3 +560,48 @@ class HookQuestionResponse(SnowflakeBase):
     age_group: str
     difficulty: str
     review_status: str
+
+
+# ---------------------------------------------------------------------------
+# Knowledge Castle (U2)
+# ---------------------------------------------------------------------------
+
+
+class CastleFloorSchema(SnowflakeBase):
+    """One floor in a castle tower — corresponds to a single domain."""
+
+    domain: str
+    mastered_count: int
+    learning_count: int
+    review_due_count: int
+    total_count: int
+
+
+class CastleTowerSchema(SnowflakeBase):
+    """One tower in the castle — corresponds to a single subject."""
+
+    subject: str
+    mastered_count: int
+    learning_count: int
+    review_due_count: int
+    total_count: int
+    floors: list[CastleFloorSchema]
+
+
+class CastleWindowSchema(SnowflakeBase):
+    """An unlit window bound to a specific topic."""
+
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str
+    reason: str  # "复习到期" | "推荐学习"
+    subject: str
+    domain: str
+
+
+class CastleIndexResponse(SnowflakeBase):
+    """Response for GET /child/learning/castle/index."""
+
+    towers: list[CastleTowerSchema]
+    windows: list[CastleWindowSchema]
+    streak_days: int

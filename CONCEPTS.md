@@ -41,6 +41,11 @@ Financial literacy badges in the child ecosystem, organized in 4 dimensions: 赚
 ### SnowflakeBase
 The base Pydantic response model every API response schema inherits from. At JSON serialization it converts `int` fields named `id` or ending in `_id` to `str` (the bigint-on-wire-as-string convention — JS doubles lose precision beyond 2^53). It is the mechanism that enforces the ID half of the money/bigint-as-strings wire convention; the money half is enforced per-schema by typing money fields `str` with a quantizing `field_validator`.
 
+## Learning OS
+
+### 知识城堡 (Knowledge Castle)
+The persistent visual-growth metaphor in the child app: an elevation castle with one tower per in-scope subject (tower count derived from the child's effective taxonomy and age band, typically 5–8; not hardcoded to 8), each floor = a domain, each brick = a topic, deterministically generated from existing learning-progress data via a new child-app endpoint (no `castle_progress` table, no stored coordinates, no client-side `topics.json` join). Complements the #208 知识大陆 map: map = navigation ("where to learn next"), castle = ownership ("what I have built"). Buildings never regress — scope = current age-band topics ∪ all `first_mastered_at`-set topics (birthdays can add but never remove bricks), and mastery decay renders as cracks/fading keyed on `mastery_level == 'mastered' AND next_review_at <= now` (not the `review` level, which is reserved for the MCP `needs_review` path). Brick-drop animation fires only for topics passed via `?new=<topicId>` on the castle route; spontaneous opens animate nothing. Tiered celebration: topic = brick-drop, completed subject tower = fireworks. Layout is a horizontally scrollable strip (min tower width ~120px).
+
 ## MCP external access
 
 ### Caller-bound principal

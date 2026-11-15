@@ -135,6 +135,12 @@ const router = createRouter({
           meta: { hasSkeleton: true },
         },
         {
+          path: 'learning/castle',
+          name: 'KnowledgeCastle',
+          component: () => import('@/pages/learning/LearningCastlePage.vue'),
+          meta: { hasSkeleton: true },
+        },
+        {
           path: 'manifesto/sign',
           name: 'ManifestoSigning',
           component: () => import('@/pages/ManifestoSigningPage.vue'),
