@@ -192,7 +192,13 @@ class SessionDetailResponse(SnowflakeBase):
 
 
 class RecommendResponse(SnowflakeBase):
-    """Recommended topic for practice."""
+    """Recommended topic for practice.
+
+    The diagnosis-only fields (is_diagnosis, depth, bkt_mastery, sample_size)
+    are populated when the response comes from a ?diagnosis=true backtrace run;
+    the post-practice result-phase call omits them so the existing caller is
+    unaffected.
+    """
 
     topic_id: int
     topic_name: str
@@ -201,6 +207,10 @@ class RecommendResponse(SnowflakeBase):
     accuracy: float
     is_prerequisite: bool
     prerequisite_of_topic_id: int | None
+    is_diagnosis: bool = False
+    depth: int | None = None
+    bkt_mastery: float | None = None
+    sample_size: int | None = None
 
 
 class SubjectCoverageItem(BaseModel):

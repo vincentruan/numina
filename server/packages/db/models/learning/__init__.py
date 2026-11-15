@@ -1,3 +1,4 @@
+from packages.db.models.learning.diagnosis_impression import DiagnosisImpression
 from packages.db.models.learning.hook import TopicHookQuestion
 from packages.db.models.learning.path import LearningPath, LearningPathItem
 from packages.db.models.learning.practice import PracticeAttempt, PracticeSession
@@ -17,4 +18,5 @@ __all__ = [
     "QuestionKnowledgePoint",
     "ChildLearningStats",
     "TopicHookQuestion",
+    "DiagnosisImpression",
 ]

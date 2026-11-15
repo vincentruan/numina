@@ -326,6 +326,218 @@ def find_weak_prerequisites(
     return results
 
 
+# --- Prerequisite backtrace diagnosis (issue #213) ---
+
+# Threshold for "stuck" detection. Applied uniformly to both estimator scales;
+# the BKT-eligible (5+ attempts) class ranks before the rule-based (3-4 attempts)
+# class — a recommendation backed by more evidence is safer to show a child.
+DIAGNOSIS_MASTERY_THRESHOLD = 0.60
+DIAGNOSIS_CONFIG_VERSION = "v1"
+
+# Mastery levels a diagnosis candidate must not be in: mastered ends the search
+# for a gap, and locked would make the card's action fail to start a session.
+NON_CANDIDATE_MASTERY_LEVELS = frozenset({"mastered", "locked"})
+
+
+def diagnose_weak_prerequisites(
+    db: Session,
+    topic_id: int,
+    child_id: int,
+    lookback_topic_ids: list[int] | None = None,
+) -> list[dict]:
+    """Depth-2 prerequisite backtrace for a child stuck on a topic.
+
+    Returns qualified weak prerequisites (≥3 attempts, BKT below threshold,
+    mastery_level neither mastered nor locked, topic not deprecated, has
+    practiceable questions, not a direct prerequisite of the target).
+    Ranked BKT-class first then rule-based, mastery ascending within each
+    class, depth descending within ties. Deduped by topic id at minimum depth.
+
+    ``lookback_topic_ids`` names direct prerequisites the child is weak on:
+    the child already sees them on the page, so they, and their own
+    prerequisites, are not reported. ``depth`` counts layers beyond the
+    target's direct prerequisites (depth 1 = a prerequisite of a
+    prerequisite).
+
+    Writes one DiagnosisImpression row per qualified candidate before returning.
+    Returns an empty list when the target itself does not meet the trigger
+    (≥3 attempts AND estimate below threshold).
+    """
+    from collections import deque
+
+    from packages.db.models.learning.diagnosis_impression import DiagnosisImpression
+    from packages.db.models.learning.progress import LearningProgress
+    from packages.db.models.learning.topic import LearningDependency
+
+    estimator = BayesianKnowledgeTracingEstimator()
+
+    # Gate: the target itself must be stuck, i.e. have enough attempts and a
+    # low enough estimate. Both estimator classes share the threshold.
+    target_attempts = (
+        db.query(PracticeAttempt)
+        .filter_by(child_id=child_id, topic_id=topic_id)
+        .count()
+    )
+    if target_attempts < RuleBasedMasteryEstimator.MIN_SAMPLE_SIZE:
+        return []
+    if estimator.estimate(db, child_id, topic_id) >= DIAGNOSIS_MASTERY_THRESHOLD:
+        return []
+
+    # Build the upstream adjacency (hard edges only) and the set of the
+    # target's direct prerequisites, which the page already shows.
+    edges = (
+        db.query(LearningDependency.topic_id, LearningDependency.prerequisite_id)
+        .filter_by(strength="hard")
+        .all()
+    )
+    topic_prereqs: dict[int, list[int]] = {}
+    for topic_ref, prereq_ref in edges:
+        topic_prereqs.setdefault(topic_ref, []).append(prereq_ref)
+
+    direct_prereq_ids: set[int] = {
+        prereq_ref for topic_ref, prereq_ref in edges if topic_ref == topic_id
+    }
+
+    # BFS upstream over hard edges, so a cycle terminates and a topic reached
+    # by several paths is kept at its minimum hop count. Reported depth counts
+    # layers beyond the target's direct prerequisites, which the page already
+    # shows: a prerequisite of a prerequisite is depth 1.
+    lookback_ids = list(dict.fromkeys(lookback_topic_ids or []))
+    skip_ids: set[int] = set(lookback_ids)
+    hops: dict[int, int] = {topic_id: 0}
+    queue: deque[tuple[int, int]] = deque()
+    for p in topic_prereqs.get(topic_id, []):
+        if p in hops:
+            continue
+        hops[p] = 1
+        queue.append((p, 1))
+    while queue:
+        current, hop = queue.popleft()
+        if hop >= 3:
+            continue
+        for p in topic_prereqs.get(current, []):
+            if p in hops:
+                continue
+            hops[p] = hop + 1
+            queue.append((p, hop + 1))
+
+    candidate_map: dict[int, int] = {
+        tid: hop - 1
+        for tid, hop in hops.items()
+        if tid != topic_id and hop >= 2 and tid not in skip_ids
+    }
+    if not candidate_map:
+        return []
+
+    # Load all candidate topics once.
+    candidate_ids = list(candidate_map.keys())
+    candidate_topics = {
+        t.id: t
+        for t in db.query(LearningTopic)
+        .filter(LearningTopic.id.in_(candidate_ids))
+        .all()
+    }
+
+    # Batch the per-candidate lookups so the loop costs no per-topic queries.
+    progress_levels = {
+        p.topic_id: p.mastery_level
+        for p in db.query(LearningProgress)
+        .filter(
+            LearningProgress.child_id == child_id,
+            LearningProgress.topic_id.in_(candidate_ids),
+        )
+        .all()
+    }
+    attempts_by_topic: dict[int, list[bool]] = {}
+    for attempt in (
+        db.query(PracticeAttempt.topic_id, PracticeAttempt.is_correct)
+        .filter(
+            PracticeAttempt.child_id == child_id,
+            PracticeAttempt.topic_id.in_(candidate_ids),
+        )
+        .all()
+    ):
+        attempts_by_topic.setdefault(attempt.topic_id, []).append(attempt.is_correct)
+    topics_with_questions = {
+        q.topic_id
+        for q in db.query(Question.topic_id)
+        .filter(
+            Question.topic_id.in_(candidate_ids),
+            Question.review_status == "approved",
+        )
+        .distinct()
+        .all()
+    }
+
+    results: list[dict] = []
+    for cand_id, depth in candidate_map.items():
+        topic = candidate_topics.get(cand_id)
+        if topic is None or topic.deprecated:
+            continue
+        if cand_id in direct_prereq_ids or cand_id in skip_ids:
+            continue
+
+        # No progress row yet means the topic is available, not mastered.
+        mastery_level = progress_levels.get(cand_id, "available")
+        if mastery_level in NON_CANDIDATE_MASTERY_LEVELS:
+            continue
+
+        outcomes = attempts_by_topic.get(cand_id, [])
+        attempt_count = len(outcomes)
+        if attempt_count < RuleBasedMasteryEstimator.MIN_SAMPLE_SIZE:
+            continue
+        accuracy = sum(1 for correct in outcomes if correct) / attempt_count
+
+        mastery = estimator.estimate(db, child_id, cand_id)
+        if mastery >= DIAGNOSIS_MASTERY_THRESHOLD:
+            continue
+
+        # The card's action must be able to start a session for this topic.
+        if cand_id not in topics_with_questions:
+            continue
+
+        results.append(
+            {
+                "topic_id": cand_id,
+                "topic_name": topic.name,
+                "topic_name_zh": topic.name_zh,
+                "depth": depth,
+                "bkt_mastery": mastery,
+                "sample_size": attempt_count,
+                "mastery_level": mastery_level,
+                "accuracy": accuracy,
+            }
+        )
+
+    # More attempts means a better-evidenced recommendation, so BKT-scored
+    # candidates come first. Then weakest mastery, then the deeper (more
+    # root-cause) prerequisite.
+    bkt_min_attempts = BayesianKnowledgeTracingEstimator.MIN_ATTEMPTS
+    results.sort(
+        key=lambda r: (
+            r["sample_size"] < bkt_min_attempts,
+            r["bkt_mastery"],
+            -r["depth"],
+        )
+    )
+
+    # Write one DiagnosisImpression row per qualified candidate.
+    for r in results:
+        db.add(
+            DiagnosisImpression(
+                child_id=child_id,
+                target_topic_id=topic_id,
+                recommended_topic_id=r["topic_id"],
+                bkt_mastery=r["bkt_mastery"],
+                sample_size=r["sample_size"],
+                config_version=DIAGNOSIS_CONFIG_VERSION,
+            )
+        )
+    db.flush()  # the router commits; flush surfaces constraint errors here
+
+    return results
+
+
 # --- Phase 6d: Explainable learning progress ---
 
 
@@ -340,7 +552,9 @@ def get_ability_dimensions(db: Session, child_id: int) -> list[dict]:
         db.query(
             LearningTopic.domain,
             sa_func.count(PracticeAttempt.id).label("total"),
-            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)).label("correct"),
+            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)).label(
+                "correct"
+            ),
         )
         .join(PracticeAttempt, PracticeAttempt.topic_id == LearningTopic.id)
         .filter(PracticeAttempt.child_id == child_id)
@@ -359,9 +573,7 @@ def get_ability_dimensions(db: Session, child_id: int) -> list[dict]:
     ]
 
 
-def get_progress_trend(
-    db: Session, child_id: int, topic_id: int
-) -> list[dict]:
+def get_progress_trend(db: Session, child_id: int, topic_id: int) -> list[dict]:
     """Get chronological attempt history for a child+topic.
 
     Returns list of {attempt_number, is_correct, created_at}.
@@ -383,9 +595,7 @@ def get_progress_trend(
     ]
 
 
-def get_recommend_with_reason(
-    db: Session, child_id: int, limit: int = 5
-) -> list[dict]:
+def get_recommend_with_reason(db: Session, child_id: int, limit: int = 5) -> list[dict]:
     """Get practice recommendations with explainable reasons.
 
     Each recommendation includes a 'reason' field explaining why
@@ -401,12 +611,17 @@ def get_recommend_with_reason(
             LearningTopic.name_zh,
             LearningTopic.domain,
             sa_func.count(PracticeAttempt.id).label("total"),
-            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)).label("correct"),
+            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)).label(
+                "correct"
+            ),
         )
         .join(PracticeAttempt, PracticeAttempt.topic_id == LearningTopic.id)
         .filter(PracticeAttempt.child_id == child_id)
         .group_by(LearningTopic.id)
-        .order_by(sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Float)) / sa_func.count(PracticeAttempt.id))
+        .order_by(
+            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Float))
+            / sa_func.count(PracticeAttempt.id)
+        )
         .limit(limit)
         .all()
     )
@@ -423,14 +638,16 @@ def get_recommend_with_reason(
         else:
             reason_key = "high_accuracy"
 
-        results.append({
-            "topic_id": row.id,
-            "topic_name": row.name,
-            "topic_name_zh": row.name_zh,
-            "domain": row.domain,
-            "total_attempts": row.total,
-            "accuracy": accuracy,
-            "reason_key": reason_key,
-        })
+        results.append(
+            {
+                "topic_id": row.id,
+                "topic_name": row.name,
+                "topic_name_zh": row.name_zh,
+                "domain": row.domain,
+                "total_attempts": row.total,
+                "accuracy": accuracy,
+                "reason_key": reason_key,
+            }
+        )
 
     return results
