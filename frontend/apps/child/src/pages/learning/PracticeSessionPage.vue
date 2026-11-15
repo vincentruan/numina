@@ -122,6 +122,8 @@
       <PracticeResultSummary
         :result="sessionResult!"
         :challenge-discovery="challengeDiscoveryMessage || undefined"
+        :topic-id="topicId"
+        :is-first-mastery="isFirstMastery"
         @again="onAgain"
         @back="goBack"
       />
@@ -163,6 +165,7 @@ import {
 } from '@/api/practice'
 import PracticeQuestionCard from '@/components/learning/PracticeQuestionCard.vue'
 import PracticeAnswerInput from '@/components/learning/PracticeAnswerInput.vue'
+import { isFirstMasteryResult, resolveSessionMode } from '@/composables/usePracticeRoute'
 import PracticeResultSummary from '@/components/learning/PracticeResultSummary.vue'
 import DiscoveryChallengeIntro from '@/components/learning/DiscoveryChallengeIntro.vue'
 import RushMode from '@/components/learning/RushMode.vue'
@@ -178,6 +181,12 @@ const router = useRouter()
 const { t, locale } = useI18n()
 
 const topicId = computed(() => String(route.params.topicId))
+
+/** Castle review windows pass ?mode=review (KTD7). */
+const sessionMode = computed(() => resolveSessionMode(route.query.mode))
+
+/** First time this topic reached 'mastered' — drives the castle CTA (U9). */
+const isFirstMastery = computed(() => isFirstMasteryResult(sessionResult.value))
 
 const loading = ref(false)
 const error = ref('')
@@ -232,7 +241,7 @@ async function startSession(count: number) {
   try {
     const resp = await createPracticeSession({
       topic_id: topicId.value,
-      session_mode: 'practice',
+      session_mode: sessionMode.value,
       count,
     })
     session.value = resp

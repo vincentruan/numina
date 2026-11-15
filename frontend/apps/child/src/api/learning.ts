@@ -410,3 +410,43 @@ export async function fetchRecommendationPath(
 }
 
 
+
+// --- Knowledge Castle (U4) ---
+
+export interface CastleFloor {
+  domain: string
+  mastered_count: number
+  learning_count: number
+  review_due_count: number
+  total_count: number
+}
+
+export interface CastleTower {
+  subject: string
+  mastered_count: number
+  learning_count: number
+  review_due_count: number
+  total_count: number
+  floors: CastleFloor[]
+}
+
+export interface CastleWindow {
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string
+  /** Closed set: "复习到期" | "推荐学习" */
+  reason: string
+  subject: string
+  domain: string
+}
+
+export interface CastleIndex {
+  towers: CastleTower[]
+  windows: CastleWindow[]
+  streak_days: number
+}
+
+export async function fetchCastle(): Promise<CastleIndex> {
+  const res = await http.get('/child/learning/castle/index')
+  return res.data
+}
