@@ -261,8 +261,8 @@
                     <div class="smart-tutor-item-meta">
                       <span>{{ session.subject }}</span>
                       <span>{{ t('learning.smartTutorSteps', { count: session.total_steps }) }}</span>
-                      <span v-if="session.misconceptions_detected > 0" class="misconception-count">
-                        {{ t('learning.smartTutorMisconceptions', { count: session.misconceptions_detected }) }}
+                      <span v-if="(session.misconceptions_detected?.length ?? 0) > 0" class="misconception-count">
+                        {{ t('learning.smartTutorMisconceptions', { count: session.misconceptions_detected?.length ?? 0 }) }}
                       </span>
                     </div>
                     <div class="smart-tutor-item-time">

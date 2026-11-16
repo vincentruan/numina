@@ -550,6 +550,13 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
                         "end",
                     ],
                 },
+                "misconception_id": {
+                    "type": "integer",
+                    "description": (
+                        "已检测到的误解 ID（可选）。提供时，系统从数据库解析该误解的"
+                        "描述与类别，记录在步骤中，供后续 Smart Tutor 反馈和学情分析使用。"
+                    ),
+                },
             },
             "required": [
                 "session_id",

@@ -371,7 +371,11 @@ export interface SmartTutorSessionResponse {
   completed_at: string | null
   final_phase: string | null
   total_steps: number
-  misconceptions_detected: number
+  misconceptions_detected: Array<{
+    misconception_id: string
+    category: string
+    description: string
+  }>
   outcome: string | null
 }
 

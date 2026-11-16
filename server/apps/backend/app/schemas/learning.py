@@ -553,7 +553,11 @@ class SmartTutorSessionResponse(SnowflakeBase):
     completed_at: datetime | None
     final_phase: str | None
     total_steps: int
-    misconceptions_detected: int
+    #: Misconceptions addressed during the session. Each entry is a
+    #: deduplicated record derived from step-record misconception fields.
+    #: Backward-compatible: `len(misconceptions_detected)` equals the old
+    #: integer count.
+    misconceptions_detected: list[dict] = []
     outcome: str | None
 
 
