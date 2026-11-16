@@ -1082,6 +1082,11 @@ export default {
       practiceFirst: '先练 {name}',
       continue: '继续练 {topic}',
     },
+    misconception: {
+      commonConfusion: '这是一个常见的混淆',
+      tryPractice: '试一道练习题',
+      notNow: '先不了',
+    },
   },
   empty: {
     noTasks: '今天没有任务，好好休息吧 🌟',
