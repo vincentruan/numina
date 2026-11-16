@@ -72,6 +72,15 @@ class PracticeAttempt(Base):
     topic_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("learning_topics.id"), nullable=False, index=True
     )
+    #: The misconception matched for this wrong answer (null if correct or
+    #: no match). Populated by the practice router after detection; drives
+    #: cross-session adaptive question boosting (U3).
+    misconception_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("misconceptions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     user_answer_json: Mapped[str] = mapped_column(Text, nullable=False)
     is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
     time_spent_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -93,6 +102,12 @@ class PracticeAttempt(Base):
             "child_id",
             "topic_id",
             "created_at",
+        ),
+        Index(
+            "ix_practice_attempt_child_topic_misconception",
+            "child_id",
+            "topic_id",
+            "misconception_id",
         ),
         UniqueConstraint(
             "session_id", "question_id", name="uq_attempt_session_question"

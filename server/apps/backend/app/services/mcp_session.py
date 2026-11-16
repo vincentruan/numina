@@ -1630,6 +1630,42 @@ class MCPSession:
                                     "strategy": arguments.get("ai_strategy", ""),
                                     "question_id": str(question_id),
                                 }
+
+                                # Resolve misconception context from DB
+                                # (issue #214 U4). The caller (LLM) supplies
+                                # only the ID; category and description come
+                                # from the DB — the LLM cannot fabricate or
+                                # mismatch them. Validate topic membership
+                                # so cross-family/cross-topic IDs are rejected.
+                                misconception_id_raw = arguments.get("misconception_id")
+                                if misconception_id_raw is not None:
+                                    try:
+                                        mid = int(misconception_id_raw)
+                                    except (ValueError, TypeError):
+                                        mid = None
+                                    if mid is not None and mid > 0:
+                                        from packages.db.models.learning.misconception import (
+                                            Misconception,
+                                        )
+                                        m = db.query(Misconception).filter_by(
+                                            id=mid, topic_id=session.topic_id,
+                                        ).first()
+                                        if m is None:
+                                            data = {
+                                                "error": "misconception_not_found",
+                                                "detail": (
+                                                    f"misconception_id {mid} does not "
+                                                    f"belong to session topic {session.topic_id}"
+                                                ),
+                                            }
+                                            # Abort the step so the LLM retries.
+                                            return self._json_response(data, status_code=200)
+                                        step_record["misconception"] = {
+                                            "id": m.id,
+                                            "category": m.category or "",
+                                            "description": m.description or "",
+                                        }
+
                                 existing_steps.append(step_record)
 
                                 session.progress_json = json.dumps(existing_steps, ensure_ascii=False)

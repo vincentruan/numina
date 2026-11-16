@@ -863,6 +863,11 @@ export default {
       practiceFirst: 'Practice {name} first',
       continue: 'Keep practicing {topic}',
     },
+    misconception: {
+      commonConfusion: 'This is a common mix-up',
+      tryPractice: 'Try a practice problem',
+      notNow: 'Not now',
+    },
   },
   empty: {
     noTasks: 'No tasks today, enjoy your rest 🌟',

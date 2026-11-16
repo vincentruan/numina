@@ -221,6 +221,7 @@ def select_questions(
     child_id: int,
     estimator: MasteryEstimator | None = None,
     session_mode: str = "practice",
+    misconception_ids: set[int] | None = None,
 ) -> list[Question]:
     """Select questions for a practice session.
 
@@ -235,7 +236,13 @@ def select_questions(
        Uses COALESCE(empirical_difficulty, difficulty) — empirical_difficulty
        replaces author difficulty when sufficient attempt data exists (≥10 attempts).
     5. Exclude recently answered questions (last N days) — except review mode
-    6. Random sample up to count
+    6. If misconception_ids provided, inject each misconception's diagnostic
+       question as an explicit candidate (bypassing the difficulty filter —
+       a struggling child's range would otherwise exclude the exact
+       diagnostic question they need) and boost them to the front of
+       the list. Diagnostic questions already in the exclusion set
+       (recently answered) are skipped.
+    7. Random sample up to count
     """
     # Derive effective mode: explicit session_mode takes precedence;
     # fallback to mastery_level for backward compatibility (callers that
@@ -289,6 +296,39 @@ def select_questions(
 
     candidates = query.all()
 
+    # Misconception-aware boosting (issue #214, U3):
+    # Inject each misconception's diagnostic question as an explicit
+    # candidate (bypassing the difficulty filter) and boost them to the
+    # front of the list. Diagnostic questions already in the exclusion
+    # set are skipped — the child recently saw them.
+    boosted_ids: set[int] = set()
+    injected_candidates: list[Question] = []
+    if misconception_ids:
+        from packages.db.models.learning.misconception import Misconception
+
+        diagnostic_ids = {
+            row.diagnostic_question_id
+            for row in db.query(Misconception.diagnostic_question_id)
+            .filter(
+                Misconception.id.in_(misconception_ids),
+                Misconception.diagnostic_question_id.isnot(None),
+            )
+            .all()
+            if row.diagnostic_question_id is not None
+        }
+        boosted_ids = {q.id for q in candidates if q.id in diagnostic_ids}
+
+        # Inject diagnostic questions that weren't already in the candidate
+        # set (e.g., outside the child's difficulty range).
+        candidate_ids = {q.id for q in candidates}
+        for qid in diagnostic_ids:
+            if qid in candidate_ids or qid in exclude_set:
+                continue
+            q = db.get(Question, qid)
+            if q is not None and q.review_status == "approved":
+                injected_candidates.append(q)
+                boosted_ids.add(qid)
+
     # Review mode: prioritize questions the child previously answered wrong.
     if effective_mode == "review" and candidates:
         wrong_ids = {
@@ -306,6 +346,17 @@ def select_questions(
         random.shuffle(wrong_candidates)
         random.shuffle(other_candidates)
         candidates = wrong_candidates + other_candidates
+
+    # Assemble final order: wrong-question priority (review mode) already
+    # at front → boosted diagnostic questions (in-candidate + injected)
+    # → remaining (shuffled).
+    if boosted_ids:
+        in_candidate_boosted = [q for q in candidates if q.id in boosted_ids]
+        remaining = [q for q in candidates if q.id not in boosted_ids]
+        random.shuffle(in_candidate_boosted)
+        random.shuffle(injected_candidates)
+        random.shuffle(remaining)
+        candidates = in_candidate_boosted + injected_candidates + remaining
 
     return candidates[:count]
 
