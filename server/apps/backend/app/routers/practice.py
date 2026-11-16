@@ -15,6 +15,7 @@ from apps.backend.app.schemas.practice import (
     BatchReviewRequest,
     CoverageResponse,
     MisconceptionFeedbackResponse,
+    MisconceptionSummaryResponse,
     PracticeAttemptResponse,
     PracticeQuestionWithAnswer,
     PracticeResultResponse,
@@ -792,7 +793,7 @@ def get_grading_explanation(
     return explanation
 
 
-@router.get("/misconceptions", response_model=list)
+@router.get("/misconceptions", response_model=list[MisconceptionSummaryResponse])
 def get_child_misconceptions(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
@@ -804,7 +805,6 @@ def get_child_misconceptions(
     """
     from sqlalchemy import func as sa_func
 
-    from apps.backend.app.schemas.practice import MisconceptionSummaryResponse
     from packages.db.models.learning.misconception import (
         Misconception,
         MisconceptionDetection,

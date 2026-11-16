@@ -54,7 +54,10 @@ def detect_misconception(
         return None
 
     # Extract the user's answer value from the dict.
-    user_val = wrong_answer.get("answer") or wrong_answer.get("value")
+    # Use explicit None check to handle falsy values like 0 correctly.
+    user_val = wrong_answer.get("answer")
+    if user_val is None:
+        user_val = wrong_answer.get("value")
     if user_val is None:
         return None
 

@@ -100,7 +100,7 @@ class PracticeSessionResponse(SnowflakeBase):
         return [str(x) for x in v]
 
 
-class MisconceptionFeedbackResponse(BaseModel):
+class MisconceptionFeedbackResponse(SnowflakeBase):
     """Feedback shown when a wrong answer matches a known misconception."""
 
     misconception_id: int
@@ -124,7 +124,7 @@ class PracticeAttemptResponse(SnowflakeBase):
     misconception_feedback: MisconceptionFeedbackResponse | None = None
 
 
-class MisconceptionSummaryResponse(BaseModel):
+class MisconceptionSummaryResponse(SnowflakeBase):
     """Summary of a detected misconception grouped by topic."""
 
     misconception_id: int
