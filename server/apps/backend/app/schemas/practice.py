@@ -20,6 +20,7 @@ class SubmitAnswerRequest(BaseModel):
     question_id: int
     user_answer: dict
     time_spent_seconds: int | None = Field(default=None, ge=0, le=7200)
+    is_diagnostic: bool = False
 
 
 class ReviewQuestionRequest(BaseModel):
@@ -99,6 +100,17 @@ class PracticeSessionResponse(SnowflakeBase):
         return [str(x) for x in v]
 
 
+class MisconceptionFeedbackResponse(BaseModel):
+    """Feedback shown when a wrong answer matches a known misconception."""
+
+    misconception_id: int
+    description: str
+    description_zh: str | None = None
+    diagnostic_question_id: int | None = None
+    diagnostic_question_stem: str | None = None
+    diagnostic_question_stem_zh: str | None = None
+
+
 class PracticeAttemptResponse(SnowflakeBase):
     id: int
     session_id: int
@@ -109,6 +121,18 @@ class PracticeAttemptResponse(SnowflakeBase):
     time_spent_seconds: int | None
     attempt_number: int
     created_at: datetime
+    misconception_feedback: MisconceptionFeedbackResponse | None = None
+
+
+class MisconceptionSummaryResponse(BaseModel):
+    """Summary of a detected misconception grouped by topic."""
+
+    misconception_id: int
+    topic_id: int
+    description: str
+    description_zh: str | None = None
+    detection_count: int
+    last_detected_at: datetime | None = None
 
 
 class PracticeResultResponse(SnowflakeBase):
