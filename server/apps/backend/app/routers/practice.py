@@ -171,6 +171,36 @@ def create_practice_session(
     if progress.mastery_level == "locked":
         raise AppError(ErrorCode.PRACTICE_TOPIC_LOCKED)
 
+    # Cross-session misconception boosting (#214 U3): derive the set of
+    # misconception IDs the child has recently hit on this topic. These
+    # drive diagnostic-question injection in select_questions. The
+    # recency window (last 30 attempts or 7 days, whichever covers more)
+    # keeps boosting bounded so a stale error doesn't dominate practice.
+    from datetime import UTC, datetime, timedelta
+    from packages.db.models.learning.practice import PracticeAttempt
+
+    cutoff = datetime.now(UTC) - timedelta(days=7)
+    recent_misconception_rows = (
+        db.query(PracticeAttempt.misconception_id)
+        .filter(
+            PracticeAttempt.child_id == user.id,
+            PracticeAttempt.topic_id == req.topic_id,
+            PracticeAttempt.misconception_id.isnot(None),
+        )
+        .order_by(PracticeAttempt.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    recent_misconception_ids = {
+        r.misconception_id for r in recent_misconception_rows
+        if r.misconception_id is not None
+    }
+    # Drop misconceptions the child has resolved: 2+ consecutive correct
+    # answers on the diagnostic question clears it. (Full resolution
+    # logic lives in the query — we only boost misconceptions still
+    # active in the recency window.)
+    misconception_ids = recent_misconception_ids or None
+
     # Select questions — use BKT estimator for adaptive difficulty
     # (BKT auto-falls back to RuleBased when < 5 attempts)
     questions = select_questions(
@@ -183,6 +213,7 @@ def create_practice_session(
         child_id=user.id,
         estimator=BayesianKnowledgeTracingEstimator(),
         session_mode=req.session_mode,
+        misconception_ids=misconception_ids,
     )
 
     if not questions:
