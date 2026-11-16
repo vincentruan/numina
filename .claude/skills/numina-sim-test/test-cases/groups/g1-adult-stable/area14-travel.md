@@ -498,7 +498,7 @@ bsk screenshot --session <id> --out dogfood-output/c14.16-trip-cancel.png
 ```
 
 Assertions:
-- [ ] Cancel button visible on planning trips (NOT on active/settled/archived)
+- [ ] Cancel button visible on planning AND active trips (NOT on settled/archived) — per 83da2627, cancelling was expanded to active status
 - [ ] Click → confirmation dialog: "取消行程？已记录的费用将冲销。"
 - [ ] Confirm → POSTs to `/trips/:id/cancel`
 - [ ] Trip status becomes "cancelled" (soft-deleted, is_active=False)
@@ -524,7 +524,7 @@ bsk screenshot --session <id> --out dogfood-output/c14.17-dashboard-travel-float
 Assertions:
 - [ ] Dashboard shows travel_float metric when travel data exists
 - [ ] travel_float = prepaid_component - unsettled_shared_component
-- [ ] Prepaid expenses (trips in planning status) → positive contribution
+- [ ] Prepaid expenses (trips in planning OR active status) → positive contribution
 - [ ] Unsettled shared expenses (is_complete=False) → negative contribution
 - [ ] **Multi-currency settlements**: unsettled amounts converted to CNY via ExchangeRateService before summing (e.g., ¥5000 JPY unsettled → converted to CNY at current rate)
 - [ ] No trips → travel_float = null (metric hidden, not shown as ¥0)

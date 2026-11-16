@@ -183,21 +183,21 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         rental_net = round(rental_income - rental_expense, 2)
         rental_deposit = round(rental_deposit, 2)
 
-    # Travel float (U8): prepaid on planning trips minus unsettled split settlements
+    # Travel float (U8): prepaid on active trips (planning + in-progress) minus unsettled split settlements
     travel_float_val: Decimal | None = None
-    planning_trip_ids = [
+    active_trip_ids = [
         t.id for t in db.query(Trip).filter(
             Trip.family_id == family_id,
             Trip.is_active == True,  # noqa: E712
-            Trip.status == "planning",
+            Trip.status.in_(["planning", "active"]),
         ).all()
     ]
     prepaid = Decimal("0")
-    if planning_trip_ids:
+    if active_trip_ids:
         prepaid_expenses = db.query(func.sum(ExpenseEntry.amount_cny)).filter(
             ExpenseEntry.family_id == family_id,
             ExpenseEntry.leg_type == "debit",
-            ExpenseEntry.ref_id.in_(planning_trip_ids),
+            ExpenseEntry.ref_id.in_(active_trip_ids),
             ExpenseEntry.ref_type == "trip",
         ).scalar()
         if prepaid_expenses:

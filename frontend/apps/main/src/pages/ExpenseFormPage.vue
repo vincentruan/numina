@@ -213,7 +213,7 @@ async function onSubmit() {
       exchange_rate: formData.value.exchange_rate ? parseFloat(formData.value.exchange_rate) || null : null,
     })
     showSuccessToast(t('common.success'))
-    router.back()
+    router.push(`/travel/${tripId}`)
   } catch {
     showFailToast(t('common.failed'))
   } finally {

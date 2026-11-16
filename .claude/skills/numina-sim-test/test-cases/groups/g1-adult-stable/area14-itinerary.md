@@ -45,7 +45,7 @@ Covers itinerary planning from `docs/plans/2026-09-21-002-feat-travel-itinerary-
   to expense ledger (auto-sync), delete with cascade/unlink choice
 - **Cross-day itinerary items**: `end_date` for multi-day items (e.g. 3-night
   hotel stay), `purchase_date` for expense date control, timeline bucketing
-  across days with ContinuationHint ("Day N") on continuation days, duration
+  across days, duration badge on start-day card (ContinuationHint removed per 6f5cc720),
   badge on cards (e.g. "10/1-10/3 · 3天")
 - **Dashboard liability detail popup**: extended breakdown on overview card
   (category totals + monthly rent + travel spending by purchase_date)
@@ -66,7 +66,7 @@ Covers itinerary planning from `docs/plans/2026-09-21-002-feat-travel-itinerary-
 | C14.32 | Itinerary item form UX | `/travel/:id` | C14.24 |
 | C14.33 | Trip detail page — itinerary as primary | `/travel/:id` | C14.23 |
 | C14.34 | Create cross-day itinerary item | `/travel/:id` | C14.3 (or seed trip) |
-| C14.35 | Cross-day timeline: ContinuationHint + duration badge | `/travel/:id` | C14.34 |
+| C14.35 | Cross-day timeline: duration badge + start-day-only | `/travel/:id` | C14.34 |
 | C14.36 | Edit cross-day item (change/remove end_date) | `/travel/:id` | C14.34 |
 | C14.37 | Purchase date on itinerary item form | `/travel/:id` | C14.24 |
 | C14.38 | Purchase date → expense date sync (API) | API `/trips/:id/itinerary` | C14.34 |
@@ -549,7 +549,7 @@ Assertions (page layout — U5):
 ## C14.34 — Create cross-day itinerary item (end_date + cross-day toggle)
 
 Reverse-engineered from `feat/travel-crossday-itinerary` branch (cross-day toggle,
-end_date field, ContinuationHint).
+end_date field, duration badge).
 **Critical case:** MUST pass
 
 ```
@@ -599,10 +599,14 @@ Assertions (validation — end_date < date):
 
 ---
 
-## C14.35 — Cross-day timeline: ContinuationHint + duration badge
+## C14.35 — Cross-day timeline: duration badge + start-day-only rendering
 
-Reverse-engineered from `feat/travel-crossday-itinerary` (ContinuationHint component,
-duration badge on ItineraryItemCard, timeline bucketing logic).
+Reverse-engineered from `feat/travel-crossday-itinerary` (duration badge on
+ItineraryItemCard, timeline bucketing logic).
+**Updated per 6f5cc720:** ContinuationHint ("Day N") was intentionally removed —
+multi-day items now only render on their start date. The duration badge on the
+card already conveys the date range.
+
 **Critical case:** MUST pass
 
 **Prerequisite:** C14.34 created a cross-day item (Oct 1–Oct 4).
@@ -616,28 +620,17 @@ bsk screenshot --session <id> --out dogfood-output/c14.35-crossday-timeline.png
 
 Assertions (start day — Oct 1):
 - [ ] ItineraryItemCard renders on Oct 1 (the start date) with full card content
-- [ ] Card shows a **duration badge** next to the type name: "10/1-10/4 · 4天" (format: `{start}-{end} · {days}天`)
+- [ ] Card shows a **duration badge** next to the type name: "10/1-10/4 · 3天" (format: `{start_month}/{start_day}-{end_month}/{end_day} · {days}天` where days = end_date - start_date in days, i.e. non-inclusive)
 - [ ] Duration badge styled: 11px, primary color text, semi-transparent primary background, 4px border-radius
 - [ ] Card shows type icon + name + location + cost as usual
 
 Assertions (continuation days — Oct 2, Oct 3, Oct 4):
-- [ ] Oct 2 day section shows a **ContinuationHint** (NOT the full card): "第2天"
-- [ ] Oct 3 day section shows a ContinuationHint: "第3天"
-- [ ] Oct 4 day section shows a ContinuationHint: "第4天" (end_date inclusive — last night still a continuation)
-- [ ] ContinuationHint shows type-specific icon (hotel-o for accommodation)
-- [ ] ContinuationHint styled: flex row, 12px text, `--text-secondary` color, `--bg-secondary` background, 8px border-radius, 0.7 opacity
-- [ ] ContinuationHint has `role="button"` and `aria-label` for accessibility
+- [ ] Oct 2, Oct 3, Oct 4 day sections show "暂无安排" (empty day placeholder) — no ContinuationHint rendered (removed per 6f5cc720)
+- [ ] The "+" add button IS visible on continuation days (since no item renders there)
+- [ ] If end_date + 1 (Oct 5) has no other items, it also shows the empty-day placeholder
 
-Assertions (end day — Oct 4, inclusive):
-- [ ] Oct 4 day section shows a ContinuationHint: "第4天" (end_date is **inclusive** — the last night of a hotel stay still counts as a continuation day; checkout day shows the hint, not the empty placeholder)
-- [ ] If end_date + 1 (Oct 5) has no other items, it shows the empty-day placeholder — the item does NOT extend beyond end_date
-
-Assertions (scroll-to-start behavior):
-- [ ] Tapping a ContinuationHint → smooth scrolls to the start-day card (Oct 1)
-- [ ] Scroll uses `scrollIntoView({ behavior: 'smooth', block: 'center' })`
-
-Assertions (empty day filtering):
-- [ ] Days where the item appears as a continuation (Oct 2, Oct 3, Oct 4) do NOT show the "add" (+) button — the item IS present those days as continuations (end_date inclusive)
+Assertions (no scroll-to-start — ContinuationHint removed):
+- [ ] No ContinuationHint component exists on the page (verify via snapshot)
 - [ ] `[console]` zero errors
 
 ---
@@ -675,15 +668,15 @@ bsk wait-ms 2s
 Assertions (end_date changed):
 - [ ] Submit PATCHes to `/api/v1/trips/:id/itinerary/:item_id`
 - [ ] Response shows `end_date="2026-10-03"` (updated)
-- [ ] Timeline refreshes: ContinuationHint now shows "第2天" (Oct 2) and "第3天" (Oct 3, end_date inclusive), Oct 4 no longer has continuation
-- [ ] Duration badge updated: "10/1-10/3 · 3天"
+- [ ] Timeline refreshes: duration badge updated to "10/1-10/3 · 2天"
+- [ ] Continuation days (Oct 2, Oct 3) still show "暂无安排" (no ContinuationHint — per 6f5cc720)
 - [ ] `[console]` zero errors
 
 Assertions (remove cross-day — toggle OFF):
 - [ ] Open edit form again, toggle cross-day OFF
 - [ ] End date field disappears
 - [ ] Submit → response shows `end_date=null`
-- [ ] Timeline: item appears only on Oct 1, no continuation hints on other days
+- [ ] Timeline: item appears only on Oct 1, no items on other days (continuation was removed per 6f5cc720)
 - [ ] Duration badge disappears from card
 - [ ] `[console]` zero errors
 
@@ -865,7 +858,7 @@ bsk screenshot --session <id> --out dogfood-output/c14.40-crossday-purchase-comb
 
 Assertions (combined scenario — UI):
 - [ ] Oct 10 day section: full ItineraryItemCard with duration badge "10/10-10/13 · 4天"
-- [ ] Oct 11, Oct 12 day sections: ContinuationHint ("第2天", "第3天")
+- [ ] Oct 11, Oct 12 day sections: "暂无安排" (no ContinuationHint — removed per 6f5cc720)
 - [ ] Oct 13: NOT shown (item ends on this day but card only on start day)
 - [ ] Card shows cost ¥2,400.00 with chain-link indicator (🔗)
 
