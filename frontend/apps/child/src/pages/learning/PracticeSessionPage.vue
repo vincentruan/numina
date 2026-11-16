@@ -76,6 +76,22 @@
     </div>
 
     <!-- Phase 2: answering -->
+    <div v-else-if="phase === 'answering' && diagnosticQuestion" class="answer-phase">
+      <PracticeQuestionCard :question="diagnosticQuestion" :index="currentIndex + 1" :total="totalQuestions + 1" />
+      <PracticeAnswerInput
+        :key="diagnosticQuestion.id"
+        :question="diagnosticQuestion"
+        :disabled="submitting"
+        :show-feedback="false"
+        :is-correct="false"
+        @submit="onDiagnosticAnswerSubmit"
+      />
+      <button class="btn-secondary skip-diagnostic-btn" @click="diagnosticQuestion = null; feedbackShown = true">
+        {{ t('practice.misconception.notNow') }}
+      </button>
+    </div>
+
+    <!-- Phase 2: answering (normal) -->
     <div v-else-if="phase === 'answering'" class="answer-phase">
       <van-progress
         :percentage="progressPercent"
@@ -101,6 +117,12 @@
 
       <!-- Feedback section -->
       <div v-if="feedbackShown" class="feedback-section">
+        <!-- Misconception feedback card (issue #214): reframe BEFORE the error signal -->
+        <MisconceptionFeedbackCard
+          :feedback="lastAttempt?.misconception_feedback ?? null"
+          @diagnostic-requested="onDiagnosticRequested"
+          @dismissed="onMisconceptionDismissed"
+        />
         <div class="feedback-banner" :class="lastAttempt?.is_correct ? 'feedback-banner--correct' : 'feedback-banner--wrong'">
           <span class="feedback-icon">{{ lastAttempt?.is_correct ? '✓' : '✗' }}</span>
           <span>{{ lastAttempt?.is_correct ? t('practice.feedback.correct') : t('practice.feedback.wrong') }}</span>
@@ -170,6 +192,7 @@ import PracticeResultSummary from '@/components/learning/PracticeResultSummary.v
 import DiscoveryChallengeIntro from '@/components/learning/DiscoveryChallengeIntro.vue'
 import RushMode from '@/components/learning/RushMode.vue'
 import DiagnosisCard from '@/components/learning/DiagnosisCard.vue'
+import MisconceptionFeedbackCard from '@/components/learning/MisconceptionFeedbackCard.vue'
 import { createSession, getMyLearningMap, getTopicDetail } from '@/api/learning'
 import { getChallengeForTopic } from '@/data/learning-challenge/fair-distribution'
 import type { ChallengeConfig } from '@/types/learning-challenge'
@@ -368,6 +391,56 @@ async function nextQuestion() {
   currentIndex.value += 1
   lastAttempt.value = null
   feedbackShown.value = false
+}
+
+// --- Misconception diagnostic question flow (issue #214) ---
+
+/** The diagnostic question currently being offered/answered, if any. */
+const diagnosticQuestion = ref<QuestionResponse | null>(null)
+
+/** Child tapped "Try a practice problem" — load and show the diagnostic question. */
+async function onDiagnosticRequested() {
+  const feedback = lastAttempt.value?.misconception_feedback
+  if (!feedback?.diagnostic_question_id || !session.value) return
+  try {
+    const [diagQ] = await batchGetQuestions([feedback.diagnostic_question_id])
+    if (!diagQ) {
+      showFailToast(t('practice.errors.submitFailed'))
+      return
+    }
+    diagnosticQuestion.value = diagQ
+    // Move straight to the diagnostic question, replacing the feedback view.
+    lastAttempt.value = null
+    feedbackShown.value = false
+  } catch {
+    showFailToast(t('practice.errors.submitFailed'))
+  }
+}
+
+/** Child declined the diagnostic question — continue normal flow. */
+function onMisconceptionDismissed() {
+  diagnosticQuestion.value = null
+}
+
+/** Submit the diagnostic question's answer with is_diagnostic=true. */
+async function onDiagnosticAnswerSubmit(answer: Record<string, unknown>) {
+  if (!session.value || !diagnosticQuestion.value) return
+  submitting.value = true
+  try {
+    const attempt = await submitPracticeAnswer(session.value.id, {
+      question_id: diagnosticQuestion.value.id,
+      user_answer: answer,
+      time_spent_seconds: undefined,
+      is_diagnostic: true,
+    })
+    lastAttempt.value = attempt
+    diagnosticQuestion.value = null
+    feedbackShown.value = true
+  } catch {
+    showFailToast(t('practice.errors.submitFailed'))
+  } finally {
+    submitting.value = false
+  }
 }
 
 async function doFinish() {
