@@ -181,6 +181,48 @@ class TestMisconceptionDetectionInPracticeAPI:
         ).all()
         assert len(detections) == 1
 
+        # The PracticeAttempt is also annotated with the misconception_id
+        # (drives cross-session adaptive boosting — U1/U2).
+        from packages.db.models.learning.practice import PracticeAttempt
+        attempt = db.query(PracticeAttempt).filter_by(
+            child_id=user.id,
+            question_id=fraction_question.id,
+        ).first()
+        assert attempt is not None
+        assert attempt.misconception_id == misconception.id
+
+    def test_attempt_misconception_id_null_when_no_match(
+        self, client, auth_headers, topic, fraction_question, db
+    ):
+        """Wrong answer that doesn't match any pattern → misconception_id null."""
+        from apps.backend.app.models.user import User
+        from packages.db.models.learning.practice import PracticeAttempt
+
+        resp = client.post(
+            "/api/v1/practice/sessions",
+            json={"topic_id": topic.id, "count": 1},
+            headers=auth_headers,
+        )
+        session_id = resp.json()["data"]["id"]
+
+        client.post(
+            f"/api/v1/practice/sessions/{session_id}/answer",
+            json={
+                "question_id": fraction_question.id,
+                "user_answer": {"answer": "99/100"},  # no matching pattern
+                "time_spent_seconds": 10,
+            },
+            headers=auth_headers,
+        )
+
+        user = db.query(User).filter_by(username="testuser").first()
+        attempt = db.query(PracticeAttempt).filter_by(
+            child_id=user.id,
+            question_id=fraction_question.id,
+        ).first()
+        assert attempt is not None
+        assert attempt.misconception_id is None
+
 
 class TestDiagnosticQuestionSubmission:
     def test_diagnostic_question_bypasses_session_check(

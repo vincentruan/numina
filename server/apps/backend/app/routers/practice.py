@@ -273,14 +273,31 @@ def submit_practice_answer(
                 question=question,
             )
             if misconception is not None:
-                # Record the detection.
-                db.add(MisconceptionDetection(
-                    child_id=user.id,
-                    topic_id=session.topic_id,
-                    misconception_id=misconception.id,
-                    question_id=req.question_id,
-                    wrong_answer_json=json.dumps(req.user_answer),
-                ))
+                # Annotate the attempt itself (drives cross-session
+                # adaptive boosting) — kept outside the savepoint so
+                # it survives even if the detection row fails.
+                attempt.misconception_id = misconception.id
+
+                # The MisconceptionDetection history row is wrapped in
+                # a savepoint: a failure here (concurrent misconception
+                # deletion, constraint error) rolls back only this row,
+                # not the answer submission.
+                try:
+                    with db.begin_nested():
+                        db.add(MisconceptionDetection(
+                            child_id=user.id,
+                            topic_id=session.topic_id,
+                            misconception_id=misconception.id,
+                            question_id=req.question_id,
+                            wrong_answer_json=json.dumps(req.user_answer),
+                        ))
+                except Exception:
+                    from packages.core.logging import get_logger
+                    get_logger(__name__).warning(
+                        "MisconceptionDetection write failed; "
+                        "attempt annotation preserved",
+                        exc_info=True,
+                    )
 
                 # Build feedback response.
                 diag_stem = None
