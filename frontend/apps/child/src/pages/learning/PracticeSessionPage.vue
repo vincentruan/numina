@@ -86,7 +86,7 @@
         :is-correct="false"
         @submit="onDiagnosticAnswerSubmit"
       />
-      <button class="btn-secondary skip-diagnostic-btn" @click="diagnosticQuestion = null; feedbackShown = true">
+      <button class="btn-secondary skip-diagnostic-btn" :disabled="submitting" @click="diagnosticQuestion = null; feedbackShown = true">
         {{ t('practice.misconception.notNow') }}
       </button>
     </div>
