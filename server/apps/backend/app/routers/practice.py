@@ -218,13 +218,31 @@ def submit_practice_answer(
     if session.ended_at is not None:
         raise AppError(ErrorCode.PRACTICE_SESSION_ALREADY_ENDED)
 
-    # For diagnostic questions, bypass the session membership check by
-    # temporarily adding the question_id to the session's list.
+    # For diagnostic questions, validate and bypass the session membership check.
+    # Only allow questions that are linked as diagnostic questions for this topic's
+    # misconceptions — prevents answering arbitrary questions to leak answer data.
     if req.is_diagnostic:
-        session_ids: list[int] = json.loads(session.question_ids_json)
-        if req.question_id not in session_ids:
-            session_ids.append(req.question_id)
-            session.question_ids_json = json.dumps(session_ids)
+        from packages.db.models.learning.misconception import Misconception
+
+        is_legitimate_diagnostic = (
+            db.query(Misconception)
+            .filter(
+                Misconception.topic_id == session.topic_id,
+                Misconception.diagnostic_question_id == req.question_id,
+                Misconception.review_status == "approved",
+            )
+            .first()
+        ) is not None
+
+        if is_legitimate_diagnostic:
+            session_ids: list[int] = json.loads(session.question_ids_json)
+            if req.question_id not in session_ids:
+                session_ids.append(req.question_id)
+                session.question_ids_json = json.dumps(session_ids)
+        else:
+            raise AppError(
+                ErrorCode.PRACTICE_QUESTION_NOT_IN_SESSION,
+            )
 
     attempt = submit_answer(
         db=db,

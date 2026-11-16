@@ -186,7 +186,7 @@ class TestDiagnosticQuestionSubmission:
     def test_diagnostic_question_bypasses_session_check(
         self, client, auth_headers, topic, fraction_question, db
     ):
-        """is_diagnostic=True allows answering a question not in the session."""
+        """is_diagnostic=True allows answering a legitimate diagnostic question."""
         # Create a diagnostic question NOT in the session.
         diag_q = Question(
             topic_id=topic.id,
@@ -200,6 +200,21 @@ class TestDiagnosticQuestionSubmission:
             review_status="approved",
         )
         db.add(diag_q)
+        db.flush()
+
+        # Create a misconception that links to this diagnostic question —
+        # the is_diagnostic validation requires a legitimate link.
+        from packages.db.models.learning.misconception import Misconception
+        m = Misconception(
+            topic_id=topic.id,
+            sequence=99,
+            error_pattern_json=json.dumps({"match_type": "symbolic", "expected_wrong": "2/5"}),
+            description="Test misconception",
+            age_group="mid",
+            diagnostic_question_id=diag_q.id,
+            review_status="approved",
+        )
+        db.add(m)
         db.flush()
 
         resp = client.post(
@@ -222,7 +237,7 @@ class TestDiagnosticQuestionSubmission:
         )
         assert resp.status_code == 400
 
-        # With is_diagnostic — should succeed.
+        # With is_diagnostic — should succeed (linked diagnostic question).
         resp = client.post(
             f"/api/v1/practice/sessions/{session_id}/answer",
             json={
@@ -234,6 +249,45 @@ class TestDiagnosticQuestionSubmission:
             headers=auth_headers,
         )
         assert resp.status_code == 200, resp.text
+
+    def test_arbitrary_question_rejected_with_is_diagnostic(
+        self, client, auth_headers, topic, fraction_question, db
+    ):
+        """is_diagnostic=True with a non-diagnostic question_id is rejected."""
+        # Create a regular question NOT linked to any misconception.
+        arbitrary_q = Question(
+            topic_id=topic.id,
+            question_type="calculation",
+            stem="Arbitrary: What is 2+3?",
+            answer_json=json.dumps({"answer": "5"}),
+            difficulty=1,
+            bloom_level="apply",
+            source="test",
+            age_group="mid",
+            review_status="approved",
+        )
+        db.add(arbitrary_q)
+        db.flush()
+
+        resp = client.post(
+            "/api/v1/practice/sessions",
+            json={"topic_id": topic.id, "count": 1},
+            headers=auth_headers,
+        )
+        session_id = resp.json()["data"]["id"]
+
+        # is_diagnostic=True with non-diagnostic question — should be rejected.
+        resp = client.post(
+            f"/api/v1/practice/sessions/{session_id}/answer",
+            json={
+                "question_id": arbitrary_q.id,
+                "user_answer": {"answer": "5"},
+                "time_spent_seconds": 10,
+                "is_diagnostic": True,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
 
 
 class TestGetChildMisconceptions:

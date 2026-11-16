@@ -11,6 +11,8 @@ Supports three match types:
   and denominators" computes expected_wrong from the specific fractions in the question)
 """
 
+import re
+
 from sqlalchemy.orm import Session
 
 from packages.core.logging import get_logger
@@ -18,6 +20,10 @@ from packages.db.models.learning.misconception import Misconception
 from packages.db.models.learning.question import Question
 
 logger = get_logger(__name__)
+
+# Safe math expression pattern: digits, fractions, basic operators, parens, whitespace.
+# Rejects anything that could be a code injection attempt.
+_SAFE_MATH_RE = re.compile(r'^[0-9+\-*/().\s^a-zA-Z]+$')
 
 
 def detect_misconception(
@@ -62,6 +68,12 @@ def detect_misconception(
         return None
 
     user_str = str(user_val).strip()
+
+    # Reject inputs that don't look like math expressions — prevents passing
+    # code injection payloads to sympy.sympify downstream.
+    if not _SAFE_MATH_RE.match(user_str):
+        logger.debug("Rejecting non-math answer for misconception detection: %s", user_str[:50])
+        return None
 
     for m in misconceptions:
         try:
