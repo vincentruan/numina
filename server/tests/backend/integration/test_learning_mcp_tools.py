@@ -6,12 +6,13 @@ rejects malformed LLM output.
 """
 
 import pytest
+
+from apps.backend.app.services.mcp_session import _validate_evaluation_schema
 from apps.backend.app.services.mcp_tool_registry import (
     TOOL_REGISTRY,
     get_tool,
     validate_registry,
 )
-from apps.backend.app.services.mcp_session import _validate_evaluation_schema
 
 
 class TestLearningToolRegistry:
@@ -231,3 +232,127 @@ class TestValidateEvaluationSchema:
                     "overall_score": 0.5,
                 }
             )
+
+
+class TestTopicGeneratorToolRegistry:
+    """Verify 5 new learning-topic-generator tools are registered (Issue #190)."""
+
+    def test_get_taxonomy_topic_registered(self):
+        meta = get_tool("get_taxonomy_topic")
+        assert meta is not None
+        assert meta.name == "get_taxonomy_topic"
+        assert meta.requires_write is False
+        props = meta.input_schema.get("properties", {})
+        assert "topic_key" in props
+
+    def test_get_taxonomy_dependencies_registered(self):
+        meta = get_tool("get_taxonomy_dependencies")
+        assert meta is not None
+        assert meta.name == "get_taxonomy_dependencies"
+        assert meta.requires_write is False
+        props = meta.input_schema.get("properties", {})
+        assert "topic_key" in props
+
+    def test_list_taxonomy_topics_registered(self):
+        meta = get_tool("list_taxonomy_topics")
+        assert meta is not None
+        assert meta.name == "list_taxonomy_topics"
+        assert meta.requires_write is False
+        props = meta.input_schema.get("properties", {})
+        assert "subject" in props
+        assert set(meta.input_schema.get("required", [])) == {"subject"}
+
+    def test_validate_question_registered(self):
+        meta = get_tool("validate_question")
+        assert meta is not None
+        assert meta.name == "validate_question"
+        assert meta.requires_write is False
+        props = meta.input_schema.get("properties", {})
+        assert "topic_id" in props
+        assert "question_type" in props
+        assert "stem" in props
+        assert "answer" in props
+        # difficulty should NOT be required (matches actual service signature)
+        required = set(meta.input_schema.get("required", []))
+        assert "difficulty" not in required
+
+    def test_get_child_weak_points_registered(self):
+        meta = get_tool("get_child_weak_points")
+        assert meta is not None
+        assert meta.name == "get_child_weak_points"
+        assert meta.requires_write is False
+        props = meta.input_schema.get("properties", {})
+        assert "child_id" in props
+        assert "limit" in props
+        # limit should have a maximum constraint
+        limit_schema = props.get("limit", {})
+        assert limit_schema.get("maximum") == 100
+
+    def test_all_new_tools_owner_member_external(self):
+        """All new tools are read-only and allow external_token."""
+        for name in (
+            "get_taxonomy_topic",
+            "get_taxonomy_dependencies",
+            "list_taxonomy_topics",
+            "validate_question",
+            "get_child_weak_points",
+        ):
+            meta = get_tool(name)
+            assert meta is not None, f"{name} not registered"
+            assert meta.allowed_roles == frozenset(
+                {"owner", "member", "external_token"}
+            ), f"{name} roles mismatch"
+
+    def test_select_adaptive_question_registered(self):
+        """select_adaptive_question tool is registered with correct schema."""
+        meta = get_tool("select_adaptive_question")
+        assert meta is not None
+        assert meta.name == "select_adaptive_question"
+        assert meta.requires_write is False
+        # Should allow child role for self-service
+        assert "child" in meta.allowed_roles
+        props = meta.input_schema.get("properties", {})
+        assert "child_id" in props
+        assert "topic_id" in props
+        assert "min_difficulty" in props
+        assert "max_difficulty" in props
+        assert "bloom_level" in props
+        assert "exclude_question_ids" in props
+        # Only child_id should be required
+        required = set(meta.input_schema.get("required", []))
+        assert required == {"child_id"}
+
+    def test_generate_hint_registered(self):
+        """generate_hint tool is registered with correct schema."""
+        meta = get_tool("generate_hint")
+        assert meta is not None
+        assert meta.name == "generate_hint"
+        assert meta.requires_write is False
+        # Should allow child role for self-service
+        assert "child" in meta.allowed_roles
+        props = meta.input_schema.get("properties", {})
+        assert "question_id" in props
+        assert "child_id" in props
+        assert "error_pattern" in props
+        assert "attempt_number" in props
+        assert "hint_type" in props
+        # error_pattern enum values
+        error_pattern = props.get("error_pattern", {})
+        assert "enum" in error_pattern
+        assert set(error_pattern["enum"]) == {
+            "computation", "concept", "reading", "partial", "guessing", "unknown"
+        }
+        # Required fields
+        required = set(meta.input_schema.get("required", []))
+        assert required == {"question_id", "child_id", "error_pattern"}
+
+    def test_adaptive_tools_allow_child_role(self):
+        """Adaptive tools (select_adaptive_question, generate_hint) allow child role."""
+        for name in ("select_adaptive_question", "generate_hint"):
+            meta = get_tool(name)
+            assert meta is not None, f"{name} not registered"
+            assert "child" in meta.allowed_roles, f"{name} should allow child role"
+
+    def test_tool_count_total(self):
+        """Registry should have 29 tools (21 existing + 5 smart tutor + 2 adaptive + 1 teach-back)."""
+        assert len(TOOL_REGISTRY) == 29

@@ -2,7 +2,7 @@
 
 import contextlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import httpx
 from fastapi import APIRouter, Depends, Query, Request
@@ -17,9 +17,13 @@ from apps.backend.app.schemas.learning import (
     AssessStreamRequest,
     AssignmentResponse,
     BridgeResponse,
+    CastleIndexResponse,
     ChildProgressOverview,
     ClusterResponse,
+    HookQuestionResponse,
     LearningStatsResponse,
+    MapExplorationCreate,
+    MapExplorationResponse,
     MapIndexItem,
     OnboardingCompleteResponse,
     PathResponse,
@@ -29,16 +33,22 @@ from apps.backend.app.schemas.learning import (
     RecommendedTopicItem,
     SessionCreate,
     SessionResponse,
+    SmartTutorStreamRequest,
     TodayLearningResponse,
     TopicResponse,
 )
 from apps.backend.app.services.learning import (
     assignment_service,
+    hook_service,
     path_service,
     progress_service,
     session_service,
+    smart_tutor_service,
     stats_service,
     zone_service,
+)
+from apps.backend.app.services.learning.agent_stream import (
+    stream_learning_agent_sse,
 )
 from apps.backend.app.services.learning.recommendation_service import (
     generate_recommendation_path,
@@ -52,6 +62,7 @@ from apps.backend.app.services.notification.dispatcher import (
     notify_learning_submitted_for_review,
 )
 from packages.db.models.learning.assignment import LearningAssignment
+from packages.db.models.learning.map_exploration import LearningMapExploration
 from packages.db.models.learning.path import LearningPath
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
@@ -60,9 +71,7 @@ from packages.db.models.learning.topic import LearningTopic
 router = APIRouter(prefix="/child/learning", tags=["learning-child"])
 
 
-def _json_text_field_equals(
-    json_column, key: str, value: str, engine
-):
+def _json_text_field_equals(json_column, key: str, value: str, engine):
     """Dialect-aware JSON text field equality filter.
 
     PostgreSQL uses ``column[key].astext``; SQLite uses ``json_extract``.
@@ -174,6 +183,70 @@ def list_my_clusters(
     )
 
 
+# ---------------------------------------------------------------------------
+# Knowledge Castle (U2)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/castle/index", response_model=CastleIndexResponse)
+def my_castle_index(
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Return aggregated castle data for the child's knowledge castle view.
+
+    Scope = in-range topics (by age) ∪ first-mastered topics.
+    Towers = subjects; floors = domains; windows = review_due + recommended.
+    Zero-progress children get empty tower skeletons (200, never 404).
+    """
+    from apps.backend.app.services.learning.castle_service import get_castle_index
+
+    data = get_castle_index(db, child.id, child.family_id, child.language)
+    return CastleIndexResponse(
+        towers=[_tower_to_schema(t) for t in data.towers],
+        windows=[_window_to_schema(w) for w in data.windows],
+        streak_days=data.streak_days,
+    )
+
+
+def _tower_to_schema(tower):
+    from apps.backend.app.schemas.learning import (
+        CastleFloorSchema,
+        CastleTowerSchema,
+    )
+
+    return CastleTowerSchema(
+        subject=tower.subject,
+        mastered_count=tower.mastered_count,
+        learning_count=tower.learning_count,
+        review_due_count=tower.review_due_count,
+        total_count=tower.total_count,
+        floors=[
+            CastleFloorSchema(
+                domain=f.domain,
+                mastered_count=f.mastered_count,
+                learning_count=f.learning_count,
+                review_due_count=f.review_due_count,
+                total_count=f.total_count,
+            )
+            for f in tower.floors
+        ],
+    )
+
+
+def _window_to_schema(window):
+    from apps.backend.app.schemas.learning import CastleWindowSchema
+
+    return CastleWindowSchema(
+        topic_id=window.topic_id,
+        topic_name=window.topic_name,
+        topic_name_zh=window.topic_name_zh,
+        reason=window.reason,
+        subject=window.subject,
+        domain=window.domain,
+    )
+
+
 @router.get("/bridges", response_model=list[BridgeResponse])
 def list_my_bridges(
     subject: str | None = Query(None),
@@ -183,6 +256,57 @@ def list_my_bridges(
     """List cross-subject bridge edges between cluster domains."""
     taxonomy = get_effective_source_taxonomy(db, child.language)
     return get_cross_subject_bridges(db, source_taxonomy=taxonomy, subject=subject)
+
+
+@router.post(
+    "/map/explorations",
+    response_model=MapExplorationResponse,
+    status_code=201,
+)
+def record_map_exploration(
+    payload: MapExplorationCreate,
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Record one knowledge-map visit (R11, R12).
+
+    Posted when the child leaves the map. A visit that ends with no topic
+    selection is still recorded, so exploration time and zoom depth survive
+    sessions that only browsed (AE4).
+
+    #17 hygiene: when the client claims a topic was selected, resolve it
+    against the child-visible taxonomy before storing. A bogus, deprecated
+    or foreign-taxonomy id is stored as null so the beacon never 4xxs, but
+    future analytics readers cannot attribute a selection to a topic the
+    child never legitimately touched.
+    """
+    selected_topic_id: int | None = None
+    if payload.topic_selected and payload.selected_topic_id is not None:
+        taxonomy = get_effective_source_taxonomy(db, child.language)
+        topic = (
+            db.query(LearningTopic)
+            .filter(
+                LearningTopic.id == payload.selected_topic_id,
+                LearningTopic.source_taxonomy == taxonomy,
+                LearningTopic.deprecated == False,  # noqa: E712
+            )
+            .first()
+        )
+        if topic is not None:
+            selected_topic_id = topic.id
+    row = LearningMapExploration(
+        child_id=child.id,
+        family_id=child.family_id,
+        duration_ms=payload.duration_ms,
+        max_zoom_level=payload.max_zoom_level,
+        topic_selected=payload.topic_selected,
+        interaction_count=payload.interaction_count,
+        selected_topic_id=selected_topic_id,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return MapExplorationResponse.model_validate(row)
 
 
 @router.get("/assignments", response_model=list[AssignmentResponse])
@@ -356,6 +480,41 @@ def get_topic_detail(
     if not topic:
         raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
     return topic
+
+
+def _child_age_group(child: User) -> str:
+    """Map child birthday to age group: low (≤7), mid (8-10), high (11+)."""
+    if child.birthday is None:
+        return "mid"
+    today = date.today()
+    age = today.year - child.birthday.year
+    if (today.month, today.day) < (child.birthday.month, child.birthday.day):
+        age -= 1
+    if age <= 7:
+        return "low"
+    if age <= 10:
+        return "mid"
+    return "high"
+
+
+@router.get(
+    "/topics/{topic_id}/hook",
+    response_model=HookQuestionResponse | None,
+)
+def get_topic_hook(
+    topic_id: int,
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Get the Socratic hook question for a topic, layered by child age.
+
+    Returns ``null`` when no hook question has been seeded for the topic.
+    """
+    age_group = _child_age_group(child)
+    hook = hook_service.get_hook_question(db, topic_id, age_group=age_group)
+    if hook is None:
+        return None
+    return hook
 
 
 @router.post("/sessions", response_model=SessionResponse, status_code=201)
@@ -667,7 +826,9 @@ async def stream_assessment(
     except httpx.HTTPStatusError as e:
         _fdb = SessionLocal()
         try:
-            AITaskService.fail_task(task_id, f"agent trigger failed: {type(e).__name__}", _fdb)
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
+            )
         finally:
             _fdb.close()
         # Agent returned 409 Conflict — another run is already active on this thread.
@@ -675,17 +836,25 @@ async def stream_assessment(
         # state instead of a generic 503 error.
         if e.response.status_code == 409:
             raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}) from e
+        raise AppError(
+            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
+        ) from e
     except Exception as e:
         _fdb = SessionLocal()
         try:
-            AITaskService.fail_task(task_id, f"agent trigger failed: {type(e).__name__}", _fdb)
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
+            )
         finally:
             _fdb.close()
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}) from e
+        raise AppError(
+            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
+        ) from e
 
     # 5. Persist run_id on AITask + spawn lifecycle consumer (matches ai_report/finance_coach pattern)
-    AITaskService.extract_and_attach_run_id(task_id, result["content_location"], family_id)
+    AITaskService.extract_and_attach_run_id(
+        task_id, result["content_location"], family_id
+    )
 
     # 6. Subscribe to Redis Stream -> SSE
     shared_bridge = get_shared_bridge()
@@ -808,3 +977,67 @@ async def get_session_history(
         "thread_id": thread_id,
         "messages": messages,
     }
+
+
+# ---------------------------------------------------------------------------
+# Smart Tutor — Socratic guided problem-solving (Issue #191)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/sessions/{session_id}/smart-tutor/stream")
+async def stream_smart_tutor(
+    session_id: int,
+    http_request: Request,
+    body: SmartTutorStreamRequest | None = None,
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Start or continue a Socratic smart-tutor session for a specific question.
+
+    First call (question_id provided): begins guided problem-solving.
+    Follow-up calls (child_answer provided): continues multi-turn dialogue.
+    """
+    from apps.backend.app.services.learning.session_service import (
+        get_thread_id_for_session,
+    )
+
+    # Validate and load entities via service
+    is_follow_up = body is not None and body.child_answer is not None
+    question_id = body.question_id if body and body.question_id else None
+
+    session, question, topic = smart_tutor_service.validate_smart_tutor_request(
+        db=db,
+        session_id=session_id,
+        child=child,
+        question_id=question_id,
+        is_follow_up=is_follow_up,
+    )
+
+    thread_id = get_thread_id_for_session(session_id)
+
+    # Build agent payload via service
+    agent_body = smart_tutor_service.build_agent_payload(
+        session=session,
+        question=question,
+        topic=topic,
+        child=child,
+        session_id=session_id,
+        question_id=question_id,
+        child_answer=body.child_answer if body else None,
+        is_follow_up=is_follow_up,
+    )
+
+    # Persist thread_id on initial call so follow-up turns can reuse it
+    if not is_follow_up and not session.thread_id:
+        session.thread_id = thread_id
+        db.commit()
+
+    return await stream_learning_agent_sse(
+        http_request=http_request,
+        db=db,
+        thread_id=thread_id,
+        agent_body=agent_body,
+        family_id=child.family_id,
+        child=child,
+        learning_session_id=session_id,
+    )

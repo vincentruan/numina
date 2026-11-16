@@ -41,10 +41,29 @@ Financial literacy badges in the child ecosystem, organized in 4 dimensions: 赚
 ### SnowflakeBase
 The base Pydantic response model every API response schema inherits from. At JSON serialization it converts `int` fields named `id` or ending in `_id` to `str` (the bigint-on-wire-as-string convention — JS doubles lose precision beyond 2^53). It is the mechanism that enforces the ID half of the money/bigint-as-strings wire convention; the money half is enforced per-schema by typing money fields `str` with a quantizing `field_validator`.
 
+## Learning OS
+
+### 知识城堡 (Knowledge Castle)
+The persistent visual-growth metaphor in the child app: an elevation castle with one tower per in-scope subject (tower count derived from the child's effective taxonomy and age band, typically 5–8; not hardcoded to 8), each floor = a domain, each brick = a topic, deterministically generated from existing learning-progress data via a new child-app endpoint (no `castle_progress` table, no stored coordinates, no client-side `topics.json` join). Complements the #208 知识大陆 map: map = navigation ("where to learn next"), castle = ownership ("what I have built"). Buildings never regress — scope = current age-band topics ∪ all `first_mastered_at`-set topics (birthdays can add but never remove bricks), and mastery decay renders as cracks/fading keyed on `mastery_level == 'mastered' AND next_review_at <= now` (not the `review` level, which is reserved for the MCP `needs_review` path). Brick-drop animation fires only for topics passed via `?new=<topicId>` on the castle route; spontaneous opens animate nothing. Tiered celebration: topic = brick-drop, completed subject tower = fireworks. Layout is a horizontally scrollable strip (min tower width ~120px).
+
 ## MCP external access
+
+### Caller-bound principal
+The security invariant that MCP session identity (`family_id`, `caller_user_id`, `caller_role`) is frozen in `MCPSession.__slots__` at SSE handshake and read exclusively from `self` during tool execution — never from tool arguments, message content, or any caller-controllable source. Enforced at three layers: SSE handshake validates the caller before session creation (403 on unknown, inactive, cross-family, or child), protocol-layer `list_tools()` filters by `caller_role ∈ allowed_roles`, and `call_tool()` re-validates the caller via `_get_caller_user()` on every invocation including re-reading `user.role` for stale-session detection. Replaces the earlier `_get_owner_user` pattern that silently fell back to the family owner when the caller could not be resolved (the confused-deputy vulnerability).
 
 ### Synthetic service user
 A virtual User row (`role='external_token'`) created per family to represent external MCP callers within the existing MCPSession caller-binding contract. External MCP clients (Claude Desktop, custom agents) have no real user account; the synthetic user provides a `caller_user_id` that `_get_caller_user()` can resolve, preserving the session invariant that caller identity is frozen at construction. Must be excluded from family member list queries, rejected by the login endpoint, and included in `_VALID_ROLES` for MCP tool filtering. Created atomically alongside the family's first MCP API Token.
 
 ### MCP API Token
 A family-scoped, long-lived credential (`mcp_` prefix + random string) that authenticates external MCP client connections to the backend's public SSE endpoint. One active token per family; stored as hash only (plaintext shown once at generation). Two-level access control: `allow_external` gates read-only tool access, `allow_write` (default off) gates write tools. Supports expiration, rotation (old token immediately invalidated), and soft revocation. Distinct from the internal agent JWT (`X-Agent-Token`, 5-min TTL) — the API Token is for external clients that cannot obtain or refresh JWTs.
+
+## Learning
+
+### teach-back session
+A distinct `LearningSession` variant (`session_type='teach_back'`) in which a child who has already `mastered` a pilot topic explains the concept back to an AI student persona. The session is triggered on the child's next revisit of a mastered pilot topic (review-due bucket or map click), runs over the existing `learning-smart-tutor` app with payload `action: "start_teach_back"`, and carries its own phase machine (`present_confusion` → `evaluate_explanation` → `resolve_or_probe`) declared in a separate `TEACH_BACK_PHASES` dict rather than the tutor's `VALID_PHASE_TRANSITIONS`. On success, the progress row's `completed_via` is updated to `'teaching'` and a `LearningAssessmentAttempt(assessment_type='teach_back')` history record is written; failure never demotes `mastery_level`.
+
+### preset confusion list
+A hand-authored list of 2–4 misconceptions per pilot topic, stored in the `topic_confusions` table (modeled on `topic_hook_questions`). Each row carries `confusion_text`, `rubric` (LLM grading rubric), `expected_expression` (SymPy comparison target, nullable), and `review_status` — only rows with `review_status='approved'` are visible to the teach-back flow, which is the enforcement mechanism that blocks runtime-LLM-generated confusions. Keyed by `(topic_id, age_group, sequence)`.
+
+### dual-track validation
+The teach-back grading mechanism that routes each child explanation through two parallel checks: math expressions extracted from the explanation (regex fallback + LLM-structured output) are compared against the confusion's `expected_expression` via `numeric_or_symbolic_eq`; conceptual reasoning is judged by the teach-back LLM skill itself against the confusion's `rubric`, with verdict emitted as a `record_teach_back_turn` tool call. The server persists the verdict; it does not independently call an LLM.

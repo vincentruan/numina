@@ -926,13 +926,13 @@ wheels = [
 
 [[package]]
 name = "deerflow-extension-api"
-version = "0.2.4"
-source = { git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fextension-api&rev=712a11c0#712a11c0cda0a7c9441c9afd68c1e854d38103c6" }
+version = "0.2.9"
+source = { git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fextension-api&rev=b3f23326a545458887f8fd77e2bad3396b0c22d4#b3f23326a545458887f8fd77e2bad3396b0c22d4" }
 
 [[package]]
 name = "deerflow-harness"
-version = "2.1.0"
-source = { git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fharness&rev=712a11c0#712a11c0cda0a7c9441c9afd68c1e854d38103c6" }
+version = "2.3.0.dev0"
+source = { git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fharness&rev=b3f23326a545458887f8fd77e2bad3396b0c22d4#b3f23326a545458887f8fd77e2bad3396b0c22d4" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "agent-sandbox" },
@@ -973,6 +973,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "readabilipy" },
+    { name = "regex" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "tavily-python" },
     { name = "tiktoken" },
@@ -1820,9 +1821,9 @@ source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 dependencies = [
     { name = "jsonpointer" },
 ]
-sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/42/78/18813351fe5d63acad16aec57f94ec2b70a09e53ca98145589e185423873/jsonpatch-1.33.tar.gz", hash = "sha256:9fcd4009c41e6d12348b4a0ff2563ba56a2923a7dfee731d004e212e1ee5030c" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/42/78/18813351fe5d63acad16aec57f94ec2b70a09e53ca98145589e185423873/jsonpatch-1.33.tar.gz", hash = "sha256:9fcd4009c41e6d12348b4a0ff2563ba56a2923a7dfee731d004e212e1ee5030c", size = 21699, upload-time = "2023-06-26T12:07:29.144Z" }
 wheels = [
-    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/73/07/02e16ed01e04a374e644b575638ec7987ae846d25ad97bcc9945a3ee4b0e/jsonpatch-1.33-py2.py3-none-any.whl", hash = "sha256:0ae28c0cd062bbd8b8ecc26d7d164fbbea9652a1a3693f3b956c1eae5145dade" },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/73/07/02e16ed01e04a374e644b575638ec7987ae846d25ad97bcc9945a3ee4b0e/jsonpatch-1.33-py2.py3-none-any.whl", hash = "sha256:0ae28c0cd062bbd8b8ecc26d7d164fbbea9652a1a3693f3b956c1eae5145dade", size = 12898, upload-time = "2023-06-16T21:01:28.466Z" },
 ]
 
 [[package]]
@@ -2810,6 +2811,7 @@ dependencies = [
     { name = "altcha" },
     { name = "apscheduler" },
     { name = "bcrypt" },
+    { name = "croniter" },
     { name = "fastapi" },
     { name = "filelock" },
     { name = "httpx" },
@@ -2823,6 +2825,7 @@ dependencies = [
     { name = "pywebpush" },
     { name = "short-io-api-client" },
     { name = "sqlalchemy" },
+    { name = "sympy" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "webauthn" },
 ]
@@ -2834,6 +2837,7 @@ agent = [
     { name = "asyncpg" },
     { name = "cryptography" },
     { name = "deerflow-harness" },
+    { name = "docker" },
     { name = "google-genai" },
     { name = "langchain" },
     { name = "langchain-anthropic" },
@@ -2895,9 +2899,11 @@ requires-dist = [
     { name = "asyncpg", marker = "extra == 'agent'", specifier = ">=0.29.0" },
     { name = "bcrypt", specifier = ">=5.0.0" },
     { name = "bcrypt", marker = "extra == 'backend'", specifier = ">=4.0.0" },
+    { name = "croniter", specifier = ">=6.2.2" },
     { name = "cryptography", marker = "extra == 'agent'", specifier = ">=42.0.0" },
     { name = "cryptography", marker = "extra == 'worker'", specifier = ">=44.0.0" },
-    { name = "deerflow-harness", marker = "extra == 'agent'", git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fharness&rev=712a11c0" },
+    { name = "deerflow-harness", marker = "extra == 'agent'", git = "https://github.com/bytedance/deer-flow.git?subdirectory=backend%2Fpackages%2Fharness&rev=b3f23326a545458887f8fd77e2bad3396b0c22d4" },
+    { name = "docker", marker = "extra == 'agent'", specifier = ">=7.0.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "filelock", specifier = ">=3.29.0" },
     { name = "filelock", marker = "extra == 'backend'", specifier = ">=3.13.0" },
@@ -2936,6 +2942,7 @@ requires-dist = [
     { name = "redis", marker = "extra == 'worker'", specifier = ">=5.0.0" },
     { name = "short-io-api-client", specifier = ">=1.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.36" },
+    { name = "sympy", specifier = ">=1.13.0" },
     { name = "user-agents", marker = "extra == 'backend'", specifier = ">=2.2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0" },
     { name = "webauthn", specifier = ">=2.7.1" },

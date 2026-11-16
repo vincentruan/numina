@@ -11,6 +11,13 @@ export interface CurriculumStandard {
   code: string | null
 }
 
+export interface RealWorldConnection {
+  context: string
+  explanation: string
+  icon?: string | null
+  image_url?: string | null
+}
+
 export interface TopicResponse {
   id: string
   topic_key: string
@@ -34,6 +41,8 @@ export interface TopicResponse {
   deprecated: boolean
   source_taxonomy: string
   curriculum_standards: CurriculumStandard[] | null
+  real_world_connections?: RealWorldConnection[] | null
+  real_world_connections_zh?: RealWorldConnection[] | null
 }
 
 export interface ProgressResponse {
@@ -55,6 +64,16 @@ export interface ProgressResponse {
   subject?: string | null
   domain?: string | null
   age_group?: string | null
+}
+
+export interface HookQuestionResponse {
+  id: string
+  topic_id: string
+  question_text: string
+  question_text_zh: string | null
+  age_group: string
+  difficulty: string
+  review_status: string
 }
 
 export interface AssignmentResponse {
@@ -198,6 +217,11 @@ export async function getTopicDetail(topicId: string): Promise<TopicResponse> {
   return res.data
 }
 
+export async function getTopicHook(topicId: string): Promise<HookQuestionResponse | null> {
+  const res = await http.get(`/child/learning/topics/${topicId}/hook`)
+  return res.data
+}
+
 export async function createSession(req: SessionCreate): Promise<SessionResponse> {
   const res = await http.post('/child/learning/sessions', req)
   return res.data
@@ -261,6 +285,74 @@ export interface DependencyEdge {
 
 export async function getSubjectDependencies(subject: string): Promise<DependencyEdge[]> {
   const res = await http.get(`/learning/dependencies`, { params: { subject } })
+  return res.data
+}
+
+/** Slim topic index row — GET /learning/topics/index (browse UI). */
+export interface TopicIndexRow {
+  id: string
+  subject: string
+  domain: string
+  name: string | null
+  name_zh: string | null
+  age_group: string
+}
+
+/** Full subject → domain → topic index (lighter than full topic payloads).
+ *
+ *  #F14: the taxonomy is static reference data (~267 KB) that every map visit
+ *  needs. Cache the in-flight promise at module level so concurrent and
+ *  repeat calls share one request; `refreshTopicIndex()` drops it for
+ *  pull-to-refresh. */
+let topicIndexPromise: Promise<TopicIndexRow[]> | null = null
+
+export async function getTopicIndex(): Promise<TopicIndexRow[]> {
+  if (!topicIndexPromise) {
+    topicIndexPromise = http
+      .get('/learning/topics/index')
+      .then((res) => res.data as TopicIndexRow[])
+      .catch((err) => {
+        topicIndexPromise = null // don't cache a failure
+        throw err
+      })
+  }
+  return topicIndexPromise
+}
+
+/** Drop the cached taxonomy index so the next call refetches. */
+export function refreshTopicIndex(): void {
+  topicIndexPromise = null
+}
+
+// --- Knowledge Map Exploration (R11, R12) ---
+
+export interface MapExplorationCreate {
+  duration_ms: number
+  max_zoom_level: number
+  topic_selected: boolean
+  interaction_count: number
+  selected_topic_id?: string
+}
+
+export interface MapExplorationResponse {
+  id: string
+  duration_ms: number
+  max_zoom_level: number
+  topic_selected: boolean
+  interaction_count: number
+  selected_topic_id: string | null
+  created_at: string
+}
+
+/** Record one completed map visit (posted when the child leaves the map).
+ *  #11: the beacon is fire-and-forget telemetry, so opt out of the offline
+ *  queue to avoid duplicate rows on replay and a spurious pending-sync badge. */
+export async function recordMapExploration(
+  payload: MapExplorationCreate,
+): Promise<MapExplorationResponse> {
+  const res = await http.post('/child/learning/map/explorations', payload, {
+    _skipOfflineQueue: true,
+  })
   return res.data
 }
 
@@ -386,3 +478,43 @@ export async function fetchRecommendationPath(
 }
 
 
+
+// --- Knowledge Castle (U4) ---
+
+export interface CastleFloor {
+  domain: string
+  mastered_count: number
+  learning_count: number
+  review_due_count: number
+  total_count: number
+}
+
+export interface CastleTower {
+  subject: string
+  mastered_count: number
+  learning_count: number
+  review_due_count: number
+  total_count: number
+  floors: CastleFloor[]
+}
+
+export interface CastleWindow {
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string
+  /** Closed set: "复习到期" | "推荐学习" */
+  reason: string
+  subject: string
+  domain: string
+}
+
+export interface CastleIndex {
+  towers: CastleTower[]
+  windows: CastleWindow[]
+  streak_days: number
+}
+
+export async function fetchCastle(): Promise<CastleIndex> {
+  const res = await http.get('/child/learning/castle/index')
+  return res.data
+}

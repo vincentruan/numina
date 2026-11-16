@@ -9,9 +9,39 @@
       <button class="btn-secondary" @click="load">{{ t('common.retry') }}</button>
     </div>
 
+    <!-- Phase 0: Discovery challenge intro (Issue #210 — try first, discover later) -->
+    <div v-else-if="phase === 'discovery' && challengeConfig" class="discovery-phase">
+      <DiscoveryChallengeIntro
+        :config="challengeConfig"
+        @complete="onDiscoveryComplete"
+        @request-tutor="onRequestTutor"
+      />
+    </div>
+
     <!-- Phase 1: mode selection -->
     <div v-else-if="phase === 'mode'" class="mode-phase">
       <h1 class="page-title">{{ displayTopicName }}</h1>
+      <!-- Diagnosis skeleton while loading (reserved height per R8). -->
+      <div
+        v-if="diagnosisLoading && !diagnosisDismissed && !hasFromDiagnosisMarker()"
+        class="diagnosis-skeleton"
+        aria-hidden="true"
+        data-test="diagnosis-skeleton"
+      />
+      <!-- Diagnosis card (issue #213): inline above the CTA, dismissed per-mount. -->
+      <DiagnosisCard
+        v-else-if="
+          !diagnosisDismissed &&
+          !hasFromDiagnosisMarker() &&
+          diagnosisCandidate
+        "
+        :candidate="diagnosisCandidate"
+        :target-topic-name="targetTopicDetail?.name ?? null"
+        :target-topic-name-zh="targetTopicDetail?.name_zh ?? null"
+        data-test="diagnosis-card-wrapper"
+        @practice-first="onPracticeFirst"
+        @continue="onDiagnosisContinue"
+      />
       <div class="mode-list">
         <button
           v-for="m in modes"
@@ -23,22 +53,30 @@
           <span class="mode-name">{{ m.label }}</span>
           <span class="mode-count">{{ m.count }}</span>
         </button>
+        <!-- Rush entry — only when the child has mastered the topic (R11/R12) -->
+        <button
+          v-if="topicMastery === 'mastered'"
+          class="mode-btn mode-btn--rush"
+          @click="phase = 'rush'"
+        >
+          <span class="mode-name">{{ t('learning.rush.entry') }}</span>
+          <span class="mode-count">{{ t('learning.rush.entryHint') }}</span>
+        </button>
       </div>
     </div>
 
-    <!-- Phase 2: hands-on manipulation (U6) -->
-    <div v-else-if="phase === 'manipulate' && challengeConfig" class="manipulate-phase">
-      <ManipulateObserveReflect
-        :config="challengeConfig"
-        @complete="onChallengeComplete"
-        @request-tutor="onRequestTutor"
+    <!-- Rush timed review (R11/R12) — independent non-scoring path -->
+    <div v-else-if="phase === 'rush'" class="rush-phase">
+      <RushMode
+        :topic-id="topicId"
+        :duration-seconds="60"
+        @exit="phase = 'mode'"
+        @retry="phase = 'mode'"
       />
     </div>
 
-    <!-- Phase 2 fallback: manipulate requested but no config → skip to answering -->
-
-    <!-- Phase 3: answering (also covers manipulate-without-config fallback) -->
-    <div v-else-if="phase === 'answering' || (phase === 'manipulate' && !challengeConfig)" class="answer-phase">
+    <!-- Phase 2: answering -->
+    <div v-else-if="phase === 'answering'" class="answer-phase">
       <van-progress
         :percentage="progressPercent"
         stroke-width="6"
@@ -84,6 +122,8 @@
       <PracticeResultSummary
         :result="sessionResult!"
         :challenge-discovery="challengeDiscoveryMessage || undefined"
+        :topic-id="topicId"
+        :is-first-mastery="isFirstMastery"
         @again="onAgain"
         @back="goBack"
       />
@@ -107,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { showFailToast } from 'vant'
@@ -125,9 +165,12 @@ import {
 } from '@/api/practice'
 import PracticeQuestionCard from '@/components/learning/PracticeQuestionCard.vue'
 import PracticeAnswerInput from '@/components/learning/PracticeAnswerInput.vue'
+import { isFirstMasteryResult, resolveSessionMode } from '@/composables/usePracticeRoute'
 import PracticeResultSummary from '@/components/learning/PracticeResultSummary.vue'
-import ManipulateObserveReflect from '@/components/learning/ManipulateObserveReflect.vue'
-import { createSession, getTopicDetail } from '@/api/learning'
+import DiscoveryChallengeIntro from '@/components/learning/DiscoveryChallengeIntro.vue'
+import RushMode from '@/components/learning/RushMode.vue'
+import DiagnosisCard from '@/components/learning/DiagnosisCard.vue'
+import { createSession, getMyLearningMap, getTopicDetail } from '@/api/learning'
 import { getChallengeForTopic } from '@/data/learning-challenge/fair-distribution'
 import type { ChallengeConfig } from '@/types/learning-challenge'
 
@@ -139,12 +182,18 @@ const { t, locale } = useI18n()
 
 const topicId = computed(() => String(route.params.topicId))
 
+/** Castle review windows pass ?mode=review (KTD7). */
+const sessionMode = computed(() => resolveSessionMode(route.query.mode))
+
+/** First time this topic reached 'mastered' — drives the castle CTA (U9). */
+const isFirstMastery = computed(() => isFirstMasteryResult(sessionResult.value))
+
 const loading = ref(false)
 const error = ref('')
 const starting = ref(false)
 const submitting = ref(false)
 
-const phase = ref<'mode' | 'manipulate' | 'answering' | 'result'>('mode')
+const phase = ref<'discovery' | 'mode' | 'answering' | 'result' | 'rush'>('mode')
 const session = ref<PracticeSessionResponse | null>(null)
 const challengeConfig = ref<ChallengeConfig | null>(null)
 const challengeDiscoveryMessage = ref('')
@@ -154,6 +203,14 @@ const lastAttempt = ref<PracticeAttemptResponse | null>(null)
 const feedbackShown = ref(false)
 const sessionResult = ref<PracticeResultResponse | null>(null)
 const recommendations = ref<RecommendResponse[]>([])
+/** Mastery level for the current topic — drives the Rush entry button. */
+const topicMastery = ref<string>('available')
+
+// Diagnosis state (issue #213)
+const diagnosisCandidate = ref<RecommendResponse | null>(null)
+const diagnosisLoading = ref(false)
+const diagnosisDismissed = ref(false)
+const targetTopicDetail = ref<{ name: string | null; name_zh: string | null } | null>(null)
 
 const answerInputRef = ref<InstanceType<typeof PracticeAnswerInput> | null>(null)
 
@@ -184,7 +241,7 @@ async function startSession(count: number) {
   try {
     const resp = await createPracticeSession({
       topic_id: topicId.value,
-      session_mode: 'practice',
+      session_mode: sessionMode.value,
       count,
     })
     session.value = resp
@@ -198,16 +255,10 @@ async function startSession(count: number) {
       error.value = t('practice.errors.noQuestions')
       return
     }
-    // Check if this topic has a hands-on challenge (U6).
-    // The route carries a snowflake topic id; challenges are keyed by topic_key,
-    // so resolve the key from the topic detail before looking up the config.
-    const challenge = getChallengeForTopic(await resolveTopicKey())
-    if (challenge) {
-      challengeConfig.value = challenge
-      phase.value = 'manipulate'
-    } else {
-      phase.value = 'answering'
-    }
+    // Challenge lookup has moved to page-entry time (resolveTopicChallenge on mount).
+    // startSession is called only from mode selection, so the challenge (if any) has
+    // already been completed — always advance directly to answering.
+    phase.value = 'answering'
   } catch (e: unknown) {
     const code = extractErrorCode(e)
     error.value = mapPracticeErrorCode(code)
@@ -236,6 +287,45 @@ async function resolveTopicKey(): Promise<string> {
     return ''
   }
 }
+
+/**
+ * KTD1: Resolve challenge on page entry (single-shot), before any session
+ * exists. Challenge topics enter discovery; challenge-less topics enter mode
+ * directly. This removes the challenge lookup from `startSession` which caused
+ * the #210 infinite loop (discovery → mode → startSession re-resolved the
+ * challenge → discovery again).
+ *
+ * Also fetches the topic's mastery level so the Rush entry button can render
+ * only for mastered topics (R11).
+ */
+async function resolveTopicChallenge() {
+  loading.value = true
+  error.value = ''
+  try {
+    const [topicKey, progressList] = await Promise.all([
+      resolveTopicKey(),
+      getMyLearningMap().catch(() => []),
+    ])
+    const challenge = getChallengeForTopic(topicKey)
+    if (challenge) {
+      challengeConfig.value = challenge
+      phase.value = 'discovery'
+    } else {
+      phase.value = 'mode'
+    }
+    const progress = progressList.find((p) => p.topic_id === topicId.value)
+    topicMastery.value = progress?.mastery_level ?? 'available'
+  } catch {
+    phase.value = 'mode'
+  } finally {
+    loading.value = false
+  }
+}
+
+// Resolve challenge once on mount — sets the initial phase (discovery or mode).
+onMounted(() => {
+  resolveTopicChallenge()
+})
 
 /** Map backend practice error codes to i18n keys */
 function mapPracticeErrorCode(code: string | null): string {
@@ -298,14 +388,15 @@ async function doFinish() {
   }
 }
 
-function onChallengeComplete() {
+/** Issue #210: After discovery challenge completes, move to mode selection */
+function onDiscoveryComplete() {
   // Capture the challenge's discovery message for the result screen (R6)
   if (challengeConfig.value) {
     challengeDiscoveryMessage.value = locale.value.startsWith('zh')
       ? challengeConfig.value.discoveryMessageZh
       : challengeConfig.value.discoveryMessage
   }
-  phase.value = 'answering'
+  phase.value = 'mode'
 }
 
 /** After 2 failed attempts the child can ask the AI tutor (F3). The tutor
@@ -344,12 +435,99 @@ function startPrereqPractice(prereqTopicId: string) {
   router.push(`/learning/practice/${prereqTopicId}`)
 }
 
+/** Retry from the error state. */
 function load() {
-  phase.value = 'mode'
   error.value = ''
   session.value = null
   questions.value = []
+  challengeConfig.value = null
+  challengeDiscoveryMessage.value = ''
+  // Re-resolve challenge on retry — resets phase to discovery or mode
+  resolveTopicChallenge()
+  startDiagnosis()
 }
+
+function hasFromDiagnosisMarker(): boolean {
+  const marker = route.query.fromDiagnosis
+  return typeof marker === 'string' && marker.length > 0 && /^\d+$/.test(marker)
+}
+
+/** Fire the diagnosis request, unless this arrival was referred by the card itself. */
+function startDiagnosis() {
+  diagnosisDismissed.value = false
+  diagnosisCandidate.value = null
+  targetTopicDetail.value = null
+  if (hasFromDiagnosisMarker()) {
+    diagnosisLoading.value = false
+    return
+  }
+  fetchDiagnosisAndTarget()
+}
+
+async function fetchDiagnosisAndTarget() {
+  diagnosisLoading.value = true
+  try {
+    const [diagnosis, detail] = await Promise.all([
+      getPracticeRecommendations(topicId.value, true),
+      getTopicDetail(topicId.value),
+    ])
+    targetTopicDetail.value = { name: detail.name, name_zh: detail.name_zh }
+    diagnosisCandidate.value = diagnosis.find((r) => r.is_diagnosis) ?? null
+  } catch {
+    // Per R8: silently omitted on failure (no retry, no error toast).
+    diagnosisCandidate.value = null
+  } finally {
+    diagnosisLoading.value = false
+  }
+}
+
+function onPracticeFirst() {
+  const candidate = diagnosisCandidate.value
+  if (!candidate) return
+  const sourceTopicId = topicId.value
+  router.push({
+    name: route.name,
+    params: { topicId: candidate.topic_id },
+    query: { fromDiagnosis: sourceTopicId },
+  })
+}
+
+function onDiagnosisContinue() {
+  diagnosisDismissed.value = true
+}
+
+/** Clear the previous topic's session state — the same route is reused for the
+ *  new topic, so without this the child lands mid-session on the new topic. */
+function resetSessionStateForNavigation() {
+  phase.value = 'mode'
+  session.value = null
+  questions.value = []
+  currentIndex.value = 0
+  lastAttempt.value = null
+  feedbackShown.value = false
+  sessionResult.value = null
+  recommendations.value = []
+  challengeConfig.value = null
+  challengeDiscoveryMessage.value = ''
+  error.value = ''
+  startDiagnosis()
+}
+
+// The page loads via onMounted only (the router renders no KeepAlive), and a
+// card referral reuses this component with a different topicId — watch-driven
+// re-fetching would duplicate the mount-time request.
+watch(
+  () => route.params.topicId,
+  (next, prev) => {
+    if (next === prev) return
+    resetSessionStateForNavigation()
+  },
+)
+
+onMounted(() => {
+  startDiagnosis()
+})
+
 </script>
 
 <style scoped>
@@ -361,6 +539,38 @@ function load() {
   margin: 16px;
   font-size: 20px;
   color: var(--color-ink);
+}
+
+/* Matches DiagnosisCard's box (12px vertical padding, 3 lines of copy, 44px
+   action row) so swapping the skeleton for the card does not shift the CTA. */
+.diagnosis-skeleton {
+  margin: 12px 16px;
+  height: 140px;
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-card) 0%,
+    var(--color-canvas) 50%,
+    var(--color-surface-card) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diagnosis-skeleton {
+    animation: none;
+    background: var(--color-canvas);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .mode-list {

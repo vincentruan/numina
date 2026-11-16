@@ -56,6 +56,8 @@ RESERVED_NAMES = [
     "dashboard-narrative",
     "literacy-weekly-report",
     "learning-tutor",
+    "learning-smart-tutor",
+    "learning-topic-generator",
     # DeerFlow public skills introduced as builtin
     "deep-research",
     "chart-visualization",

@@ -29,6 +29,8 @@ from apps.backend.app.schemas.practice import (
 )
 from apps.backend.app.services.learning.adaptive_service import (
     BayesianKnowledgeTracingEstimator,
+    diagnose_weak_prerequisites,
+    find_weak_prerequisites,
     get_ability_dimensions,
     get_progress_trend,
     select_questions,
@@ -243,30 +245,36 @@ def finish_practice_session(
     # Calculate score (flush only — no commit yet)
     result = finish_session(db=db, session_id=session_id, child_id=user.id)
 
+    # Rush sessions are independent, non-scoring review runs (R13b): do NOT
+    # trigger the mastery-update state machine. Skipping update_progress_from_session
+    # keeps a Rush from advancing a topic's mastery_level or moving the mastered gate.
+    is_rush = session.session_mode == "rush"
+
     # Update progress state machine
     mastery_changed = False
     new_mastery_level = None
-    try:
-        from apps.backend.app.services.learning.practice_progress_integration import (
-            update_progress_from_session,
-        )
+    if not is_rush:
+        try:
+            from apps.backend.app.services.learning.practice_progress_integration import (
+                update_progress_from_session,
+            )
 
-        progress_result = update_progress_from_session(
-            db=db, session_id=session_id, child_id=user.id
-        )
-        mastery_changed = progress_result["mastery_changed"]
-        new_mastery_level = progress_result["new_mastery_level"]
-    except Exception:
-        logger.warning(
-            "Progress integration failed for session %s — rolling back",
-            session_id,
-            exc_info=True,
-        )
-        db.rollback()
-        raise AppError(
-            ErrorCode.PRACTICE_SESSION_NOT_FOUND,
-            details="Failed to finalize session",
-        ) from None
+            progress_result = update_progress_from_session(
+                db=db, session_id=session_id, child_id=user.id
+            )
+            mastery_changed = progress_result["mastery_changed"]
+            new_mastery_level = progress_result["new_mastery_level"]
+        except Exception:
+            logger.warning(
+                "Progress integration failed for session %s — rolling back",
+                session_id,
+                exc_info=True,
+            )
+            db.rollback()
+            raise AppError(
+                ErrorCode.PRACTICE_SESSION_NOT_FOUND,
+                details="Failed to finalize session",
+            ) from None
 
     # Award XP and coins if mastery changed
     xp_earned = 0
@@ -385,6 +393,7 @@ def get_practice_session_detail(
 @router.get("/recommend", response_model=list[RecommendResponse])
 def get_practice_recommendations(
     topic_id: int | None = None,
+    diagnosis: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
 ):
@@ -392,12 +401,36 @@ def get_practice_recommendations(
 
     If topic_id is provided, checks for weak prerequisites of that topic.
     Otherwise, returns the child's overall weakest topics.
-    """
-    if topic_id:
-        from apps.backend.app.services.learning.adaptive_service import (
-            find_weak_prerequisites,
-        )
 
+    With ?diagnosis=true and a topic_id, runs the depth-2 prerequisite
+    backtrace diagnosis and returns qualified weak prerequisites with the
+    diagnosis fields populated (depth, bkt_mastery, sample_size, is_diagnosis),
+    and commits one impression record per qualified candidate.
+    """
+    if diagnosis and topic_id is not None:
+        candidates = diagnose_weak_prerequisites(
+            db,
+            topic_id=topic_id,
+            child_id=user.id,
+        )
+        db.commit()
+        return [
+            RecommendResponse(
+                topic_id=r["topic_id"],
+                topic_name=r["topic_name"],
+                topic_name_zh=r["topic_name_zh"],
+                mastery_level=r["mastery_level"],
+                accuracy=r["accuracy"],
+                is_prerequisite=True,
+                prerequisite_of_topic_id=topic_id,
+                is_diagnosis=True,
+                depth=r["depth"],
+                bkt_mastery=r["bkt_mastery"],
+                sample_size=r["sample_size"],
+            )
+            for r in candidates
+        ]
+    if topic_id:
         weak_prereqs = find_weak_prerequisites(db, topic_id=topic_id, child_id=user.id)
         return [
             RecommendResponse(

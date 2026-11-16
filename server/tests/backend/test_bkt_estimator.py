@@ -198,9 +198,13 @@ class TestBayesianKnowledgeTracingEstimator:
         assert abs(bkt_score - rb_score) > 0.001
 
     def test_default_params(self):
-        """BKT default parameters match standard values."""
+        """BKT default parameters match standard values.
+
+        These are the fallback parameters used when a topic has too few
+        attempts for per-skill calibration (#212).
+        """
         est = BayesianKnowledgeTracingEstimator()
-        assert est.p_l0 == 0.1
-        assert est.p_t == 0.3
-        assert est.p_g == 0.25
-        assert est.p_s == 0.1
+        assert est.default_p_l0 == 0.1
+        assert est.default_p_t == 0.3
+        assert est.default_p_g == 0.25
+        assert est.default_p_s == 0.1

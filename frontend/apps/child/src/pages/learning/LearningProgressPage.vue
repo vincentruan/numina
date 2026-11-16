@@ -18,8 +18,23 @@
           <!-- Page title -->
           <h1 class="page-title">{{ t('learning.progress.title') }}</h1>
 
-          <!-- XP / Level / Streak section -->
-          <div v-if="learningStats" class="xp-level-section">
+          <!-- Castle entry replaces the XP bar as the primary visual (R9).
+               XP level and streak stay visible below, as secondary detail. -->
+          <button
+            type="button"
+            class="castle-entry-card"
+            data-test="progress-castle-entry"
+            @click="router.push('/learning/castle')"
+          >
+            <span class="castle-entry-card__icon" aria-hidden="true">🏰</span>
+            <span class="castle-entry-card__text">
+              <span class="castle-entry-card__title">{{ t('learning.castle.entryTitle') }}</span>
+              <span class="castle-entry-card__cta">{{ t('learning.castle.entryCta') }}</span>
+            </span>
+          </button>
+
+          <!-- XP / Level / Streak — secondary position, still visible -->
+          <div v-if="learningStats" class="xp-level-section xp-level-section--secondary">
             <div class="xp-level-header">
               <LevelBadge :emoji="learningStats.level_emoji" :name="locale === 'en-US' ? learningStats.level_name_en : learningStats.level_name_zh" />
               <LearningStreakBadge :days="learningStats.learning_streak_days" />
@@ -321,11 +336,52 @@ onMounted(async () => {
 }
 
 /* XP/Level section */
+/* Castle entry card — primary visual on this page (R9) */
+.castle-entry-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 18px 16px;
+  border: 2px solid var(--color-brand-ochre, #e8b94a);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-card);
+  text-align: left;
+  cursor: pointer;
+}
+.castle-entry-card:active {
+  transform: scale(0.97);
+}
+.castle-entry-card__icon {
+  font-size: 34px;
+  line-height: 1;
+}
+.castle-entry-card__text {
+  display: flex;
+  flex-direction: column;
+}
+.castle-entry-card__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.castle-entry-card__cta {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
 .xp-level-section {
   margin-bottom: 20px;
   padding: 16px;
   background: var(--color-surface-card);
   border-radius: var(--radius-lg);
+}
+
+/* XP is demoted to secondary weight now that the castle owns the main slot */
+.xp-level-section--secondary {
+  opacity: 0.85;
 }
 
 .xp-level-header {

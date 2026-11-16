@@ -194,18 +194,21 @@ export function normalizeAgentEvent(
     }
 
     case 'tool.progress':
-      if (event.tool_id && event.progress_message) {
+      // Backend sends structured payload (status, path, ok). Consumers handle
+      // i18n; only use progress_message if explicitly provided.
+      const progressMsg = event.progress_message
+      if (event.tool_id && progressMsg) {
         const target = state.steps.find(
           (s): s is Extract<ProcessStep, { type: 'tool_call' }> =>
             s.type === 'tool_call' && s.id === event.tool_id,
         )
         if (target) {
-          target.progressMessage = event.progress_message
+          target.progressMessage = progressMsg
         }
         events.push({
           type: 'tool_progress',
           toolCallId: event.tool_id,
-          progressMessage: event.progress_message,
+          progressMessage: progressMsg,
         })
       }
       break

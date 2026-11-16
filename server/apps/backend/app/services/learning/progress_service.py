@@ -292,9 +292,13 @@ def update_sm2_after_session(progress: LearningProgress, score: float) -> None:
         progress.ease_factor = max(1.3, current_ease + 0.1 - diff * (0.08 + diff * 0.02))
         # Advance stability (acts as repetition counter)
         progress.stability = (progress.stability or 1.0) + 1
+        # Advance consecutive review passes (#32)
+        progress.consecutive_review_passes = (progress.consecutive_review_passes or 0) + 1
     else:
         # Reset: interval goes back to 1, ease_factor unchanged
         progress.stability = 1.0
+        # Reset consecutive review passes on failure (#32)
+        progress.consecutive_review_passes = 0
 
 
 def transition_to_mastered(
@@ -305,7 +309,7 @@ def transition_to_mastered(
 ) -> LearningProgress:
     """Transition progress to 'mastered' state and update stability/review schedule."""
     validate_transition(progress.mastery_level, "mastered")
-    if completed_via not in ("ai_assessment", "parent_approval", "practice_session", "parent_override"):
+    if completed_via not in ("ai_assessment", "parent_approval", "practice_session", "parent_override", "teaching"):
         raise ValueError(f"Invalid completed_via: {completed_via}")
     now = datetime.now(UTC)
     progress.mastery_level = "mastered"
@@ -324,6 +328,152 @@ def transition_to_mastered(
     progress.next_review_at = compute_next_review(progress)
     db.flush()
     return progress
+
+
+def apply_teach_back_success(
+    db: Session,
+    progress: LearningProgress,
+    session_id: int | None = None,
+) -> LearningProgress:
+    """Apply teach-back success effects to an already-mastered progress row.
+
+    - Updates ``completed_via`` to ``'teaching'`` (most recent completion mechanism).
+    - Multiplies ``stability`` by 1.5× (capped at 30.0).
+    - Recomputes ``next_review_at`` with explicit 180-day cap (prevents
+      ``compute_next_review`` from producing century-scale intervals).
+    - Increments ``consecutive_review_passes`` (the "牢固掌握" counter).
+    - Creates a ``LearningAssessmentAttempt(assessment_type='teach_back')``
+      history record.
+    """
+    from datetime import timedelta
+
+    from packages.db.models.learning.session import LearningAssessmentAttempt
+
+    now = datetime.now(UTC)
+
+    # Update completed_via — teaching is now the most recent mastery mechanism
+    progress.completed_via = "teaching"
+
+    # Stability multiplier: 1.5× capped at 30.0 (matches update_stability cap)
+    current_stability = progress.stability or 1.0
+    progress.stability = min(current_stability * 1.5, 30.0)
+
+    # Recompute next_review_at with explicit 180-day cap. compute_next_review
+    # can overflow on very large stability (ease ** (stability-2)), so compute
+    # the cap first and guard the interval computation.
+    cap = now + timedelta(days=180)
+    try:
+        computed_next = compute_next_review(progress)
+    except (OverflowError, ValueError):
+        computed_next = cap
+    progress.next_review_at = min(computed_next, cap)
+
+    # Increment consecutive review passes
+    progress.consecutive_review_passes = (progress.consecutive_review_passes or 0) + 1
+
+    # Update last_practice_at
+    progress.last_practice_at = now
+
+    # Create history record
+    attempt = LearningAssessmentAttempt(
+        child_id=progress.child_id,
+        topic_id=progress.topic_id,
+        session_id=session_id,
+        assessment_type="teach_back",
+        score=1.0,  # teach-back success = perfect score
+        passed=True,
+    )
+    db.add(attempt)
+
+    db.flush()
+    return progress
+
+
+def apply_teach_back_rewards(
+    db: Session,
+    child_id: int,
+    family_id: int,
+    topic_id: int,
+    session_id: int | None = None,
+) -> dict:
+    """Award XP, coins, and check milestones for a successful teach-back.
+
+    Returns dict with ``xp_awarded``, ``coins_awarded``, ``milestone`` keys.
+    """
+    from packages.db.models.learning.topic import LearningTopic
+
+    result: dict = {
+        "xp_awarded": 0,
+        "coins_awarded": 0,
+        "milestone": None,
+    }
+
+    # Resolve topic name for narrative
+    topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
+    topic_label = (topic.name_zh or topic.name or "learning") if topic else "learning"
+
+    # Award XP (25 for teach-back — highest tier)
+    try:
+        from apps.backend.app.services.learning import stats_service
+
+        xp_result = stats_service.award_xp(db, child_id, family_id, 25)
+        result["xp_awarded"] = xp_result.get("xp_awarded", 0)
+    except Exception:
+        logger.warning("Teach-back XP award failed", exc_info=True)
+
+    # Award coins (20 for teach-back, ref_id = attempt id for uniqueness)
+    try:
+        from packages.db.models.learning.session import LearningAssessmentAttempt
+
+        # Find the teach_back attempt for this session (scoped to the current
+        # session to avoid collisions across sessions on the same topic —
+        # #11 review fix).
+        attempt_query = (
+            db.query(LearningAssessmentAttempt)
+            .filter(
+                LearningAssessmentAttempt.child_id == child_id,
+                LearningAssessmentAttempt.topic_id == topic_id,
+                LearningAssessmentAttempt.assessment_type == "teach_back",
+                LearningAssessmentAttempt.passed == True,  # noqa: E712
+            )
+        )
+        if session_id is not None:
+            attempt_query = attempt_query.filter(
+                LearningAssessmentAttempt.session_id == session_id
+            )
+        attempt = attempt_query.order_by(LearningAssessmentAttempt.created_at.desc()).first()
+        if attempt:
+            txn = CoinTransaction(
+                family_id=family_id,
+                child_user_id=child_id,
+                amount=20,
+                transaction_type="learning_earn",
+                ref_id=attempt.id,
+                narrative=f"教你学会啦：{topic_label}",
+                narrative_emoji="🎓",
+            )
+            db.add(txn)
+            result["coins_awarded"] = 20
+    except Exception:
+        logger.warning("Teach-back coin award failed", exc_info=True)
+        # Roll back the partial coin add so the outer session stays usable
+        # for the next commit (#11 review fix).
+        db.rollback()
+
+    # Check milestones (first_teach_back) via unified path (#33/#45)
+    try:
+        from apps.backend.app.services.milestones import check_and_record_milestones
+
+        milestone = check_and_record_milestones(
+            db, child_id, family_id,
+            {"teach_back_session_id": session_id, "topic_id": topic_id},
+        )
+        result["milestone"] = milestone
+    except Exception:
+        logger.warning("Teach-back milestone check failed", exc_info=True)
+
+    db.flush()
+    return result
 
 
 def recheck_prerequisites(

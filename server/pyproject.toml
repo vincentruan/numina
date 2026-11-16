@@ -29,6 +29,9 @@ dependencies = [
     "short-io-api-client>=1.0.0",
     # Web Push notifications
     "pywebpush>=2.0.0",
+    "croniter>=6.2.2",
+    # Symbolic math for expression equivalence checking (scoring service)
+    "sympy>=1.13.0",
 ]
 
 [project.optional-dependencies]
@@ -86,6 +89,10 @@ agent = [
     "pyyaml>=6.0.3",
     # Cache (Redis)
     "redis>=5.0.0",
+    # Docker Engine API for DeerFlow's container sandbox (AioSandboxProvider).
+    # Required at runtime, not only in tests: the agent Dockerfile installs the
+    # agent extra and excludes dev dependencies.
+    "docker>=7.0.0",
     # DeerFlow harness (workspace member — installed from apps/agent/vendor/deerflow-harness)
     "deerflow-harness",
 ]
@@ -118,8 +125,12 @@ dev = [
 [tool.uv.workspace]
 members = []
 
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
 [tool.uv.sources]
-deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness", rev = "712a11c0" }
+deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness", rev = "b3f23326a545458887f8fd77e2bad3396b0c22d4" }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -131,6 +142,7 @@ addopts = "--tb=short -q"
 log_level = "WARNING"
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "docker: marks tests that require a running Docker Engine",
 ]
 
 [tool.ruff]

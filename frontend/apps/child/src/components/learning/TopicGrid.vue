@@ -13,7 +13,7 @@
           class="topic-card"
           :class="{
             [`topic-card--${masteryStatus(item)}`]: true,
-            'topic-card--review-due': isReviewDue(item),
+            'topic-card--review-due': masteryStatus(item) === 'review',
             'topic-card--rejected': isRejected(item),
           }"
           @click="$emit('topicClick', item.topic.id)"
@@ -43,6 +43,7 @@ import { useI18n } from 'vue-i18n'
 import type { ProgressWithTopic } from '@/api/learning'
 import ZoneBadge from './ZoneBadge.vue'
 import { domainLabel as translateDomain } from '@/utils/domainLabel'
+import { masteryStatus, type MasteryStatus } from '@/utils/masteryStatus'
 
 const { t, locale } = useI18n()
 
@@ -54,27 +55,6 @@ const props = defineProps<{
 defineEmits<{
   topicClick: [topicId: string]
 }>()
-
-type MasteryStatus = 'mastered' | 'learning' | 'available' | 'locked' | 'review'
-
-function masteryStatus(item: ProgressWithTopic): MasteryStatus {
-  const level = item.mastery_level
-  if (level === 'mastered') {
-    // Check if due for review
-    if (item.next_review_at) {
-      const reviewDate = new Date(item.next_review_at)
-      if (reviewDate <= new Date()) return 'review'
-    }
-    return 'mastered'
-  }
-  if (level === 'learning' || level === 'assessing') return 'learning'
-  if (level === 'locked') return 'locked'
-  return 'available'
-}
-
-function isReviewDue(item: ProgressWithTopic): boolean {
-  return item.mastery_level === 'mastered' && item.next_review_at !== null && new Date(item.next_review_at) <= new Date()
-}
 
 function isRejected(item: ProgressWithTopic): boolean {
   return item.mastery_level === 'parent_review'

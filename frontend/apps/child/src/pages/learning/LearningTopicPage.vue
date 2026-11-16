@@ -50,6 +50,13 @@
         <p class="mastery-attempts">{{ t('learning.attempts', { count: progress.attempts }) }}</p>
       </div>
 
+      <!-- Socratic curiosity hook -->
+      <TopicHookQuestion
+        v-if="hookQuestion && !hookSkipped"
+        :question="hookQuestion"
+        @skip="hookSkipped = true"
+      />
+
       <!-- Description -->
       <div class="description-section">
         <p class="description-text">{{ displayDescription }}</p>
@@ -78,6 +85,9 @@
           </li>
         </ul>
       </div>
+
+      <!-- Real-world connections (Issue #201) -->
+      <RealWorldConnections :connections="displayRealWorldConnections" />
 
       <!-- Learning path: prerequisites + dependents -->
       <div v-if="graphData?.prerequisites?.length" class="graph-section">
@@ -153,6 +163,14 @@
         <button class="btn-secondary" @click="goToPractice">
           {{ t('practice.startPractice') }}
         </button>
+        <!-- Teach-back entry: only for mastered topics (Issue #216) -->
+        <button
+          v-if="isMastered"
+          class="btn-secondary"
+          @click="goToTeachBack"
+        >
+          {{ t('learning.teach_back.start_btn') }}
+        </button>
         <button class="btn-secondary" :disabled="submitting" @click="onSubmitAssignment">
           {{ submitting ? t('common.loading') : t('learning.submitAssignment') }}
         </button>
@@ -210,6 +228,7 @@ import { domainLabel as translateDomain } from '@/utils/domainLabel'
 import {
   getTopicDetail,
   getTopicGraph,
+  getTopicHook,
   getMyLearningMap,
   getMyAssignments,
   createSession,
@@ -221,8 +240,11 @@ import {
   type AssignmentResponse,
   type TopicGraphResponse,
   type SessionResponse,
+  type HookQuestionResponse,
 } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
+import TopicHookQuestion from '@/components/learning/TopicHookQuestion.vue'
+import RealWorldConnections from '@/components/learning/RealWorldConnections.vue'
 import { hasChineseChars } from '@numina/shared'
 
 const { t, locale } = useI18n()
@@ -250,6 +272,10 @@ const progress = ref<ProgressResponse | null>(null)
 const allProgress = ref<ProgressResponse[]>([])
 const graphData = ref<TopicGraphResponse | null>(null)
 
+// Hook question state
+const hookQuestion = ref<HookQuestionResponse | null>(null)
+const hookSkipped = ref(false)
+
 // Difficulty dialog state
 const showDifficultyDialog = ref(false)
 const pendingSessionId = ref<string | null>(null)
@@ -272,6 +298,14 @@ const displayEvidence = computed(() => {
   if (!topic.value) return []
   if (locale.value.startsWith('zh') && topic.value.evidence_zh) return topic.value.evidence_zh as string[]
   return topic.value.evidence
+})
+
+const displayRealWorldConnections = computed(() => {
+  if (!topic.value) return []
+  if (locale.value.startsWith('zh') && topic.value.real_world_connections_zh) {
+    return topic.value.real_world_connections_zh
+  }
+  return topic.value.real_world_connections ?? []
 })
 
 const firstResolvedStandard = computed(() => {
@@ -340,6 +374,17 @@ function goToPractice() {
   router.push(`/learning/practice/${topicId.value}`)
 }
 
+/** True when this topic has been mastered — enables the teach-back entry. */
+const isMastered = computed(() => progress.value?.mastery_level === 'mastered')
+
+function goToTeachBack() {
+  const subject = (topic.value?.subject as string) || 'mathematics'
+  const ageGroup = (topic.value?.age_group as string) || 'mid'
+  router.push(
+    `/learning/teach-back/${topicId.value}?subject=${subject}&ageGroup=${ageGroup}`,
+  )
+}
+
 function getProgressLevel(topicIdStr: string): string {
   const prog = allProgress.value.find(p => p.topic_id === topicIdStr)
   return prog?.mastery_level ?? 'available'
@@ -367,15 +412,18 @@ async function load() {
   loading.value = true
   error.value = ''
   errorIsNotFound.value = false
+  hookSkipped.value = false
   try {
-    const [topicDetail, progressList, graph] = await Promise.all([
+    const [topicDetail, progressList, graph, hook] = await Promise.all([
       getTopicDetail(topicId.value),
       getMyLearningMap(),
       getTopicGraph(topicId.value).catch(() => null),
+      getTopicHook(topicId.value).catch(() => null),
     ])
     topic.value = topicDetail
     allProgress.value = progressList
     graphData.value = graph
+    hookQuestion.value = hook
 
     // Find progress for this topic
     const topicProgress = progressList.find((p) => p.topic_id === topicId.value)

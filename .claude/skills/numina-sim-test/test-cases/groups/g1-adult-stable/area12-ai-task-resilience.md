@@ -287,6 +287,296 @@ curl -s -X POST -H "$AUTH" "$API/ai/tasks/detail/${TASK_ID}/cancel"
 # 诱导中断：见 C12.9 前置（关停或孤儿恢复）
 ```
 
+### C12.10 Scheduled tasks T23（定时任务创建、编辑、执行状态）
+
+**来源:** T23 — Scheduled tasks (#185)
+
+验证定时任务的创建、编辑、执行状态显示功能。
+
+```
+# 导航到定时任务管理页面（如果存在）或相关设置页面
+bsk navigate ${BASE}settings/ai --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+
+# 查找定时任务配置入口（可能在 AI 设置或其他位置）
+# 如果定时任务 UI 不在设置页面，尝试以下路径：
+# - /settings/scheduled-tasks
+# - /ai/scheduled-tasks
+# - Dashboard 上的定时任务卡片
+
+# 测试 1：创建定时任务
+bsk evaluate --session <id> "(async () => {
+  const r = await fetch('${API_BASE}api/v1/scheduled-tasks', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    credentials: 'include',
+    body: JSON.stringify({
+      name: '每日资产报告',
+      skill_id: 'report',
+      cron_expression: '0 9 * * *',  // 每天 9:00
+      enabled: true,
+    }),
+  });
+  return String(r.status);
+})()"
+
+# 测试 2：获取定时任务列表
+bsk evaluate --session <id> "(async () => {
+  const r = await fetch('${API_BASE}api/v1/scheduled-tasks', {
+    credentials: 'include',
+  });
+  const data = await r.json();
+  return JSON.stringify({
+    status: r.status,
+    count: data.data?.length || 0,
+    tasks: data.data?.map(t => ({id: t.id, name: t.name, enabled: t.enabled})) || [],
+  });
+})()"
+
+# 测试 3：更新定时任务
+bsk evaluate --session <id> "(async () => {
+  // 获取第一个任务的 ID
+  const listR = await fetch('${API_BASE}api/v1/scheduled-tasks', {credentials: 'include'});
+  const listData = await listR.json();
+  const taskId = listData.data?.[0]?.id;
+  if (!taskId) return 'NO_TASK';
+  
+  const r = await fetch('${API_BASE}api/v1/scheduled-tasks/' + taskId, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    credentials: 'include',
+    body: JSON.stringify({
+      enabled: false,  // 禁用任务
+    }),
+  });
+  return String(r.status);
+})()"
+
+# 测试 4：删除定时任务
+bsk evaluate --session <id> "(async () => {
+  const listR = await fetch('${API_BASE}api/v1/scheduled-tasks', {credentials: 'include'});
+  const listData = await listR.json();
+  const taskId = listData.data?.[0]?.id;
+  if (!taskId) return 'NO_TASK';
+  
+  const r = await fetch('${API_BASE}api/v1/scheduled-tasks/' + taskId, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  return String(r.status);
+})()"
+```
+
+Assertions:
+- [ ] 创建定时任务返回 201（创建成功）
+- [ ] 获取定时任务列表返回 200 + 任务数组
+- [ ] 任务列表包含任务 ID、名称、cron 表达式、启用状态
+- [ ] 更新定时任务返回 200（更新成功）
+- [ ] 删除定时任务返回 200 或 204（删除成功）
+- [ ] 如果存在 UI 页面：定时任务卡片正确显示任务列表和状态
+- [ ] `[console]` zero errors
+
+> **备注:** 如果定时任务没有独立的 UI 页面，此测试仅验证 API 端点。定时任务的执行状态可通过查看 AITask 表验证（`GET /ai/tasks?skill_id=report&source=scheduled`）。
+
+### C12.11 Last-Event-ID reconnection（SSE 重连机制）
+
+**来源:** T12/T13 — Run Event Store + Last-Event-ID reconnection (#180)
+
+验证 SSE 连接中断后，前端能否通过 Last-Event-ID 机制从断点恢复，而不是重新开始。
+
+```
+# 测试 1：正常 SSE 流式体验（建立 baseline）
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk fill @eN --value "帮我分析资产" --session <id>
+bsk click @eM --session <id>
+bsk wait-ms 5s
+bsk snapshot --session <id>
+
+# 记录当前的事件 ID（通过 JavaScript 获取 SSE 连接状态）
+bsk evaluate --session <id> "(async () => {
+  // 尝试从 SSE 连接或全局状态获取 lastEventId
+  // 具体实现取决于前端的 SSE 客户端
+  const lastEventId = window.__lastEventId || 'unknown';
+  return lastEventId;
+})()"
+
+# 测试 2：模拟网络中断（通过禁用网络或关闭连接）
+# 注意：bsk 无法直接模拟网络中断，此步骤需要手动或通过 Chrome DevTools Protocol
+# 这里我们验证刷新页面后的恢复行为（类似 C12.8）
+
+# 测试 3：刷新页面后验证 Last-Event-ID 恢复
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+
+# 检查是否从 checkpointer 恢复了对话历史（而不是重新生成）
+bsk evaluate --session <id> "(async () => {
+  // 验证对话历史是否从 checkpointer 加载
+  const messages = document.querySelectorAll('.ai-chat-message');
+  const hasHistory = messages.length > 0;
+  
+  // 检查是否有 "恢复中" 或 "从缓存加载" 的提示
+  const recoveryIndicator = document.querySelector('.recovery-indicator, .cache-badge');
+  
+  return JSON.stringify({
+    hasHistory,
+    messageCount: messages.length,
+    hasRecoveryIndicator: !!recoveryIndicator,
+  });
+})()"
+
+# 测试 4：验证 SSE 重连请求包含 Last-Event-ID header
+# 通过 Chrome DevTools Network 面板查看请求头
+bsk evaluate --session <id> "(async () => {
+  // 触发一个新的 SSE 连接
+  const r = await fetch('${API_BASE}ai/chat/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Last-Event-ID': 'test-event-id-123',  // 模拟 Last-Event-ID
+    },
+    credentials: 'include',
+    body: JSON.stringify({question: '继续上次的话题'}),
+  });
+  return String(r.status);
+})()"
+```
+
+Assertions:
+- [ ] 正常 SSE 流式体验：token-by-token 流式显示，无卡顿
+- [ ] 刷新页面后：从 checkpointer 或 event store 恢复对话历史（不是重新生成）
+- [ ] 恢复的对话包含之前所有的消息（用户消息 + AI 响应）
+- [ ] 如果任务仍在运行：显示 "任务仍在后台运行中" banner + 轮询恢复
+- [ ] SSE 重连请求可以携带 Last-Event-ID header（后端支持从断点恢复）
+- [ ] Event store 正确存储事件（支持按 event_id 查询）
+- [ ] `[console]` zero errors
+
+> **备注:** Last-Event-ID 重连机制依赖后端的 Run Event Store（#180）。此测试验证前端能否正确利用该机制恢复中断的 SSE 流。
+
+### C12.12 Chat sessionStorage 恢复 — 流式状态持久化（#175, PR #186）
+
+**来源:** T20 — Chat sessionStorage persistence for streaming state recovery
+
+验证 AI 对话流式状态持久化到 sessionStorage 后，刷新页面能否从 sessionStorage 恢复流式进度，而非丢失或重新开始。
+
+```
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+
+# 触发一个较长的 AI 对话任务
+bsk fill @eN --value 深度分析我的资产负债结构并给出优化方案 --session <id>
+bsk click @eM --session <id>
+bsk wait-ms 2s  # 等待流式开始
+
+# 验证 sessionStorage 已写入
+bsk evaluate --session <id> "(async () => {
+  const keys = Object.keys(sessionStorage).filter(k => 
+    k.includes('chat') || k.includes('stream') || k.includes('thread') || k.includes('ai')
+  );
+  const streamingState = {};
+  keys.forEach(k => {
+    try {
+      streamingState[k] = JSON.parse(sessionStorage.getItem(k));
+    } catch {
+      streamingState[k] = sessionStorage.getItem(k);
+    }
+  });
+  return JSON.stringify({
+    keysCount: keys.length,
+    sampleKeys: keys.slice(0, 3),
+    hasThreadId: keys.some(k => k.includes('thread')),
+  });
+})()"
+
+# 硬刷新页面（模拟 F5）
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk wait-ms 3s
+bsk snapshot --session <id>
+
+# 验证恢复状态
+bsk evaluate --session <id> "(async () => {
+  // 检查是否从 sessionStorage 恢复了状态
+  const recoveredFromSession = window.__recoveredFromSessionStorage || false;
+  const hasStreamingBanner = document.querySelector('.streaming-banner, .task-running-banner') !== null;
+  const messageCount = document.querySelectorAll('.ai-chat-message, .message-bubble').length;
+  
+  return JSON.stringify({
+    recoveredFromSession,
+    hasStreamingBanner,
+    messageCount,
+    recovered: recoveredFromSession || hasStreamingBanner || messageCount > 0,
+  });
+})()"
+```
+
+Assertions:
+- [ ] 流式进行中，sessionStorage 包含流式状态（thread_id、message_id、streaming 标志等）
+- [ ] 刷新后，页面从 sessionStorage 恢复流式状态（不显示空白对话）
+- [ ] 恢复后显示正确的 UI 状态：
+  - 若任务仍在 running → 显示"任务仍在后台运行中" banner + 自动轮询
+  - 若任务已 completed → 从 checkpointer 加载完整对话历史
+  - 若任务已 failed → 显示错误 banner + 重试按钮
+- [ ] 恢复的对话包含之前所有的消息（用户消息 + AI 响应）
+- [ ] 轮询完成后，sessionStorage 状态被清理（不残留过期数据）
+- [ ] `[console]` zero errors
+
+> **前置:** 此测试与 C12.8 类似，但聚焦于 sessionStorage 持久化机制（而非 checkpointer）。C12.8 验证 checkpointer 恢复，C12.12 验证 sessionStorage 恢复。两者互补。
+
+### C12.13 Run event hash chain — 事件完整性校验（#176, PR #184）
+
+**来源:** T27 — Run event hash chain for tamper-evidence
+
+验证 run 事件是否具有 hash chain 完整性校验，确保事件序列未被篡改。
+
+> **注意:** Run event store 位于 agent app（port 8001），使用 `X-Agent-Token` 内部服务认证。
+> 此测试使用 curl 直接调用 agent app API，而非浏览器 bsk。
+
+**前置:** 需要获取 agent token（内部服务间认证）。
+
+```bash
+# 1. 获取 agent token（从环境变量或配置中读取）
+# 通常 AGENT_TOKEN 在 .env 中配置
+AGENT_TOKEN=$(grep AGENT_TOKEN server/.env | cut -d= -f2)
+FAMILY_ID="1834793774176324"  # demouser 的 family_id
+
+# 2. 触发一个 AI 任务以生成事件
+curl -s -X POST "http://localhost:8000/api/v1/ai/chat/stream" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: numina_token=$TOKEN" \
+  -d '{"question":"你好"}' > /dev/null
+
+sleep 5  # 等待事件写入
+
+# 3. 查询事件（agent app port 8001）
+curl -s "http://localhost:8001/run-events?family_id=$FAMILY_ID&limit=10" \
+  -H "X-Agent-Token: $AGENT_TOKEN" | python3 -m json.tool
+
+# 4. 验证 hash chain
+curl -s "http://localhost:8001/run-events/verify?family_id=$FAMILY_ID" \
+  -H "X-Agent-Token: $AGENT_TOKEN" | python3 -m json.tool
+```
+
+**期望响应（verify 端点）:**
+```json
+{
+  "family_id": "1834793774176324",
+  "total_events": <N>,
+  "chain_valid": true,
+  "tampered_events": []
+}
+```
+
+Assertions:
+- [ ] Agent app `/run-events` 端点可访问（需要 `X-Agent-Token`）
+- [ ] 每个 run 事件包含 `hash` 字段（事件内容的 SHA-256 哈希）
+- [ ] 每个事件（除第一个）包含 `prev_hash` 字段（前一个事件的哈希）
+- [ ] `/run-events/verify` 返回 `chain_valid: true`
+- [ ] 事件支持按 `thread_id` 或 `family_id` 查询
+- [ ] 租户隔离：不同 family_id 的事件互相不可见
+
+> **备注:** Run event hash chain 用于防篡改证据（tamper-evidence）。事件存储在
+> `{DATA_ROOT}/run_events/{family_id}.jsonl`，每个事件包含前序 hash 形成链式结构。
+> 如果 `X-Agent-Token` 未配置，此测试标记为 SKIP。
+
 ---
 
 ## Quick Reference

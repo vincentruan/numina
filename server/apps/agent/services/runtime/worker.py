@@ -24,6 +24,7 @@ from typing import Any
 from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 
 from apps.agent.core.backend_client import BackendClient
+from apps.agent.services.run_event_store import _get_event_store
 from packages.core import get_path_manager
 from packages.core.logging import get_logger
 
@@ -356,11 +357,24 @@ async def run_agent(
             _heartbeat_loop(task_id, family_id, stop_event=heartbeat_stop)
         )
 
+    # T12: Emit run.start event for structured event persistence.
+    try:
+        _get_event_store().record_raw(
+            "run.start",
+            run_id=record.run_id,
+            thread_id=thread_id,
+            family_id=family_id,
+            data={"app": record.metadata.get("app", "numina") if record.metadata else "numina"},
+        )
+    except Exception:
+        logger.warning("[run_agent] failed to record run.start event", exc_info=True)
+
     # Resolved-3 blocker A reset (P0, ce-code-review 2026-07-19): the family_id
     # + extensions_config_path ContextVars are coroutine-scoped and would leak
     # into a subsequent run if this coroutine is reused (shared worker task /
     # executor thread). Mirror the active-skill reset pattern: set above, reset
     # in a finally that wraps all dispatch branches + any exception path.
+    run_status = "success"
     try:
         app = record.metadata.get("app", "numina") if record.metadata else "numina"
 
@@ -418,7 +432,19 @@ async def run_agent(
             await bridge.publish(record.run_id, "end", {"status": "error"})
         except Exception:
             logger.exception("[run_agent] failed to publish error frame")
+        run_status = "error"
     finally:
+        # T12: Emit run.end event for structured event persistence.
+        try:
+            _get_event_store().record_raw(
+                "run.end",
+                run_id=record.run_id,
+                thread_id=thread_id,
+                family_id=family_id,
+                data={"status": run_status},
+            )
+        except Exception:
+            logger.warning("[run_agent] failed to record run.end event", exc_info=True)
         # U12: Stop the heartbeat loop and await it (best-effort).
         if heartbeat_stop is not None:
             heartbeat_stop.set()
@@ -913,6 +939,16 @@ _SYNTHETIC_TRIGGERS_BY_LANG = {
         "zh-CN": "/learning-tutor 提供个性化学习辅导",
         "default": "/learning-tutor 提供个性化学习辅导",
     },
+    "learning-smart-tutor": {
+        "en-US": "/learning-smart-tutor Socratic interactive problem solver",
+        "zh-CN": "/learning-smart-tutor 苏格拉底式智能解题引导",
+        "default": "/learning-smart-tutor 苏格拉底式智能解题引导",
+    },
+    "learning-topic-generator": {
+        "en-US": "/learning-topic-generator Generate learning topic plan",
+        "zh-CN": "/learning-topic-generator 生成学习课题方案",
+        "default": "/learning-topic-generator 生成学习课题方案",
+    },
 }
 
 # Localized session titles for skill runs (shown in chat history sidebar).
@@ -952,6 +988,16 @@ _SESSION_TITLES_BY_LANG = {
         "zh-CN": "学习辅导",
         "default": "学习辅导",
     },
+    "learning-smart-tutor": {
+        "en-US": "Smart Tutor",
+        "zh-CN": "智能解题教师",
+        "default": "智能解题教师",
+    },
+    "learning-topic-generator": {
+        "en-US": "Learning Topic Plan",
+        "zh-CN": "学习课题方案",
+        "default": "学习课题方案",
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -986,6 +1032,24 @@ _SIMPLE_APPS: dict[str, _SimpleAppConfig] = {
         memory_enabled=False,
         trigger_key="learning-tutor",
         # no result_event_type, no result_builder — frontend consumes streamed frames directly
+    ),
+    "learning-smart-tutor": _SimpleAppConfig(
+        app_name="learning-smart-tutor",
+        skill_name="learning-smart-tutor",
+        enable_thinking=True,
+        memory_enabled=False,
+        timeout_seconds=180,  # longer for multi-turn Socratic dialogue
+        trigger_key="learning-smart-tutor",
+        # no result_event_type — frontend consumes streamed frames directly
+    ),
+    "learning-topic-generator": _SimpleAppConfig(
+        app_name="learning-topic-generator",
+        skill_name="learning-topic-generator",
+        enable_thinking=True,
+        memory_enabled=False,
+        timeout_seconds=120,
+        trigger_key="learning-topic-generator",
+        # no result_event_type — frontend consumes streamed frames directly
     ),
 }
 
@@ -1387,16 +1451,18 @@ async def _run_finance_coach_agent(
                             p.run_id,
                             validation_errors[:5],
                         )
-                    await bridge.publish(
-                        p.run_id,
-                        "error",
-                        {"error": "财务建议格式异常，请重试"},
-                    )
-                else:
+                        await bridge.publish(
+                            p.run_id,
+                            "error",
+                            {"error": "财务建议格式异常，请重试"},
+                        )
+
+                # Shared success path: runs when first parse OR fallback succeeded
+                if not validation_errors:
                     # Anti-hallucination: sanitise suggestions referencing entity
                     # IDs not present in the snapshot (LLM fabricated IDs → 404
-                    # on click).  target_id/target_type are cleared so the text
-                    # is still shown but the CTA button is inert.
+                    # on click).  target_id is cleared, target_type is kept so the
+                    # text is still shown but the CTA button is inert.
                     if _valid_coach_ids:
                         parsed, _filtered = filter_coach_suggestions_by_ids(
                             parsed, _valid_coach_ids

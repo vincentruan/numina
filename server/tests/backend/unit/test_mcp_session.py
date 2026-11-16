@@ -29,7 +29,7 @@ async def test_list_tools_returns_all_tools():
     session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
     tools = await session.list_tools()
     names = {t.name for t in tools}
-    # 10 existing + 3 travel + 3 learning tools
+    # 10 existing + 3 travel + 3 learning + 5 topic-generator + 5 smart-tutor + 2 adaptive tools
     assert names == {
         "get_family_overview",
         "get_assets",
@@ -47,6 +47,23 @@ async def test_list_tools_returns_all_tools():
         "get_learning_topic",
         "get_child_learning_profile",
         "record_learning_result",
+        # Issue #190: learning-topic-generator tools
+        "get_child_weak_points",
+        "get_taxonomy_topic",
+        "list_taxonomy_topics",
+        "get_taxonomy_dependencies",
+        "validate_question",
+        # Issue #191: smart-tutor tools
+        "get_guided_question",
+        "submit_guided_answer",
+        "get_knowledge_bridge",
+        "get_teacher_persona",
+        "record_tutoring_step",
+        # Issue #191: adaptive question selection + hint generation
+        "select_adaptive_question",
+        "generate_hint",
+        # Issue #216: teach-back tool
+        "record_teach_back_turn",
     }
 
 
@@ -71,7 +88,7 @@ async def test_get_family_overview_uses_bound_family_id(mock_db):
         with patch(
             "apps.backend.app.services.mcp_session._get_caller_user"
         ) as mock_user:
-            mock_user.return_value = MagicMock(id="u1", family_id="100")
+            mock_user.return_value = MagicMock(id="u1", family_id="100", role="member")
             with patch(
                 "apps.backend.app.services.dashboard.get_overview"
             ) as mock_get_overview:
@@ -89,7 +106,11 @@ async def test_child_role_cannot_use_batch_write_tools():
     tools = await session.list_tools()
     assert all(not t.name.startswith("import_") for t in tools)
     # And a direct call is rejected with permission_denied at the enforcement layer.
-    result = await session.call_tool("import_assets_batch", {"items": []})
+    with patch(
+        "apps.backend.app.services.mcp_session._get_caller_user"
+    ) as mock_get:
+        mock_get.return_value = MagicMock(id="u1", family_id="100", role="child")
+        result = await session.call_tool("import_assets_batch", {"items": []})
     payload = json.loads(result[0].text)
     assert payload["error"] == "permission_denied"
 
@@ -111,7 +132,7 @@ async def test_import_assets_batch_skips_unknown_category(mock_db):
         with patch(
             "apps.backend.app.services.mcp_session._get_caller_user"
         ) as mock_user:
-            mock_user.return_value = MagicMock(id="u1", family_id="100")
+            mock_user.return_value = MagicMock(id="u1", family_id="100", role="member")
             result = await session.call_tool(
                 "import_assets_batch",
                 {
@@ -151,7 +172,7 @@ async def test_import_credit_cards_batch_applies_category_override(mock_db):
         with patch(
             "apps.backend.app.services.mcp_session._get_caller_user"
         ) as mock_user:
-            mock_user.return_value = MagicMock(id="u1", family_id="100")
+            mock_user.return_value = MagicMock(id="u1", family_id="100", role="member")
             with patch(
                 "apps.backend.app.services.liability.create_liability",
                 side_effect=_fake_create_liability,

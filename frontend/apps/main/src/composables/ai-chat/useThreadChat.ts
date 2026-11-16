@@ -10,6 +10,7 @@ import {
   getThreadGoal,
   setThreadGoal,
   clearThreadGoal,
+  streamChatRun,
 } from '@/api/ai-chat'
 import type { GoalState } from '@/api/ai-chat'
 import { submitMessageFeedback, getSessionFeedback } from '@/api/sessions'
@@ -37,12 +38,6 @@ function genId(prefix: string): string {
     ? crypto.randomUUID()
     : nanoid()
   return `${prefix}-${uuid}`
-}
-
-/** A single chunk yielded by client.runs.stream() in legacy SSE mode. */
-interface StreamChunk {
-  event: string
-  data?: unknown
 }
 
 /** DeerFlow messages-tuple event data shape (AI text chunk). */
@@ -274,6 +269,57 @@ function messageIdentity(message: ChatMessage): string | undefined {
 function isNonEmptyString(value: string | undefined): value is string {
   return typeof value === 'string' && value.length > 0
 }
+
+// ---------------------------------------------------------------------------
+// T20: sessionStorage persistence for chat streaming state.
+// Replicates the useReportStream pattern (numina:report-stream-state).
+// ---------------------------------------------------------------------------
+
+/** sessionStorage key for persisting chat streaming state across page navigation. */
+const CHAT_SESSION_STORAGE_KEY = 'numina:chat-stream-state'
+
+/** Serialized snapshot of chat streaming state for sessionStorage persistence. */
+interface SavedChatState {
+  status: 'streaming' | 'connecting'
+  threadId: string | null
+  runId: string | null
+  messages: ChatMessage[]
+  planningSteps: PlanningStep[]
+  error: string | null
+}
+
+function saveChatStateToStorage(state: SavedChatState): void {
+  try {
+    sessionStorage.setItem(CHAT_SESSION_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // sessionStorage may be unavailable (private browsing, quota exceeded)
+  }
+}
+
+function restoreChatStateFromStorage(): SavedChatState | null {
+  try {
+    const raw = sessionStorage.getItem(CHAT_SESSION_STORAGE_KEY)
+    if (!raw) return null
+    const saved = JSON.parse(raw) as SavedChatState
+    // Only restore when the previous run was actively streaming/connecting.
+    if (saved.status !== 'connecting' && saved.status !== 'streaming') return null
+    return saved
+  } catch {
+    return null
+  }
+}
+
+function clearChatStateFromStorage(): void {
+  try {
+    sessionStorage.removeItem(CHAT_SESSION_STORAGE_KEY)
+  } catch {
+    // best-effort
+  }
+}
+
+// ---------------------------------------------------------------------------
+// useThreadChat composable
+// ---------------------------------------------------------------------------
 
 /**
  * Whether a message should be hidden from the UI (control / summary messages).
@@ -623,6 +669,35 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   // Distinguishes a user-initiated cancel from a stream timeout/error abort.
   // Timeout and stream errors must be retryable; a user cancel must not be.
   let userCancelled = false
+
+  // ── T20: sessionStorage restore + snapshot-clear suppression ──
+  /** Set while loadHistory() internally cancels: the snapshot must survive. */
+  let suppressSnapshotClear = false
+
+  // Restore chat state from a previous session (page leave during active stream)
+  // so the UI renders immediately instead of blank while the checkpoint loads.
+  // Page re-entry continues through the existing checkChatTask() polling +
+  // loadHistory() path; the restored messages are the same shape those produce,
+  // so loadHistory replaces them wholesale once canonical state is available.
+  const savedChatState = restoreChatStateFromStorage()
+  if (savedChatState) {
+    if (savedChatState.messages.length > 0) {
+      messages.value = savedChatState.messages
+    }
+    if (savedChatState.planningSteps.length > 0) {
+      planningSteps.value = savedChatState.planningSteps
+    }
+    if (savedChatState.runId) {
+      runId.value = savedChatState.runId
+    }
+    if (savedChatState.threadId) {
+      currentThreadId = savedChatState.threadId
+    }
+    if (savedChatState.error) {
+      error.value = savedChatState.error
+    }
+    isLoading.value = true
+  }
 
   // ── Stream text batching (rAF coalescing) ──
   // Multiple SSE text chunks often arrive within a single frame (~16ms).
@@ -1100,6 +1175,36 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   }
 
   /**
+   * Attach a backend `tool.progress` message to the matching tool call so
+   * ChainOfThought can show what the tool is doing (e.g. "Writing report.md").
+   * The backend emits this only for long tools such as write_file.
+   *
+   * When *clear* is true the progressMessage is removed instead of set —
+   * used for the `done` status so the label does not persist after the tool
+   * has finished (the result content already shows what was written).
+   */
+  function attachToolProgress(toolCallId: string, message: string, clear = false): void {
+    if (!toolCallId) return
+    if (!clear && !message) return
+    const aiMsgIdx = messages.value.findLastIndex(
+      m => m.type === 'ai' && m.tool_calls?.some(tc => tc.id === toolCallId),
+    )
+    if (aiMsgIdx >= 0) {
+      const aiMsg = messages.value[aiMsgIdx]
+      const updatedCalls = (aiMsg.tool_calls || []).map(tc =>
+        tc.id === toolCallId
+          ? { ...tc, progressMessage: clear ? undefined : message }
+          : tc,
+      )
+      messages.value = [
+        ...messages.value.slice(0, aiMsgIdx),
+        { ...aiMsg, tool_calls: updatedCalls },
+        ...messages.value.slice(aiMsgIdx + 1),
+      ]
+    }
+  }
+
+  /**
    * Finalize all in-progress AI messages and planning steps.
    *
    * Marks every AI message with phase='answering' → phase='done', stops all
@@ -1227,6 +1332,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     setUserMsgStatus(userMsgId, 'sent')
     // Clear standalone suggestions (now attached inline)
     suggestions.value = []
+    // T20: terminal state — a completed stream never needs restoring.
+    clearChatStateFromStorage()
   }
 
   async function sendMessage(
@@ -1292,6 +1399,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     runId.value = null
     userCancelled = false
     abortController = new AbortController()
+    // T20: a fresh generation supersedes any snapshot left by a prior run.
+    clearChatStateFromStorage()
 
     try {
     const userMsg = addOptimisticUserMessage(text, additionalKwargs)
@@ -1324,9 +1433,16 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // drop (decide success by whether we got substantial content). Reset to
     // false at the top of each attempt so a prior iteration's `end` doesn't leak.
     let streamEnded: boolean
+    // T7: Gap recovery tracking — max 5 consecutive auto-recoveries per DeerFlow protocol.
+    let gapRecoveries = 0
+    let gapDetected = false
+    // Latest SSE `id:` seen this turn, sent as `Last-Event-ID` on retry so the
+    // backend replays buffered events that arrived while we were disconnected.
+    let lastEventId = ''
 
     while (!streamSucceeded && retryCount <= SSE_MAX_RETRIES) {
       streamEnded = false
+      gapDetected = false
       if (retryCount > 0) {
         // Exponential backoff with jitter to avoid thundering herd on backend
         // recovery (#24). Jitter is bounded to [85%, 100%] of the base delay so
@@ -1350,8 +1466,6 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       }, STREAM_TIMEOUT_MS)
 
       try {
-        const client = getClient()
-
         // Idempotent retry (#2): if we have already streamed content in a prior
         // attempt (partial progress observed server-side), do NOT re-send the
         // user message — that would append a duplicate and re-execute tools.
@@ -1415,14 +1529,25 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         if (Object.keys(mergedKwargs).length > 0) {
           inputMessage.additional_kwargs = mergedKwargs
         }
-        const stream = client.runs.stream(currentThreadId as string, 'agent', {
-          input: hasPriorProgress ? null : { messages: [inputMessage] },
+        const stream = streamChatRun({
+          threadId: currentThreadId as string,
+          // T7: After gap recovery, resume from checkpoint (input:null) instead
+          // of re-sending the user message. hasPriorProgress also uses null for
+          // the same reason (already sent in a prior attempt).
+          input: (hasPriorProgress || gapRecoveries > 0) ? null : { messages: [inputMessage] },
           signal: abortController.signal,
           // #17: drop 'events' — the active backend never emits an 'events' frame
           // and there is no handler branch for it; requesting it advertises an
           // unfulfilled contract.
           streamMode: ['messages-tuple', 'values', 'custom'],
-          ...(Object.keys(configurable).length > 0 ? { config: { configurable } } : {}),
+          configurable,
+          // Reconnect replay: send the last SSE id we saw so the backend resumes
+          // from the buffered event after it instead of dropping the frames that
+          // arrived while we were disconnected.
+          lastEventId: lastEventId || undefined,
+          onEventId: (id) => {
+            lastEventId = id
+          },
         })
 
         // Always mark the current turn's user message as 'sent' once the stream
@@ -1441,7 +1566,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           planningSteps.value = []
         }
 
-        for await (const chunk of stream as AsyncIterable<StreamChunk>) {
+        for await (const chunk of stream) {
           if (chunk.event === 'metadata' && chunk.data) {
             const metaData = chunk.data as { run_id?: string }
             if (metaData.run_id) {
@@ -1513,6 +1638,10 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             const customData = chunk.data as {
               type?: string
               tool_call_id?: string
+              tool_id?: string
+              path?: string
+              status?: string
+              ok?: boolean
               tool_name?: string
               args?: Record<string, unknown>
               display_name?: string
@@ -1554,6 +1683,21 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
                   }
                 }
               }
+            } else if (customData.type === 'tool.progress') {
+              // Tool-level status from the backend (e.g. write_file
+              // "writing" -> "done"). Progress is advisory: an unknown or
+              // missing tool id simply leaves the UI unchanged.
+              // On "done" the progress label is cleared — the tool result
+              // already shows what was written; persisting the label would
+              // make the step look permanently in-progress.
+              const isDone = customData.status === 'done'
+              attachToolProgress(
+                String(customData.tool_id || ''),
+                isDone
+                  ? ''
+                  : t('aiHub.toolProgressWriting', { path: String(customData.path || '') }),
+                isDone,
+              )
             } else if (customData.type === 'tool_result') {
               // Tool result from backend — update the corresponding tool_call
               // step status from 'running' to 'done' and attach the result.
@@ -1600,6 +1744,44 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               // DeerFlow task_tool emits these events for subagent progress
               handleTaskEvent({ ...customData, type: customData.type })
             }
+          } else if (chunk.event === 'gap') {
+            // T7: Gap recovery — the backend's retained buffer was truncated
+            // (e.g., slow client / weak network). The stream closes after the
+            // gap frame. Discard transient state, reload from checkpoint, and
+            // let the retry loop reconnect with input:null (checkpoint resume).
+            // Per DeerFlow STREAMING.md: max 5 consecutive recoveries.
+            gapRecoveries++
+            if (gapRecoveries > 5) {
+              console.error('[useThreadChat] gap recovery limit exceeded (5)')
+              finalizeAllInProgress()
+              streamSucceeded = true
+              break
+            }
+            const gapData = chunk.data as { checkpoint_id?: string } | undefined
+            console.warn(
+              `[useThreadChat] gap #${gapRecoveries} — reloading from checkpoint`,
+              gapData?.checkpoint_id,
+            )
+            // Reset transient planning state
+            planningSteps.value = []
+            suggestions.value = []
+            // Reload messages from checkpoint
+            if (currentThreadId) {
+              try {
+                const client = getClient()
+                const state = await client.threads.getState(currentThreadId)
+                const values = state.values as { messages?: SerializedMessage[] } | undefined
+                if (values?.messages) {
+                  messages.value = values.messages.map(serializedToChatMessage)
+                }
+              } catch (err) {
+                console.error('[useThreadChat] gap recovery reload failed:', err)
+              }
+            }
+            // Mark gap detected so the post-loop logic reconnects instead of
+            // treating the stream-closure as a content-complete response.
+            gapDetected = true
+            break
           } else if (chunk.event === 'end') {
             streamEnded = true
             // worker.py publishes an `end` data frame `{"status": ...}` before
@@ -1719,7 +1901,10 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         // sets streamSucceeded directly above; this only covers the dropped-
         // connection-after-content case. Truncated/empty content falls through
         // to retry.
-        if (!streamSucceeded && streamEnded === false) {
+        // T7: When gapDetected, skip content-complete detection — the stream
+        // closed because of a gap, not because the response finished. Let the
+        // retry loop reconnect with input:null to resume from checkpoint.
+        if (!streamSucceeded && streamEnded === false && !gapDetected) {
           const lastAi = [...messages.value].reverse().find(m => m.type === 'ai')
           if (lastAi && lastAi.content.trim().length > 0) {
             // Use the same finalization helper as the `end` event path to avoid
@@ -1850,6 +2035,11 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     planningSteps.value = planningSteps.value.map(s =>
       s.status === 'running' ? { ...s, status: 'error' as const } : s,
     )
+    // T20: user-initiated cancel — nothing to restore. Skipped when
+    // loadHistory() triggers this via a page re-entry: the snapshot must
+    // survive until canonical history / the still-running task supersedes it,
+    // otherwise the instant restore it exists for is destroyed on arrival.
+    if (!suppressSnapshotClear) clearChatStateFromStorage()
   }
 
   /**
@@ -1861,6 +2051,18 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * cancelStream() which sends client.runs.cancel() to the agent.
    */
   function abortLocalStream() {
+    // T20: Persist the current streaming state so returning to the page can
+    // restore the UI instantly, before SSE replay catches up.
+    if (isLoading.value) {
+      saveChatStateToStorage({
+        status: 'streaming',
+        threadId: currentThreadId,
+        runId: runId.value,
+        messages: messages.value,
+        planningSteps: planningSteps.value,
+        error: error.value,
+      })
+    }
     if (abortController) {
       abortController.abort()
       abortController = null
@@ -1880,8 +2082,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   }
 
   async function loadHistory(threadId: string, retries = 1): Promise<void> {
-    // Cancel any ongoing stream before loading new history
+    // Cancel any ongoing stream before loading new history. T20: this also runs
+    // on page re-entry (onActivated), where the sessionStorage snapshot must
+    // survive until canonical history supersedes it — suppress the clear here.
+    suppressSnapshotClear = true
     cancelStream()
+    suppressSnapshotClear = false
 
     // U6: history reload is authoritative — drain the transient bridge so
     // summarized-away turns (which will never reappear in canonical history)

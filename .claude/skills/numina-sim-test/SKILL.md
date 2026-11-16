@@ -6,7 +6,8 @@ description: >
   the Numina project. Covers 20 areas across child app, financial management,
   AI capabilities, currency, regression, expanded features, security/notification,
   AI report, adversarial security, task resilience, travel, UI quality/design
-  system, learning OS (taxonomy/core/parent/optimization), and MCP token governance.
+  system, learning OS (taxonomy/core/parent/smart-tutor/topic-generator/optimization),
+  and MCP token governance.
   Triggers on: "run sim test", "ui audit", "截图测试", "仿真测试", "全栈验收",
   "功能验收", "ui检查", "界面审查", "check the UI", "test the app visually",
   "儿童测试", "child frontend test", "test AI chat/report/PDF import",
@@ -15,6 +16,7 @@ description: >
   "热加载测试", "HMR test", "accessibility test", "无障碍测试",
   "security test", "安全测试", "learning test", "学习测试", "curriculum test",
   "课标测试", "travel test", "旅行测试", "MCP token test",
+  "smart tutor test", "智能解题测试", "topic generator test", "课题方案测试",
   or any request to verify the deployed app's features.
 ---
 
@@ -56,8 +58,8 @@ Covers **twenty** feature areas (detailed cases split by area under
 14. **Travel core (Trip/Expense/Split/Dashboard)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float (C14.1–C14.22) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md)) + **Itinerary planning** (C14.23–C14.40) ([`test-cases/groups/g1-adult-stable/area14-itinerary.md`](./test-cases/groups/g1-adult-stable/area14-itinerary.md))
 15. **UI quality & design system audit** — 移动端 H5/PWA 适配 / 深色模式 / Vant4 组件规范 / 无障碍 / 安全区域 / 跨应用风格一致性 (UIQ.1–UIQ.10) ([`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md))
 16. **Learning OS taxonomy Beijing + curriculum/edge-status** — 课标徽章/callout / AI 生成边标识别 / locale 知识图谱过滤 / 深色模式可读性 (C16.1–C16.14) ([`test-cases/groups/g3-child/area16-learning-os-taxonomy.md`](./test-cases/groups/g3-child/area16-learning-os-taxonomy.md))
-17. **Learning OS core flows (child)** — 知识地图 / Topic 详情 / AI 导师对话 / 学习进度 / 今日学习卡片 / 自选学习难度提示 (C17.1–C17.21) ([`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md))
-18. **Learning OS (家长端 + 端到端闭环)** — 学习 Hub / 智能推荐 / 预设路径 / DNA图谱 / 双轨审核 / 来源标签 / 闭环流程 (C18.1–C18.24) ([`test-cases/groups/g1-adult-stable/area18-learning-os.md`](./test-cases/groups/g1-adult-stable/area18-learning-os.md))
+17. **Learning OS core flows (child)** — 知识地图 / Topic 详情 / AI 导师对话 / 学习进度 / 今日学习卡片 / 自选学习难度提示 / Smart Tutor 苏格拉底解题 (C17.1–C17.28) ([`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md))
+18. **Learning OS (家长端 + 端到端闭环)** — 学习 Hub / 智能推荐 / 预设路径 / DNA图谱 / 双轨审核 / 来源标签 / 闭环流程 / 课题方案生成 (C18.1–C18.28) ([`test-cases/groups/g1-adult-stable/area18-learning-os.md`](./test-cases/groups/g1-adult-stable/area18-learning-os.md))
 19. **MCP external API token & governance** — Token 生命周期 / 认证 / 两级访问控制 / 审计日志 / 速率限制 (M20.1–M20.15) ([`test-cases/groups/g1-adult-stable/area20-mcp-external-token.md`](./test-cases/groups/g1-adult-stable/area20-mcp-external-token.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
@@ -152,7 +154,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 | **security** | "security test", "安全测试" | Area 9 (C9.1–C9.7) + Area 11 (C11.1–C11.20) + R6 | ~25-35 min |
 | **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.40, two files) | ~45-55 min |
 | **ui-quality** | "ui quality", "设计审查", "UI 质量检查" | Area 15 only (UIQ.1–UIQ.10) | ~25-35 min |
-| **learning** | "learning test", "学习测试" | Area 16 + Area 17 (G3) + Area 18 (G1) + Area 19 (G1) + Area 20 (G1) | ~70-85 min |
+| **learning** | "learning test", "学习测试" | Area 16 + Area 17 (G3) + Area 18 (G1) + Area 19 (G1) + Area 20 (G1) — includes Smart Tutor (C17.22–C17.28) + 课题方案 (C18.25–C18.28) | ~80-100 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
 
 **选择逻辑:**
@@ -625,7 +627,7 @@ the skill log.
 - 截图目录: dogfood-output/
 
 ## 成功摘要
-- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.8/F.11/F.12, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.40, Area15: UIQ.1–UIQ.10, Area16: C16.1–C16.14, Area17: C17.1–C17.21, Area18: C18.1–C18.24, Area20: M20.1–M20.15)
+- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.8/F.11/F.12, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.40, Area15: UIQ.1–UIQ.10, Area16: C16.1–C16.14, Area17: C17.1–C17.28, Area18: C18.1–C18.28, Area20: M20.1–M20.15)
 - 通过: X
 - 失败: Y
 - 跳过: Z (注明原因, 如 AI 未启用、数据不足)
@@ -799,8 +801,8 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | **14b — Itinerary planning (行程规划/跨天/购买日期)** | **G1** | **C14.23–C14.40** | [`test-cases/groups/g1-adult-stable/area14-itinerary.md`](./test-cases/groups/g1-adult-stable/area14-itinerary.md) |
 | **15 — UI quality & design system (H5/PWA/深色模式/无障碍/一致性)** | **G1** | **UIQ.1–UIQ.10** | [`test-cases/groups/g1-adult-stable/area15-ui-quality.md`](./test-cases/groups/g1-adult-stable/area15-ui-quality.md) |
 | **16 — Learning OS taxonomy Beijing (课标徽章/边标/locale)** | **G3** | **C16.1–C16.14** | [`test-cases/groups/g3-child/area16-learning-os-taxonomy.md`](./test-cases/groups/g3-child/area16-learning-os-taxonomy.md) |
-| **17 — Learning OS core flows (child: 知识地图/Topic/AI 导师/进度/自选学习)** | **G3** | **C17.1–C17.21** | [`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md) |
-| **18 — Learning OS 家长端 + 端到端闭环 (Hub/推荐/路径/DNA/双轨审核/闭环)** | **G1** | **C18.1–C18.24** | [`test-cases/groups/g1-adult-stable/area18-learning-os.md`](./test-cases/groups/g1-adult-stable/area18-learning-os.md) |
+| **17 — Learning OS core flows (child: 知识地图/Topic/AI 导师/进度/自选学习/Smart Tutor)** | **G3** | **C17.1–C17.28** | [`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md) |
+| **18 — Learning OS 家长端 + 端到端闭环 (Hub/推荐/路径/DNA/双轨审核/闭环/课题方案)** | **G1** | **C18.1–C18.28** | [`test-cases/groups/g1-adult-stable/area18-learning-os.md`](./test-cases/groups/g1-adult-stable/area18-learning-os.md) |
 | **20 — MCP external API token & governance (Token 生命周期/认证/审计/速率限制)** | **G1** | **M20.1–M20.15** | [`test-cases/groups/g1-adult-stable/area20-mcp-external-token.md`](./test-cases/groups/g1-adult-stable/area20-mcp-external-token.md) |
 
 ### Supporting References

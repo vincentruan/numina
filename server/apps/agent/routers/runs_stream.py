@@ -156,6 +156,63 @@ async def stream_run(
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
             "Content-Location": f"/api/threads/{thread_id}/runs/{record.run_id}",
+            # T13: advertise the reattach URL so the SDK's streamWithRetry can
+            # derive its reconnect path from the `location` header.
+            "Location": f"/api/threads/{thread_id}/runs/{record.run_id}",
+        },
+    )
+
+
+@router.get("/{thread_id}/runs/{run_id}/stream")
+async def reattach_run_stream(
+    thread_id: str,
+    run_id: str,
+    request: Request,
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
+) -> StreamingResponse:
+    """Reattach to an in-flight run and replay events via SSE.
+
+    Subscribe-only endpoint for ``Last-Event-ID`` reconnects — attaches to the
+    run's existing Redis buffer (keyed by ``run_id``) without creating a new
+    run. Mirrors the contract of ``@langchain/langgraph-sdk``'s
+    ``client.runs.joinStream(thread_id, run_id, { lastEventId })``, which
+    issues ``GET /threads/{thread_id}/runs/{run_id}/stream`` with the
+    ``Last-Event-ID`` header on reconnect.
+
+    Cross-tenant isolation is enforced by checking the run's ``family_id``
+    metadata against the verified family; a mismatched or unknown run returns
+    404 so existence is not leaked.
+
+    Does not install a disconnect watcher — disconnecting the reattach
+    subscriber must not cancel the underlying run (the primary POST
+    subscriber owns the lifecycle).
+
+    # [T13] — Run Event Stream reattach, paired with issue #173
+    """
+    run_mgr = get_run_manager(request)
+    record = await run_mgr.get(run_id)
+    if (
+        record is None
+        or record.thread_id != thread_id
+        or record.metadata.get("family_id") != verified.family_id
+    ):
+        raise HTTPException(status_code=404, detail="运行不存在")
+
+    # The primary stream (POST /runs/stream) owns the run lifecycle; a reattach
+    # must not terminate it. If the run has already reached a terminal state,
+    # there may still be retained events to replay — hand off to sse_consumer
+    # which will drain the buffer and emit end before returning.
+    bridge = await get_stream_bridge(request)
+
+    return StreamingResponse(
+        sse_consumer(bridge, record, request, run_mgr),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Location": f"/api/threads/{thread_id}/runs/{record.run_id}",
         },
     )
 

@@ -1,5 +1,6 @@
 """Numina AI Agent 微服务入口。"""
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -20,6 +21,7 @@ from apps.agent.core.logging import setup_logging
 from apps.agent.routers import import_parse as import_parse_router
 from apps.agent.routers import input_polish as input_polish_router
 from apps.agent.routers import model_test as model_test_router
+from apps.agent.routers import run_events as run_events_router
 from apps.agent.routers import runs_stream as runs_stream_router
 from apps.agent.routers import suggest as suggest_router
 from apps.agent.routers import threads as threads_router
@@ -62,6 +64,26 @@ if "DEER_FLOW_CONFIG_PATH" not in os.environ:
     )
 
 setup_logging(log_level=settings.LOG_LEVEL, log_dir=settings.LOG_DIR)
+
+# Suppress noisy DeerFlow input sanitization warnings.
+# The upstream InputSanitizationMiddleware logs "rfind failed with original_user_content set"
+# at WARNING level for a design-intentional degradation path (KTD2: Bridge-don't-fork).
+# Downgrade these to DEBUG so they don't pollute INFO-level logs.
+
+
+class _SanitizationWarningFilter(logging.Filter):
+    """Downgrade 'rfind failed' WARNINGs from input_sanitization_middleware to DEBUG."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno == logging.WARNING and "rfind failed" in record.getMessage():
+            record.levelno = logging.DEBUG
+            record.levelname = "DEBUG"
+        return True  # never suppress, only downgrade
+
+
+logging.getLogger(
+    "deerflow.agents.middlewares.input_sanitization_middleware"
+).addFilter(_SanitizationWarningFilter())
 
 # Bridge the per-family DeerFlow AppConfig into the background memory-update
 # timer thread (see services/deerflow_adapter/memory_config_bridge.py for why).
@@ -309,6 +331,7 @@ app.include_router(model_test_router.router)
 app.include_router(threads_router.router)
 app.include_router(runs_stream_router.router)
 app.include_router(translate_router.router)
+app.include_router(run_events_router.router)
 
 
 @app.get("/health")

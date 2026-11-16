@@ -173,7 +173,7 @@ class LLMClient:
             from google import genai
             from google.genai import types
 
-            http_options = types.HttpOptions(timeout=timeout * 1000)  # SDK uses milliseconds
+            http_options = types.HttpOptions(timeout=int(timeout * 1000))  # SDK uses milliseconds
             self._gemini_client = genai.Client(api_key=api_key, http_options=http_options)
 
     async def complete(
@@ -657,7 +657,7 @@ class LLMClient:
 
         response = await self._gemini_client.aio.models.generate_content(
             model=self.vision_model_id,
-            contents=[image_part, prompt],
+            contents=cast(Any, [image_part, prompt]),
             config=config,
         )
         return response.text or ""

@@ -24,7 +24,7 @@ def mock_session_local():
 @pytest.fixture(autouse=True)
 def mock_caller_user():
     with patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_get:
-        mock_get.return_value = MagicMock(id="u1", family_id="100")
+        mock_get.return_value = MagicMock(id="u1", family_id="100", role="member")
         yield
 
 
@@ -41,7 +41,9 @@ class TestAuditLogFields:
     @pytest.mark.asyncio
     async def test_audit_log_permission_denied_level_warning(self):
         child_session = MCPSession("100", "u1", "child")
-        with patch("apps.backend.app.services.mcp_session.logger") as mock_logger:
+        with patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_get, \
+             patch("apps.backend.app.services.mcp_session.logger") as mock_logger:
+            mock_get.return_value = MagicMock(id="u1", family_id="100", role="child")
             await child_session.call_tool("get_family_overview", {})
             mock_logger.warning.assert_called_once()
             log_msg = mock_logger.warning.call_args[0][0]

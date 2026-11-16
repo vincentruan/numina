@@ -104,6 +104,7 @@ from apps.backend.app.routers import ai_literacy_report as ai_literacy_report_ro
 from apps.backend.app.routers import ai_mcp as ai_mcp_router
 from apps.backend.app.routers import ai_mcp_token as ai_mcp_token_router
 from apps.backend.app.routers import ai_report as ai_report_router
+from apps.backend.app.routers import ai_scheduled_tasks as ai_scheduled_tasks_router
 from apps.backend.app.routers import ai_skills as ai_skills_router
 from apps.backend.app.routers import ai_suggest as ai_suggest_router
 from apps.backend.app.routers import ai_tasks as ai_tasks_router
@@ -148,7 +149,7 @@ from apps.backend.app.routers import learning as learning_router
 from apps.backend.app.routers import learning_child as learning_child_router
 from apps.backend.app.routers import learning_family as learning_family_router
 from apps.backend.app.routers import learning_preset as learning_preset_router
-from apps.backend.app.routers import practice as practice_router
+from apps.backend.app.routers import learning_teach_back as learning_teach_back_router
 from apps.backend.app.routers import literacy_child as literacy_child_router
 from apps.backend.app.routers import literacy_parent as literacy_parent_router
 from apps.backend.app.routers import manifesto as manifesto_router
@@ -160,6 +161,7 @@ from apps.backend.app.routers import (
 )
 from apps.backend.app.routers import notification_config as notification_config_router
 from apps.backend.app.routers import notification_push as notification_push_router
+from apps.backend.app.routers import practice as practice_router
 from apps.backend.app.routers import reminders as reminders_router
 from apps.backend.app.routers import rental_contracts as rental_contracts_router
 from apps.backend.app.routers import shared as shared_router
@@ -632,6 +634,7 @@ app.include_router(ai_internal_router.router, prefix="/api/v1")
 app.include_router(mcp_internal_router.router, prefix="/api/v1")
 app.include_router(mcp_public_router.router, prefix="/api/v1")
 app.include_router(ai_report_router.router, prefix="/api/v1")
+app.include_router(ai_scheduled_tasks_router.router, prefix="/api/v1")
 app.include_router(ai_finance_coach_router.router, prefix="/api/v1")
 app.include_router(ai_suggest_router.router, prefix="/api/v1")
 app.include_router(ai_context_router.router, prefix="/api/v1")
@@ -684,6 +687,7 @@ app.include_router(shared_router.router, prefix="/api/v1")
 app.include_router(learning_router.router, prefix="/api/v1")
 app.include_router(learning_family_router.router, prefix="/api/v1")
 app.include_router(learning_child_router.router, prefix="/api/v1")
+app.include_router(learning_teach_back_router.router, prefix="/api/v1")
 app.include_router(learning_preset_router.router, prefix="/api/v1")
 app.include_router(practice_router.router, prefix="/api/v1")
 

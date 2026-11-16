@@ -1,13 +1,17 @@
 """Family (parent) learning endpoints — manage children's learning."""
 
 import contextlib
+import json
+from typing import Literal
 
+import httpx
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
-from apps.backend.app.database import get_db
+from apps.backend.app.database import SessionLocal, get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.learning import (
@@ -26,6 +30,9 @@ from apps.backend.app.schemas.learning import (
     RecommendedTopicItem,
     ReviewItemResponse,
     ReviewOverrideRequest,
+    SmartTutorSessionDetailResponse,
+    SmartTutorSessionResponse,
+    TeachBackSessionDetailResponse,
     TopicResponse,
 )
 from apps.backend.app.services.learning import (
@@ -772,3 +779,460 @@ def get_child_bridges(
 
     taxonomy = get_effective_source_taxonomy(db, user.language)
     return get_cross_subject_bridges(db, source_taxonomy=taxonomy, subject=subject)
+
+
+# ── Learning Topic Generator (Issue #190) ────────────────────────────────────
+
+
+class _TopicPlanGenerateRequest(BaseModel):
+    """Request body for AI topic plan generation."""
+
+    topic_key: str
+    age_group: Literal["low", "mid", "high"] = "mid"
+
+
+@router.post("/topic-plan/generate")
+async def generate_topic_plan(
+    body: _TopicPlanGenerateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Generate a learning topic plan via AI agent.
+
+    Triggers the ``learning-topic-generator`` skill to produce a structured
+    learning plan JSON from os_taxonomy data. The plan includes objectives,
+    outline, prerequisite chain, and recommended exercises.
+
+    Returns task_id for SSE streaming via the bridge consumer.
+    """
+    import hashlib
+
+    from apps.backend.app.services.agent_client import AgentClient
+    from apps.backend.app.services.ai_task_service import AITaskService
+    from apps.backend.app.services.bridge_consumer import (
+        _spawn_lifecycle_consumer,
+        get_shared_bridge,
+        trigger_agent_run,
+    )
+    from packages.os_taxonomy import get_clusters, get_dependencies, get_topics
+
+    family_id = user.family_id
+
+    # 1. Build taxonomy context from os_taxonomy package
+    all_topics = get_topics()
+    topic_data = None
+    for t in all_topics:
+        if t["id"] == body.topic_key:
+            topic_data = t
+            break
+
+    if topic_data is None:
+        raise AppError(
+            ErrorCode.LEARNING_TOPIC_NOT_FOUND,
+            details={"topic_key": body.topic_key},
+        )
+
+    # Gather prerequisites
+    all_deps = get_dependencies()
+    prereqs = []
+    for dep in all_deps:
+        if dep["topicId"] == body.topic_key:
+            prereq_topic = next(
+                (t for t in all_topics if t["id"] == dep["prerequisiteId"]),
+                None,
+            )
+            prereqs.append(
+                {
+                    "topic_key": dep["prerequisiteId"],
+                    "name": prereq_topic.get("name", "") if prereq_topic else "",
+                    "name_zh": prereq_topic.get("nameZh", "") if prereq_topic else "",
+                    "strength": dep.get("strength", "soft"),
+                    "reason": dep.get("reason", ""),
+                }
+            )
+
+    # Find cluster context
+    all_clusters = get_clusters()
+    subject = topic_data.get("subject", "")
+    domain = topic_data.get("domain", "")
+    cluster_summary = ""
+    for c in all_clusters:
+        if c.get("subject") == subject and c.get("domain") == domain:
+            cluster_summary = c.get("summaryZh") or c.get("summary", "")
+            break
+
+    # 2. Build deterministic thread_id (family + topic + age_group)
+    thread_hash = hashlib.sha256(
+        f"{family_id}:{body.topic_key}:{body.age_group}".encode()
+    ).hexdigest()[:16]
+    thread_id = f"topic-gen-{thread_hash}"
+
+    # 3. Construct trigger message with taxonomy context
+    agent_content = json.dumps(
+        {
+            "topic_key": topic_data["id"],
+            "subject": subject,
+            "domain": domain,
+            "age_group": body.age_group,
+            "topic_name": topic_data.get("name", ""),
+            "topic_name_zh": topic_data.get("nameZh", ""),
+            "topic_description": topic_data.get("description", ""),
+            "topic_description_zh": topic_data.get("descriptionZh", ""),
+            "evidence": topic_data.get("evidenceZh") or topic_data.get("evidence", []),
+            "prerequisites": prereqs,
+            "cluster_summary": cluster_summary,
+            "locale": user.language or "zh-CN",
+        },
+        ensure_ascii=False,
+    )
+
+    agent_body = {
+        "family_id": str(family_id),
+        "user_id": str(user.id),
+        "input": {
+            "messages": [{"role": "user", "content": agent_content}],
+        },
+        "on_disconnect": "continue",
+        "metadata": {
+            "app": "learning-topic-generator",
+            "topic_key": body.topic_key,
+            "age_group": body.age_group,
+            "language": user.language or "zh-CN",
+        },
+    }
+
+    # 4. Create AITask
+    task = AITaskService.create_task(
+        family_id=family_id,
+        skill_id="learning-topic-generator",
+        session_id=None,
+        db=db,
+    )
+    task.progress = {"topic_key": body.topic_key, "age_group": body.age_group}
+    db.commit()
+    task_id = str(task.id)
+
+    # 5. Trigger agent
+    agent_client = AgentClient(family_id=str(family_id), user_id=str(user.id))
+    try:
+        result = await trigger_agent_run(
+            agent_client=agent_client,
+            agent_url=f"/internal/gateway/runs/learning-topic-generator/{thread_id}",
+            json_body=agent_body,
+            task_id=task_id,
+        )
+    except httpx.HTTPStatusError as e:
+        _fdb = SessionLocal()
+        try:
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
+            )
+        finally:
+            _fdb.close()
+        if e.response.status_code == 409:
+            raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
+        raise AppError(
+            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
+        ) from e
+    except Exception as e:
+        _fdb = SessionLocal()
+        try:
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
+            )
+        finally:
+            _fdb.close()
+        raise AppError(
+            ErrorCode.AI_SERVICE_UNAVAILABLE, details={"reason": str(e)}
+        ) from e
+
+    # 6. Attach run_id + spawn lifecycle consumer
+    AITaskService.extract_and_attach_run_id(
+        task_id, result["content_location"], family_id
+    )
+    shared_bridge = get_shared_bridge()
+    _spawn_lifecycle_consumer(
+        task_id=task_id,
+        family_id=family_id,
+        run_id=result["run_id"],
+        bridge=shared_bridge,
+    )
+
+    return {
+        "task_id": task_id,
+        "thread_id": thread_id,
+        "topic_key": body.topic_key,
+        "age_group": body.age_group,
+    }
+
+
+# ── Smart Tutor (Parent View, Issue #194) ────────────────────────────────────
+
+
+def _parse_smart_tutor_steps(session: LearningSession) -> tuple[list[dict], str | None, int]:
+    """Parse Smart Tutor session data from progress_json.
+
+    Returns:
+        Tuple of (steps, final_phase, misconceptions_count)
+    """
+    steps: list[dict] = []
+    final_phase: str | None = None
+    misconceptions = 0
+
+    if session.progress_json:
+        try:
+            raw_steps = json.loads(session.progress_json)
+            if isinstance(raw_steps, list):
+                steps = raw_steps
+                # Final phase is the next_phase of the last step
+                if steps:
+                    final_phase = steps[-1].get("next_phase")
+                # Count misconceptions (quality == "misconception")
+                misconceptions = sum(
+                    1 for s in steps if s.get("quality") == "misconception"
+                )
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return steps, final_phase, misconceptions
+
+
+def _parse_teach_back_steps(session: LearningSession) -> list[dict]:
+    """Parse teach-back turns from progress_json.
+
+    Returns list of teach_back_turn records (child explanation + verdict).
+    """
+    turns: list[dict] = []
+    if session.progress_json:
+        try:
+            raw_steps = json.loads(session.progress_json)
+            if isinstance(raw_steps, list):
+                turns = [
+                    s for s in raw_steps
+                    if isinstance(s, dict) and s.get("type") == "teach_back_turn"
+                ]
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return turns
+
+
+def _determine_outcome(
+    session: LearningSession, final_phase: str | None
+) -> str | None:
+    """Determine session outcome based on completion state."""
+    if session.ended_at is None:
+        return "in_progress"
+    if final_phase == "end":
+        return "completed"
+    if session.score:
+        return "needs_review"
+    return "abandoned"
+
+
+@router.get(
+    "/children/{child_id}/smart-tutor/sessions",
+    response_model=list[SmartTutorSessionResponse],
+)
+def list_child_smart_tutor_sessions(
+    child_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get child's Smart Tutor sessions for parent review.
+
+    Returns session summaries with phase, step count, and outcome.
+    """
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    # Query sessions with Smart Tutor data (session_type = 'smart_tutor' or has progress_json)
+    sessions = (
+        db.query(LearningSession)
+        .filter(
+            LearningSession.child_id == child_id,
+            LearningSession.session_type == "smart_tutor",
+        )
+        .order_by(LearningSession.started_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    # Batch-fetch topic names
+    topic_ids = list({s.topic_id for s in sessions})
+    taxonomy = get_effective_source_taxonomy(db, user.language)
+    topics = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id.in_(topic_ids),
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .all()
+    ) if topic_ids else []
+    topic_map = {t.id: t for t in topics}
+
+    result = []
+    for s in sessions:
+        topic = topic_map.get(s.topic_id)
+        steps, final_phase, misconceptions = _parse_smart_tutor_steps(s)
+        outcome = _determine_outcome(s, final_phase)
+        result.append(
+            SmartTutorSessionResponse(
+                session_id=s.id,
+                topic_id=s.topic_id,
+                topic_name=topic.name if topic else "",
+                topic_name_zh=topic.name_zh if topic else None,
+                subject=topic.subject if topic else "",
+                started_at=s.started_at,
+                completed_at=s.ended_at,
+                final_phase=final_phase,
+                total_steps=len(steps),
+                misconceptions_detected=misconceptions,
+                outcome=outcome,
+            )
+        )
+    return result
+
+
+@router.get(
+    "/children/{child_id}/smart-tutor/sessions/{session_id}",
+    response_model=SmartTutorSessionDetailResponse,
+)
+def get_child_smart_tutor_session(
+    child_id: int,
+    session_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get detailed Smart Tutor session with step-by-step records.
+
+    Returns full session data including AI evaluation and step history.
+    """
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    # Load session
+    session = (
+        db.query(LearningSession)
+        .filter(
+            LearningSession.id == session_id,
+            LearningSession.child_id == child_id,
+            LearningSession.session_type == "smart_tutor",
+        )
+        .first()
+    )
+    if not session:
+        raise AppError(ErrorCode.LEARNING_SESSION_NOT_FOUND)
+
+    # Load topic
+    taxonomy = get_effective_source_taxonomy(db, user.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == session.topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
+
+    steps, final_phase, misconceptions = _parse_smart_tutor_steps(session)
+    outcome = _determine_outcome(session, final_phase)
+
+    # Parse AI evaluation if present
+    ai_eval = None
+    if session.ai_evaluation_json:
+        with contextlib.suppress(json.JSONDecodeError, TypeError):
+            ai_eval = json.loads(session.ai_evaluation_json)
+
+    return SmartTutorSessionDetailResponse(
+        session_id=session.id,
+        topic_id=session.topic_id,
+        topic_name=topic.name if topic else "",
+        topic_name_zh=topic.name_zh if topic else None,
+        subject=topic.subject if topic else "",
+        started_at=session.started_at,
+        completed_at=session.ended_at,
+        final_phase=final_phase,
+        total_steps=len(steps),
+        misconceptions_detected=misconceptions,
+        outcome=outcome,
+        steps=steps,
+        ai_evaluation=ai_eval,
+    )
+
+
+@router.get(
+    "/children/{child_id}/teach-back/sessions/{session_id}",
+    response_model=TeachBackSessionDetailResponse,
+)
+def get_child_teach_back_session(
+    child_id: int,
+    session_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get detailed teach-back session transcript for parent review.
+
+    Issue #216. Returns the child's explanations and per-confusion verdicts.
+    """
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    # Load session
+    session = (
+        db.query(LearningSession)
+        .filter(
+            LearningSession.id == session_id,
+            LearningSession.child_id == child_id,
+            LearningSession.session_type == "teach_back",
+        )
+        .first()
+    )
+    if not session:
+        raise AppError(ErrorCode.LEARNING_SESSION_NOT_FOUND)
+
+    # Load topic
+    taxonomy = get_effective_source_taxonomy(db, user.language)
+    topic = (
+        db.query(LearningTopic)
+        .filter(
+            LearningTopic.id == session.topic_id,
+            LearningTopic.source_taxonomy == taxonomy,
+        )
+        .first()
+    )
+
+    turns = _parse_teach_back_steps(session)
+    last_phase = turns[-1].get("next_phase") if turns else None
+    outcome = _determine_outcome(session, last_phase)
+
+    return {
+        "session_id": str(session.id),
+        "topic_id": str(session.topic_id),
+        "topic_name": topic.name if topic else "",
+        "topic_name_zh": topic.name_zh if topic else None,
+        "subject": topic.subject if topic else "",
+        "started_at": session.started_at,
+        "completed_at": session.ended_at,
+        "outcome": outcome,
+        "total_turns": len(turns),
+        "turns": turns,
+    }

@@ -1,6 +1,7 @@
 """Question bank models."""
 import json
 from datetime import datetime
+from typing import cast
 
 from sqlalchemy import (
     BigInteger,
@@ -88,7 +89,7 @@ class Question(Base):
     @property
     def grading_explanation(self) -> dict | None:
         if self.grading_explanation_json:
-            return json.loads(self.grading_explanation_json)
+            return cast(dict, json.loads(self.grading_explanation_json))
         return None
 
 

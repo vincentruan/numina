@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable
+from typing import Any, cast
+
 from packages.core.cache.base import Cache
 from packages.core.cache.memory import MemoryCache
 from packages.core.logging import get_logger
@@ -74,7 +77,7 @@ async def _check_redis_connection(redis_url: str) -> None:
     import redis.asyncio as aioredis
     try:
         r = aioredis.from_url(redis_url)
-        await r.ping()
+        await cast(Awaitable[Any], r.ping())
         await r.aclose()
     except Exception as e:
         raise RuntimeError(f"Redis connection failed: {e}") from e

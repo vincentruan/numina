@@ -7,6 +7,7 @@ from apps.backend.app.constants.system_ids import (
     DASHBOARD_NARRATIVE_AGENT_ID,
     FINANCE_COACH_AGENT_ID,
     IMPORT_PARSE_AGENT_ID,
+    LEARNING_SMART_TUTOR_AGENT_ID,
     LEARNING_TUTOR_AGENT_ID,
     NUMINA_AGENT_ID,
     WISH_ADVICE_AGENT_ID,
@@ -268,6 +269,26 @@ _LEARNING_TUTOR_AGENT = {
 }
 
 
+# System agent dedicated to learning-smart-tutor (苏格拉底式智能解题, Issue #191).
+# 8th stream_run agent (app="learning-smart-tutor"). Stateless — each run builds
+# fresh Socratic tutoring context for guided problem-solving.
+# The tutoring contract lives in skills/builtin/public/learning-smart-tutor/SKILL.md.
+_LEARNING_SMART_TUTOR_AGENT = {
+    "id": LEARNING_SMART_TUTOR_AGENT_ID,
+    "family_id": 0,
+    "agent_name": "learning-smart-tutor",
+    "display_name": "智能解题",
+    "description": "苏格拉底式智能解题引导。通过提问而非直接给答案，帮助6-12岁儿童解决问题。",
+    "icon": "🧠",
+    "color": "#0891b2",
+    "soul_md": "你是苏格拉底式智能导师，通过引导式提问帮助儿童发现答案，而非直接给出答案。适应不同学科和年龄组的教学风格。",
+    "skills": ["learning-smart-tutor"],
+    "agent_type": "system",
+    "memory_enabled": False,
+    "display_order": 75,
+}
+
+
 def _upsert_builtin_agent(db: Session, spec: dict) -> None:
     """Insert or update a builtin system agent from its spec dict."""
     from apps.backend.app.models.ai_agent import AIAgent
@@ -324,4 +345,5 @@ def bootstrap_agents(db: Session) -> None:
     _upsert_builtin_agent(db, _WISH_ADVICE_AGENT)
     _upsert_builtin_agent(db, _DASHBOARD_NARRATIVE_AGENT)
     _upsert_builtin_agent(db, _LEARNING_TUTOR_AGENT)
+    _upsert_builtin_agent(db, _LEARNING_SMART_TUTOR_AGENT)
     db.commit()

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Coroutine
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -92,7 +93,7 @@ _ALL_COLUMNS = (
 # ---------------------------------------------------------------------------
 
 
-async def _run_isolated(coro):
+async def _run_isolated[T](coro: Coroutine[Any, Any, T]) -> T:
     """Run a DB coroutine in an independent task, shielded from caller cancellation.
 
     When the caller's task is cancelled (e.g. client disconnect during SSE
@@ -150,6 +151,7 @@ class NuminaSqlRunStore:
                     self._dialect = session.bind.dialect.name
 
             await _run_isolated(_do())
+        assert self._dialect is not None  # set by _do() above
         return self._dialect
 
     async def _ensure_table(self) -> None:

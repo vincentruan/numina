@@ -358,3 +358,51 @@ export async function getChildBridges(
   })
   return res.data
 }
+
+// --- Smart Tutor (Parent View, Issue #194) ---
+
+export interface SmartTutorSessionResponse {
+  session_id: string
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string | null
+  subject: string
+  started_at: string
+  completed_at: string | null
+  final_phase: string | null
+  total_steps: number
+  misconceptions_detected: number
+  outcome: string | null
+}
+
+export interface SmartTutorSessionDetailResponse extends SmartTutorSessionResponse {
+  steps: Array<{
+    step: number
+    phase: string
+    quality: string
+    next_phase: string | null
+    strategy: string
+    question_id: string
+  }>
+  ai_evaluation: Record<string, unknown> | null
+}
+
+export async function getChildSmartTutorSessions(
+  childId: string,
+  limit = 20,
+): Promise<SmartTutorSessionResponse[]> {
+  const res = await http.get(`/family/learning/children/${childId}/smart-tutor/sessions`, {
+    params: { limit },
+  })
+  return res.data
+}
+
+export async function getChildSmartTutorSession(
+  childId: string,
+  sessionId: string,
+): Promise<SmartTutorSessionDetailResponse> {
+  const res = await http.get(
+    `/family/learning/children/${childId}/smart-tutor/sessions/${sessionId}`,
+  )
+  return res.data
+}

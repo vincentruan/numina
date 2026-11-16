@@ -12,6 +12,8 @@ In memory mode, each process has its own cache.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from apps.agent.core.backend_client import BackendClient
 from packages.core.cache import get_cache
 from packages.core.cache.keys import AGENT_REG
@@ -47,7 +49,7 @@ class AgentRegistry:
         if cached is not None:
             if cached == _NOT_FOUND_SENTINEL:
                 return None
-            return cached
+            return cast(dict[Any, Any], cached)
 
         # Cache miss — fetch from backend
         try:

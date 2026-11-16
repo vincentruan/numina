@@ -24,6 +24,7 @@ vi.mock('@/api/ai-chat', () => ({
   createThread: vi.fn(),
   deleteThread: vi.fn(),
   compactThread: vi.fn(),
+  streamChatRun: vi.fn(),
 }))
 
 // Mock vant toasts so no DOM is required. handleCompact uses showToast for
@@ -72,11 +73,9 @@ describe('useThreadChat — U6 compact transient bridge', () => {
         }
       },
     }
-    const mockRunsStream = vi.fn().mockReturnValue(mockStream)
-    const { getClient } = await import('@/api/ai-chat')
-    vi.mocked(getClient).mockReturnValue({
-      runs: { stream: mockRunsStream },
-    } as unknown as ReturnType<typeof getClient>)
+    const mockStreamChatRun = vi.fn().mockReturnValue(mockStream)
+    const { streamChatRun } = await import('@/api/ai-chat')
+    vi.mocked(streamChatRun).mockImplementation(mockStreamChatRun)
 
     const { useThreadChat } = await import('../useThreadChat')
     const chat = useThreadChat()

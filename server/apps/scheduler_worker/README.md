@@ -1,6 +1,6 @@
 # apps/scheduler_worker
 
-Standalone APScheduler + FastAPI process that runs all 7 background jobs independently from the backend API. Starts on port 8002 via Docker and exposes `/health` for container healthchecks.
+Standalone APScheduler + FastAPI process that runs all background jobs independently from the backend API. Starts on port 8002 via Docker and exposes `/health` for container healthchecks.
 
 ## Jobs
 
@@ -13,6 +13,9 @@ Standalone APScheduler + FastAPI process that runs all 7 background jobs indepen
 | `device_session_cleanup` | `device_session_cleanup_job` | cron | Hourly at :15 | `packages.domain.device.service` | Expires stale + purges old revoked device sessions |
 | `reminder_daily` | `reminder_job` | cron | Daily 09:20 | `packages.domain.notification.service` | Runs scheduled notification/reminder checks |
 | `snapshot_daily` | `snapshot_job` | cron | Daily 00:05 | `packages.domain.snapshot.service` | Generates daily asset snapshots for all families |
+| `scheduled_task_poll` | `scheduled_task_poll_job` | interval | Every 60s | `packages.db.models.scheduled_task` | Dispatches due user-configured scheduled tasks to the backend execute endpoint |
+| `empirical_difficulty_daily` | `empirical_difficulty_job` | cron | Daily 04:00 | `apps.backend.app.services.learning.difficulty_calculator` | Updates Question.empirical_difficulty from PracticeAttempt data |
+| `bkt_calibration_weekly` | `bkt_calibration_job` | cron | Weekly Sunday 03:00 | `apps.backend.app.services.learning.bkt_calibration` | Fits per-skill BKT parameters (P(L0), P(T), P(G), P(S)) from PracticeAttempt data |
 
 ## Dev Commands
 

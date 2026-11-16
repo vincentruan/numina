@@ -182,6 +182,330 @@ def _inject_pii_redaction(config: dict[str, Any]) -> None:
     }
 
 
+def _inject_container_sandbox(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+    family_id: str,
+) -> None:
+    """Opt the family into DeerFlow's container sandbox when enabled (in-place).
+
+    Container isolation is opt-in per family via
+    ``ai_config["sandbox"]["container_enabled"]``, so this is a no-op unless the
+    backend explicitly enables it. Per-thread mount selection is left to
+    ``AioSandboxProvider``, which derives it from family_id + thread_id at
+    acquire time.
+    """
+    # Local imports: ``apps.agent.services.runtime`` pulls in the worker, which
+    # imports this adapter package — module-level imports here are circular.
+    from apps.agent.services.runtime.numina_container_overlay import (
+        container_enabled,
+        override_sandbox_provider,
+    )
+
+    if not container_enabled(ai_config):
+        return
+
+    try:
+        from deerflow.config.paths import get_paths
+
+        family_root = Path(get_paths().host_base_dir) / "users" / family_id
+    except Exception:
+        from apps.agent.app.config import settings
+
+        family_root = Path(settings.AGENT_DATA_DIR) / family_id
+
+    override_sandbox_provider(config, ai_config, family_id, family_root)
+
+
+def _inject_sandbox_gate(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+) -> None:
+    """Inject the per-family sandbox policy gate (in-place).
+
+    Enables DeerFlow's ``GuardrailMiddleware`` with ``NuminaGuardrailProvider``,
+    which enforces each family's resource limits and path patterns on file
+    tool calls. Injection is unconditional: the gate must be active for every
+    family run, so it cannot be keyed off an optional backend field that does
+    not exist (an absent field previously left the gate silently inert).
+
+    Policy source: ``ai_config["sandbox_policy"]``. When absent, the default
+    policy applies. When present but malformed, the policy dict is passed
+    through as-is so the provider enters its fail-closed state and denies
+    sandbox file operations — a misconfiguration must not silently degrade to
+    the permissive default.
+
+    Design (two-layer safety):
+    - PolicyGuard: pre-dispatch gate (checks skill/capability before the LLM call)
+    - NuminaGuardrailProvider: tool execution gate (per tool call during the run)
+    Both are active simultaneously for defense-in-depth.
+    """
+    # Import locally: ``apps.agent.services.runtime`` pulls in the worker, which
+    # imports this adapter package — a module-level import here is circular.
+    from apps.agent.services.runtime.sandbox_policy import SandboxPolicy
+
+    raw_policy = ai_config.get("sandbox_policy")
+    if raw_policy is None:
+        policy_dict: dict[str, Any] = SandboxPolicy.default_policy().model_dump()
+    elif isinstance(raw_policy, dict):
+        policy_dict = raw_policy
+    else:
+        # Non-dict policy is unusable; pass a sentinel the provider rejects so
+        # the gate fails closed rather than falling back to the default.
+        logger.error(
+            "[deerflow_config] sandbox_policy must be a dict, got %s; "
+            "sandbox operations will be denied for this family",
+            type(raw_policy).__name__,
+        )
+        policy_dict = {"allowed_paths": ["<invalid>"]}
+
+    config["guardrails"] = {
+        "enabled": True,
+        "provider": {
+            "use": "apps.agent.services.deerflow_adapter.numina_guardrail_provider:NuminaGuardrailProvider",
+            "config": {
+                "sandbox_policy": policy_dict,
+                "fail_closed": True,
+            },
+        },
+        "fail_closed": True,
+    }
+    logger.debug(
+        "[deerflow_config] sandbox gate injected: policy=%s",
+        sorted(policy_dict),
+    )
+
+
+def _inject_summarization(config: dict[str, Any], memory_enabled: bool) -> None:
+    """Inject automatic conversation summarization config (in-place).
+
+    Enables DeerFlow's native ``SummarizationMiddleware`` for the chat path
+    (``memory_enabled=True``). Fixed-flow agents (asset-report, import-parse,
+    etc.) pass ``memory_enabled=False`` and skip this — they are stateless
+    single-run paths that should not accumulate or compact history.
+
+    Trigger: absolute message/token counts (OR relationship — either threshold
+    triggers compaction). Aligned with ``deerflow_config/base/config.yaml``.
+    Keep: last 12 messages after summarization (≈6 conversation turns).
+
+    The middleware is auto-instantiated by ``build_middlewares`` when
+    ``summarization.enabled=True`` — no manual ``custom_middlewares`` mount
+    needed (which would trigger class-name dedup AssertionError).
+    """
+    if not memory_enabled:
+        return
+
+    config["summarization"] = {
+        "enabled": True,
+        "trigger": [
+            {"type": "messages", "value": 40},
+            {"type": "tokens", "value": 12000},
+        ],
+        "keep": {"type": "messages", "value": 12},
+    }
+
+
+def _inject_subagent_limit(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+) -> None:
+    """Inject subagent concurrency limit config (in-place).
+
+    Enables ``SubagentLimitMiddleware`` when ``subagent_limit.enabled=True``.
+    The middleware caps concurrent subagent tasks per family, preventing
+    runaway task spawning.
+
+    Configuration source: ``ai_config["subagent_limit"]`` (optional).
+    When absent or ``enabled=False``, no injection occurs.
+    """
+    cfg = ai_config.get("subagent_limit")
+    if not cfg or not cfg.get("enabled", False):
+        return
+
+    from apps.agent.app.config import settings
+
+    config["subagent_limit"] = {
+        "enabled": True,
+        "max_concurrent": cfg.get(
+            "max_concurrent", settings.SUBAGENT_MAX_CONCURRENT
+        ),
+    }
+    logger.debug(
+        "[deerflow_config] subagent_limit injected: max_concurrent=%s",
+        config["subagent_limit"]["max_concurrent"],
+    )
+
+
+def _inject_tool_progress(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+) -> None:
+    """Inject tool execution progress tracking config (in-place).
+
+    Enables ``ToolProgressMiddleware`` when ``tool_progress.enabled=True``.
+    The middleware tracks tool execution duration through ACTIVE → WARNED →
+    BLOCKED states and logs transitions; it does not emit SSE events.
+    Client-visible tool progress comes from
+    ``RunPipeline._emit_write_progress`` instead.
+
+    Configuration source: ``ai_config["tool_progress"]`` (optional).
+    When absent or ``enabled=False``, no injection occurs.
+    """
+    cfg = ai_config.get("tool_progress")
+    if not cfg or not cfg.get("enabled", False):
+        return
+
+    config["tool_progress"] = {
+        "enabled": True,
+        "warn_threshold_seconds": cfg.get("warn_threshold_seconds", 30.0),
+        "hard_stop_threshold_seconds": cfg.get("hard_stop_threshold_seconds", 120.0),
+    }
+    logger.debug(
+        "[deerflow_config] tool_progress injected: warn=%.1fs hard_stop=%.1fs",
+        config["tool_progress"]["warn_threshold_seconds"],
+        config["tool_progress"]["hard_stop_threshold_seconds"],
+    )
+
+
+def _inject_tool_search(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+) -> None:
+    """Inject deferred MCP tool pipeline config (in-place).
+
+    When the family's MCP server count meets or exceeds
+    ``tool_search.mcp_server_threshold`` (default: 3), the DeerFlow harness
+    defers MCP tool schemas — only tool names are bound to the model;
+    full schemas are discovered on demand via the ``tool_search`` builtin.
+
+    Precedence: explicit per-family ``ai_config.tool_search.enabled``
+    overrides the threshold check.  The threshold check only fires when
+    the explicit flag is absent (``None``).
+
+    Note: ``mcp_server_threshold`` is a Numina-only field — upstream
+    ``ToolSearchConfig`` has only ``enabled`` and ``auto_promote_top_k``.
+    Pydantic v2 silently ignores extra keys, so the threshold value
+    written to config.yaml is harmless to the harness.
+    """
+    ts_config = config.get("tool_search", {})
+    ai_ts = ai_config.get("tool_search", {})
+
+    threshold = ai_ts.get("mcp_server_threshold") or ts_config.get(
+        "mcp_server_threshold", 3
+    )
+    explicit_enabled = ai_ts.get("enabled")  # None | True | False
+
+    if explicit_enabled is not None:
+        enabled = bool(explicit_enabled)
+    else:
+        mcp_count = len(config.get("mcp_servers") or [])
+        enabled = mcp_count >= threshold
+
+    config.setdefault("tool_search", {})
+    config["tool_search"]["enabled"] = enabled
+    config["tool_search"]["mcp_server_threshold"] = threshold
+
+    logger.debug(
+        "[deerflow_config] tool_search resolved: enabled=%s (mcp_servers=%d, threshold=%d)",
+        enabled,
+        len(config.get("mcp_servers") or []),
+        threshold,
+    )
+
+
+def _inject_task_continuity(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+) -> None:
+    """Inject task continuity config (in-place).
+
+    Enables upstream's ``task_note`` / ``history_search`` / ``history_read``
+    tools and the ``DurableContextMiddleware`` projection for ``task_notes``.
+
+    Precedence: explicit per-family ``ai_config.task_continuity.enabled``
+    overrides the base-config default.  The base-config default (from
+    ``deerflow_config/base/config.yaml``) is the fallback when the override
+    is absent.
+    """
+    base_cfg = config.get("task_continuity", {})
+    ai_cfg = ai_config.get("task_continuity", {})
+
+    explicit_enabled = ai_cfg.get("enabled")  # None | True | False
+    if explicit_enabled is not None:
+        enabled = bool(explicit_enabled)
+    else:
+        enabled = bool(base_cfg.get("enabled", False))
+
+    config.setdefault("task_continuity", {})
+    config["task_continuity"]["enabled"] = enabled
+
+    logger.debug("[deerflow_config] task_continuity resolved: enabled=%s", enabled)
+
+
+def _build_runtime_middlewares(
+    ai_config: dict[str, Any],
+    family_id: str,
+    existing_middlewares: list[Any] | None = None,
+) -> list[Any] | None:
+    """Build runtime middlewares from config (T15: SubagentLimit, T17: ToolProgress).
+
+    Reads enabled flags from ``ai_config`` and instantiates middleware classes
+    when enabled. Combines with any existing middlewares passed by the caller.
+
+    Args:
+        ai_config: Family AI configuration with middleware settings.
+        family_id: Family ID for subagent limit scoping.
+        existing_middlewares: Pre-existing middlewares from the caller.
+
+    Returns:
+        Combined middleware list, or None if no middlewares are configured.
+    """
+    middlewares: list[Any] = list(existing_middlewares) if existing_middlewares else []
+
+    # T15: SubagentLimitMiddleware
+    sl_cfg = ai_config.get("subagent_limit")
+    if sl_cfg and sl_cfg.get("enabled", False):
+        from apps.agent.app.config import settings
+        from apps.agent.services.runtime.subagent_limit_middleware import (
+            SubagentLimitMiddleware,
+        )
+
+        middlewares.append(
+            SubagentLimitMiddleware(
+                max_concurrent=sl_cfg.get(
+                    "max_concurrent", settings.SUBAGENT_MAX_CONCURRENT
+                ),
+                family_id=family_id,
+            )
+        )
+        logger.debug(
+            "[deerflow_config] SubagentLimitMiddleware instantiated: max=%s family=%s",
+            sl_cfg.get("max_concurrent", settings.SUBAGENT_MAX_CONCURRENT),
+            family_id,
+        )
+
+    # T17: ToolProgressMiddleware
+    tp_cfg = ai_config.get("tool_progress")
+    if tp_cfg and tp_cfg.get("enabled", False):
+        from apps.agent.services.runtime.tool_progress_middleware import (
+            ToolProgressMiddleware,
+        )
+
+        middlewares.append(
+            ToolProgressMiddleware(
+                warn_threshold_seconds=tp_cfg.get("warn_threshold_seconds", 30.0),
+                hard_stop_threshold_seconds=tp_cfg.get("hard_stop_threshold_seconds", 120.0),
+            )
+        )
+        logger.debug(
+            "[deerflow_config] ToolProgressMiddleware instantiated: warn=%.1fs hard_stop=%.1fs",
+            tp_cfg.get("warn_threshold_seconds", 30.0),
+            tp_cfg.get("hard_stop_threshold_seconds", 120.0),
+        )
+
+    return middlewares if middlewares else None
+
+
 def _inject_web_search(
     config: dict[str, Any],
     ai_config: dict[str, Any],
@@ -543,10 +867,17 @@ def _generate_temp_config(
     # Numina-specific injections (no DeerFlow equivalents)
     _inject_memory(config, family_id, memory_enabled)
     _inject_sandbox(config)
+    _inject_container_sandbox(config, ai_config, family_id)
     _inject_skills(config)
     _inject_mcp(config, mcp_servers)
     _inject_token_budget(config)
     _inject_pii_redaction(config)
+    _inject_sandbox_gate(config, ai_config)
+    _inject_summarization(config, memory_enabled)
+    _inject_subagent_limit(config, ai_config)
+    _inject_tool_progress(config, ai_config)
+    _inject_tool_search(config, ai_config)
+    _inject_task_continuity(config, ai_config)
     web_search_mcp = ai_config.get("web_search_mcp_servers", [])
     _inject_web_search(config, ai_config, mcp_servers, web_search_mcp)
 
@@ -689,6 +1020,9 @@ def get_family_adapter(
         memory_enabled=memory_enabled,
     )
 
+    # Build runtime middlewares from config (T15: SubagentLimit, T17: ToolProgress)
+    runtime_middlewares = _build_runtime_middlewares(ai_config, family_id, middlewares)
+
     # Obtain the shared checkpointer before reload_app_config() so the
     # checkpointer DB path is read from the base config, not the per-family
     # temp config (initialised exactly once).
@@ -726,7 +1060,7 @@ def get_family_adapter(
                     subagent_enabled=subagent_enabled,
                     plan_mode=plan_mode,
                     agent_name=agent_name,
-                    middlewares=middlewares,
+                    middlewares=runtime_middlewares,
                     available_skills=available_skills,  # U3: slash activation whitelist
                 )
             finally:

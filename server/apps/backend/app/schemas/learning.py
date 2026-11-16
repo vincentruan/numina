@@ -26,6 +26,15 @@ class CurriculumStandard(BaseModel):
     code: str | None = None
 
 
+class RealWorldConnection(BaseModel):
+    """A single real-world scenario showing how a topic is used in life."""
+
+    context: str
+    explanation: str
+    icon: str | None = None
+    image_url: str | None = None
+
+
 class TopicResponse(SnowflakeBase):
     id: int
     topic_key: str
@@ -47,6 +56,8 @@ class TopicResponse(SnowflakeBase):
     standards: list[str] = []
     ability_dimensions: list[str] | None
     curriculum_standards: list[CurriculumStandard] | None = None
+    real_world_connections: list[RealWorldConnection] | None = None
+    real_world_connections_zh: list[RealWorldConnection] | None = None
     source_taxonomy: str = "os-taxonomy"
     deprecated: bool
 
@@ -246,6 +257,33 @@ class AssessStreamRequest(BaseModel):
     """Optional body for multi-turn tutorial messages. Omit for initial assessment."""
 
     user_message: str | None = Field(default=None, max_length=4000)
+
+
+class SmartTutorStreamRequest(BaseModel):
+    """Request body for smart-tutor streaming endpoint.
+
+    First call: provide question_id to start a guided session.
+    Follow-up calls: provide child_answer to continue Socratic dialogue.
+    """
+
+    question_id: int | None = Field(default=None, description="Question to start tutoring on")
+    child_answer: str | None = Field(
+        default=None, max_length=2000, description="Child's answer for follow-up turns"
+    )
+
+
+class TeachBackStreamRequest(BaseModel):
+    """Request body for teach-back streaming endpoint.
+
+    First call: provide topic_id to start a teach-back session on a mastered topic.
+    Follow-up calls: provide session_id + child_answer to continue.
+    """
+
+    topic_id: int | None = Field(default=None, description="Topic to teach back (initial call)")
+    session_id: int | None = Field(default=None, description="Session to continue (follow-up)")
+    child_answer: str | None = Field(
+        default=None, max_length=4000, description="Child's explanation for follow-up turns"
+    )
 
 
 # --- Session ---
@@ -498,3 +536,134 @@ class AIReviewStatusResponse(BaseModel):
 
     ai_auto_pass_paused: bool
     consecutive_overrides: int
+
+
+# --- Smart Tutor (Parent View) ---
+
+
+class SmartTutorSessionResponse(SnowflakeBase):
+    """Smart Tutor session summary for parent review."""
+
+    session_id: int
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    subject: str
+    started_at: datetime
+    completed_at: datetime | None
+    final_phase: str | None
+    total_steps: int
+    misconceptions_detected: int
+    outcome: str | None
+
+
+class SmartTutorSessionDetailResponse(SmartTutorSessionResponse):
+    """Detailed Smart Tutor session with step-by-step records."""
+
+    steps: list[dict] = []
+    ai_evaluation: dict | None = None
+
+
+class TeachBackSessionDetailResponse(SnowflakeBase):
+    """Detailed teach-back session with turn-by-turn transcript (#8)."""
+
+    session_id: int
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None = None
+    subject: str
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    outcome: str | None = None
+    total_turns: int = 0
+    turns: list[dict] = []
+
+
+class HookQuestionResponse(SnowflakeBase):
+    """Socratic curiosity hook question for topic entry."""
+
+    id: int
+    topic_id: int
+    question_text: str
+    question_text_zh: str | None = None
+    age_group: str
+    difficulty: str
+    review_status: str
+
+
+# --- Knowledge Map Exploration (R11, R12) ---
+
+
+class MapExplorationCreate(BaseModel):
+    """One completed map visit, posted when the child leaves the map."""
+
+    # Elapsed ms between map mount and first topic selection (R11).
+    # Upper bound = 7 days (604,800,000 ms); Postgres Integer is 4-byte (max
+    # ~24.8 days), so a buggy client posting larger values would otherwise
+    # trigger a DataError (500).
+    duration_ms: int = Field(ge=0, le=604_800_000)
+    # Deepest zoom level reached: 0 subject, 1 domain, 2 topic (R12).
+    max_zoom_level: int = Field(ge=0, le=2)
+    topic_selected: bool = False
+    # Pan/zoom/tap count — separates browsing from a drive-by (R12).
+    # Upper bound is the Postgres 4-byte Integer max; the same cap the
+    # duration_ms comment already points at, matching the DataError-500 class.
+    interaction_count: int = Field(ge=0, le=2_147_483_647, default=0)
+    # Upper bound is the Postgres BigInteger max (signed 8-byte). The frontend
+    # sends this as a Snowflake string (numeric, well within range); the bound
+    # is a guard against a hostile or buggy client posting past the column.
+    selected_topic_id: int | None = Field(default=None, ge=0, le=9_223_372_036_854_775_807)
+
+
+class MapExplorationResponse(SnowflakeBase):
+    id: int
+    duration_ms: int
+    max_zoom_level: int
+    topic_selected: bool
+    interaction_count: int
+    selected_topic_id: int | None = None
+    created_at: datetime
+
+# ---------------------------------------------------------------------------
+# Knowledge Castle (U2)
+# ---------------------------------------------------------------------------
+
+
+class CastleFloorSchema(SnowflakeBase):
+    """One floor in a castle tower — corresponds to a single domain."""
+
+    domain: str
+    mastered_count: int
+    learning_count: int
+    review_due_count: int
+    total_count: int
+
+
+class CastleTowerSchema(SnowflakeBase):
+    """One tower in the castle — corresponds to a single subject."""
+
+    subject: str
+    mastered_count: int
+    learning_count: int
+    review_due_count: int
+    total_count: int
+    floors: list[CastleFloorSchema]
+
+
+class CastleWindowSchema(SnowflakeBase):
+    """An unlit window bound to a specific topic."""
+
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str
+    reason: str  # "复习到期" | "推荐学习"
+    subject: str
+    domain: str
+
+
+class CastleIndexResponse(SnowflakeBase):
+    """Response for GET /child/learning/castle/index."""
+
+    towers: list[CastleTowerSchema]
+    windows: list[CastleWindowSchema]
+    streak_days: int

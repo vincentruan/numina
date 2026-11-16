@@ -5,6 +5,7 @@ from starlette.responses import Response
 
 from apps.backend.app.config import settings
 from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.services.mcp_audit import write_mcp_access_log
 from apps.backend.app.services.mcp_session import MCPSession
 from packages.core.logging import get_logger
 from packages.core.roles import UserRole
@@ -132,11 +133,30 @@ async def mcp_sse(
 
         caller_role = user.role
 
+    # Build audit callback for tool_call events (internal path — no external token)
+    def _audit_tool_call(
+        *, event_type: str, tool_name: str, status: str,
+        duration_ms: int = 0, args_digest: dict | None = None,
+        error_code: str | None = None,
+    ) -> None:
+        write_mcp_access_log(
+            family_id=int(family_id),
+            token_id=None,
+            event_type=event_type,
+            tool_name=tool_name,
+            status=status,
+            duration_ms=duration_ms,
+            client_ip="internal",
+            args_digest=args_digest,
+            error_code=error_code,
+        )
+
     session = MCPSession(
         family_id=family_id,
         caller_user_id=x_caller_user_id,
         caller_role=caller_role,
         thread_id=x_thread_id,
+        audit_callback=_audit_tool_call,
     )
     return MCPSSEResponse(session=session, family_id=family_id)
 

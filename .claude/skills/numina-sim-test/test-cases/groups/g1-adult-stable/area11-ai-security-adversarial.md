@@ -617,6 +617,276 @@ Assertions:
 - [ ] Reserved metadata keys (`owner_id`, `user_id`, `family_id`) are stripped by `_strip_reserved_metadata`
 - [ ] `[console]` zero errors
 
+### C11.21 Per-family sandbox policy gate (#187)
+
+**来源:** #187 — Per-family sandbox policy gate and container isolation
+
+验证不同家庭的 sandbox 策略是否正确隔离，以及 sandbox policy gate 是否正确执行。
+
+```
+# 测试 1：验证当前家庭的 sandbox 策略
+bsk evaluate --session <id> "(async () => {
+  const r = await fetch('${API_BASE}api/v1/internal/mcp/${FAMILY_ID}/sandbox-policy', {
+    credentials: 'include',
+  });
+  const data = await r.json();
+  return JSON.stringify({status: r.status, policy: data.data});
+})()"
+
+# 测试 2：尝试访问其他家庭的 sandbox policy（应被拒绝）
+bsk evaluate --session <id> "(async () => {
+  const fakeFamilyId = '999999999999999';
+  const r = await fetch('${API_BASE}api/v1/internal/mcp/' + fakeFamilyId + '/sandbox-policy', {
+    credentials: 'include',
+  });
+  return String(r.status);
+})()"
+
+# 测试 3：验证 sandbox 路径隔离（尝试访问其他家庭的文件）
+bsk evaluate --session <id> "(async () => {
+  const r = await fetch('${API_BASE}api/v1/ai/chat/artifact?path=/mnt/user-data/outputs/test.txt', {
+    credentials: 'include',
+  });
+  return String(r.status);
+})()"
+```
+
+Assertions:
+- [ ] 当前家庭的 sandbox policy 正确返回（200 + policy data）
+- [ ] 访问其他家庭的 sandbox policy 返回 403（family_id 校验失败）
+- [ ] sandbox 路径访问严格限制在当前家庭的目录内
+- [ ] 容器隔离策略正确执行（如果启用容器隔离）
+- [ ] `[console]` zero errors
+
+### C11.22 MCP cache race condition（多用户并发访问）
+
+**来源:** T11 — MCP cache race fix (#171)
+
+验证多用户同时访问 MCP 工具时的缓存隔离，确保不会发生缓存穿透或数据泄漏。
+
+```
+# 模拟多用户并发访问 MCP 工具（需要多个 session 或并发请求）
+bsk evaluate --session <id> "(async () => {
+  // 并发发送 5 个 MCP 工具调用请求
+  const promises = [];
+  for (let i = 0; i < 5; i++) {
+    promises.push(
+      fetch('${API_BASE}api/v1/internal/mcp/${FAMILY_ID}/call-tool', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({
+          tool_name: 'get_family_overview',
+          arguments: {},
+        }),
+      }).then(r => r.status)
+    );
+  }
+  const results = await Promise.all(promises);
+  return results.join(',');
+})()"
+
+# 验证返回结果一致性
+bsk evaluate --session <id> "(async () => {
+  const r1 = await fetch('${API_BASE}api/v1/internal/mcp/${FAMILY_ID}/call-tool', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    credentials: 'include',
+    body: JSON.stringify({tool_name: 'get_family_overview', arguments: {}}),
+  });
+  const data1 = await r1.json();
+  
+  const r2 = await fetch('${API_BASE}api/v1/internal/mcp/${FAMILY_ID}/call-tool', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    credentials: 'include',
+    body: JSON.stringify({tool_name: 'get_family_overview', arguments: {}}),
+  });
+  const data2 = await r2.json();
+  
+  // 验证两次调用返回相同数据（缓存命中）
+  return JSON.stringify({
+    match: JSON.stringify(data1.data) === JSON.stringify(data2.data),
+    cached: data1.cached === true || data2.cached === true,
+  });
+})()"
+```
+
+Assertions:
+- [ ] 并发请求全部成功（5 个 200）
+- [ ] 无缓存穿透（第二次调用命中缓存，返回 cached=true）
+- [ ] 不同家庭的 MCP 缓存完全隔离（通过 ContextVar 传播）
+- [ ] 无数据泄漏（每次调用返回当前家庭的数据）
+- [ ] `[console]` zero errors
+
+### C11.23 Thread ownership check（跨用户 thread 访问）
+
+**来源:** P0 harness isolation — thread ownership check (#177)
+
+验证用户无法访问其他用户的 thread，确保 harness 层的隔离正确执行。
+
+```
+# 创建一个新的 thread
+bsk evaluate --session <id> "(async () => {
+  const r = await fetch('${API_BASE}api/threads', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    credentials: 'include',
+    body: JSON.stringify({
+      assistant_id: 'numina',
+      metadata: {},
+    }),
+  });
+  const thread = (await r.json()).data;
+  return thread.id;
+})()"
+
+# 使用另一个用户的 session 尝试访问该 thread（应被拒绝）
+# 注意：此测试需要第二个用户的 session，如果不可用则标注 SKIP
+bsk evaluate --session <id> "(async () => {
+  // 假设 THREAD_ID 是上一个测试创建的 thread
+  const threadId = '<THREAD_ID_FROM_ABOVE>';
+  
+  // 尝试访问 thread 状态
+  const r = await fetch('${API_BASE}api/threads/' + threadId + '/state', {
+    credentials: 'include',
+  });
+  
+  // 如果不是 thread 所有者，应返回 403 或 404
+  return String(r.status);
+})()"
+```
+
+Assertions:
+- [ ] thread 创建成功（201）
+- [ ] 非所有者访问 thread 返回 403 或 404（不泄漏 thread 是否存在的信息）
+- [ ] 错误消息不包含敏感的 thread 元数据
+- [ ] harness 层正确验证 thread ownership（通过 owner_id 或 user_id）
+- [ ] `[console]` zero errors
+
+> **前置:** 此测试需要两个不同的用户 session。如果第二个 session 不可用，标注 SKIP。
+
+### C11.24 GuardrailMiddleware edge cases（tool allow/deny 边界）
+
+**来源:** T4 — GuardrailMiddleware per-family tool allow/deny (#179)
+
+验证 GuardrailMiddleware 的 tool allow/deny 列表在边界情况下的行为。
+
+```
+# 测试 1：尝试调用被 deny 的工具
+bsk evaluate --session <id> "(async () => {
+  const r = await fetch('${API_BASE}api/v1/internal/mcp/${FAMILY_ID}/call-tool', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    credentials: 'include',
+    body: JSON.stringify({
+      tool_name: 'dangerous_tool',  // 假设此工具在 deny 列表中
+      arguments: {},
+    }),
+  });
+  return String(r.status) + ':' + (await r.text()).substring(0, 100);
+})()"
+
+# 测试 2：尝试调用未明确 allow 的工具（默认拒绝）
+bsk evaluate --session <id> "(async () => {
+  const r = await fetch('${API_BASE}api/v1/internal/mcp/${FAMILY_ID}/call-tool', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    credentials: 'include',
+    body: JSON.stringify({
+      tool_name: 'unknown_tool',  // 不在 allow 列表中
+      arguments: {},
+    }),
+  });
+  return String(r.status);
+})()"
+
+# 测试 3：验证 allow 列表中的工具可以正常调用
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk fill @eN --value "帮我分析一下资产" --session <id>
+bsk click @eM --session <id>
+bsk wait-ms 8s
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] 调用 deny 列表中的工具返回 403（工具被拒绝）
+- [ ] 调用未 allow 的工具返回 403（默认拒绝策略）
+- [ ] allow 列表中的工具（如 get_family_overview）可以正常调用
+- [ ] 错误消息明确指出工具被拒绝的原因（不泄漏内部配置）
+- [ ] GuardrailMiddleware 正确拦截并记录拒绝事件
+- [ ] `[console]` zero errors
+
+### C11.25 Per-family rate limiting — 滑动窗口限流（#168, PR #177）
+
+**来源:** T9 — Per-family sliding window rate limit at stream_run
+
+验证 per-family 的滑动窗口限流是否能防止单个家庭耗尽所有并发 slot，确保多租户公平性。
+
+```
+# 测试 1：正常并发请求（应在限制内）
+bsk evaluate --session <id> "(async () => {
+  const results = [];
+  const concurrency = 3;  // 假设限制为 5，测试 3 个并发
+  
+  const promises = [];
+  for (let i = 0; i < concurrency; i++) {
+    promises.push(
+      fetch('${API_BASE}ai/chat/stream', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({question: 'Message ' + i}),
+      }).then(r => r.status)
+    );
+  }
+  
+  const statuses = await Promise.all(promises);
+  return JSON.stringify({concurrency, statuses});
+})()"
+
+# 测试 2：超限并发请求（应触发限流）
+bsk evaluate --session <id> "(async () => {
+  const results = [];
+  const concurrency = 10;  // 超过限制（假设 5）
+  
+  const promises = [];
+  for (let i = 0; i < concurrency; i++) {
+    promises.push(
+      fetch('${API_BASE}ai/chat/stream', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({question: 'Flood message ' + i}),
+      }).then(r => r.status)
+    );
+  }
+  
+  const statuses = await Promise.all(promises);
+  const ok = statuses.filter(s => s === 200).length;
+  const limited = statuses.filter(s => s === 429).length;
+  return JSON.stringify({concurrency, ok, limited, statuses});
+})()"
+
+# 测试 3：验证限流是 per-family 而非全局
+# 需要第二个家庭的 session（如果不可用则标注 SKIP）
+bsk evaluate --session <id> "(async () => {
+  // 此测试需要第二个家庭 session
+  return 'SKIP-NO-SECOND-FAMILY-SESSION';
+})()"
+```
+
+Assertions:
+- [ ] 正常并发请求（< 限制）全部返回 200（不被限流）
+- [ ] 超限并发请求（> 限制）部分返回 429（Too Many Requests）
+- [ ] 429 响应包含 `Retry-After` header（指示重试时间）
+- [ ] 限流是 per-family 的（family A 的限流不影响 family B）
+- [ ] 滑动窗口机制正确执行（不是固定窗口，避免边界突发）
+- [ ] 限流日志记录完整（family_id、timestamp、request_count）
+- [ ] `[console]` zero errors
+
+> **备注:** 限流配置通常在环境变量或配置文件中（如 `RATE_LIMIT_PER_FAMILY=5`）。此测试验证限流机制的正确性，而非具体数值。如果无法触发 429，可能是限流阈值较高或限流未启用。
+
 ---
 
 ## Evaluation notes (评估说明)
