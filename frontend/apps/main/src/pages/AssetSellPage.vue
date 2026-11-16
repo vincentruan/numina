@@ -60,7 +60,7 @@
       </van-cell-group>
 
       <div class="actions">
-        <van-button block type="warning" :loading="submitting" @click="onSubmit">
+        <van-button block type="warning" :loading="submitting" @click="onSubmit" data-test="asset-sell-submit">
           {{ t('assetSell.confirmBtn') }}
         </van-button>
         <van-button block plain @click="$router.back()">{{ t('assetSell.cancelBtn') }}</van-button>

@@ -27,11 +27,15 @@ import { useI18n } from 'vue-i18n'
 import { checkWebAuthnSupport, registerPasskey } from '@/utils/webauthn'
 import { getDeviceTrustWebAuthnOptions, registerDeviceTrustWebAuthn } from '@/api/device'
 import { refreshTokenIfNeeded } from '@/api'
+import { registerTestHooks } from '@/utils/testHooks'
 
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const { locale, t } = useI18n()
 const router = useRouter()
+
+// Register dev-only test hooks (no-op in production builds)
+registerTestHooks()
 
 // Sync this browser's Web Push subscription to the backend when permission is
 // already granted. Never prompts — the opt-in UI is a separate concern.

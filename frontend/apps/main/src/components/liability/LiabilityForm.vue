@@ -191,7 +191,7 @@
     </van-cell-group>
 
     <div class="form-actions">
-      <van-button round block type="primary" native-type="submit" :loading="loading">
+      <van-button round block type="primary" native-type="submit" :loading="loading" data-test="liability-submit">
         {{ isEdit ? t('liability.saveChanges') : t('liability.addLiability') }}
       </van-button>
     </div>

@@ -81,7 +81,7 @@
       </van-cell-group>
 
       <div class="submit-button">
-        <van-button type="primary" block round native-type="submit" :loading="submitting">
+        <van-button type="primary" block round native-type="submit" :loading="submitting" data-test="expense-submit">
           {{ t('common.submit') }}
         </van-button>
       </div>

@@ -14,7 +14,7 @@ def _gen_tutankhamun(params: dict) -> GeneratedQuestion:
         template_id="history.tutankhamun",
         stem="Who found the tomb of Tutankhamun in 1922?",
         stem_zh="1922 年，谁发现了图坦卡蒙的墓？",
-        answer={"answer": "Howard Carter"},
+        answer={"key": "A"},
         question_type="multiple_choice",
         difficulty=2,
         bloom_level="remember",

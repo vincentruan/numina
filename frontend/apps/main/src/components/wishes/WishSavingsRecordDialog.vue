@@ -97,7 +97,7 @@ function close() {
         </van-cell-group>
         <div class="dialog-actions">
           <van-button block plain @click="close">{{ t('common.cancel') }}</van-button>
-          <van-button block type="primary" native-type="submit" :loading="submitting">
+          <van-button block type="primary" native-type="submit" :loading="submitting" data-test="wish-savings-record-submit">
             {{ t('wish.savings.recordBtn') }}
           </van-button>
         </div>

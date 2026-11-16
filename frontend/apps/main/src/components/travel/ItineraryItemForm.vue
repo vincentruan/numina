@@ -204,6 +204,7 @@
           round
           :loading="submitting"
           :disabled="!canSubmit"
+          data-test="itinerary-submit"
           @click="handleSubmit"
         >
           {{ isEdit ? t('common.save') : t('common.confirm') }}

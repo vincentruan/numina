@@ -72,7 +72,7 @@ function close() {
         :label="t('liability.interest.extraLabel')"
         :placeholder="t('liability.interest.extraPlaceholder')"
       />
-      <van-button block type="primary" :loading="loading" class="sim-btn" @click="onSimulate">
+      <van-button block type="primary" :loading="loading" class="sim-btn" @click="onSimulate" data-test="simulate-btn">
         {{ t('liability.interest.simulate') }}
       </van-button>
 

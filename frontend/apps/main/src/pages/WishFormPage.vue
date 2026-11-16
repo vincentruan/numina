@@ -120,7 +120,7 @@
       </van-cell-group>
 
       <div style="margin: 16px">
-        <van-button round block type="primary" native-type="submit" :loading="submitting">
+        <van-button round block type="primary" native-type="submit" :loading="submitting" data-test="wish-submit">
           {{ isEdit ? t('wish.form.saveBtn') : t('wish.form.addBtn') }}
         </van-button>
       </div>

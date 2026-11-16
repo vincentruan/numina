@@ -65,7 +65,7 @@
       </van-cell-group>
 
       <div class="form-actions">
-        <van-button type="primary" block round native-type="submit" :loading="submitting">
+        <van-button type="primary" block round native-type="submit" :loading="submitting" data-test="trip-submit">
           {{ isEdit ? t('common.save') : t('travel.createTrip') }}
         </van-button>
       </div>

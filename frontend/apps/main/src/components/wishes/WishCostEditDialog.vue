@@ -43,7 +43,7 @@
         <div v-if="submitError" class="error-msg">{{ submitError }}</div>
         <div class="dialog-actions">
           <button class="btn-cancel" @click="stage = 'edit'">{{ t('wishCostEdit.reconsider') }}</button>
-          <button class="btn-confirm" :disabled="submitting" @click="commit">
+          <button class="btn-confirm" :disabled="submitting" @click="commit" data-test="wish-cost-confirm">
             {{ t('wishCostEdit.confirm') }}
           </button>
         </div>

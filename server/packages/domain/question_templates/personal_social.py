@@ -14,7 +14,7 @@ def _gen_expressing_feelings(params: dict) -> GeneratedQuestion:
         template_id="personal_social.expressing_feelings",
         stem="Which sentence shows a child using words to express a feeling?",
         stem_zh="哪句话是孩子在用语言表达自己的感受？",
-        answer={"answer": "I feel sad because my friend left."},
+        answer={"key": "A"},
         question_type="multiple_choice",
         difficulty=1,
         bloom_level="apply",

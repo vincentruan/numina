@@ -14,7 +14,7 @@ def _gen_ai_daily_life(params: dict) -> GeneratedQuestion:
         template_id="computing.ai_daily_life",
         stem="Which of these is a daily-life example of AI?",
         stem_zh="以下哪一个是日常生活中用到人工智能的例子？",
-        answer={"answer": "A phone that suggests the next word you will type."},
+        answer={"key": "A"},
         question_type="multiple_choice",
         difficulty=2,
         bloom_level="apply",

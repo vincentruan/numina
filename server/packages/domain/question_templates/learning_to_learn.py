@@ -14,7 +14,7 @@ def _gen_asking_for_help(params: dict) -> GeneratedQuestion:
         template_id="learning_to_learn.asking_for_help",
         stem="You do not understand your homework. What is the best first step?",
         stem_zh="作业看不懂，第一步该怎么做？",
-        answer={"answer": "Read the question slowly and underline the part you do not understand."},
+        answer={"key": "A"},
         question_type="multiple_choice",
         difficulty=1,
         bloom_level="apply",
