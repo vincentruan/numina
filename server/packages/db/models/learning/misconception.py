@@ -71,6 +71,13 @@ class Misconception(Base):
     review_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending", server_default="pending"
     )
+    #: Classification of the misconception. Drives feedback tone:
+    #: concept_confusion ("common mix-up"), procedural_error ("steps got
+    #: mixed up"), carelessness (no misconception-specific feedback).
+    #: Nullable for backward compatibility with pre-category rows.
+    category: Mapped[str | None] = mapped_column(
+        String(30), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now()
     )
@@ -96,8 +103,13 @@ class MisconceptionDetection(Base):
     topic_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("learning_topics.id"), nullable=False, index=True
     )
-    misconception_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("misconceptions.id"), nullable=False, index=True
+    #: Nullable with SET NULL — topic deletion cascades misconceptions; the
+    #: detection history survives with a null reference.
+    misconception_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("misconceptions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     question_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("questions.id"), nullable=False, index=True
@@ -116,3 +128,10 @@ class MisconceptionDetection(Base):
             "created_at",
         ),
     )
+
+
+# Valid values for Misconception.category — drives feedback tone in the
+# Smart Tutor SKILL.md prompt (U5) and validates the column's enum-like values.
+MISCONCEPTION_CATEGORIES = frozenset(
+    {"concept_confusion", "procedural_error", "carelessness"}
+)

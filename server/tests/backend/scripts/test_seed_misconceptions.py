@@ -5,7 +5,10 @@ import json
 import pytest
 from sqlalchemy.orm import Session
 
-from packages.db.models.learning.misconception import Misconception
+from packages.db.models.learning.misconception import (
+    MISCONCEPTION_CATEGORIES,
+    Misconception,
+)
 from packages.db.models.learning.question import Question
 from packages.db.models.learning.topic import LearningTopic
 
@@ -50,6 +53,7 @@ class TestSeedMisconceptions:
         for m in misconceptions:
             assert m.review_status == "approved"
             assert m.age_group == "mid"
+            assert m.category in MISCONCEPTION_CATEGORIES
             assert m.diagnostic_question_id is not None
             # Diagnostic question exists and is approved.
             diag_q = db.query(Question).filter_by(id=m.diagnostic_question_id).first()

@@ -28,6 +28,8 @@ from packages.db.session import SessionLocal  # noqa: E402
 # Each misconception has:
 #   - sequence: order within the topic's list
 #   - error_pattern: how to detect it (match_type + expected_wrong/algorithm)
+#   - category: concept_confusion | procedural_error | carelessness —
+#     drives the Smart Tutor's feedback tone
 #   - description / description_zh: child-facing feedback text (common-confusion framing)
 #   - diagnostic_question: a regular Question offered after detection
 #
@@ -41,6 +43,7 @@ SAMPLE_MISCONCEPTIONS: dict[str, list[dict]] = {
     "mt_9KmVWCuh5_": [  # Understanding fractions (age 10+)
         {
             "sequence": 0,
+            "category": "concept_confusion",
             "error_pattern": {
                 "match_type": "parametric",
                 "algorithm": "fraction_add_numerators",
@@ -64,6 +67,7 @@ SAMPLE_MISCONCEPTIONS: dict[str, list[dict]] = {
         },
         {
             "sequence": 1,
+            "category": "concept_confusion",
             "error_pattern": {
                 "match_type": "parametric",
                 "algorithm": "fraction_add_whole_numbers",
@@ -87,6 +91,7 @@ SAMPLE_MISCONCEPTIONS: dict[str, list[dict]] = {
         },
         {
             "sequence": 2,
+            "category": "procedural_error",
             "error_pattern": {
                 "match_type": "parametric",
                 "algorithm": "fraction_add_product_denominator",
@@ -172,6 +177,7 @@ def seed_misconceptions() -> None:
                     age_group="mid",
                     diagnostic_question_id=diagnostic_question_id,
                     review_status="approved",
+                    category=m_data["category"],
                 )
                 db.add(row)
 
