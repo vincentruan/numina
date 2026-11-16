@@ -49,7 +49,13 @@ def _mastery_score_to_difficulty(score: float) -> tuple[int, int]:
 class MasteryEstimator(Protocol):
     """Protocol for knowledge mastery estimation."""
 
-    def estimate(self, db: Session, child_id: int, topic_id: int) -> float:
+    def estimate(
+        self,
+        db: Session,
+        child_id: int,
+        topic_id: int,
+        outcomes: list[bool] | None = None,
+    ) -> float:
         """Return 0.0-1.0 mastery estimate."""
         ...
 
@@ -65,33 +71,47 @@ class RuleBasedMasteryEstimator:
     DECAY_FACTOR = 0.8
     MAX_ATTEMPTS = 10
 
-    def estimate(self, db: Session, child_id: int, topic_id: int) -> float:
+    def estimate(
+        self,
+        db: Session,
+        child_id: int,
+        topic_id: int,
+        outcomes: list[bool] | None = None,
+    ) -> float:
         """Estimate mastery as time-decay weighted accuracy.
 
         Weight formula: weight_i = DECAY_FACTOR ^ (n - 1 - i)
         where i is the attempt index (0=oldest) and n is total attempts.
         Most recent attempt gets weight 1.0, previous gets 0.8, etc.
+
+        ``outcomes`` lets a caller that already loaded the child's attempts for
+        this topic in chronological order skip the query. It is only used when
+        the caller's window matches what this estimator would have loaded.
         """
-        attempts = (
-            db.query(PracticeAttempt)
-            .filter_by(child_id=child_id, topic_id=topic_id)
-            .order_by(PracticeAttempt.created_at.desc())
-            .limit(self.MAX_ATTEMPTS)
-            .all()
-        )
-        if len(attempts) < self.MIN_SAMPLE_SIZE:
+        if outcomes is not None:
+            correct_flags = outcomes[-self.MAX_ATTEMPTS :]
+        else:
+            attempts = (
+                db.query(PracticeAttempt)
+                .filter_by(child_id=child_id, topic_id=topic_id)
+                .order_by(PracticeAttempt.created_at.desc())
+                .limit(self.MAX_ATTEMPTS)
+                .all()
+            )
+            # Reverse to chronological order for decay weighting
+            correct_flags = [a.is_correct for a in reversed(attempts)]
+
+        if len(correct_flags) < self.MIN_SAMPLE_SIZE:
             return 0.5  # Neutral fallback for insufficient data
 
-        # Reverse to chronological order for decay weighting
-        attempts = list(reversed(attempts))
-        n = len(attempts)
+        n = len(correct_flags)
         total_weight = 0.0
         weighted_correct = 0.0
 
-        for i, attempt in enumerate(attempts):
+        for i, is_correct in enumerate(correct_flags):
             weight = self.DECAY_FACTOR ** (n - 1 - i)
             total_weight += weight
-            if attempt.is_correct:
+            if is_correct:
                 weighted_correct += weight
 
         return weighted_correct / total_weight if total_weight > 0 else 0.0
@@ -136,32 +156,45 @@ class BayesianKnowledgeTracingEstimator:
         # Use defaults
         return self.default_p_l0, self.default_p_t, self.default_p_g, self.default_p_s
 
-    def estimate(self, db: Session, child_id: int, topic_id: int) -> float:
+    def estimate(
+        self,
+        db: Session,
+        child_id: int,
+        topic_id: int,
+        outcomes: list[bool] | None = None,
+    ) -> float:
         """Estimate mastery via Bayesian belief state update.
 
         Iterates through attempts chronologically, applying Bayes' rule
         after each observation, then projecting forward with P(T).
         Uses per-skill calibrated parameters when available.
-        """
-        attempts = (
-            db.query(PracticeAttempt)
-            .filter_by(child_id=child_id, topic_id=topic_id)
-            .order_by(PracticeAttempt.created_at.asc())
-            .all()
-        )
 
-        if len(attempts) < self.MIN_ATTEMPTS:
+        ``outcomes`` lets a caller that already loaded the child's attempts for
+        this topic in chronological order skip the query.
+        """
+        if outcomes is None:
+            attempts = (
+                db.query(PracticeAttempt)
+                .filter_by(child_id=child_id, topic_id=topic_id)
+                .order_by(PracticeAttempt.created_at.asc())
+                .all()
+            )
+            outcomes = [a.is_correct for a in attempts]
+
+        if len(outcomes) < self.MIN_ATTEMPTS:
             # Insufficient data — fallback to rule-based
-            return RuleBasedMasteryEstimator().estimate(db, child_id, topic_id)
+            return RuleBasedMasteryEstimator().estimate(
+                db, child_id, topic_id, outcomes=outcomes
+            )
 
         # Get per-skill parameters (fitted or defaults)
         p_l0, p_t, p_g, p_s = self._get_params_for_topic(db, topic_id)
 
         # BKT forward algorithm
         p_l = p_l0
-        for attempt in attempts:
+        for is_correct in outcomes:
             # Bayesian update: P(L|observation)
-            if attempt.is_correct:
+            if is_correct:
                 p_l_given_obs = (
                     p_l * (1 - p_s)
                     / (p_l * (1 - p_s) + (1 - p_l) * p_g)
@@ -343,21 +376,19 @@ def diagnose_weak_prerequisites(
     db: Session,
     topic_id: int,
     child_id: int,
-    lookback_topic_ids: list[int] | None = None,
 ) -> list[dict]:
     """Depth-2 prerequisite backtrace for a child stuck on a topic.
 
     Returns qualified weak prerequisites (≥3 attempts, BKT below threshold,
     mastery_level neither mastered nor locked, topic not deprecated, has
-    practiceable questions, not a direct prerequisite of the target).
+    practiceable questions, not a direct unmet prerequisite of the target).
     Ranked BKT-class first then rule-based, mastery ascending within each
     class, depth descending within ties. Deduped by topic id at minimum depth.
 
-    ``lookback_topic_ids`` names direct prerequisites the child is weak on:
-    the child already sees them on the page, so they, and their own
-    prerequisites, are not reported. ``depth`` counts layers beyond the
-    target's direct prerequisites (depth 1 = a prerequisite of a
-    prerequisite).
+    The child's own weak direct prerequisites are already shown on the page,
+    so they, and their own prerequisites, are not reported. ``depth`` counts
+    layers beyond the target's direct prerequisites (depth 1 = a prerequisite
+    of a prerequisite).
 
     Writes one DiagnosisImpression row per qualified candidate before returning.
     Returns an empty list when the target itself does not meet the trigger
@@ -365,6 +396,9 @@ def diagnose_weak_prerequisites(
     """
     from collections import deque
 
+    from apps.backend.app.services.learning.progress_service import (
+        get_unmet_prerequisites,
+    )
     from packages.db.models.learning.diagnosis_impression import DiagnosisImpression
     from packages.db.models.learning.progress import LearningProgress
     from packages.db.models.learning.topic import LearningDependency
@@ -402,8 +436,11 @@ def diagnose_weak_prerequisites(
     # by several paths is kept at its minimum hop count. Reported depth counts
     # layers beyond the target's direct prerequisites, which the page already
     # shows: a prerequisite of a prerequisite is depth 1.
-    lookback_ids = list(dict.fromkeys(lookback_topic_ids or []))
-    skip_ids: set[int] = set(lookback_ids)
+    # The child already sees their unmet direct prerequisites on this page, so
+    # those and their own prerequisites are not reported (R10).
+    skip_ids: set[int] = {
+        p.id for p in get_unmet_prerequisites(db, topic_id, child_id)
+    }
     hops: dict[int, int] = {topic_id: 0}
     queue: deque[tuple[int, int]] = deque()
     for p in topic_prereqs.get(topic_id, []):
@@ -448,13 +485,18 @@ def diagnose_weak_prerequisites(
         )
         .all()
     }
+    # Chronological order, so the estimators can consume these directly.
     attempts_by_topic: dict[int, list[bool]] = {}
     for attempt in (
-        db.query(PracticeAttempt.topic_id, PracticeAttempt.is_correct)
+        db.query(
+            PracticeAttempt.topic_id,
+            PracticeAttempt.is_correct,
+        )
         .filter(
             PracticeAttempt.child_id == child_id,
             PracticeAttempt.topic_id.in_(candidate_ids),
         )
+        .order_by(PracticeAttempt.created_at.asc())
         .all()
     ):
         attempts_by_topic.setdefault(attempt.topic_id, []).append(attempt.is_correct)
@@ -474,7 +516,7 @@ def diagnose_weak_prerequisites(
         topic = candidate_topics.get(cand_id)
         if topic is None or topic.deprecated:
             continue
-        if cand_id in direct_prereq_ids or cand_id in skip_ids:
+        if cand_id in direct_prereq_ids:
             continue
 
         # No progress row yet means the topic is available, not mastered.
@@ -488,7 +530,9 @@ def diagnose_weak_prerequisites(
             continue
         accuracy = sum(1 for correct in outcomes if correct) / attempt_count
 
-        mastery = estimator.estimate(db, child_id, cand_id)
+        mastery = estimator.estimate(
+            db, child_id, cand_id, outcomes=outcomes
+        )
         if mastery >= DIAGNOSIS_MASTERY_THRESHOLD:
             continue
 
@@ -552,9 +596,7 @@ def get_ability_dimensions(db: Session, child_id: int) -> list[dict]:
         db.query(
             LearningTopic.domain,
             sa_func.count(PracticeAttempt.id).label("total"),
-            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)).label(
-                "correct"
-            ),
+            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)).label("correct"),
         )
         .join(PracticeAttempt, PracticeAttempt.topic_id == LearningTopic.id)
         .filter(PracticeAttempt.child_id == child_id)
@@ -573,7 +615,9 @@ def get_ability_dimensions(db: Session, child_id: int) -> list[dict]:
     ]
 
 
-def get_progress_trend(db: Session, child_id: int, topic_id: int) -> list[dict]:
+def get_progress_trend(
+    db: Session, child_id: int, topic_id: int
+) -> list[dict]:
     """Get chronological attempt history for a child+topic.
 
     Returns list of {attempt_number, is_correct, created_at}.
@@ -595,7 +639,9 @@ def get_progress_trend(db: Session, child_id: int, topic_id: int) -> list[dict]:
     ]
 
 
-def get_recommend_with_reason(db: Session, child_id: int, limit: int = 5) -> list[dict]:
+def get_recommend_with_reason(
+    db: Session, child_id: int, limit: int = 5
+) -> list[dict]:
     """Get practice recommendations with explainable reasons.
 
     Each recommendation includes a 'reason' field explaining why
@@ -611,17 +657,12 @@ def get_recommend_with_reason(db: Session, child_id: int, limit: int = 5) -> lis
             LearningTopic.name_zh,
             LearningTopic.domain,
             sa_func.count(PracticeAttempt.id).label("total"),
-            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)).label(
-                "correct"
-            ),
+            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Integer)).label("correct"),
         )
         .join(PracticeAttempt, PracticeAttempt.topic_id == LearningTopic.id)
         .filter(PracticeAttempt.child_id == child_id)
         .group_by(LearningTopic.id)
-        .order_by(
-            sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Float))
-            / sa_func.count(PracticeAttempt.id)
-        )
+        .order_by(sa_func.sum(sa_func.cast(PracticeAttempt.is_correct, sa_Float)) / sa_func.count(PracticeAttempt.id))
         .limit(limit)
         .all()
     )
@@ -638,16 +679,14 @@ def get_recommend_with_reason(db: Session, child_id: int, limit: int = 5) -> lis
         else:
             reason_key = "high_accuracy"
 
-        results.append(
-            {
-                "topic_id": row.id,
-                "topic_name": row.name,
-                "topic_name_zh": row.name_zh,
-                "domain": row.domain,
-                "total_attempts": row.total,
-                "accuracy": accuracy,
-                "reason_key": reason_key,
-            }
-        )
+        results.append({
+            "topic_id": row.id,
+            "topic_name": row.name,
+            "topic_name_zh": row.name_zh,
+            "domain": row.domain,
+            "total_attempts": row.total,
+            "accuracy": accuracy,
+            "reason_key": reason_key,
+        })
 
     return results

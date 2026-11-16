@@ -46,7 +46,6 @@ from apps.backend.app.services.learning.practice_service import (
 )
 from apps.backend.app.services.learning.progress_service import (
     get_or_create_progress,
-    get_unmet_prerequisites,
 )
 from apps.backend.app.services.learning.question_service import (
     get_coverage_stats,
@@ -409,16 +408,10 @@ def get_practice_recommendations(
     and commits one impression record per qualified candidate.
     """
     if diagnosis and topic_id is not None:
-        # The child already sees their weak direct prerequisites on this page,
-        # so the diagnosis looks one layer further back through exactly those.
-        weak_direct_ids = [
-            p.id for p in get_unmet_prerequisites(db, topic_id, user.id)
-        ]
         candidates = diagnose_weak_prerequisites(
             db,
             topic_id=topic_id,
             child_id=user.id,
-            lookback_topic_ids=weak_direct_ids,
         )
         db.commit()
         return [

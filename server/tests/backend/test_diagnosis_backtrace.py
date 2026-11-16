@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from apps.backend.app.services.learning.adaptive_service import (
     DIAGNOSIS_CONFIG_VERSION,
     DIAGNOSIS_MASTERY_THRESHOLD,
+    BayesianKnowledgeTracingEstimator,
+    RuleBasedMasteryEstimator,
     diagnose_weak_prerequisites,
 )
 from packages.db.models.family import Family
@@ -135,7 +137,7 @@ def _question(db: Session, topic: LearningTopic) -> Question:
 def test_ae1_depth2_candidate_is_top(db: Session, child: User):
     target = _topic(db, 200_001, "fractions_add")
     # Direct prerequisite the child is weak on: shown on the page already, so
-    # the router passes it in as a lookback and the backtrace looks past it.
+    # the backtrace skips it and looks past it.
     direct_unmet = _topic(db, 200_002, "common_denom")
     # Depth-2 qualified
     depth2 = _topic(db, 200_003, "lcm")
@@ -154,9 +156,7 @@ def test_ae1_depth2_candidate_is_top(db: Session, child: User):
     _progress(db, child.id, depth2.id, "learning")
     _question(db, depth2)
 
-    results = diagnose_weak_prerequisites(
-        db, target.id, child.id, lookback_topic_ids=[direct_unmet.id]
-    )
+    results = diagnose_weak_prerequisites(db, target.id, child.id)
     assert len(results) == 1, f"expected 1 candidate, got {[r['topic_name'] for r in results]}"
     assert results[0]["topic_id"] == depth2.id
     # One layer back from the direct prerequisites the page already shows.
@@ -462,3 +462,101 @@ def test_impression_written_for_each_qualified_candidate(db: Session, child: Use
 
 def test_threshold_constant_value():
     assert DIAGNOSIS_MASTERY_THRESHOLD == 0.60
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Candidate with attempts but no LearningProgress row defaults to "available"
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_candidate_without_progress_row_uses_available(db: Session, child: User):
+    target = _topic(db, 1_300_001, "target")
+    buffer = _topic(db, 1_300_002, "buffer")
+    candidate = _topic(db, 1_300_003, "candidate")
+    _dep(db, target.id, buffer.id)
+    _dep(db, buffer.id, candidate.id)
+
+    _session_and_attempts(db, child, target, n_attempts=8, correct=3)
+    _progress(db, child.id, target.id, "learning")
+    _session_and_attempts(db, child, buffer, n_attempts=8, correct=7)
+    _progress(db, child.id, buffer.id, "mastered")
+    _question(db, buffer)
+
+    # The candidate has attempts but no LearningProgress row at all.
+    _session_and_attempts(db, child, candidate, n_attempts=5, correct=1)
+    _question(db, candidate)
+
+    results = diagnose_weak_prerequisites(db, target.id, child.id)
+    assert len(results) == 1
+    assert results[0]["topic_id"] == candidate.id
+    assert results[0]["mastery_level"] == "available"
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Candidate without approved questions is excluded (KTD15 — the CTA must work)
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_candidate_without_approved_questions_excluded(db: Session, child: User):
+    target = _topic(db, 1_400_001, "target")
+    buffer = _topic(db, 1_400_002, "buffer")
+    no_questions = _topic(db, 1_400_003, "no_questions")
+    _dep(db, target.id, buffer.id)
+    _dep(db, buffer.id, no_questions.id)
+
+    _session_and_attempts(db, child, target, n_attempts=8, correct=3)
+    _progress(db, child.id, target.id, "learning")
+    _session_and_attempts(db, child, buffer, n_attempts=8, correct=7)
+    _progress(db, child.id, buffer.id, "mastered")
+    _question(db, buffer)
+
+    _session_and_attempts(db, child, no_questions, n_attempts=5, correct=1)
+    _progress(db, child.id, no_questions.id, "learning")
+    # No _question() call — the topic has no approved questions.
+
+    assert diagnose_weak_prerequisites(db, target.id, child.id) == []
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Empty candidate short-circuit: upstream exists but nothing qualifies at hop>=2
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_no_candidate_when_every_upstream_topic_is_mastered(db: Session, child: User):
+    target = _topic(db, 1_500_001, "target")
+    mastered = _topic(db, 1_500_002, "mastered")
+    _dep(db, target.id, mastered.id)
+
+    _session_and_attempts(db, child, target, n_attempts=8, correct=3)
+    _progress(db, child.id, target.id, "learning")
+    _session_and_attempts(db, child, mastered, n_attempts=8, correct=7)
+    _progress(db, child.id, mastered.id, "mastered")
+    _question(db, mastered)
+
+    assert diagnose_weak_prerequisites(db, target.id, child.id) == []
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Estimator fast path: pre-loaded outcomes match the queried result
+# ────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("n_attempts,correct", [(3, 1), (5, 2), (9, 4)])
+def test_estimators_accept_preloaded_outcomes(db: Session, child: User, n_attempts, correct):
+    topic = _topic(db, 1_600_001 + n_attempts, "topic")
+    _session_and_attempts(db, child, topic, n_attempts=n_attempts, correct=correct)
+
+    outcomes = [
+        a.is_correct
+        for a in (
+            db.query(PracticeAttempt)
+            .filter_by(child_id=child.id, topic_id=topic.id)
+            .order_by(PracticeAttempt.created_at.asc())
+            .all()
+        )
+    ]
+
+    for estimator in (RuleBasedMasteryEstimator(), BayesianKnowledgeTracingEstimator()):
+        queried = estimator.estimate(db, child.id, topic.id)
+        preloaded = estimator.estimate(db, child.id, topic.id, outcomes=outcomes)
+        assert preloaded == pytest.approx(queried)
