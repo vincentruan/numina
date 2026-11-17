@@ -84,7 +84,12 @@ def detect_misconception(
     Args:
         db: Database session.
         topic_id: The topic being practiced.
-        wrong_answer: The child's wrong answer dict (e.g., {"answer": "2/7"}).
+        wrong_answer: The child's wrong answer dict. Which key carries the value
+            depends on the question type — see ``scoring_service.check_answer``
+            for the authoritative contract: ``{"answer": ...}`` for calculation
+            and application, ``{"value": ...}`` for fill_blank and true_false,
+            ``{"key": ...}`` for multiple_choice, ``{"blanks": [...]}`` for
+            multi_fill_blank, ``{"text": ...}`` for ai_graded.
         question: The Question object (provides correct_answer for parametric matching).
         age_group: Age group filter (only misconceptions for this group are checked).
 
@@ -107,9 +112,14 @@ def detect_misconception(
 
     # Extract the user's answer value from the dict.
     # Use explicit None check to handle falsy values like 0 correctly.
+    # Probe order follows scoring_service.check_answer and is load-bearing:
+    # "answer" first so calculation payloads are untouched, then "value" for
+    # fill_blank/true_false, then "key" for multiple_choice.
     user_val = wrong_answer.get("answer")
     if user_val is None:
         user_val = wrong_answer.get("value")
+    if user_val is None:
+        user_val = wrong_answer.get("key")
     if user_val is None:
         return None
 

@@ -552,6 +552,114 @@ class TestOptionSelectMatching:
         assert result.id == m.id
 
 
+# --- Answer-extraction prelude: the payload shapes production actually sends ---
+#
+# The practice API forwards the child app's raw payload (see
+# PracticeAnswerInput.vue emit shapes and scoring_service.check_answer). For
+# multiple_choice that is {"key": ...} — not {"answer": ...} — so these tests
+# exercise the prelude probe that recovers the option key, which the
+# TestOptionSelectMatching cases above never reach.
+
+
+class TestAnswerExtractionPrelude:
+    def _option_misconception(self, db, topic):
+        return _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "option_select",
+                "wrong_options": ["B", "C"],
+            }),
+            description="Adds numerators and denominators",
+        )
+
+    def test_option_key_payload_matches(self, db, topic, question):
+        """{"key": "B"} — the shape the child app emits — reaches option_select."""
+        m = self._option_misconception(db, topic)
+        result = detect_misconception(db, topic.id, {"key": "B"}, question)
+        assert result is not None
+        assert result.id == m.id
+
+    def test_option_key_payload_not_in_wrong_options_returns_none(self, db, topic, question):
+        """A correct option key passes through the prelude but matches nothing."""
+        self._option_misconception(db, topic)
+        result = detect_misconception(db, topic.id, {"key": "A"}, question)
+        assert result is None
+
+    def test_none_option_key_returns_none(self, db, topic, question):
+        """{"key": None} with no answer/value is treated as missing."""
+        self._option_misconception(db, topic)
+        result = detect_misconception(db, topic.id, {"key": None}, question)
+        assert result is None
+
+    def test_answer_payload_still_matches(self, db, topic, question):
+        """Regression: the pre-existing {"answer": ...} shape keeps working."""
+        m = self._option_misconception(db, topic)
+        result = detect_misconception(db, topic.id, {"answer": "B"}, question)
+        assert result is not None
+        assert result.id == m.id
+
+    def test_answer_probe_wins_over_key(self, db, topic, question):
+        """When both are present, "answer" is read first — probe order is preserved."""
+        symbolic = _create_misconception(
+            db, topic,
+            sequence=0,
+            error_pattern_json=json.dumps({"match_type": "symbolic", "expected_wrong": "2/7"}),
+            description="Symbolic match on the answer probe",
+        )
+        option = _create_misconception(
+            db, topic,
+            sequence=1,
+            error_pattern_json=json.dumps({
+                "match_type": "option_select",
+                "wrong_options": ["B"],
+            }),
+            description="Option match on the key probe",
+        )
+        result = detect_misconception(db, topic.id, {"answer": "2/7", "key": "B"}, question)
+        assert result is not None
+        # "answer" is probed first, so the symbolic pattern is what fires.
+        assert result.id == symbolic.id
+        assert result.id != option.id
+
+    def test_value_probe_wins_over_key(self, db, topic, question):
+        """"value" outranks "key": a fill_blank payload carrying both uses value."""
+        text = _create_misconception(
+            db, topic,
+            sequence=0,
+            error_pattern_json=json.dumps({
+                "match_type": "text_match",
+                "expected_wrong": "denominator",
+                "normalize": True,
+            }),
+            description="Text match on the value probe",
+        )
+        _create_misconception(
+            db, topic,
+            sequence=1,
+            error_pattern_json=json.dumps({
+                "match_type": "option_select",
+                "wrong_options": ["B"],
+            }),
+            description="Option match on the key probe",
+        )
+        result = detect_misconception(
+            db, topic.id, {"value": "denominator", "key": "B"}, question
+        )
+        assert result is not None
+        assert result.id == text.id
+
+    def test_injected_option_key_never_reaches_sympy(self, db, topic, question):
+        """A code-injection-shaped key is rejected by _SAFE_MATH_RE before sympy."""
+        _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({"match_type": "symbolic", "expected_wrong": "2/7"}),
+        )
+        result = detect_misconception(
+            db, topic.id, {"key": "__import__('os').system('rm -rf /')"}, question
+        )
+        assert result is None
+
+
 # --- Integration tests: detect_and_record_misconception with non-calc types ---
 
 
