@@ -1,4 +1,4 @@
-"""Tests for teach-back dual-track grading and progress update (Issue #216)."""
+"""Tests for teach-back dual-track grading and progress update (Issue #216, #234)."""
 
 import pytest
 
@@ -8,6 +8,7 @@ from apps.backend.app.services.learning.teach_back_grading import (
     extract_expression,
     grade_expression,
 )
+from packages.core.settings import Settings
 from packages.db.models.learning.confusion import TopicConfusion
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import (
@@ -363,3 +364,73 @@ class TestTeachBackService:
             teach_back_service.validate_teach_back_request(
                 db=db, child=child, topic_id=999999
             )
+
+    def test_validate_rejects_topic_outside_allowlist(self, db, child_user, topic):
+        """A topic that exists but is not in the enabled set is rejected (#234).
+
+        The default allowlist contains real taxonomy keys, so a fixture key like
+        'teachback-topic-1' is never in the set — this isolates the allowlist guard.
+        """
+        from apps.backend.app.errors import AppError
+
+        child = db.query(User).filter(User.id == child_user["id"]).first()
+        assert topic.topic_key not in (
+            settings_holder().teach_back_enabled_topic_keys_set
+        )
+        with pytest.raises(AppError) as exc_info:
+            teach_back_service.validate_teach_back_request(
+                db=db, child=child, topic_id=topic.id
+            )
+        details = getattr(exc_info.value, "details", None) or {}
+        assert "enabled" in str(details), (
+            f"expected the allowlist guard to reject, got {details!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TEACH_BACK_ENABLED_TOPIC_KEYS configuration (Issue #234)
+# ---------------------------------------------------------------------------
+
+_EXPECTED_DEFAULT_KEYS = frozenset(
+    {
+        "mt_9KmVWCuh5_",
+        "mt_ndGqFPWyen",
+        "mt_FP-mjXaq3B",
+        "mt_Fl7b8q9pI1",
+        "mt_ZM9mhHsyYZ",
+        "mt_TgHxujL81r",
+    }
+)
+
+
+def settings_holder():
+    """Lazy settings import to keep module-level import ordering tidy."""
+    from packages.core.settings import settings
+
+    return settings
+
+
+class TestTeachBackEnabledTopicKeysConfig:
+    def test_default_includes_all_six_topics(self):
+        assert settings_holder().teach_back_enabled_topic_keys_set == _EXPECTED_DEFAULT_KEYS
+
+    def test_custom_keys_parsed(self, monkeypatch):
+        monkeypatch.setenv("TEACH_BACK_ENABLED_TOPIC_KEYS", "mt_a,mt_b")
+        from packages.core.settings import Settings
+
+        s = Settings()
+        assert s.teach_back_enabled_topic_keys_set == frozenset({"mt_a", "mt_b"})
+
+    def test_whitespace_stripped(self, monkeypatch):
+        monkeypatch.setenv("TEACH_BACK_ENABLED_TOPIC_KEYS", " mt_a ,  mt_b ")
+        from packages.core.settings import Settings
+
+        s = Settings()
+        assert s.teach_back_enabled_topic_keys_set == frozenset({"mt_a", "mt_b"})
+
+    def test_empty_string_yields_empty_set(self, monkeypatch):
+        monkeypatch.setenv("TEACH_BACK_ENABLED_TOPIC_KEYS", "")
+        from packages.core.settings import Settings
+
+        s = Settings()
+        assert s.teach_back_enabled_topic_keys_set == frozenset()
