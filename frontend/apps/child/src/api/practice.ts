@@ -53,6 +53,15 @@ export interface PracticeSessionResponse {
   learning_progress_id: string | null
 }
 
+export interface MisconceptionFeedback {
+  misconception_id: string
+  description: string
+  description_zh: string | null
+  diagnostic_question_id: string | null
+  diagnostic_question_stem: string | null
+  diagnostic_question_stem_zh: string | null
+}
+
 export interface PracticeAttemptResponse {
   id: string
   session_id: string
@@ -63,6 +72,7 @@ export interface PracticeAttemptResponse {
   time_spent_seconds: number | null
   attempt_number: number
   created_at: string
+  misconception_feedback: MisconceptionFeedback | null
 }
 
 export interface PracticeResultResponse {
@@ -86,6 +96,7 @@ export interface PracticeAnswerSubmit {
   question_id: string
   user_answer: Record<string, unknown>
   time_spent_seconds?: number
+  is_diagnostic?: boolean
 }
 
 // --- API functions ---

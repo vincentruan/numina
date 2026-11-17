@@ -969,15 +969,21 @@ async def generate_topic_plan(
 # ── Smart Tutor (Parent View, Issue #194) ────────────────────────────────────
 
 
-def _parse_smart_tutor_steps(session: LearningSession) -> tuple[list[dict], str | None, int]:
+def _parse_smart_tutor_steps(
+    session: LearningSession,
+) -> tuple[list[dict], str | None, list[dict]]:
     """Parse Smart Tutor session data from progress_json.
 
     Returns:
-        Tuple of (steps, final_phase, misconceptions_count)
+        Tuple of (steps, final_phase, misconceptions_detected)
+        where misconceptions_detected is a deduplicated list of
+        {misconception_id, category, description} dicts derived from
+        step records (replaces the old int count).
     """
     steps: list[dict] = []
     final_phase: str | None = None
-    misconceptions = 0
+    misconceptions: list[dict] = []
+    seen_misconception_ids: set[int] = set()
 
     if session.progress_json:
         try:
@@ -987,10 +993,22 @@ def _parse_smart_tutor_steps(session: LearningSession) -> tuple[list[dict], str 
                 # Final phase is the next_phase of the last step
                 if steps:
                     final_phase = steps[-1].get("next_phase")
-                # Count misconceptions (quality == "misconception")
-                misconceptions = sum(
-                    1 for s in steps if s.get("quality") == "misconception"
-                )
+                # Derive deduplicated misconceptions from step records.
+                # Each step may carry a 'misconception' sub-dict with
+                # {id, category, description}.
+                for s in steps:
+                    m = s.get("misconception")
+                    if not m or not isinstance(m, dict):
+                        continue
+                    mid = m.get("id")
+                    if mid is None or mid in seen_misconception_ids:
+                        continue
+                    seen_misconception_ids.add(mid)
+                    misconceptions.append({
+                        "misconception_id": str(mid),
+                        "category": m.get("category", ""),
+                        "description": m.get("description", ""),
+                    })
         except (json.JSONDecodeError, TypeError):
             pass
 

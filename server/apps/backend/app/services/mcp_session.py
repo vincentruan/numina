@@ -1630,54 +1630,93 @@ class MCPSession:
                                     "strategy": arguments.get("ai_strategy", ""),
                                     "question_id": str(question_id),
                                 }
-                                existing_steps.append(step_record)
 
-                                session.progress_json = json.dumps(existing_steps, ensure_ascii=False)
-                                db.commit()
-
-                                data = {
-                                    "ok": True,
-                                    "session_id": str(session_id),
-                                    "step_number": step_number,
-                                    "total_steps": len(existing_steps),
-                                    "phase": phase,
-                                    "next_phase": next_phase,
-                                }
-
-                                # Issue #196: Trigger parent notification when
-                                # Smart Tutor session completes (phase → end)
-                                if next_phase == "end":
+                                # Resolve misconception context from DB
+                                # (issue #214 U4). The caller (LLM) supplies
+                                # only the ID; category and description come
+                                # from the DB — the LLM cannot fabricate or
+                                # mismatch them. Validate topic membership
+                                # so cross-family/cross-topic IDs are rejected.
+                                misconception_rejected = False
+                                misconception_id_raw = arguments.get("misconception_id")
+                                if misconception_id_raw is not None:
                                     try:
-                                        from apps.backend.app.services.notification.dispatcher import (
-                                            notify_smart_tutor_completed,
+                                        mid = int(misconception_id_raw)
+                                    except (ValueError, TypeError):
+                                        mid = None
+                                    if mid is not None and mid > 0:
+                                        from packages.db.models.learning.misconception import (
+                                            Misconception,
                                         )
-                                        from packages.db.models.learning.topic import (
-                                            LearningTopic,
-                                        )
+                                        m = db.query(Misconception).filter_by(
+                                            id=mid, topic_id=session.topic_id,
+                                        ).first()
+                                        if m is None:
+                                            data = {
+                                                "error": "misconception_not_found",
+                                                "detail": (
+                                                    f"misconception_id {mid} does not "
+                                                    f"belong to session topic {session.topic_id}"
+                                                ),
+                                            }
+                                            # Abort the step so the LLM retries.
+                                            misconception_rejected = True
+                                        else:
+                                            step_record["misconception"] = {
+                                                "id": m.id,
+                                                "category": m.category or "",
+                                                "description": m.description or "",
+                                            }
 
-                                        topic = (
-                                            db.query(LearningTopic)
-                                            .filter(LearningTopic.id == session.topic_id)
-                                            .first()
-                                        )
-                                        if topic:
-                                            topic_name = topic.name_zh or topic.name or ""
-                                            child_user = (
-                                                db.query(User)
-                                                .filter(User.id == session.child_id)
+                                if not misconception_rejected:
+                                    existing_steps.append(step_record)
+
+                                    session.progress_json = json.dumps(existing_steps, ensure_ascii=False)
+                                    db.commit()
+
+                                    data = {
+                                        "ok": True,
+                                        "session_id": str(session_id),
+                                        "step_number": step_number,
+                                        "total_steps": len(existing_steps),
+                                        "phase": phase,
+                                        "next_phase": next_phase,
+                                    }
+
+                                    # Issue #196: Trigger parent notification when
+                                    # Smart Tutor session completes (phase → end)
+                                    if next_phase == "end":
+                                        try:
+                                            from apps.backend.app.services.notification.dispatcher import (
+                                                notify_smart_tutor_completed,
+                                            )
+                                            from packages.db.models.learning.topic import (
+                                                LearningTopic,
+                                            )
+
+                                            topic = (
+                                                db.query(LearningTopic)
+                                                .filter(LearningTopic.id == session.topic_id)
                                                 .first()
                                             )
-                                            if child_user:
-                                                notify_smart_tutor_completed(
-                                                    db=db,
-                                                    family_id=int(self._family_id),
-                                                    child_id=session.child_id,
-                                                    topic_name=topic_name,
-                                                    total_steps=len(existing_steps),
+                                            if topic:
+                                                topic_name = topic.name_zh or topic.name or ""
+                                                child_user = (
+                                                    db.query(User)
+                                                    .filter(User.id == session.child_id)
+                                                    .first()
                                                 )
-                                    except Exception:
-                                        # Notification failure should not break step recording
-                                        logger.warning("Smart tutor notification failed", exc_info=True)
+                                                if child_user:
+                                                    notify_smart_tutor_completed(
+                                                        db=db,
+                                                        family_id=int(self._family_id),
+                                                        child_id=session.child_id,
+                                                        topic_name=topic_name,
+                                                        total_steps=len(existing_steps),
+                                                    )
+                                        except Exception:
+                                            # Notification failure should not break step recording
+                                            logger.warning("Smart tutor notification failed", exc_info=True)
                 elif name == "record_teach_back_turn":
                     # Issue #216: record a teach-back turn (child explains to AI student).
                     # All logic lives in teach_back_service so it is testable in isolation.

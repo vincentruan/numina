@@ -2,6 +2,10 @@ from packages.db.models.learning.confusion import TopicConfusion
 from packages.db.models.learning.diagnosis_impression import DiagnosisImpression
 from packages.db.models.learning.hook import TopicHookQuestion
 from packages.db.models.learning.map_exploration import LearningMapExploration
+from packages.db.models.learning.misconception import (
+    Misconception,
+    MisconceptionDetection,
+)
 from packages.db.models.learning.path import LearningPath, LearningPathItem
 from packages.db.models.learning.practice import PracticeAttempt, PracticeSession
 from packages.db.models.learning.preset_path import PresetLearningPath
@@ -13,6 +17,8 @@ __all__ = [
     "LearningPath",
     "LearningPathItem",
     "LearningProgress",
+    "Misconception",
+    "MisconceptionDetection",
     "PracticeAttempt",
     "PracticeSession",
     "PresetLearningPath",

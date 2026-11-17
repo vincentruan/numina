@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   vue-router@4.6.4:
-    hash: biit3555aogu6ntrzng2r6xce4
+    hash: 520efc9d7817f85df7b0bf5fff4dd19c13ce386cb26db94a1b025cbc13ccd475
     path: patches/vue-router@4.6.4.patch
 
 importers:
@@ -32,7 +32,7 @@ importers:
         version: 3.5.33(typescript@5.9.3)
       vue-router:
         specifier: ^4.6.4
-        version: 4.6.4(patch_hash=biit3555aogu6ntrzng2r6xce4)(vue@3.5.33(typescript@5.9.3))
+        version: 4.6.4(patch_hash=520efc9d7817f85df7b0bf5fff4dd19c13ce386cb26db94a1b025cbc13ccd475)(vue@3.5.33(typescript@5.9.3))
     devDependencies:
       '@capacitor/cli':
         specifier: ^8.6.0
@@ -102,7 +102,7 @@ importers:
         version: 10.0.8(vue@3.5.33(typescript@5.9.3))
       vue-router:
         specifier: ^4.6.4
-        version: 4.6.4(patch_hash=biit3555aogu6ntrzng2r6xce4)(vue@3.5.33(typescript@5.9.3))
+        version: 4.6.4(patch_hash=520efc9d7817f85df7b0bf5fff4dd19c13ce386cb26db94a1b025cbc13ccd475)(vue@3.5.33(typescript@5.9.3))
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -271,7 +271,7 @@ importers:
         version: 10.0.8(vue@3.5.33(typescript@5.9.3))
       vue-router:
         specifier: ^4.6.4
-        version: 4.6.4(patch_hash=biit3555aogu6ntrzng2r6xce4)(vue@3.5.33(typescript@5.9.3))
+        version: 4.6.4(patch_hash=520efc9d7817f85df7b0bf5fff4dd19c13ce386cb26db94a1b025cbc13ccd475)(vue@3.5.33(typescript@5.9.3))
       vue-virtual-scroller:
         specifier: ^2.0.1
         version: 2.0.1(vue@3.5.33(typescript@5.9.3))
@@ -8811,7 +8811,7 @@ snapshots:
       '@vue/devtools-api': 6.6.4
       vue: 3.5.33(typescript@5.9.3)
 
-  vue-router@4.6.4(patch_hash=biit3555aogu6ntrzng2r6xce4)(vue@3.5.33(typescript@5.9.3)):
+  vue-router@4.6.4(patch_hash=520efc9d7817f85df7b0bf5fff4dd19c13ce386cb26db94a1b025cbc13ccd475)(vue@3.5.33(typescript@5.9.3)):
     dependencies:
       '@vue/devtools-api': 6.6.4
       vue: 3.5.33(typescript@5.9.3)

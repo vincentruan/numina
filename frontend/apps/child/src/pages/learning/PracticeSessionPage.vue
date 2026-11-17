@@ -76,6 +76,22 @@
     </div>
 
     <!-- Phase 2: answering -->
+    <div v-else-if="phase === 'answering' && diagnosticQuestion" class="answer-phase">
+      <PracticeQuestionCard :question="diagnosticQuestion" :index="currentIndex + 1" :total="totalQuestions + 1" />
+      <PracticeAnswerInput
+        :key="diagnosticQuestion.id"
+        :question="diagnosticQuestion"
+        :disabled="submitting"
+        :show-feedback="false"
+        :is-correct="false"
+        @submit="onDiagnosticAnswerSubmit"
+      />
+      <button class="btn-secondary skip-diagnostic-btn" :disabled="submitting" @click="diagnosticQuestion = null; feedbackShown = true">
+        {{ t('practice.misconception.notNow') }}
+      </button>
+    </div>
+
+    <!-- Phase 2: answering (normal) -->
     <div v-else-if="phase === 'answering'" class="answer-phase">
       <van-progress
         :percentage="progressPercent"
@@ -100,14 +116,20 @@
       />
 
       <!-- Feedback section -->
-      <div v-if="feedbackShown" class="feedback-section">
+      <div v-if="feedbackShown && lastAttempt" class="feedback-section">
+        <!-- Misconception feedback card (issue #214): reframe BEFORE the error signal -->
+        <MisconceptionFeedbackCard
+          :feedback="lastAttempt?.misconception_feedback ?? null"
+          @diagnostic-requested="onDiagnosticRequested"
+          @dismissed="onMisconceptionDismissed"
+        />
         <div class="feedback-banner" :class="lastAttempt?.is_correct ? 'feedback-banner--correct' : 'feedback-banner--wrong'">
           <span class="feedback-icon">{{ lastAttempt?.is_correct ? '✓' : '✗' }}</span>
           <span>{{ lastAttempt?.is_correct ? t('practice.feedback.correct') : t('practice.feedback.wrong') }}</span>
         </div>
-        <div v-if="!lastAttempt?.is_correct && currentQuestion.solution" class="solution-box">
+        <div v-if="!lastAttempt?.is_correct && activeSolution" class="solution-box">
           <p class="solution-title">{{ t('practice.feedback.solution') }}</p>
-          <p v-for="(step, i) in currentQuestion.solution.steps || []" :key="i" class="solution-step">
+          <p v-for="(step, i) in activeSolution.steps || []" :key="i" class="solution-step">
             {{ step }}
           </p>
         </div>
@@ -170,6 +192,7 @@ import PracticeResultSummary from '@/components/learning/PracticeResultSummary.v
 import DiscoveryChallengeIntro from '@/components/learning/DiscoveryChallengeIntro.vue'
 import RushMode from '@/components/learning/RushMode.vue'
 import DiagnosisCard from '@/components/learning/DiagnosisCard.vue'
+import MisconceptionFeedbackCard from '@/components/learning/MisconceptionFeedbackCard.vue'
 import { createSession, getMyLearningMap, getTopicDetail } from '@/api/learning'
 import { getChallengeForTopic } from '@/data/learning-challenge/fair-distribution'
 import type { ChallengeConfig } from '@/types/learning-challenge'
@@ -231,6 +254,11 @@ const displayTopicName = computed(() => {
 const totalQuestions = computed(() => questions.value.length)
 const currentQuestion = computed(() => questions.value[currentIndex.value])
 const isLastQuestion = computed(() => currentIndex.value >= totalQuestions.value - 1)
+/** Solution shown after answering: prefer the diagnostic question's solution
+ *  (if one is still alive) over the regular question's. */
+const activeSolution = computed(
+  () => diagnosticQuestion.value?.solution ?? currentQuestion.value?.solution,
+)
 const progressPercent = computed(() =>
   Math.round(((currentIndex.value + (feedbackShown.value ? 1 : 0)) / totalQuestions.value) * 100),
 )
@@ -322,9 +350,11 @@ async function resolveTopicChallenge() {
   }
 }
 
-// Resolve challenge once on mount — sets the initial phase (discovery or mode).
+// Resolve challenge and kick off diagnosis once on mount — the router renders
+// no KeepAlive, so this is the single-shot entry point.
 onMounted(() => {
   resolveTopicChallenge()
+  startDiagnosis()
 })
 
 /** Map backend practice error codes to i18n keys */
@@ -361,6 +391,7 @@ async function onAnswerSubmit(answer: Record<string, unknown>) {
 }
 
 async function nextQuestion() {
+  diagnosticQuestion.value = null
   if (isLastQuestion.value) {
     await doFinish()
     return
@@ -368,6 +399,58 @@ async function nextQuestion() {
   currentIndex.value += 1
   lastAttempt.value = null
   feedbackShown.value = false
+}
+
+// --- Misconception diagnostic question flow (issue #214) ---
+
+/** The diagnostic question currently being offered/answered, if any. */
+const diagnosticQuestion = ref<QuestionResponse | null>(null)
+
+/** Child tapped "Try a practice problem" — load and show the diagnostic question. */
+async function onDiagnosticRequested() {
+  const feedback = lastAttempt.value?.misconception_feedback
+  if (!feedback?.diagnostic_question_id || !session.value) return
+  try {
+    const [diagQ] = await batchGetQuestions([feedback.diagnostic_question_id])
+    if (!diagQ) {
+      showFailToast(t('practice.errors.submitFailed'))
+      return
+    }
+    diagnosticQuestion.value = diagQ
+    // Keep lastAttempt populated so the feedback section can restore correctly
+    // if the child skips the diagnostic question (feedbackShown is re-enabled
+    // by the skip handler with lastAttempt still pointing at the wrong answer).
+    feedbackShown.value = false
+  } catch {
+    showFailToast(t('practice.errors.submitFailed'))
+  }
+}
+
+/** Child declined the diagnostic question — continue normal flow. */
+function onMisconceptionDismissed() {
+  diagnosticQuestion.value = null
+}
+
+/** Submit the diagnostic question's answer with is_diagnostic=true. */
+async function onDiagnosticAnswerSubmit(answer: Record<string, unknown>) {
+  if (!session.value || !diagnosticQuestion.value) return
+  submitting.value = true
+  try {
+    const attempt = await submitPracticeAnswer(session.value.id, {
+      question_id: diagnosticQuestion.value.id,
+      user_answer: answer,
+      time_spent_seconds: undefined,
+      is_diagnostic: true,
+    })
+    lastAttempt.value = attempt
+    // Keep diagnosticQuestion alive so the solution section can display its steps.
+    // It is cleared in nextQuestion() when advancing to the next regular question.
+    feedbackShown.value = true
+  } catch {
+    showFailToast(t('practice.errors.submitFailed'))
+  } finally {
+    submitting.value = false
+  }
 }
 
 async function doFinish() {
@@ -523,10 +606,6 @@ watch(
     resetSessionStateForNavigation()
   },
 )
-
-onMounted(() => {
-  startDiagnosis()
-})
 
 </script>
 

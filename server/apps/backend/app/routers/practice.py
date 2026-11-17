@@ -1,6 +1,7 @@
 """Practice system API endpoints."""
 
 import json
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -14,6 +15,7 @@ from apps.backend.app.models.user import User
 from apps.backend.app.schemas.practice import (
     BatchReviewRequest,
     CoverageResponse,
+    MisconceptionSummaryResponse,
     PracticeAttemptResponse,
     PracticeQuestionWithAnswer,
     PracticeResultResponse,
@@ -35,6 +37,10 @@ from apps.backend.app.services.learning.adaptive_service import (
     get_progress_trend,
     select_questions,
 )
+from apps.backend.app.services.learning.misconception_service import (
+    detect_and_record_misconception,
+    get_child_misconceptions_summary,
+)
 from apps.backend.app.services.learning.practice_service import (
     create_session,
     finish_session,
@@ -53,7 +59,8 @@ from apps.backend.app.services.learning.question_service import (
     review_question,
 )
 from packages.core.logging import get_logger
-from packages.db.models.learning.practice import PracticeSession
+from packages.db.models.learning.misconception import Misconception
+from packages.db.models.learning.practice import PracticeAttempt, PracticeSession
 from packages.db.models.learning.question import Question as QuestionModel
 from packages.db.models.learning.topic import LearningTopic
 
@@ -169,6 +176,33 @@ def create_practice_session(
     if progress.mastery_level == "locked":
         raise AppError(ErrorCode.PRACTICE_TOPIC_LOCKED)
 
+    # Cross-session misconception boosting (#214 U3): derive the set of
+    # misconception IDs the child has recently hit on this topic. These
+    # drive diagnostic-question injection in select_questions. The
+    # recency window (last 30 attempts or 7 days, whichever covers more)
+    # keeps boosting bounded so a stale error doesn't dominate practice.
+    cutoff = datetime.now(UTC) - timedelta(days=7)
+    recent_misconception_rows = (
+        db.query(PracticeAttempt.misconception_id)
+        .filter(
+            PracticeAttempt.child_id == user.id,
+            PracticeAttempt.topic_id == req.topic_id,
+            PracticeAttempt.misconception_id.isnot(None),
+            PracticeAttempt.created_at >= cutoff,
+        )
+        .order_by(PracticeAttempt.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    recent_misconception_ids = {
+        r.misconception_id for r in recent_misconception_rows
+        if r.misconception_id is not None
+    }
+    # TODO (#214 follow-up): resolve misconceptions the child has overcome
+    # (e.g., 2+ consecutive correct answers on the diagnostic question).
+    # The resolution logic was scoped out of the initial implementation.
+    misconception_ids = recent_misconception_ids or None
+
     # Select questions — use BKT estimator for adaptive difficulty
     # (BKT auto-falls back to RuleBased when < 5 attempts)
     questions = select_questions(
@@ -181,6 +215,7 @@ def create_practice_session(
         child_id=user.id,
         estimator=BayesianKnowledgeTracingEstimator(),
         session_mode=req.session_mode,
+        misconception_ids=misconception_ids,
     )
 
     if not questions:
@@ -204,12 +239,41 @@ def submit_practice_answer(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_child),
 ):
-    """Submit an answer for a question in a practice session."""
+    """Submit an answer for a question in a practice session.
+
+    When ``is_diagnostic=True``, the session membership check is bypassed —
+    diagnostic questions are not in the original session's question list but
+    are offered after misconception detection.
+    """
     session = get_session(db, session_id)
     if not session or session.child_id != user.id:
         raise AppError(ErrorCode.PRACTICE_SESSION_NOT_FOUND)
     if session.ended_at is not None:
         raise AppError(ErrorCode.PRACTICE_SESSION_ALREADY_ENDED)
+
+    # For diagnostic questions, validate and bypass the session membership check.
+    # Only allow questions that are linked as diagnostic questions for this topic's
+    # misconceptions — prevents answering arbitrary questions to leak answer data.
+    if req.is_diagnostic:
+        is_legitimate_diagnostic = (
+            db.query(Misconception)
+            .filter(
+                Misconception.topic_id == session.topic_id,
+                Misconception.diagnostic_question_id == req.question_id,
+                Misconception.review_status == "approved",
+            )
+            .first()
+        ) is not None
+
+        if is_legitimate_diagnostic:
+            session_ids: list[int] = json.loads(session.question_ids_json)
+            if req.question_id not in session_ids:
+                session_ids.append(req.question_id)
+                session.question_ids_json = json.dumps(session_ids)
+        else:
+            raise AppError(
+                ErrorCode.PRACTICE_QUESTION_NOT_IN_SESSION,
+            )
 
     attempt = submit_answer(
         db=db,
@@ -221,8 +285,40 @@ def submit_practice_answer(
         time_spent_seconds=req.time_spent_seconds,
         _session=session,
     )
+
+    # Run misconception detection on wrong calculation answers. Detection
+    # failure is isolated — the attempt is still saved without the
+    # misconception annotation, so a detection bug never blocks a child's
+    # answer submission.
+    misconception_feedback = None
+    if not attempt.is_correct:
+        try:
+            result = detect_and_record_misconception(
+                db,
+                child_id=user.id,
+                topic_id=session.topic_id,
+                question_id=req.question_id,
+                user_answer=req.user_answer,
+            )
+        except Exception:
+            logger.warning(
+                "Misconception detection failed for question_id=%s; "
+                "saving attempt without annotation",
+                req.question_id,
+                exc_info=True,
+            )
+            result = None
+        if result is not None:
+            # Annotate the attempt itself (drives cross-session adaptive boosting).
+            misconception_id, misconception_feedback = result
+            attempt.misconception_id = misconception_id
+
     db.commit()
-    return attempt
+
+    # Build response with optional misconception feedback.
+    response = PracticeAttemptResponse.model_validate(attempt)
+    response.misconception_feedback = misconception_feedback
+    return response
 
 
 @router.post("/sessions/{session_id}/finish", response_model=PracticeResultResponse)
@@ -724,3 +820,16 @@ def get_grading_explanation(
 
         explanation = _filter_recursive(explanation, child_id=user.id)
     return explanation
+
+
+@router.get("/misconceptions", response_model=list[MisconceptionSummaryResponse])
+def get_child_misconceptions(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_child),
+):
+    """Get the child's detected misconceptions grouped by topic.
+
+    Returns a list of misconception summaries with detection counts,
+    ordered by most recently detected first.
+    """
+    return get_child_misconceptions_summary(db, child_id=user.id)
