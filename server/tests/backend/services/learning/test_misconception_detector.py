@@ -408,3 +408,146 @@ class TestFractionAddProductDenominator:
         # Unrelated wrong answer also must not trigger
         result_wrong = detect_misconception(db, topic.id, {"answer": "3/5"}, q)
         assert result_wrong is None
+
+
+# --- text_match tests ---
+
+
+class TestTextMatching:
+    def test_exact_normalized_match_returns_misconception(self, db, topic, question):
+        """Text answer '分子' matches text_match pattern with expected_wrong '分子'."""
+        m = _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "text_match",
+                "expected_wrong": "分子",
+                "normalize": True,
+            }),
+        )
+        result = detect_misconception(db, topic.id, {"answer": "分子"}, question)
+        assert result is not None
+        assert result.id == m.id
+
+    def test_trailing_whitespace_matches_after_normalization(self, db, topic, question):
+        """Text answer '分子 ' (trailing space) matches '分子' after normalization."""
+        m = _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "text_match",
+                "expected_wrong": "分子",
+                "normalize": True,
+            }),
+        )
+        result = detect_misconception(db, topic.id, {"answer": "分子 "}, question)
+        assert result is not None
+        assert result.id == m.id
+
+    def test_case_insensitive_match(self, db, topic, question):
+        """Text answer 'FRACTION' matches 'fraction' when normalize=true."""
+        m = _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "text_match",
+                "expected_wrong": "fraction",
+                "normalize": True,
+            }),
+        )
+        result = detect_misconception(db, topic.id, {"answer": "FRACTION"}, question)
+        assert result is not None
+        assert result.id == m.id
+
+    def test_normalize_false_requires_exact_match(self, db, topic, question):
+        """With normalize=false, case difference means no match."""
+        _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "text_match",
+                "expected_wrong": "fraction",
+                "normalize": False,
+            }),
+        )
+        result = detect_misconception(db, topic.id, {"answer": "Fraction"}, question)
+        assert result is None
+
+    def test_non_matching_text_returns_none(self, db, topic, question):
+        """Unrelated text answer does not match."""
+        _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "text_match",
+                "expected_wrong": "分子",
+                "normalize": True,
+            }),
+        )
+        result = detect_misconception(db, topic.id, {"answer": "分母"}, question)
+        assert result is None
+
+    def test_chinese_text_bypasses_safe_math_re(self, db, topic, question):
+        """Chinese text answer is handled by text_match without _SAFE_MATH_RE blocking it."""
+        m = _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "text_match",
+                "expected_wrong": "光合作用",
+                "normalize": True,
+            }),
+        )
+        result = detect_misconception(db, topic.id, {"answer": "光合作用"}, question)
+        assert result is not None
+        assert result.id == m.id
+
+
+# --- option_select tests ---
+
+
+class TestOptionSelectMatching:
+    def test_wrong_option_in_list_returns_misconception(self, db, topic, question):
+        """Selecting option 'B' when wrong_options=['B', 'C'] triggers detection."""
+        m = _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "option_select",
+                "wrong_options": ["B", "C"],
+            }),
+        )
+        result = detect_misconception(db, topic.id, {"answer": "B"}, question)
+        assert result is not None
+        assert result.id == m.id
+
+    def test_correct_option_not_in_list_returns_none(self, db, topic, question):
+        """Selecting option 'A' when wrong_options=['B', 'C'] does not trigger."""
+        _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "option_select",
+                "wrong_options": ["B", "C"],
+            }),
+        )
+        result = detect_misconception(db, topic.id, {"answer": "A"}, question)
+        assert result is None
+
+    def test_empty_wrong_options_returns_none(self, db, topic, question):
+        """Empty wrong_options list means no match."""
+        _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "option_select",
+                "wrong_options": [],
+            }),
+        )
+        result = detect_misconception(db, topic.id, {"answer": "B"}, question)
+        assert result is None
+
+    def test_option_select_bypasses_safe_math_re(self, db, topic, question):
+        """Option key 'B' would fail _SAFE_MATH_RE but is handled by option_select."""
+        m = _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "option_select",
+                "wrong_options": ["B"],
+            }),
+        )
+        result = detect_misconception(db, topic.id, {"answer": "B"}, question)
+        assert result is not None
+        assert result.id == m.id
+

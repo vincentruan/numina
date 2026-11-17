@@ -4,11 +4,14 @@ Runs after a wrong answer is scored. Loads the topic's approved misconceptions,
 compares the child's wrong answer against each entry's error_pattern, and returns
 the first match (or None).
 
-Supports three match types:
+Supports five match types:
 - "symbolic": exact symbolic comparison (e.g., "2/7" == "2/7")
 - "numeric": tolerance-based float comparison
 - "parametric": dynamic computation from question content (e.g., "add numerators
   and denominators" computes expected_wrong from the specific fractions in the question)
+- "text_match": normalized string comparison for fill_in_blank answers (strip whitespace,
+  case-insensitive by default)
+- "option_select": wrong option key matching for multiple_choice answers (e.g., "B", "C")
 """
 
 import math
@@ -35,7 +38,7 @@ _SAFE_MATH_RE = re.compile(r'^[0-9+\-*/().\s^a-zA-Z]+$')
 # --- TypedDict hierarchy for parsed error patterns ---
 
 class _BasePattern(TypedDict):
-    match_type: Literal["symbolic", "numeric", "parametric"]
+    match_type: Literal["symbolic", "numeric", "parametric", "text_match", "option_select"]
 
 
 class _SymbolicPattern(_BasePattern):
@@ -51,7 +54,22 @@ class _ParametricPattern(_BasePattern):
     algorithm: str
 
 
-_ErrorPattern = _SymbolicPattern | _NumericPattern | _ParametricPattern
+class _TextMatchPattern(_BasePattern):
+    expected_wrong: str
+    normalize: bool
+
+
+class _OptionSelectPattern(_BasePattern):
+    wrong_options: list[str]
+
+
+_ErrorPattern = (
+    _SymbolicPattern
+    | _NumericPattern
+    | _ParametricPattern
+    | _TextMatchPattern
+    | _OptionSelectPattern
+)
 
 
 def detect_misconception(
@@ -97,11 +115,9 @@ def detect_misconception(
 
     user_str = str(user_val).strip()
 
-    # Reject inputs that don't look like math expressions — prevents passing
-    # code injection payloads to sympy.sympify downstream.
-    if not _SAFE_MATH_RE.match(user_str):
-        logger.debug("Rejecting non-math answer for misconception detection: %s", user_str[:50])
-        return None
+    # Note: _SAFE_MATH_RE validation is done inside _match_symbolic, _match_numeric,
+    # and _match_parametric — not here — because text_match and option_select operate
+    # on plain text/keys and never feed input to sympy.
 
     for m in misconceptions:
         try:
@@ -129,11 +145,30 @@ def detect_misconception(
                 )
                 return m
 
-        elif match_type == "parametric" and _match_parametric(
-            user_str, cast(_ParametricPattern, pattern), question
+        elif match_type == "parametric":
+            if _match_parametric(user_str, cast(_ParametricPattern, pattern), question):
+                logger.debug(
+                    "Misconception detected (parametric): misconception_id=%s, topic_id=%s",
+                    m.id,
+                    topic_id,
+                )
+                return m
+
+        elif match_type == "text_match" and _match_text(
+            user_str, cast(_TextMatchPattern, pattern)
         ):
             logger.debug(
-                "Misconception detected (parametric): misconception_id=%s, topic_id=%s",
+                "Misconception detected (text_match): misconception_id=%s, topic_id=%s",
+                m.id,
+                topic_id,
+            )
+            return m
+
+        elif match_type == "option_select" and _match_option_select(
+            user_str, cast(_OptionSelectPattern, pattern)
+        ):
+            logger.debug(
+                "Misconception detected (option_select): misconception_id=%s, topic_id=%s",
                 m.id,
                 topic_id,
             )
@@ -158,6 +193,10 @@ def _parse_pattern(m: Misconception) -> _ErrorPattern:
 
 def _match_symbolic(user_str: str, pattern: _SymbolicPattern) -> bool:
     """Match using symbolic equivalence (SymPy-based)."""
+    # Reject non-math inputs before passing to sympy.
+    if not _SAFE_MATH_RE.match(user_str):
+        return False
+
     expected = pattern.get("expected_wrong")
     if expected is None:
         return False
@@ -169,6 +208,10 @@ def _match_symbolic(user_str: str, pattern: _SymbolicPattern) -> bool:
 
 def _match_numeric(user_str: str, pattern: _NumericPattern) -> bool:
     """Match using tolerance-based numeric comparison."""
+    # Reject non-math inputs before numeric parsing.
+    if not _SAFE_MATH_RE.match(user_str):
+        return False
+
     expected = pattern.get("expected_wrong")
     if expected is None:
         return False
@@ -195,6 +238,10 @@ def _match_parametric(user_str: str, pattern: _ParametricPattern, question: Ques
     The algorithm named in the pattern computes what the expected wrong answer
     would be given the question's specific values, then compares with the user's answer.
     """
+    # Reject non-math inputs before passing to parametric handlers (which use sympy).
+    if not _SAFE_MATH_RE.match(user_str):
+        return False
+
     algorithm = pattern.get("algorithm")
     if not algorithm:
         return False
@@ -206,6 +253,44 @@ def _match_parametric(user_str: str, pattern: _ParametricPattern, question: Ques
         return False
 
     return handler(user_str, question)
+
+
+def _match_text(user_str: str, pattern: _TextMatchPattern) -> bool:
+    """Match using normalized text comparison for fill_in_blank answers.
+
+    Strips whitespace and optionally lowercases before comparing.
+    Does NOT run _SAFE_MATH_RE — text inputs never reach sympy.
+    """
+    expected = pattern.get("expected_wrong")
+    if expected is None:
+        return False
+
+    expected_str = str(expected).strip()
+
+    # Normalize: strip whitespace (already done on user_str by caller) and lowercase.
+    normalize = pattern.get("normalize", True)
+    if normalize:
+        user_cmp = user_str.strip().lower()
+        expected_cmp = expected_str.lower()
+    else:
+        user_cmp = user_str.strip()
+        expected_cmp = expected_str
+
+    return user_cmp == expected_cmp
+
+
+def _match_option_select(user_str: str, pattern: _OptionSelectPattern) -> bool:
+    """Match by checking if the user's selected option key is in wrong_options.
+
+    For multiple_choice questions: the user's answer is an option key like "B".
+    Does NOT run _SAFE_MATH_RE — option keys never reach sympy.
+    """
+    wrong_options = pattern.get("wrong_options")
+    if not wrong_options:
+        return False
+
+    # user_str is already stripped by the caller.
+    return user_str in wrong_options
 
 
 # --- Parametric algorithm handlers ---
