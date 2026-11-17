@@ -551,3 +551,138 @@ class TestOptionSelectMatching:
         assert result is not None
         assert result.id == m.id
 
+
+# --- Integration tests: detect_and_record_misconception with non-calc types ---
+
+
+class TestServiceNonCalcIntegration:
+    """Tests that detect_and_record_misconception works for non-calculation question types."""
+
+    def test_fill_in_blank_question_detected(self, db, topic):
+        """fill_in_blank question with text_match misconception is detected via the service."""
+        from packages.db.models.learning.question import Question
+        from apps.backend.app.services.learning.misconception_service import (
+            detect_and_record_misconception,
+        )
+
+        q = Question(
+            topic_id=topic.id,
+            question_type="fill_in_blank",
+            stem="The top part of a fraction is called the ___",
+            answer_json=json.dumps({"answer": "numerator"}),
+            difficulty=1,
+            bloom_level="remember",
+            source="test",
+            age_group="mid",
+            review_status="approved",
+        )
+        db.add(q)
+        db.flush()
+
+        _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "text_match",
+                "expected_wrong": "denominator",
+                "normalize": True,
+            }),
+            description="Confuses numerator and denominator",
+        )
+
+        result = detect_and_record_misconception(
+            db,
+            child_id=1,
+            topic_id=topic.id,
+            question_id=q.id,
+            user_answer={"answer": "denominator"},
+        )
+        assert result is not None
+        misconception_id, feedback = result
+        assert feedback is not None
+
+    def test_multiple_choice_question_detected(self, db, topic):
+        """multiple_choice question with option_select misconception is detected via the service."""
+        from packages.db.models.learning.question import Question
+        from apps.backend.app.services.learning.misconception_service import (
+            detect_and_record_misconception,
+        )
+
+        q = Question(
+            topic_id=topic.id,
+            question_type="multiple_choice",
+            stem="What is 1/3 + 1/4?",
+            options_json=json.dumps([
+                {"key": "A", "text": "2/7"},
+                {"key": "B", "text": "7/12"},
+                {"key": "C", "text": "4/7"},
+            ]),
+            answer_json=json.dumps({"answer": "B"}),
+            difficulty=2,
+            bloom_level="apply",
+            source="test",
+            age_group="mid",
+            review_status="approved",
+        )
+        db.add(q)
+        db.flush()
+
+        _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "option_select",
+                "wrong_options": ["A", "C"],
+            }),
+            description="Incorrect fraction addition",
+        )
+
+        # Selecting wrong option A
+        result = detect_and_record_misconception(
+            db,
+            child_id=1,
+            topic_id=topic.id,
+            question_id=q.id,
+            user_answer={"answer": "A"},
+        )
+        assert result is not None
+        misconception_id, feedback = result
+        assert feedback is not None
+
+    def test_unknown_question_type_returns_none(self, db, topic):
+        """Unknown question_type runs detection but returns None when no match."""
+        from packages.db.models.learning.question import Question
+        from apps.backend.app.services.learning.misconception_service import (
+            detect_and_record_misconception,
+        )
+
+        q = Question(
+            topic_id=topic.id,
+            question_type="matching",
+            stem="Match the fractions",
+            answer_json=json.dumps({"answer": "pairs"}),
+            difficulty=1,
+            bloom_level="apply",
+            source="test",
+            age_group="mid",
+            review_status="approved",
+        )
+        db.add(q)
+        db.flush()
+
+        _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "text_match",
+                "expected_wrong": "wrong_match",
+                "normalize": True,
+            }),
+        )
+
+        result = detect_and_record_misconception(
+            db,
+            child_id=1,
+            topic_id=topic.id,
+            question_id=q.id,
+            user_answer={"answer": "some_other_match"},
+        )
+        assert result is None
+
