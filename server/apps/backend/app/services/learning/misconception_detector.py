@@ -55,7 +55,10 @@ class _ParametricPattern(_BasePattern):
 
 
 class _TextMatchPattern(_BasePattern):
-    expected_wrong: str
+    # A bare string matches one expected wrong answer. A list matches any of
+    # several — used when the same confusion can be expressed in more than one
+    # language (e.g. the seeded bilingual fill_blank diagnostic questions).
+    expected_wrong: str | list[str]
     normalize: bool
 
 
@@ -266,27 +269,38 @@ def _match_parametric(user_str: str, pattern: _ParametricPattern, question: Ques
 
 
 def _match_text(user_str: str, pattern: _TextMatchPattern) -> bool:
-    """Match using normalized text comparison for fill_in_blank answers.
+    """Match using normalized text comparison for fill_blank answers.
 
-    Strips whitespace and optionally lowercases before comparing.
+    Strips whitespace and optionally lowercases before comparing. ``expected_wrong``
+    may be a single string or a list of acceptable wrong answers (e.g. both the
+    Chinese and English forms of the same term).
     Does NOT run _SAFE_MATH_RE — text inputs never reach sympy.
     """
     expected = pattern.get("expected_wrong")
     if expected is None:
         return False
 
-    expected_str = str(expected).strip()
+    candidates = expected if isinstance(expected, list) else [expected]
+    if not candidates:
+        return False
 
     # Normalize: strip whitespace (already done on user_str by caller) and lowercase.
     normalize = pattern.get("normalize", True)
     if normalize:
         user_cmp = user_str.strip().lower()
-        expected_cmp = expected_str.lower()
     else:
         user_cmp = user_str.strip()
-        expected_cmp = expected_str
 
-    return user_cmp == expected_cmp
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        expected_cmp = str(candidate).strip()
+        if normalize:
+            expected_cmp = expected_cmp.lower()
+        if user_cmp == expected_cmp:
+            return True
+
+    return False
 
 
 def _match_option_select(user_str: str, pattern: _OptionSelectPattern) -> bool:

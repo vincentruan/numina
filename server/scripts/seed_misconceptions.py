@@ -5,10 +5,16 @@ Usage:
     cd server
     uv run python scripts/seed_misconceptions.py
 
-Writes 3 hand-authored misconceptions for fraction addition into
-``misconceptions`` with ``review_status='approved'``, plus a linked diagnostic
-question per misconception. Idempotent: deletes existing seeded rows for each
-topic before re-inserting.
+Writes hand-authored misconceptions into ``misconceptions`` with
+``review_status='approved'``, plus a linked diagnostic question per
+misconception: three calculation (parametric), two fill_blank (text_match) and
+two multiple_choice (option_select). Idempotent: misconceptions are upserted by
+(topic_id, age_group, sequence) and diagnostic questions by stem.
+
+Diagnostic question payloads must match the grading contract in
+``apps/backend/app/services/learning/scoring_service.py`` — ``{"value": ...}``
+for fill_blank and ``{"key": ...}`` for multiple_choice. Seeded rows using any
+other shape grade as wrong for every child.
 """
 import json
 import sys
@@ -113,13 +119,15 @@ SAMPLE_MISCONCEPTIONS: dict[str, list[dict]] = {
                 "bloom_level": "apply",
             },
         },
-        # --- fill_in_blank misconceptions (sequence 3-4) ---
+        # --- fill_blank misconceptions (sequence 3-4) ---
+        # expected_wrong lists both languages: the stems are bilingual, so the
+        # child may answer in either. See scoring_service: fill_blank reads "value".
         {
             "sequence": 3,
             "category": "concept_confusion",
             "error_pattern": {
                 "match_type": "text_match",
-                "expected_wrong": "denominator",
+                "expected_wrong": ["denominator", "分母"],
                 "normalize": True,
             },
             "description": (
@@ -132,10 +140,10 @@ SAMPLE_MISCONCEPTIONS: dict[str, list[dict]] = {
                 "分母是下面的数（表示平均分成几份）。"
             ),
             "diagnostic_question": {
-                "question_type": "fill_in_blank",
+                "question_type": "fill_blank",
                 "stem": "In the fraction 3/4, the number 3 is called the ___",
                 "stem_zh": "在分数 3/4 中，上面的 3 叫做___",
-                "answer": {"answer": "numerator"},
+                "answer": {"value": "numerator"},
                 "difficulty": 1,
                 "bloom_level": "remember",
             },
@@ -145,7 +153,7 @@ SAMPLE_MISCONCEPTIONS: dict[str, list[dict]] = {
             "category": "concept_confusion",
             "error_pattern": {
                 "match_type": "text_match",
-                "expected_wrong": "numerator",
+                "expected_wrong": ["numerator", "分子"],
                 "normalize": True,
             },
             "description": (
@@ -158,15 +166,17 @@ SAMPLE_MISCONCEPTIONS: dict[str, list[dict]] = {
                 "表示把一个整体平均分成多少份。"
             ),
             "diagnostic_question": {
-                "question_type": "fill_in_blank",
+                "question_type": "fill_blank",
                 "stem": "In the fraction 2/5, the number 5 is called the ___",
                 "stem_zh": "在分数 2/5 中，下面的 5 叫做___",
-                "answer": {"answer": "denominator"},
+                "answer": {"value": "denominator"},
                 "difficulty": 1,
                 "bloom_level": "remember",
             },
         },
         # --- multiple_choice misconceptions (sequence 5-6) ---
+        # wrong_options are option keys on the linked diagnostic question below.
+        # See scoring_service: multiple_choice reads "key".
         {
             "sequence": 5,
             "category": "concept_confusion",
@@ -193,7 +203,7 @@ SAMPLE_MISCONCEPTIONS: dict[str, list[dict]] = {
                     {"key": "C", "text": "2/6"},
                     {"key": "D", "text": "1/9"},
                 ],
-                "answer": {"answer": "B"},
+                "answer": {"key": "B"},
                 "difficulty": 2,
                 "bloom_level": "apply",
             },
@@ -223,13 +233,35 @@ SAMPLE_MISCONCEPTIONS: dict[str, list[dict]] = {
                     {"key": "C", "text": "5/12"},
                     {"key": "D", "text": "1/3"},
                 ],
-                "answer": {"answer": "C"},
+                "answer": {"key": "C"},
                 "difficulty": 3,
                 "bloom_level": "apply",
             },
         },
     ],
 }
+
+
+def _sync_diagnostic_question(q: Question, diag_data: dict) -> None:
+    """Write the seed data's gradable fields onto a diagnostic question row.
+
+    Used both on insert and when the row already exists. Re-runs of the seed
+    script must overwrite ``answer_json``/``options_json`` too — otherwise a
+    corrected seed row never reaches an already-seeded question and the child
+    keeps grading against the stale payload.
+    """
+    q.question_type = diag_data["question_type"]
+    q.stem_zh = diag_data["stem_zh"]
+    q.answer_json = json.dumps(diag_data["answer"])
+    # options_json is required for multiple_choice: without it the child sees a
+    # question with no choices. Other types carry no options.
+    options = diag_data.get("options")
+    q.options_json = json.dumps(options) if options is not None else None
+    q.difficulty = diag_data["difficulty"]
+    q.bloom_level = diag_data["bloom_level"]
+    q.source = "seed"
+    q.age_group = "mid"
+    q.review_status = "approved"
 
 
 def seed_misconceptions() -> None:
@@ -261,20 +293,11 @@ def seed_misconceptions() -> None:
                     .first()
                 )
                 if existing_q is not None:
+                    _sync_diagnostic_question(existing_q, diag_data)
                     diagnostic_question_id = existing_q.id
                 else:
-                    diag_q = Question(
-                        topic_id=topic.id,
-                        question_type=diag_data["question_type"],
-                        stem=diag_data["stem"],
-                        stem_zh=diag_data["stem_zh"],
-                        answer_json=json.dumps(diag_data["answer"]),
-                        difficulty=diag_data["difficulty"],
-                        bloom_level=diag_data["bloom_level"],
-                        source="seed",
-                        age_group="mid",
-                        review_status="approved",
-                    )
+                    diag_q = Question(topic_id=topic.id, stem=diag_data["stem"])
+                    _sync_diagnostic_question(diag_q, diag_data)
                     db.add(diag_q)
                     db.flush()
                     diagnostic_question_id = diag_q.id
