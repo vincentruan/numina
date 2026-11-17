@@ -19,6 +19,10 @@ from apps.backend.app.schemas.learning import (
     AssignmentCreate,
     AssignmentResponse,
     BridgeResponse,
+    CastleFloorSchema,
+    CastleIndexResponse,
+    CastleTowerSchema,
+    CastleWindowSchema,
     ChildLearningOverview,
     ChildSessionLogResponse,
     ClusterResponse,
@@ -779,6 +783,72 @@ def get_child_bridges(
 
     taxonomy = get_effective_source_taxonomy(db, user.language)
     return get_cross_subject_bridges(db, source_taxonomy=taxonomy, subject=subject)
+
+
+# ── Knowledge Castle (Parent View, Issue #235) ───────────────────────────────
+
+
+@router.get(
+    "/children/{child_id}/castle/index",
+    response_model=CastleIndexResponse,
+)
+def get_child_castle(
+    child_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Return aggregated castle data for a child (parent view).
+
+    Reuses castle_service — the same data the child sees in their castle.
+    Zero-progress children get empty tower skeletons (200, never 404).
+    """
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    from apps.backend.app.services.learning.castle_service import get_castle_index
+
+    data = get_castle_index(db, child.id, user.family_id, user.language)
+    return CastleIndexResponse(
+        towers=[_castle_tower_to_schema(t) for t in data.towers],
+        windows=[_castle_window_to_schema(w) for w in data.windows],
+        streak_days=data.streak_days,
+    )
+
+
+def _castle_tower_to_schema(tower):
+    return CastleTowerSchema(
+        subject=tower.subject,
+        mastered_count=tower.mastered_count,
+        learning_count=tower.learning_count,
+        review_due_count=tower.review_due_count,
+        total_count=tower.total_count,
+        floors=[
+            CastleFloorSchema(
+                domain=f.domain,
+                mastered_count=f.mastered_count,
+                learning_count=f.learning_count,
+                review_due_count=f.review_due_count,
+                total_count=f.total_count,
+            )
+            for f in tower.floors
+        ],
+    )
+
+
+def _castle_window_to_schema(window):
+    return CastleWindowSchema(
+        topic_id=window.topic_id,
+        topic_name=window.topic_name,
+        topic_name_zh=window.topic_name_zh,
+        reason=window.reason,
+        subject=window.subject,
+        domain=window.domain,
+    )
 
 
 # ── Learning Topic Generator (Issue #190) ────────────────────────────────────

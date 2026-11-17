@@ -243,4 +243,101 @@ class TestCastleIndexEndpoint:
         stats = client.get("/api/v1/child/learning/stats", headers=headers).json()[
             "data"
         ]
+
         assert castle["streak_days"] == stats["learning_streak_days"]
+
+
+# ---------------------------------------------------------------------------
+# Parent castle endpoint tests (Issue #235)
+# ---------------------------------------------------------------------------
+
+PARENT_CASTLE_URL = "/api/v1/family/learning/children/{child_id}/castle/index"
+
+
+@pytest.fixture
+def parent_and_child(db: Session, client, auth_headers):
+    """Create an adult (via auth_headers) + child in same family. Returns (child_id, auth_headers)."""
+    from packages.db.models.user import User
+
+    resp = client.post(
+        "/api/v1/family/children",
+        headers=auth_headers,
+        json={
+            "username": "parentcastlekid",
+            "password": "ChildPass1",
+            "display_name": "Parent Castle Kid",
+            "avatar_color": "#FF5733",
+            "pin": ["🐱", "🌟", "🎈", "🐶"],
+        },
+    )
+    assert resp.status_code == 201
+    child_id = int(resp.json()["data"]["id"])
+    child = db.query(User).filter(User.id == child_id).first()
+    child.birthday = date(2017, 6, 1)
+    db.flush()
+    return child_id, auth_headers
+
+
+class TestParentCastleIndexEndpoint:
+    def test_parent_gets_child_castle(self, client, parent_and_child, castle_topics):
+        """Parent can fetch castle for their child — same shape as child endpoint."""
+        child_id, headers = parent_and_child
+        url = PARENT_CASTLE_URL.format(child_id=child_id)
+        resp = client.get(url, headers=headers)
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert set(data.keys()) == {"towers", "windows", "streak_days"}
+        assert len(data["towers"]) > 0
+
+    def test_zero_progress_returns_200(self, client, parent_and_child, castle_topics):
+        """Zero-progress child gets empty tower skeletons (200, never 404)."""
+        child_id, headers = parent_and_child
+        url = PARENT_CASTLE_URL.format(child_id=child_id)
+        resp = client.get(url, headers=headers)
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["windows"] == []
+        assert data["streak_days"] >= 0
+
+    def test_cross_family_rejected(self, client, db, parent_and_child, castle_topics):
+        """Parent cannot fetch castle for a child in a different family."""
+        _, _ = parent_and_child
+        # Create a second family with a child
+        resp2 = client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": "otherparent",
+                "display_name": "Other Parent",
+                "password": "TestPass123",
+                "family_name": "Other Family",
+                "family_invitation_code": "AUT02",
+            },
+        )
+        assert resp2.status_code == 200
+        other_headers = {
+            "Authorization": f"Bearer {resp2.json()['data']['access_token']}",
+        }
+        other_child_resp = client.post(
+            "/api/v1/family/children",
+            headers=other_headers,
+            json={
+                "username": "otherkid",
+                "password": "ChildPass1",
+                "display_name": "Other Kid",
+                "avatar_color": "#123456",
+                "pin": ["🐱", "🌟", "🎈", "🐶"],
+            },
+        )
+        other_child_id = int(other_child_resp.json()["data"]["id"])
+
+        # Original parent tries to access other family's child castle
+        _, headers = parent_and_child
+        url = PARENT_CASTLE_URL.format(child_id=other_child_id)
+        resp = client.get(url, headers=headers)
+        assert resp.status_code in (400, 404)
+
+    def test_requires_adult_auth(self, client):
+        """Unauthenticated requests are rejected."""
+        url = PARENT_CASTLE_URL.format(child_id=999999)
+        resp = client.get(url)
+        assert resp.status_code in (401, 403)
