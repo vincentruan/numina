@@ -779,13 +779,12 @@ async function refreshRecommendations() {
 async function onRefresh() {
   // Pull-to-refresh is the page's canonical recovery gesture — let it retry the
   // castle too instead of leaving an errored module stuck.
-  if (expandedModules.value.includes('castle')) {
-    castleLoaded = false
-  }
+  const castleExpanded = expandedModules.value.includes('castle')
+  if (castleExpanded) castleLoaded = true
   await Promise.all([
     loadData(),
     loadChildDependentData(),
-    expandedModules.value.includes('castle') ? loadCastle() : Promise.resolve(),
+    castleExpanded ? loadCastle() : Promise.resolve(),
   ])
   refreshing.value = false
 }
