@@ -2148,7 +2148,6 @@ export default {
     castle: {
       parentTitle: '知识城堡',
       parentSubtitle: '看看孩子建造了什么',
-      parentPageTitle: '孩子的知识城堡',
       parentEmpty: '暂无学习内容',
       towers: '{mastered}/{total}',
       towerA11y: '{subject}塔，已掌握 {mastered} 个，共 {total} 个',
@@ -2159,7 +2158,6 @@ export default {
       decoStreak: '连续学习 {days} 天',
       errorTitle: '城堡暂时打不开',
       errorRetry: '再试一次',
-      viewFullCastle: '查看完整城堡 →',
       compactTitle: '知识城堡',
     },
     parentReviewOnly: '当前为家长手动审核模式',

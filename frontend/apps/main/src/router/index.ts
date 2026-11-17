@@ -515,11 +515,6 @@ const router = createRouter({
           component: () => import('@/pages/ChildLearningMapPage.vue')
         },
         {
-          path: 'baby/learning/castle',
-          name: 'ParentCastle',
-          component: () => import('@/pages/ParentCastlePage.vue')
-        },
-        {
           path: 'manifesto/template-select',
           name: 'ManifestoTemplateSelect',
           component: () => import('@/pages/ManifestoTemplateSelectPage.vue'),

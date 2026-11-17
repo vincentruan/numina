@@ -281,28 +281,11 @@
                   <span>{{ t('learning.castle.compactTitle') }}</span>
                 </div>
               </template>
-              <van-skeleton v-if="castleLoading" :rows="2" :round="true" />
-              <template v-else>
-                <div v-if="!castleData || castleData.towers.length === 0" class="module-empty">
-                  <EmptyState :description="t('learning.castle.parentEmpty')" image-size="48" />
-                </div>
-                <template v-else>
-                  <div
-                    v-for="tower in castleData.towers"
-                    :key="tower.subject"
-                    class="castle-tower-row"
-                  >
-                    <span class="castle-tower-icon">{{ getTowerIcon(tower.subject) }}</span>
-                    <span class="castle-tower-name">{{ t(`learning.subject.${tower.subject}`, tower.subject) }}</span>
-                    <span class="castle-tower-progress">{{ tower.mastered_count }}/{{ tower.total_count }}</span>
-                  </div>
-                  <div class="castle-actions">
-                    <van-button size="small" type="primary" plain @click="router.push('/baby/learning/castle')">
-                      {{ t('learning.castle.viewFullCastle') }}
-                    </van-button>
-                  </div>
-                </template>
-              </template>
+              <ParentKnowledgeCastle
+                :castle="castleData"
+                :state="castleState"
+                @retry="loadCastle"
+              />
             </van-collapse-item>
           </van-collapse>
         </template>
@@ -386,12 +369,12 @@ import {
   type SmartTutorSessionResponse,
   type CastleIndex,
 } from '@/api/learning'
-import { getContinentTheme } from '@/data/continentThemes'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import IIcon from '@/components/IIcon.vue'
 import DnaGraph2D from '@/components/learning/DnaGraph2D.vue'
 import ParentClusterMap from '@/components/learning/ParentClusterMap.vue'
+import ParentKnowledgeCastle from '@/components/learning/ParentKnowledgeCastle.vue'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -414,7 +397,14 @@ const smartTutorLoading = ref(false)
 // Castle (Issue #235)
 const castleData = ref<CastleIndex | null>(null)
 const castleLoading = ref(false)
+const castleError = ref(false)
 let castleLoaded = false
+
+const castleState = computed<'loading' | 'error' | 'content'>(() => {
+  if (castleLoading.value) return 'loading'
+  if (castleError.value) return 'error'
+  return 'content'
+})
 const actioningId = ref<string | null>(null)
 const dnaGraphItems = ref<ProgressWithTopic[]>([])
 const dnaGraphLoading = ref(false)
@@ -617,17 +607,15 @@ async function loadCastle() {
   const childId = babyStore.selectedChildId
   if (!childId) return
   castleLoading.value = true
+  castleError.value = false
   try {
     castleData.value = await fetchChildCastle(childId)
   } catch {
     castleData.value = null
+    castleError.value = true
   } finally {
     castleLoading.value = false
   }
-}
-
-function getTowerIcon(subject: string): string {
-  return getContinentTheme(subject).icon
 }
 
 // Shared progress rows from getChildMap — avoids duplicate fetch between DNA graph and cluster map
@@ -789,6 +777,7 @@ watch(() => babyStore.selectedChildId, (newId) => {
     clusterMapLoaded = false
     castleLoaded = false
     castleData.value = null
+    castleError.value = false
     loadChildDependentData()
   }
 })
@@ -1187,30 +1176,5 @@ onActivated(async () => {
   font-size: 11px;
   color: var(--text-secondary);
   margin-top: 4px;
-}
-
-/* Castle compact card (Issue #235) */
-.castle-tower-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-}
-.castle-tower-icon {
-  font-size: 18px;
-  line-height: 1;
-}
-.castle-tower-name {
-  flex: 1;
-  font-size: 13px;
-  color: var(--text-primary);
-}
-.castle-tower-progress {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-.castle-actions {
-  padding: 8px 0 4px;
 }
 </style>
