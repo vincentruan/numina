@@ -150,6 +150,28 @@ class TestSeedDataQuality:
                 f"confusion seq={row.sequence} on topic {row.topic_id} has no rubric"
             )
 
+    def test_expansion_topics_have_expected_expressions(self, seed_module, pilot_topics, db):
+        """Each expansion topic (issue #234) has at least one gradeable expression.
+
+        Pins that decimals/percents/fraction-multiply seeds exercise the SymPy
+        track — the round-trip test alone would pass if their expected_expression
+        values were all null while old fraction topics still supply rows.
+        """
+        _run_seed(seed_module, db)
+        expansion_keys = ("mt_Fl7b8q9pI1", "mt_ZM9mhHsyYZ", "mt_TgHxujL81r")
+        key_to_topic = {t.topic_key: t for t in pilot_topics}
+        for key in expansion_keys:
+            topic = key_to_topic[key]
+            expr_rows = (
+                db.query(TopicConfusion)
+                .filter(
+                    TopicConfusion.topic_id == topic.id,
+                    TopicConfusion.expected_expression.isnot(None),
+                )
+                .count()
+            )
+            assert expr_rows >= 1, f"expansion topic {key} has no expected_expression rows"
+
 
 class TestSeedAgeGroupScoping:
     def test_other_age_group_rows_survive_reseed(self, seed_module, pilot_topics, db):

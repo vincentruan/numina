@@ -184,6 +184,19 @@ class TestGradeExpression:
         """1/2 × 1/3 = 1/6 should grade correctly."""
         assert grade_expression("1/6", "1/2 × 1/3 = 1/6") is True
 
+    def test_x_letter_multiply_form(self):
+        """The ASCII 'x' separator the extractor accepts must also grade."""
+        assert extract_expression("3 x 2 = 6") == "3 x 2 = 6"
+        assert grade_expression("6", "3 × 2 = 6") is True
+
+    def test_decimal_expected_fraction_child(self):
+        """Reverse direction: expected is a decimal seed, child text yields a fraction."""
+        assert grade_expression("0.25", "1/4") is True
+        assert grade_expression("0.5", "2/4") is True
+
+    def test_percent_expected_fraction_child(self):
+        assert grade_expression("50/100", "1/2") is True
+
 
 # ---------------------------------------------------------------------------
 # Progress update
