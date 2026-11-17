@@ -6,6 +6,7 @@ Covers:
 - every non-null expected_expression round-trips through the grader
 - rows for other age groups survive a re-seed (#38)
 """
+
 import importlib.util
 import sys
 from pathlib import Path
@@ -42,12 +43,15 @@ def seed_module():
 
 @pytest.fixture
 def pilot_topics(db):
-    """Create the three pilot topics the seed script expects."""
+    """Create the six teach-back topics the seed script expects."""
     topics = []
     for key in (
         "mt_9KmVWCuh5_",
         "mt_ndGqFPWyen",
         "mt_FP-mjXaq3B",
+        "mt_Fl7b8q9pI1",
+        "mt_ZM9mhHsyYZ",
+        "mt_TgHxujL81r",
     ):
         topic = LearningTopic(
             topic_key=key,
@@ -123,9 +127,7 @@ class TestSeedDataQuality:
         form the extractor can actually produce, or the track can never pass.
         """
         _run_seed(seed_module, db)
-        rows = [
-            r for r in db.query(TopicConfusion).all() if r.expected_expression
-        ]
+        rows = [r for r in db.query(TopicConfusion).all() if r.expected_expression]
         assert rows, "no seeded confusion has an expected_expression"
 
         for row in rows:
@@ -150,9 +152,7 @@ class TestSeedDataQuality:
 
 
 class TestSeedAgeGroupScoping:
-    def test_other_age_group_rows_survive_reseed(
-        self, seed_module, pilot_topics, db
-    ):
+    def test_other_age_group_rows_survive_reseed(self, seed_module, pilot_topics, db):
         """Re-seeding only replaces age_group='mid' rows (#38)."""
         topic = pilot_topics[0]
         other = TopicConfusion(
@@ -190,8 +190,7 @@ class TestSeedSequenceScoping:
         """Re-seed must not destroy hand-curated rows at unseeded sequences (#15)."""
         topic = pilot_topics[0]
         seeded_sequences = {
-            c["sequence"]
-            for c in seed_module.SAMPLE_CONFUSIONS[topic.topic_key]
+            c["sequence"] for c in seed_module.SAMPLE_CONFUSIONS[topic.topic_key]
         }
         curated_seq = max(seeded_sequences) + 100
         curated = TopicConfusion(
