@@ -113,6 +113,121 @@ SAMPLE_MISCONCEPTIONS: dict[str, list[dict]] = {
                 "bloom_level": "apply",
             },
         },
+        # --- fill_in_blank misconceptions (sequence 3-4) ---
+        {
+            "sequence": 3,
+            "category": "concept_confusion",
+            "error_pattern": {
+                "match_type": "text_match",
+                "expected_wrong": "denominator",
+                "normalize": True,
+            },
+            "description": (
+                "You mixed up numerator and denominator. The numerator is the top "
+                "number (how many parts), the denominator is the bottom (how many "
+                "equal parts the whole is split into)."
+            ),
+            "description_zh": (
+                "你把分子和分母搞混了。分子是上面的数（表示几份），"
+                "分母是下面的数（表示平均分成几份）。"
+            ),
+            "diagnostic_question": {
+                "question_type": "fill_in_blank",
+                "stem": "In the fraction 3/4, the number 3 is called the ___",
+                "stem_zh": "在分数 3/4 中，上面的 3 叫做___",
+                "answer": {"answer": "numerator"},
+                "difficulty": 1,
+                "bloom_level": "remember",
+            },
+        },
+        {
+            "sequence": 4,
+            "category": "concept_confusion",
+            "error_pattern": {
+                "match_type": "text_match",
+                "expected_wrong": "numerator",
+                "normalize": True,
+            },
+            "description": (
+                "You mixed up numerator and denominator. The denominator is the "
+                "bottom number — it tells you how many equal parts the whole is "
+                "divided into."
+            ),
+            "description_zh": (
+                "你把分子和分母搞混了。分母是下面的数，"
+                "表示把一个整体平均分成多少份。"
+            ),
+            "diagnostic_question": {
+                "question_type": "fill_in_blank",
+                "stem": "In the fraction 2/5, the number 5 is called the ___",
+                "stem_zh": "在分数 2/5 中，下面的 5 叫做___",
+                "answer": {"answer": "denominator"},
+                "difficulty": 1,
+                "bloom_level": "remember",
+            },
+        },
+        # --- multiple_choice misconceptions (sequence 5-6) ---
+        {
+            "sequence": 5,
+            "category": "concept_confusion",
+            "error_pattern": {
+                "match_type": "option_select",
+                "wrong_options": ["A"],
+            },
+            "description": (
+                "It looks like you added the numerators and denominators directly. "
+                "Remember: find a common denominator first, then add only the "
+                "numerators."
+            ),
+            "description_zh": (
+                "看起来你直接把分子和分母相加了。记住：先通分，"
+                "然后只加分子。"
+            ),
+            "diagnostic_question": {
+                "question_type": "multiple_choice",
+                "stem": "What is 1/3 + 1/6?",
+                "stem_zh": "1/3 + 1/6 等于多少？",
+                "options": [
+                    {"key": "A", "text": "2/9"},
+                    {"key": "B", "text": "1/2"},
+                    {"key": "C", "text": "2/6"},
+                    {"key": "D", "text": "1/9"},
+                ],
+                "answer": {"answer": "B"},
+                "difficulty": 2,
+                "bloom_level": "apply",
+            },
+        },
+        {
+            "sequence": 6,
+            "category": "procedural_error",
+            "error_pattern": {
+                "match_type": "option_select",
+                "wrong_options": ["C"],
+            },
+            "description": (
+                "You used the product of the denominators instead of the lowest "
+                "common denominator. The answer may look right but isn't simplified."
+            ),
+            "description_zh": (
+                "你用了分母的乘积而不是最小公分母。答案看起来对，"
+                "但没有化简。"
+            ),
+            "diagnostic_question": {
+                "question_type": "multiple_choice",
+                "stem": "What is 1/4 + 1/6?",
+                "stem_zh": "1/4 + 1/6 等于多少？",
+                "options": [
+                    {"key": "A", "text": "2/10"},
+                    {"key": "B", "text": "10/24"},
+                    {"key": "C", "text": "5/12"},
+                    {"key": "D", "text": "1/3"},
+                ],
+                "answer": {"answer": "C"},
+                "difficulty": 3,
+                "bloom_level": "apply",
+            },
+        },
     ],
 }
 
