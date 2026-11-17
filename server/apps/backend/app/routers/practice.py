@@ -1,6 +1,7 @@
 """Practice system API endpoints."""
 
 import json
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -14,7 +15,6 @@ from apps.backend.app.models.user import User
 from apps.backend.app.schemas.practice import (
     BatchReviewRequest,
     CoverageResponse,
-    MisconceptionFeedbackResponse,
     MisconceptionSummaryResponse,
     PracticeAttemptResponse,
     PracticeQuestionWithAnswer,
@@ -37,6 +37,10 @@ from apps.backend.app.services.learning.adaptive_service import (
     get_progress_trend,
     select_questions,
 )
+from apps.backend.app.services.learning.misconception_service import (
+    detect_and_record_misconception,
+    get_child_misconceptions_summary,
+)
 from apps.backend.app.services.learning.practice_service import (
     create_session,
     finish_session,
@@ -55,7 +59,8 @@ from apps.backend.app.services.learning.question_service import (
     review_question,
 )
 from packages.core.logging import get_logger
-from packages.db.models.learning.practice import PracticeSession
+from packages.db.models.learning.misconception import Misconception
+from packages.db.models.learning.practice import PracticeAttempt, PracticeSession
 from packages.db.models.learning.question import Question as QuestionModel
 from packages.db.models.learning.topic import LearningTopic
 
@@ -176,9 +181,6 @@ def create_practice_session(
     # drive diagnostic-question injection in select_questions. The
     # recency window (last 30 attempts or 7 days, whichever covers more)
     # keeps boosting bounded so a stale error doesn't dominate practice.
-    from datetime import UTC, datetime, timedelta
-    from packages.db.models.learning.practice import PracticeAttempt
-
     cutoff = datetime.now(UTC) - timedelta(days=7)
     recent_misconception_rows = (
         db.query(PracticeAttempt.misconception_id)
@@ -186,6 +188,7 @@ def create_practice_session(
             PracticeAttempt.child_id == user.id,
             PracticeAttempt.topic_id == req.topic_id,
             PracticeAttempt.misconception_id.isnot(None),
+            PracticeAttempt.created_at >= cutoff,
         )
         .order_by(PracticeAttempt.created_at.desc())
         .limit(30)
@@ -195,10 +198,9 @@ def create_practice_session(
         r.misconception_id for r in recent_misconception_rows
         if r.misconception_id is not None
     }
-    # Drop misconceptions the child has resolved: 2+ consecutive correct
-    # answers on the diagnostic question clears it. (Full resolution
-    # logic lives in the query — we only boost misconceptions still
-    # active in the recency window.)
+    # TODO (#214 follow-up): resolve misconceptions the child has overcome
+    # (e.g., 2+ consecutive correct answers on the diagnostic question).
+    # The resolution logic was scoped out of the initial implementation.
     misconception_ids = recent_misconception_ids or None
 
     # Select questions — use BKT estimator for adaptive difficulty
@@ -253,8 +255,6 @@ def submit_practice_answer(
     # Only allow questions that are linked as diagnostic questions for this topic's
     # misconceptions — prevents answering arbitrary questions to leak answer data.
     if req.is_diagnostic:
-        from packages.db.models.learning.misconception import Misconception
-
         is_legitimate_diagnostic = (
             db.query(Misconception)
             .filter(
@@ -286,69 +286,32 @@ def submit_practice_answer(
         _session=session,
     )
 
-    # Run misconception detection on wrong calculation answers.
+    # Run misconception detection on wrong calculation answers. Detection
+    # failure is isolated — the attempt is still saved without the
+    # misconception annotation, so a detection bug never blocks a child's
+    # answer submission.
     misconception_feedback = None
     if not attempt.is_correct:
-        from apps.backend.app.services.learning.misconception_detector import (
-            detect_misconception,
-        )
-        from packages.db.models.learning.misconception import MisconceptionDetection
-        from packages.db.models.learning.question import Question
-
-        question = db.query(Question).filter_by(id=req.question_id).first()
-        if question and question.question_type == "calculation":
-            misconception = detect_misconception(
+        try:
+            result = detect_and_record_misconception(
                 db,
+                child_id=user.id,
                 topic_id=session.topic_id,
-                wrong_answer=req.user_answer,
-                question=question,
+                question_id=req.question_id,
+                user_answer=req.user_answer,
             )
-            if misconception is not None:
-                # Annotate the attempt itself (drives cross-session
-                # adaptive boosting) — kept outside the savepoint so
-                # it survives even if the detection row fails.
-                attempt.misconception_id = misconception.id
-
-                # The MisconceptionDetection history row is wrapped in
-                # a savepoint: a failure here (concurrent misconception
-                # deletion, constraint error) rolls back only this row,
-                # not the answer submission.
-                try:
-                    with db.begin_nested():
-                        db.add(MisconceptionDetection(
-                            child_id=user.id,
-                            topic_id=session.topic_id,
-                            misconception_id=misconception.id,
-                            question_id=req.question_id,
-                            wrong_answer_json=json.dumps(req.user_answer),
-                        ))
-                except Exception:
-                    from packages.core.logging import get_logger
-                    get_logger(__name__).warning(
-                        "MisconceptionDetection write failed; "
-                        "attempt annotation preserved",
-                        exc_info=True,
-                    )
-
-                # Build feedback response.
-                diag_stem = None
-                diag_stem_zh = None
-                if misconception.diagnostic_question_id:
-                    diag_q = db.query(Question).filter_by(
-                        id=misconception.diagnostic_question_id
-                    ).first()
-                    if diag_q:
-                        diag_stem = diag_q.stem
-                        diag_stem_zh = diag_q.stem_zh
-
-                misconception_feedback = MisconceptionFeedbackResponse(
-                    misconception_id=misconception.id,
-                    description=misconception.description,
-                    description_zh=misconception.description_zh,
-                    diagnostic_question_id=misconception.diagnostic_question_id,
-                    diagnostic_question_stem=diag_stem,
-                    diagnostic_question_stem_zh=diag_stem_zh,
-                )
+        except Exception:
+            logger.warning(
+                "Misconception detection failed for question_id=%s; "
+                "saving attempt without annotation",
+                req.question_id,
+                exc_info=True,
+            )
+            result = None
+        if result is not None:
+            # Annotate the attempt itself (drives cross-session adaptive boosting).
+            misconception_id, misconception_feedback = result
+            attempt.misconception_id = misconception_id
 
     db.commit()
 
@@ -869,42 +832,4 @@ def get_child_misconceptions(
     Returns a list of misconception summaries with detection counts,
     ordered by most recently detected first.
     """
-    from sqlalchemy import func as sa_func
-
-    from packages.db.models.learning.misconception import (
-        Misconception,
-        MisconceptionDetection,
-    )
-
-    rows = (
-        db.query(
-            MisconceptionDetection.misconception_id,
-            Misconception.topic_id,
-            Misconception.description,
-            Misconception.description_zh,
-            sa_func.count(MisconceptionDetection.id).label("detection_count"),
-            sa_func.max(MisconceptionDetection.created_at).label("last_detected_at"),
-        )
-        .join(Misconception, Misconception.id == MisconceptionDetection.misconception_id)
-        .filter(MisconceptionDetection.child_id == user.id)
-        .group_by(
-            MisconceptionDetection.misconception_id,
-            Misconception.topic_id,
-            Misconception.description,
-            Misconception.description_zh,
-        )
-        .order_by(sa_func.max(MisconceptionDetection.created_at).desc())
-        .all()
-    )
-
-    return [
-        MisconceptionSummaryResponse(
-            misconception_id=row.misconception_id,
-            topic_id=row.topic_id,
-            description=row.description,
-            description_zh=row.description_zh,
-            detection_count=row.detection_count,
-            last_detected_at=row.last_detected_at,
-        )
-        for row in rows
-    ]
+    return get_child_misconceptions_summary(db, child_id=user.id)

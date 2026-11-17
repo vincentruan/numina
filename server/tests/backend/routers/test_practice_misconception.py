@@ -223,6 +223,71 @@ class TestMisconceptionDetectionInPracticeAPI:
         assert attempt is not None
         assert attempt.misconception_id is None
 
+    def test_non_calculation_question_skips_detection(
+        self, client, auth_headers, topic, fraction_question, misconception, db
+    ):
+        """Detection must not run for non-calculation questions (word_problem)."""
+        from apps.backend.app.models.user import User
+        from packages.db.models.learning.practice import PracticeAttempt
+
+        wp_q = Question(
+            topic_id=topic.id,
+            question_type="word_problem",
+            stem="Word problem: 1/3 of a cake plus 1/4 of a cake?",
+            stem_zh="应用题：一个蛋糕的 1/3 加上 1/4？",
+            answer_json=json.dumps({
+                "answer": "7/12",
+                "fractions": [[1, 3], [1, 4]],
+            }),
+            difficulty=2,
+            bloom_level="apply",
+            source="test",
+            age_group="mid",
+            review_status="approved",
+        )
+        db.add(wp_q)
+        db.flush()
+
+        resp = client.post(
+            "/api/v1/practice/sessions",
+            json={"topic_id": topic.id, "count": 1},
+            headers=auth_headers,
+        )
+        session_id = resp.json()["data"]["id"]
+
+        # Add the word_problem question to the session's question list so the
+        # session membership check passes (adaptive selection may not pick it).
+        from packages.db.models.learning.practice import PracticeSession
+        session = db.query(PracticeSession).filter_by(id=session_id).first()
+        session.question_ids_json = json.dumps(
+            json.loads(session.question_ids_json) + [wp_q.id]
+        )
+        db.flush()
+
+        # Wrong answer matching the misconception pattern — but the question
+        # is not a calculation question, so detection must not run.
+        resp = client.post(
+            f"/api/v1/practice/sessions/{session_id}/answer",
+            json={
+                "question_id": wp_q.id,
+                "user_answer": {"answer": "2/7"},
+                "time_spent_seconds": 10,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["is_correct"] is False
+        assert data["misconception_feedback"] is None
+
+        user = db.query(User).filter_by(username="testuser").first()
+        attempt = db.query(PracticeAttempt).filter_by(
+            child_id=user.id,
+            question_id=wp_q.id,
+        ).first()
+        assert attempt is not None
+        assert attempt.misconception_id is None
+
 
 class TestDiagnosticQuestionSubmission:
     def test_diagnostic_question_bypasses_session_check(
@@ -291,6 +356,16 @@ class TestDiagnosticQuestionSubmission:
             headers=auth_headers,
         )
         assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["is_correct"] is True
+        assert data["misconception_feedback"] is None
+
+        # The diagnostic question is appended to the session's question list.
+        from packages.db.models.learning.practice import PracticeSession
+        session = db.query(PracticeSession).filter_by(id=session_id).first()
+        assert session is not None
+        session_qids = json.loads(session.question_ids_json)
+        assert diag_q.id in session_qids
 
     def test_arbitrary_question_rejected_with_is_diagnostic(
         self, client, auth_headers, topic, fraction_question, db
@@ -370,3 +445,99 @@ class TestGetChildMisconceptions:
         entry = data[0]
         assert entry["misconception_id"] == str(misconception.id)
         assert entry["detection_count"] >= 1
+
+    def test_returns_two_misconceptions_ordered_and_fields(
+        self, client, auth_headers, topic, fraction_question, misconception, db
+    ):
+        """Two detections → both entries present, ordered most-recent-first, with full fields."""
+        # Second misconception with a distinct symbolic pattern.
+        m2 = Misconception(
+            topic_id=topic.id,
+            sequence=1,
+            error_pattern_json=json.dumps({"match_type": "symbolic", "expected_wrong": "99/100"}),
+            description="Another misconception",
+            description_zh="另一个误解。",
+            age_group="mid",
+            review_status="approved",
+        )
+        db.add(m2)
+        db.flush()
+
+        # Second question (different fractions) so adaptive selection doesn't
+        # exclude the first as recently-attempted.
+        q2 = Question(
+            topic_id=topic.id,
+            question_type="calculation",
+            stem="What is 1/2 + 1/3?",
+            stem_zh="1/2 + 1/3 等于多少？",
+            answer_json=json.dumps({
+                "answer": "5/6",
+                "fractions": [[1, 2], [1, 3]],
+            }),
+            difficulty=2,
+            bloom_level="apply",
+            source="test",
+            age_group="mid",
+            review_status="approved",
+        )
+        db.add(q2)
+        db.flush()
+
+        resp = client.post(
+            "/api/v1/practice/sessions",
+            json={"topic_id": topic.id, "count": 1},
+            headers=auth_headers,
+        )
+        session_id = resp.json()["data"]["id"]
+
+        # Trigger detection 1: parametric fraction_add_numerators (2/7 on q1).
+        client.post(
+            f"/api/v1/practice/sessions/{session_id}/answer",
+            json={
+                "question_id": fraction_question.id,
+                "user_answer": {"answer": "2/7"},
+                "time_spent_seconds": 10,
+            },
+            headers=auth_headers,
+        )
+
+        # Second session for the second answer (one attempt per question per session).
+        resp = client.post(
+            "/api/v1/practice/sessions",
+            json={"topic_id": topic.id, "count": 1},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        session_id2 = resp.json()["data"]["id"]
+
+        # Trigger detection 2: symbolic 99/100 on q2.
+        client.post(
+            f"/api/v1/practice/sessions/{session_id2}/answer",
+            json={
+                "question_id": q2.id,
+                "user_answer": {"answer": "99/100"},
+                "time_spent_seconds": 10,
+            },
+            headers=auth_headers,
+        )
+
+        resp = client.get("/api/v1/practice/misconceptions", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        ids = {entry["misconception_id"] for entry in data}
+        assert str(misconception.id) in ids
+        assert str(m2.id) in ids
+
+        for entry in data:
+            if entry["misconception_id"] == str(misconception.id):
+                assert entry["detection_count"] == 1
+                assert entry["topic_id"] == str(topic.id)
+                assert entry["description"] == misconception.description
+                assert entry["description_zh"] == misconception.description_zh
+                assert entry["last_detected_at"] is not None
+            if entry["misconception_id"] == str(m2.id):
+                assert entry["detection_count"] == 1
+                assert entry["topic_id"] == str(topic.id)
+                assert entry["description"] == "Another misconception"
+                assert entry["description_zh"] == "另一个误解。"
+                assert entry["last_detected_at"] is not None

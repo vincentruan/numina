@@ -11,10 +11,16 @@ Supports three match types:
   and denominators" computes expected_wrong from the specific fractions in the question)
 """
 
+import math
 import re
+from typing import Any, Literal, TypedDict, cast
 
 from sqlalchemy.orm import Session
 
+from apps.backend.app.services.learning.symbolic_equivalence import (
+    numeric_or_symbolic_eq,
+    symbolic_eq,
+)
 from packages.core.logging import get_logger
 from packages.db.models.learning.misconception import Misconception
 from packages.db.models.learning.question import Question
@@ -26,10 +32,32 @@ logger = get_logger(__name__)
 _SAFE_MATH_RE = re.compile(r'^[0-9+\-*/().\s^a-zA-Z]+$')
 
 
+# --- TypedDict hierarchy for parsed error patterns ---
+
+class _BasePattern(TypedDict):
+    match_type: Literal["symbolic", "numeric", "parametric"]
+
+
+class _SymbolicPattern(_BasePattern):
+    expected_wrong: str
+
+
+class _NumericPattern(_BasePattern):
+    expected_wrong: float | str
+    tolerance: float
+
+
+class _ParametricPattern(_BasePattern):
+    algorithm: str
+
+
+_ErrorPattern = _SymbolicPattern | _NumericPattern | _ParametricPattern
+
+
 def detect_misconception(
     db: Session,
     topic_id: int,
-    wrong_answer: dict,
+    wrong_answer: dict[str, Any],
     question: Question,
     age_group: str = "mid",
 ) -> Misconception | None:
@@ -84,7 +112,7 @@ def detect_misconception(
         match_type = pattern.get("match_type")
 
         if match_type == "symbolic":
-            if _match_symbolic(user_str, pattern):
+            if _match_symbolic(user_str, cast(_SymbolicPattern, pattern)):
                 logger.debug(
                     "Misconception detected (symbolic): misconception_id=%s, topic_id=%s",
                     m.id,
@@ -93,7 +121,7 @@ def detect_misconception(
                 return m
 
         elif match_type == "numeric":
-            if _match_numeric(user_str, pattern):
+            if _match_numeric(user_str, cast(_NumericPattern, pattern)):
                 logger.debug(
                     "Misconception detected (numeric): misconception_id=%s, topic_id=%s",
                     m.id,
@@ -101,7 +129,9 @@ def detect_misconception(
                 )
                 return m
 
-        elif match_type == "parametric" and _match_parametric(user_str, pattern, question):
+        elif match_type == "parametric" and _match_parametric(
+            user_str, cast(_ParametricPattern, pattern), question
+        ):
             logger.debug(
                 "Misconception detected (parametric): misconception_id=%s, topic_id=%s",
                 m.id,
@@ -116,20 +146,18 @@ class _PatternParseError(Exception):
     """Raised when error_pattern_json is malformed or missing required fields."""
 
 
-def _parse_pattern(m: Misconception) -> dict:
+def _parse_pattern(m: Misconception) -> _ErrorPattern:
     """Parse and validate the error_pattern_json field."""
     raw = m.error_pattern
     if not raw or not isinstance(raw, dict):
         raise _PatternParseError(f"Invalid error_pattern for misconception {m.id}")
     if "match_type" not in raw:
         raise _PatternParseError(f"Missing match_type for misconception {m.id}")
-    return raw
+    return raw  # type: ignore[return-value]
 
 
-def _match_symbolic(user_str: str, pattern: dict) -> bool:
+def _match_symbolic(user_str: str, pattern: _SymbolicPattern) -> bool:
     """Match using symbolic equivalence (SymPy-based)."""
-    from apps.backend.app.services.learning.symbolic_equivalence import symbolic_eq
-
     expected = pattern.get("expected_wrong")
     if expected is None:
         return False
@@ -139,12 +167,8 @@ def _match_symbolic(user_str: str, pattern: dict) -> bool:
     return result is True
 
 
-def _match_numeric(user_str: str, pattern: dict) -> bool:
+def _match_numeric(user_str: str, pattern: _NumericPattern) -> bool:
     """Match using tolerance-based numeric comparison."""
-    from apps.backend.app.services.learning.symbolic_equivalence import (
-        numeric_or_symbolic_eq,
-    )
-
     expected = pattern.get("expected_wrong")
     if expected is None:
         return False
@@ -165,7 +189,7 @@ def _match_numeric(user_str: str, pattern: dict) -> bool:
     )
 
 
-def _match_parametric(user_str: str, pattern: dict, question: Question) -> bool:
+def _match_parametric(user_str: str, pattern: _ParametricPattern, question: Question) -> bool:
     """Match using dynamic computation from question content.
 
     The algorithm named in the pattern computes what the expected wrong answer
@@ -206,8 +230,6 @@ def _algo_fraction_add_numerators(user_str: str, question: Question) -> bool:
     wrong_den = b + d
     expected_wrong = f"{wrong_num}/{wrong_den}"
 
-    from apps.backend.app.services.learning.symbolic_equivalence import symbolic_eq
-
     result = symbolic_eq(user_str, expected_wrong)
     return result is True
 
@@ -230,13 +252,10 @@ def _algo_fraction_add_product_denominator(user_str: str, question: Question) ->
     wrong_den = b * d
     expected_wrong = f"{wrong_num}/{wrong_den}"
 
-    from apps.backend.app.services.learning.symbolic_equivalence import symbolic_eq
-
     result = symbolic_eq(user_str, expected_wrong)
     # Only match if this is NOT also the correct answer (LCM might equal product
     # when b and d are coprime — in that case, the product IS the correct denominator).
     if result is True:
-        import math
         lcm = (b * d) // math.gcd(b, d)
         if lcm == wrong_den:
             # Product equals LCM — this is actually the correct answer, not a misconception.
@@ -261,10 +280,23 @@ def _algo_fraction_add_whole_numbers(user_str: str, question: Question) -> bool:
     # Wrong: just adds numerators, result is a whole number
     wrong_val = str(a + c)
 
-    from apps.backend.app.services.learning.symbolic_equivalence import symbolic_eq
-
     result = symbolic_eq(user_str, wrong_val)
     return result is True
+
+
+def _coerce_fraction_pairs(raw: object) -> list[tuple[int, int]] | None:
+    """Coerce a list of [num, den] pairs into int tuples, or None on failure."""
+    if not raw or not isinstance(raw, list) or len(raw) < 2:
+        return None
+    result: list[tuple[int, int]] = []
+    for pair in raw[:2]:
+        if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+            return None
+        try:
+            result.append((int(pair[0]), int(pair[1])))
+        except (ValueError, TypeError):
+            return None
+    return result if len(result) == 2 else None
 
 
 def _extract_fractions_from_question(question: Question) -> list[tuple[int, int]] | None:
@@ -282,45 +314,21 @@ def _extract_fractions_from_question(question: Question) -> list[tuple[int, int]
         return None
 
     # Try explicit fractions list
-    fractions = answer.get("fractions")
-    if fractions and isinstance(fractions, list) and len(fractions) >= 2:
-        result = []
-        for f in fractions[:2]:
-            if isinstance(f, (list, tuple)) and len(f) >= 2:
-                try:
-                    result.append((int(f[0]), int(f[1])))
-                except (ValueError, TypeError):
-                    return None
-        if len(result) == 2:
-            return result
+    result = _coerce_fraction_pairs(answer.get("fractions"))
+    if result:
+        return result
 
     # Try operands list
-    operands = answer.get("operands")
-    if operands and isinstance(operands, list) and len(operands) >= 2:
-        result = []
-        for o in operands[:2]:
-            if isinstance(o, (list, tuple)) and len(o) >= 2:
-                try:
-                    result.append((int(o[0]), int(o[1])))
-                except (ValueError, TypeError):
-                    return None
-        if len(result) == 2:
-            return result
+    result = _coerce_fraction_pairs(answer.get("operands"))
+    if result:
+        return result
 
     # Try parsing from question parameters
     params = question.parameters
     if params and isinstance(params, dict):
-        fractions = params.get("fractions") or params.get("operands")
-        if fractions and isinstance(fractions, list) and len(fractions) >= 2:
-            result = []
-            for f in fractions[:2]:
-                if isinstance(f, (list, tuple)) and len(f) >= 2:
-                    try:
-                        result.append((int(f[0]), int(f[1])))
-                    except (ValueError, TypeError):
-                        return None
-            if len(result) == 2:
-                return result
+        result = _coerce_fraction_pairs(params.get("fractions") or params.get("operands"))
+        if result:
+            return result
 
     return None
 

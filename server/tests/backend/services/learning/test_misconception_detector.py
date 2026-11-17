@@ -8,6 +8,7 @@ from apps.backend.app.services.learning.misconception_detector import (
     detect_misconception,
     _extract_fractions_from_question,
     _algo_fraction_add_numerators,
+    _algo_fraction_add_product_denominator,
 )
 from packages.db.models.learning.misconception import Misconception
 
@@ -290,3 +291,120 @@ class TestFractionExtraction:
         db.flush()
         result = _extract_fractions_from_question(q)
         assert result is None
+
+
+class TestFractionAddProductDenominator:
+    """Tests for the 'product of denominators instead of LCM' misconception."""
+
+    def test_happy_path_product_denominator_detected(self, db, topic):
+        """For 1/4 + 1/6, wrong answer '10/24' matches the product-denominator pattern.
+
+        Product denominator: (1*6 + 1*4) / (4*6) = 10/24.
+        LCM(4, 6) = 12, so 10/24 is NOT the correct answer (correct is 5/12).
+        """
+        from packages.db.models.learning.question import Question
+
+        q = Question(
+            topic_id=topic.id,
+            question_type="calculation",
+            stem="What is 1/4 + 1/6?",
+            answer_json=json.dumps({
+                "answer": "5/12",
+                "fractions": [[1, 4], [1, 6]],
+            }),
+            difficulty=3,
+            bloom_level="apply",
+            source="test",
+            age_group="mid",
+            review_status="approved",
+        )
+        db.add(q)
+        db.flush()
+        m = _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "parametric",
+                "algorithm": "fraction_add_product_denominator",
+            }),
+            description="Product denominator instead of LCM",
+        )
+        result = detect_misconception(db, topic.id, {"answer": "10/24"}, q)
+        assert result is not None
+        assert result.id == m.id
+
+    def test_coprime_denominators_product_equals_lcm_not_detected(self, db, topic):
+        """For 1/3 + 1/4, correct answer '7/12' must NOT trigger the misconception.
+
+        Product of denominators: 3*4 = 12. LCM(3, 4) = 12 (coprime).
+        Since product equals LCM, this is the correct denominator, not a mistake.
+        """
+        from packages.db.models.learning.question import Question
+
+        q = Question(
+            topic_id=topic.id,
+            question_type="calculation",
+            stem="What is 1/3 + 1/4?",
+            answer_json=json.dumps({
+                "answer": "7/12",
+                "fractions": [[1, 3], [1, 4]],
+            }),
+            difficulty=2,
+            bloom_level="apply",
+            source="test",
+            age_group="mid",
+            review_status="approved",
+        )
+        db.add(q)
+        db.flush()
+        _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "parametric",
+                "algorithm": "fraction_add_product_denominator",
+            }),
+            description="Product denominator instead of LCM",
+        )
+        # Correct answer should not be flagged
+        result = detect_misconception(db, topic.id, {"answer": "7/12"}, q)
+        assert result is None
+
+    def test_coprime_denominators_unrelated_wrong_answer_not_detected(self, db, topic):
+        """For 1/2 + 1/3, unrelated wrong answer '3/5' must NOT trigger.
+
+        Product of denominators: 2*3 = 6. LCM(2, 3) = 6 (coprime).
+        Expected wrong by product rule: (1*3 + 1*2) / (2*3) = 5/6 — which is
+        also the correct answer. So even entering '5/6' should not trigger.
+        An unrelated wrong answer like '3/5' must not trigger either.
+        """
+        from packages.db.models.learning.question import Question
+
+        q = Question(
+            topic_id=topic.id,
+            question_type="calculation",
+            stem="What is 1/2 + 1/3?",
+            answer_json=json.dumps({
+                "answer": "5/6",
+                "fractions": [[1, 2], [1, 3]],
+            }),
+            difficulty=2,
+            bloom_level="apply",
+            source="test",
+            age_group="mid",
+            review_status="approved",
+        )
+        db.add(q)
+        db.flush()
+        _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "parametric",
+                "algorithm": "fraction_add_product_denominator",
+            }),
+            description="Product denominator instead of LCM",
+        )
+        # Even the correct answer must not trigger when product == LCM
+        result_correct = detect_misconception(db, topic.id, {"answer": "5/6"}, q)
+        assert result_correct is None
+        # Unrelated wrong answer also must not trigger
+        result_wrong = detect_misconception(db, topic.id, {"answer": "3/5"}, q)
+        assert result_wrong is None

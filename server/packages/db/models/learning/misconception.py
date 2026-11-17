@@ -98,21 +98,20 @@ class MisconceptionDetection(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     child_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id"), nullable=False, index=True
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     topic_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("learning_topics.id"), nullable=False, index=True
+        BigInteger, ForeignKey("learning_topics.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    #: Nullable with SET NULL — topic deletion cascades misconceptions; the
-    #: detection history survives with a null reference.
-    misconception_id: Mapped[int | None] = mapped_column(
+    #: CASCADE — detections are meaningless without the misconception.
+    misconception_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("misconceptions.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("misconceptions.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     question_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("questions.id"), nullable=False, index=True
+        BigInteger, ForeignKey("questions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     #: The child's wrong answer that triggered the detection.
     wrong_answer_json: Mapped[str] = mapped_column(Text, nullable=False)

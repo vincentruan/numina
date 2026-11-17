@@ -90,18 +90,22 @@ def upgrade() -> None:
             sa.ForeignKeyConstraint(
                 ["child_id"],
                 ["users.id"],
+                ondelete="CASCADE",
             ),
             sa.ForeignKeyConstraint(
                 ["topic_id"],
                 ["learning_topics.id"],
+                ondelete="CASCADE",
             ),
             sa.ForeignKeyConstraint(
                 ["misconception_id"],
                 ["misconceptions.id"],
+                ondelete="CASCADE",
             ),
             sa.ForeignKeyConstraint(
                 ["question_id"],
                 ["questions.id"],
+                ondelete="CASCADE",
             ),
             sa.PrimaryKeyConstraint("id"),
         )

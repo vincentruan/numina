@@ -116,7 +116,7 @@
       />
 
       <!-- Feedback section -->
-      <div v-if="feedbackShown" class="feedback-section">
+      <div v-if="feedbackShown && lastAttempt" class="feedback-section">
         <!-- Misconception feedback card (issue #214): reframe BEFORE the error signal -->
         <MisconceptionFeedbackCard
           :feedback="lastAttempt?.misconception_feedback ?? null"
@@ -127,9 +127,9 @@
           <span class="feedback-icon">{{ lastAttempt?.is_correct ? '✓' : '✗' }}</span>
           <span>{{ lastAttempt?.is_correct ? t('practice.feedback.correct') : t('practice.feedback.wrong') }}</span>
         </div>
-        <div v-if="!lastAttempt?.is_correct && currentQuestion.solution" class="solution-box">
+        <div v-if="!lastAttempt?.is_correct && activeSolution" class="solution-box">
           <p class="solution-title">{{ t('practice.feedback.solution') }}</p>
-          <p v-for="(step, i) in currentQuestion.solution.steps || []" :key="i" class="solution-step">
+          <p v-for="(step, i) in activeSolution.steps || []" :key="i" class="solution-step">
             {{ step }}
           </p>
         </div>
@@ -254,6 +254,11 @@ const displayTopicName = computed(() => {
 const totalQuestions = computed(() => questions.value.length)
 const currentQuestion = computed(() => questions.value[currentIndex.value])
 const isLastQuestion = computed(() => currentIndex.value >= totalQuestions.value - 1)
+/** Solution shown after answering: prefer the diagnostic question's solution
+ *  (if one is still alive) over the regular question's. */
+const activeSolution = computed(
+  () => diagnosticQuestion.value?.solution ?? currentQuestion.value?.solution,
+)
 const progressPercent = computed(() =>
   Math.round(((currentIndex.value + (feedbackShown.value ? 1 : 0)) / totalQuestions.value) * 100),
 )
@@ -345,9 +350,11 @@ async function resolveTopicChallenge() {
   }
 }
 
-// Resolve challenge once on mount — sets the initial phase (discovery or mode).
+// Resolve challenge and kick off diagnosis once on mount — the router renders
+// no KeepAlive, so this is the single-shot entry point.
 onMounted(() => {
   resolveTopicChallenge()
+  startDiagnosis()
 })
 
 /** Map backend practice error codes to i18n keys */
@@ -384,6 +391,7 @@ async function onAnswerSubmit(answer: Record<string, unknown>) {
 }
 
 async function nextQuestion() {
+  diagnosticQuestion.value = null
   if (isLastQuestion.value) {
     await doFinish()
     return
@@ -409,8 +417,9 @@ async function onDiagnosticRequested() {
       return
     }
     diagnosticQuestion.value = diagQ
-    // Move straight to the diagnostic question, replacing the feedback view.
-    lastAttempt.value = null
+    // Keep lastAttempt populated so the feedback section can restore correctly
+    // if the child skips the diagnostic question (feedbackShown is re-enabled
+    // by the skip handler with lastAttempt still pointing at the wrong answer).
     feedbackShown.value = false
   } catch {
     showFailToast(t('practice.errors.submitFailed'))
@@ -434,7 +443,8 @@ async function onDiagnosticAnswerSubmit(answer: Record<string, unknown>) {
       is_diagnostic: true,
     })
     lastAttempt.value = attempt
-    diagnosticQuestion.value = null
+    // Keep diagnosticQuestion alive so the solution section can display its steps.
+    // It is cleared in nextQuestion() when advancing to the next regular question.
     feedbackShown.value = true
   } catch {
     showFailToast(t('practice.errors.submitFailed'))
@@ -596,10 +606,6 @@ watch(
     resetSessionStateForNavigation()
   },
 )
-
-onMounted(() => {
-  startDiagnosis()
-})
 
 </script>
 

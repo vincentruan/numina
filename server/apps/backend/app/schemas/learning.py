@@ -541,6 +541,19 @@ class AIReviewStatusResponse(BaseModel):
 # --- Smart Tutor (Parent View) ---
 
 
+class MisconceptionDetectedItem(SnowflakeBase):
+    """A single misconception addressed during a Smart Tutor session.
+
+    Deduplicated from step records — ``misconception_id`` is the DB ID of
+    the resolved misconception, ``category`` and ``description`` come from
+    the misconception row (LLM cannot fabricate them).
+    """
+
+    misconception_id: int
+    category: str
+    description: str
+
+
 class SmartTutorSessionResponse(SnowflakeBase):
     """Smart Tutor session summary for parent review."""
 
@@ -557,7 +570,7 @@ class SmartTutorSessionResponse(SnowflakeBase):
     #: deduplicated record derived from step-record misconception fields.
     #: Backward-compatible: `len(misconceptions_detected)` equals the old
     #: integer count.
-    misconceptions_detected: list[dict] = []
+    misconceptions_detected: list[MisconceptionDetectedItem] = []
     outcome: str | None
 
 

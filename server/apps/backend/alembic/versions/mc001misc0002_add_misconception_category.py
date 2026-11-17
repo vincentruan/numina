@@ -62,12 +62,12 @@ def upgrade() -> None:
             op.execute(
                 "ALTER TABLE misconception_detections "
                 "DROP CONSTRAINT IF EXISTS "
-                "fk_misconception_detections_misconception_id_misconceptions"
+                "misconception_detections_misconception_id_fkey"
             )
             op.execute(
                 "ALTER TABLE misconception_detections "
                 "ADD CONSTRAINT "
-                "fk_misconception_detections_misconception_id_misconceptions "
+                "misconception_detections_misconception_id_fkey "
                 "FOREIGN KEY (misconception_id) REFERENCES misconceptions(id) "
                 "ON DELETE SET NULL"
             )
@@ -79,6 +79,12 @@ def downgrade() -> None:
 
     if bind.dialect.has_table(bind, "misconception_detections"):
         if is_sqlite:
+            # SQLite cannot ALTER constraints; batch mode rebuilds the table.
+            # Clear rows with NULL misconception_id before flipping back to NOT NULL.
+            op.execute(
+                "DELETE FROM misconception_detections "
+                "WHERE misconception_id IS NULL"
+            )
             with op.batch_alter_table("misconception_detections") as batch_op:
                 batch_op.alter_column(
                     "misconception_id",
@@ -86,15 +92,21 @@ def downgrade() -> None:
                     nullable=False,
                 )
         else:
+            # Postgres: drop the SET NULL FK, reinstate the plain FK, and
+            # clear any rows that were orphaned while the nullable was in effect.
+            op.execute(
+                "DELETE FROM misconception_detections "
+                "WHERE misconception_id IS NULL"
+            )
             op.execute(
                 "ALTER TABLE misconception_detections "
                 "DROP CONSTRAINT IF EXISTS "
-                "fk_misconception_detections_misconception_id_misconceptions"
+                "misconception_detections_misconception_id_fkey"
             )
             op.execute(
                 "ALTER TABLE misconception_detections "
                 "ADD CONSTRAINT "
-                "fk_misconception_detections_misconception_id_misconceptions "
+                "misconception_detections_misconception_id_fkey "
                 "FOREIGN KEY (misconception_id) REFERENCES misconceptions(id)"
             )
             op.execute(
