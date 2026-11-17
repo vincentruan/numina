@@ -42,7 +42,7 @@
               :key="floor.domain"
               class="floor"
               :class="`floor--${floorState(floor)}`"
-              :aria-label="floorA11y(tower.subject, floor)"
+              :aria-label="floorA11y(floor)"
             >
               <span class="floor__bricks" aria-hidden="true">
                 <i
@@ -73,12 +73,12 @@
               v-for="win in windowsFor(tower.subject)"
               :key="win.topic_id"
               class="window"
-              :class="`window--${win.reason === '复习到期' ? 'review' : 'recommended'}`"
+              :class="`window--${isReviewDue(win) ? 'review' : 'recommended'}`"
               :title="windowTooltip(win)"
               :aria-label="windowA11y(win)"
             >
               <span class="window__glyph" aria-hidden="true">
-                {{ win.reason === '复习到期' ? '🔁' : '✨' }}
+                {{ isReviewDue(win) ? '🔁' : '✨' }}
               </span>
             </span>
           </div>
@@ -99,6 +99,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CastleFloor, CastleIndex, CastleTower, CastleWindow } from '@/api/learning'
 import { CONTINENT_THEMES, getContinentTheme } from '@/data/continentThemes'
+import { subjectLabel } from '@/utils/domainLabel'
 
 const props = defineProps<{
   castle: CastleIndex | null
@@ -150,35 +151,48 @@ function reversedFloors(tower: CastleTower): CastleFloor[] {
 
 // --- windows (display-only) ----------------------------------------------
 
+/**
+ * Backend sends `reason` as the Chinese display string ('复习到期' /
+ * '推荐学习'). Centralised here so the component compares in one place and a
+ * future machine code only needs changing in this helper.
+ */
+const REASON_REVIEW_DUE = '复习到期'
+
+function isReviewDue(win: CastleWindow): boolean {
+  return win.reason === REASON_REVIEW_DUE
+}
+
+function windowReasonLabel(win: CastleWindow): string {
+  return isReviewDue(win)
+    ? t('learning.castle.windowReview')
+    : t('learning.castle.windowRecommended')
+}
+
 function windowsFor(subject: string): CastleWindow[] {
   return windows.value.filter((w) => w.subject === subject)
 }
 
 function windowTooltip(win: CastleWindow): string {
   const name = win.topic_name_zh || win.topic_name
-  return `${name} — ${win.reason}`
+  return `${name} — ${windowReasonLabel(win)}`
 }
 
 function windowA11y(win: CastleWindow): string {
-  const reason =
-    win.reason === '复习到期'
-      ? t('learning.castle.windowReview')
-      : t('learning.castle.windowRecommended')
   return t('learning.castle.windowA11y', {
     topic: win.topic_name_zh || win.topic_name,
-    reason,
+    reason: windowReasonLabel(win),
   })
 }
 
 function towerA11y(tower: CastleTower): string {
   return t('learning.castle.towerA11y', {
-    subject: t(`learning.subject.${tower.subject}`, tower.subject),
+    subject: subjectLabel(t, tower.subject),
     mastered: tower.mastered_count,
     total: tower.total_count,
   })
 }
 
-function floorA11y(_subject: string, floor: CastleFloor): string {
+function floorA11y(floor: CastleFloor): string {
   return t('learning.castle.floorA11y', {
     domain: floor.domain,
     mastered: floor.mastered_count,

@@ -278,7 +278,7 @@
               <template #title>
                 <div class="collapse-title-row">
                   <IIcon icon="mdi:castle-outline" size="18" color="var(--van-warning-color)" />
-                  <span>{{ t('learning.castle.compactTitle') }}</span>
+                  <span>{{ t('learning.castle.title') }}</span>
                 </div>
               </template>
               <ParentKnowledgeCastle
@@ -605,16 +605,26 @@ async function loadSmartTutorSessions() {
 
 async function loadCastle() {
   const childId = babyStore.selectedChildId
-  if (!childId) return
+  if (!childId) {
+    // Nothing selected: never leave the spinner running on a no-op.
+    castleData.value = null
+    castleError.value = false
+    castleLoading.value = false
+    return
+  }
   castleLoading.value = true
   castleError.value = false
   try {
-    castleData.value = await fetchChildCastle(childId)
+    const data = await fetchChildCastle(childId)
+    // Discard a response that outlived its child selection (rapid switching).
+    if (babyStore.selectedChildId !== childId) return
+    castleData.value = data
   } catch {
+    if (babyStore.selectedChildId !== childId) return
     castleData.value = null
     castleError.value = true
   } finally {
-    castleLoading.value = false
+    if (babyStore.selectedChildId === childId) castleLoading.value = false
   }
 }
 
@@ -767,7 +777,16 @@ async function refreshRecommendations() {
 }
 
 async function onRefresh() {
-  await Promise.all([loadData(), loadChildDependentData()])
+  // Pull-to-refresh is the page's canonical recovery gesture — let it retry the
+  // castle too instead of leaving an errored module stuck.
+  if (expandedModules.value.includes('castle')) {
+    castleLoaded = false
+  }
+  await Promise.all([
+    loadData(),
+    loadChildDependentData(),
+    expandedModules.value.includes('castle') ? loadCastle() : Promise.resolve(),
+  ])
   refreshing.value = false
 }
 
@@ -778,6 +797,12 @@ watch(() => babyStore.selectedChildId, (newId) => {
     castleLoaded = false
     castleData.value = null
     castleError.value = false
+    // An already-expanded castle module must refetch — the expand watcher only
+    // fires when the collapse array changes, which a child switch does not do.
+    if (expandedModules.value.includes('castle')) {
+      castleLoaded = true
+      loadCastle()
+    }
     loadChildDependentData()
   }
 })

@@ -2158,7 +2158,7 @@ export default {
       decoStreak: '连续学习 {days} 天',
       errorTitle: '城堡暂时打不开',
       errorRetry: '再试一次',
-      compactTitle: '知识城堡',
+      title: '知识城堡',
     },
     parentReviewOnly: '当前为家长手动审核模式',
     aiReviewPaused: 'AI 自动审核已暂停',

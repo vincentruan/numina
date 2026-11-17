@@ -298,28 +298,63 @@ class TestParentCastleIndexEndpoint:
         data = resp.json()["data"]
         assert data["windows"] == []
         assert data["streak_days"] >= 0
+        # Skeleton contract: towers exist with unstarted floors, not towers == [].
+        assert len(data["towers"]) > 0
+        for tower in data["towers"]:
+            assert tower["mastered_count"] == 0
+            assert tower["learning_count"] == 0
+            assert tower["total_count"] > 0
+            for floor in tower["floors"]:
+                assert floor["total_count"] > 0
+                assert floor["mastered_count"] == 0
 
-    def test_cross_family_rejected(self, client, db, parent_and_child, castle_topics):
-        """Parent cannot fetch castle for a child in a different family."""
-        _, _ = parent_and_child
-        # Create a second family with a child
-        resp2 = client.post(
-            "/api/v1/auth/register",
-            json={
-                "username": "otherparent",
-                "display_name": "Other Parent",
-                "password": "TestPass123",
-                "family_name": "Other Family",
-                "family_invitation_code": "AUT02",
-            },
+    def test_parent_payload_matches_child_payload(
+        self, client, db, parent_and_child, castle_topics
+    ):
+        """Parent and child endpoints serialize identically for the same child.
+
+        Guards the shared mapper in castle_service against one-sided field drift.
+        """
+        from packages.db.models.user import User
+
+        child_id, headers = parent_and_child
+        # Seed a mastered + overdue progress row so windows and counters are exercised.
+        topic = castle_topics["in_range"][0]
+        db.add(
+            LearningProgress(
+                child_id=child_id,
+                topic_id=topic.id,
+                mastery_level="mastered",
+                first_mastered_at=datetime.now(UTC) - timedelta(days=30),
+                next_review_at=datetime.now(UTC) - timedelta(days=1),
+            )
         )
-        assert resp2.status_code == 200
-        other_headers = {
-            "Authorization": f"Bearer {resp2.json()['data']['access_token']}",
-        }
+        db.flush()
+
+        parent_payload = client.get(
+            PARENT_CASTLE_URL.format(child_id=child_id), headers=headers
+        ).json()["data"]
+
+        child = db.query(User).filter(User.id == child_id).first()
+        token = child_login_two_phase(client, "parentcastlekid", CHILD_PASSWORD, PIN)
+        child_payload = client.get(
+            CASTLE_URL, headers={"Authorization": f"Bearer {token}"}
+        ).json()["data"]
+
+        assert parent_payload == child_payload
+        # Snowflake + closed-set contract on the parent path.
+        for window in parent_payload["windows"]:
+            assert isinstance(window["topic_id"], str)
+            assert window["reason"] in {"复习到期", "推荐学习"}
+        assert child is not None
+
+    def test_cross_family_rejected(
+        self, client, parent_and_child, second_user_headers, castle_topics
+    ):
+        """Parent cannot fetch castle for a child in a different family."""
         other_child_resp = client.post(
             "/api/v1/family/children",
-            headers=other_headers,
+            headers=second_user_headers,
             json={
                 "username": "otherkid",
                 "password": "ChildPass1",
@@ -328,16 +363,18 @@ class TestParentCastleIndexEndpoint:
                 "pin": ["🐱", "🌟", "🎈", "🐶"],
             },
         )
+        assert other_child_resp.status_code == 201
         other_child_id = int(other_child_resp.json()["data"]["id"])
 
         # Original parent tries to access other family's child castle
         _, headers = parent_and_child
         url = PARENT_CASTLE_URL.format(child_id=other_child_id)
         resp = client.get(url, headers=headers)
-        assert resp.status_code in (400, 404)
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "AUTH_CHILD_NOT_FOUND"
 
     def test_requires_adult_auth(self, client):
         """Unauthenticated requests are rejected."""
         url = PARENT_CASTLE_URL.format(child_id=999999)
         resp = client.get(url)
-        assert resp.status_code in (401, 403)
+        assert resp.status_code == 401

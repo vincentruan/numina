@@ -430,12 +430,14 @@ export interface CastleTower {
   floors: CastleFloor[]
 }
 
+/** Closed set emitted by the backend (see castle_service). */
+export type CastleWindowReason = '复习到期' | '推荐学习'
+
 export interface CastleWindow {
   topic_id: string
   topic_name: string
   topic_name_zh: string
-  /** Closed set: "复习到期" | "推荐学习" */
-  reason: string
+  reason: CastleWindowReason
   subject: string
   domain: string
 }

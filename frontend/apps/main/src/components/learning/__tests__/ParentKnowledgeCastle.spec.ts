@@ -1,34 +1,19 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import zhCN from '@/i18n/locales/zh-CN'
+import enUS from '@/i18n/locales/en-US'
 import ParentKnowledgeCastle from '../ParentKnowledgeCastle.vue'
 import type { CastleIndex } from '@/api/learning'
 
-const i18n = createI18n({
-  legacy: false,
-  locale: 'zh-CN',
-  messages: {
-    'zh-CN': {
-      learning: {
-        subject: { mathematics: '数学', science: '科学' },
-        castle: {
-          parentTitle: '知识城堡',
-          parentSubtitle: '看看孩子建造了什么',
-          parentEmpty: '暂无学习内容',
-          towers: '{mastered}/{total}',
-          towerA11y: '{subject}塔，已掌握 {mastered} 个，共 {total} 个',
-          floorA11y: '{domain}楼层，已掌握 {mastered} 个，共 {total} 个',
-          windowReview: '复习到期',
-          windowRecommended: '推荐学习',
-          windowA11y: '{topic}，{reason}',
-          decoStreak: '连续学习 {days} 天',
-          errorTitle: '城堡暂时打不开',
-          errorRetry: '再试一次',
-        },
-      },
-    },
-  },
-})
+// Real locale modules — a missing/renamed castle key must fail the suite.
+function makeI18n(locale: 'zh-CN' | 'en-US' = 'zh-CN') {
+  return createI18n({
+    legacy: false,
+    locale,
+    messages: { 'zh-CN': zhCN, 'en-US': enUS },
+  })
+}
 
 function makeCastle(overrides: Partial<CastleIndex> = {}): CastleIndex {
   return {
@@ -65,14 +50,17 @@ function makeCastle(overrides: Partial<CastleIndex> = {}): CastleIndex {
   }
 }
 
-function mountCastle(props: Record<string, unknown> = {}) {
+function mountCastle(
+  props: Record<string, unknown> = {},
+  locale: 'zh-CN' | 'en-US' = 'zh-CN',
+) {
   return mount(ParentKnowledgeCastle, {
     props: {
       castle: makeCastle(),
       state: 'content' as const,
       ...props,
     },
-    global: { plugins: [i18n] },
+    global: { plugins: [makeI18n(locale)] },
   })
 }
 
@@ -135,6 +123,7 @@ describe('ParentKnowledgeCastle', () => {
     const body = wrapper.find('.castle-body')
     expect(body.exists()).toBe(true)
     expect(body.findAll('.tower')).toHaveLength(1)
+    // Empty floors still render — the castle exists on day one.
     expect(body.find('.floor--empty').exists()).toBe(true)
     // No streak line when streak is 0
     expect(body.find('.castle-header__streak').exists()).toBe(false)
@@ -170,5 +159,46 @@ describe('ParentKnowledgeCastle', () => {
     })
     const wrapper = mountCastle({ castle: decayedCastle })
     expect(wrapper.find('.floor--decayed').exists()).toBe(true)
+  })
+
+  it('windows are display-only — no click handler, no router navigation', async () => {
+    const wrapper = mountCastle()
+    const win = wrapper.find('.window')
+    expect(win.exists()).toBe(true)
+    // Observer mode: a span, not a button, and clicking emits nothing.
+    expect(win.element.tagName).toBe('SPAN')
+    expect(win.attributes('role')).toBeUndefined()
+    await win.trigger('click')
+    expect(wrapper.emitted()).not.toHaveProperty('windowSelect')
+  })
+
+  it('localises the tower a11y summary using the real subject label', () => {
+    const wrapper = mountCastle()
+    const sr = wrapper.find('.sr-only')
+    expect(sr.exists()).toBe(true)
+    // learning.subjectMathematics = 数学 — not the raw slug.
+    expect(sr.text()).toContain('数学')
+    expect(sr.text()).toContain('2')
+    expect(sr.text()).toContain('10')
+  })
+
+  it('renders the review-due reason in the active locale, not the raw Chinese sentinel', () => {
+    const reviewCastle = makeCastle({
+      windows: [
+        {
+          topic_id: '202',
+          topic_name: 'Fractions',
+          topic_name_zh: 'Fractions',
+          reason: '复习到期',
+          subject: 'mathematics',
+          domain: 'Algebra',
+        },
+      ],
+    })
+    const wrapper = mountCastle({ castle: reviewCastle }, 'en-US')
+    const win = wrapper.find('.window')
+    // en-US tooltip must not leak the Chinese reason string.
+    expect(win.attributes('title')).toContain('Review due')
+    expect(win.classes()).toContain('window--review')
   })
 })
