@@ -272,6 +272,38 @@
                 </template>
               </template>
             </van-collapse-item>
+
+            <!-- Module 7: Knowledge Castle (Issue #235) -->
+            <van-collapse-item name="castle">
+              <template #title>
+                <div class="collapse-title-row">
+                  <IIcon icon="mdi:castle-outline" size="18" color="var(--van-warning-color)" />
+                  <span>{{ t('learning.castle.compactTitle') }}</span>
+                </div>
+              </template>
+              <van-skeleton v-if="castleLoading" :rows="2" :round="true" />
+              <template v-else>
+                <div v-if="!castleData || castleData.towers.length === 0" class="module-empty">
+                  <EmptyState :description="t('learning.castle.parentEmpty')" image-size="48" />
+                </div>
+                <template v-else>
+                  <div
+                    v-for="tower in castleData.towers"
+                    :key="tower.subject"
+                    class="castle-tower-row"
+                  >
+                    <span class="castle-tower-icon">{{ getTowerIcon(tower.subject) }}</span>
+                    <span class="castle-tower-name">{{ t(`learning.subject.${tower.subject}`, tower.subject) }}</span>
+                    <span class="castle-tower-progress">{{ tower.mastered_count }}/{{ tower.total_count }}</span>
+                  </div>
+                  <div class="castle-actions">
+                    <van-button size="small" type="primary" plain @click="router.push('/baby/learning/castle')">
+                      {{ t('learning.castle.viewFullCastle') }}
+                    </van-button>
+                  </div>
+                </template>
+              </template>
+            </van-collapse-item>
           </van-collapse>
         </template>
       </van-pull-refresh>
@@ -342,6 +374,7 @@ import {
   getChildMap,
   getTopicsBatch,
   getChildSmartTutorSessions,
+  fetchChildCastle,
   type ChildLearningOverview,
   type ReviewItem,
   type PathResponse,
@@ -351,7 +384,9 @@ import {
   type ProgressWithTopic,
   type TopicResponse,
   type SmartTutorSessionResponse,
+  type CastleIndex,
 } from '@/api/learning'
+import { getContinentTheme } from '@/data/continentThemes'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import IIcon from '@/components/IIcon.vue'
@@ -376,6 +411,10 @@ const presetPathsLoading = ref(false)
 const pathsLoading = ref(false)
 const smartTutorSessions = ref<SmartTutorSessionResponse[]>([])
 const smartTutorLoading = ref(false)
+// Castle (Issue #235)
+const castleData = ref<CastleIndex | null>(null)
+const castleLoading = ref(false)
+let castleLoaded = false
 const actioningId = ref<string | null>(null)
 const dnaGraphItems = ref<ProgressWithTopic[]>([])
 const dnaGraphLoading = ref(false)
@@ -574,6 +613,23 @@ async function loadSmartTutorSessions() {
   }
 }
 
+async function loadCastle() {
+  const childId = babyStore.selectedChildId
+  if (!childId) return
+  castleLoading.value = true
+  try {
+    castleData.value = await fetchChildCastle(childId)
+  } catch {
+    castleData.value = null
+  } finally {
+    castleLoading.value = false
+  }
+}
+
+function getTowerIcon(subject: string): string {
+  return getContinentTheme(subject).icon
+}
+
 // Shared progress rows from getChildMap — avoids duplicate fetch between DNA graph and cluster map
 const sharedProgressRows = ref<ProgressResponse[]>([])
 
@@ -651,6 +707,14 @@ watch(graphViewMode, async (mode) => {
   }
 })
 
+// Lazy-load castle data when user expands the castle module
+watch(expandedModules, (modules) => {
+  if (modules.includes('castle') && !castleLoaded) {
+    castleLoaded = true
+    loadCastle()
+  }
+})
+
 async function loadData() {
   await Promise.all([
     loadChildren(),
@@ -723,6 +787,8 @@ async function onRefresh() {
 watch(() => babyStore.selectedChildId, (newId) => {
   if (newId) {
     clusterMapLoaded = false
+    castleLoaded = false
+    castleData.value = null
     loadChildDependentData()
   }
 })
@@ -1121,5 +1187,30 @@ onActivated(async () => {
   font-size: 11px;
   color: var(--text-secondary);
   margin-top: 4px;
+}
+
+/* Castle compact card (Issue #235) */
+.castle-tower-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+.castle-tower-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+.castle-tower-name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.castle-tower-progress {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.castle-actions {
+  padding: 8px 0 4px;
 }
 </style>
