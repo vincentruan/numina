@@ -168,7 +168,9 @@ SAMPLE_CONFUSIONS: dict[str, list[dict]] = {
             "confusion_text": "Does multiplying fractions always give a smaller answer?",
             "confusion_text_zh": "分数乘法的結果总是更小吗？",
             "rubric": "The child should explain that multiplying proper fractions (less than 1) always gives a smaller result — you're taking a part of a part. But multiplying by an improper fraction (greater than 1) can give a bigger result. For example, 2/3 × 3/2 = 1, and 2/3 × 5/4 = 10/12 which is bigger than 2/3.",
-            "expected_expression": "2/3",
+            # The rubric's worked example, not the starting fraction: a child writing
+            # "2/3 × 5/4 = 10/12" extracts the full equation and grades against 10/12.
+            "expected_expression": "10/12",
         },
     ],
 }
@@ -181,9 +183,7 @@ def seed_confusions() -> None:
         for topic_key, confusions in SAMPLE_CONFUSIONS.items():
             # Resolve topic_id from topic_key (may have duplicate rows per locale — take first)
             topic = db.execute(
-                select(LearningTopic)
-                .where(LearningTopic.topic_key == topic_key)
-                .limit(1)
+                select(LearningTopic).where(LearningTopic.topic_key == topic_key).limit(1)
             ).scalar_one_or_none()
             if topic is None:
                 print(f"WARNING: topic_key '{topic_key}' not found, skipping")
@@ -213,9 +213,7 @@ def seed_confusions() -> None:
                 db.add(row)
 
             db.commit()
-            print(
-                f"Seeded {len(confusions)} confusions for topic '{topic.name}' ({topic_key})"
-            )
+            print(f"Seeded {len(confusions)} confusions for topic '{topic.name}' ({topic_key})")
 
         print("\nDone. Total confusions seeded:", db.query(TopicConfusion).count())
     finally:

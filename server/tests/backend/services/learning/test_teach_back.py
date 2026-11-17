@@ -8,7 +8,6 @@ from apps.backend.app.services.learning.teach_back_grading import (
     extract_expression,
     grade_expression,
 )
-from packages.core.settings import Settings
 from packages.db.models.learning.confusion import TopicConfusion
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import (
@@ -196,6 +195,38 @@ class TestGradeExpression:
 
     def test_percent_expected_fraction_child(self):
         assert grade_expression("50/100", "1/2") is True
+
+    def test_fraction_times_whole_number(self):
+        """A fraction × whole statement must not be shadowed by the whole-number pattern.
+
+        Regression: _MULTIPLY_PATTERN once matched "2 × 4 = 2" inside
+        "1/2 × 4 = 2", turning a correct explanation into a 'miss'.
+        """
+        assert extract_expression("1/2 × 4 = 2") == "1/2 × 4 = 2"
+        assert grade_expression("2", "1/2 × 4 = 2") is True
+        assert extract_expression("4 × 1/2 = 2") == "4 × 1/2 = 2"
+        assert grade_expression("2", "4 × 1/2 = 2") is True
+
+    def test_uppercase_x_multiplier(self):
+        """The extractor accepts 'X'; _sympy_parse must normalize it too."""
+        assert grade_expression("6", "3 X 2 = 6") is True
+
+    def test_decimal_percent(self):
+        """'12.5%' must be read as a percentage, not the bare decimal 12.5."""
+        assert extract_expression("12.5% 就是 1/8") == "12.5/100"
+        assert grade_expression("1/8", "12.5/100") is True
+
+    def test_false_decimal_equation_rejected(self):
+        """A false numeric claim must reach require_true, not collapse to a bare value."""
+        assert extract_expression("0.5 = 0.05") == "0.5 = 0.05"
+        assert grade_expression("0.5", "0.5 = 0.05") is False
+        assert grade_expression("1/2", extract_expression("50% = 5")) is False
+
+    def test_true_percent_equation_accepted(self):
+        """A true percent claim survives the extract → grade pipeline."""
+        extracted = extract_expression("50% = 1/2")
+        assert extracted == "50/100 = 1/2"
+        assert grade_expression("1/2", extracted) is True
 
 
 # ---------------------------------------------------------------------------
@@ -426,6 +457,12 @@ def settings_holder():
 class TestTeachBackEnabledTopicKeysConfig:
     def test_default_includes_all_six_topics(self):
         assert settings_holder().teach_back_enabled_topic_keys_set == _EXPECTED_DEFAULT_KEYS
+
+    def test_default_constant_matches_settings_default(self):
+        """The SSOT tuple and the Settings default must not drift apart."""
+        from packages.core.settings import TEACH_BACK_DEFAULT_TOPIC_KEYS
+
+        assert frozenset(TEACH_BACK_DEFAULT_TOPIC_KEYS) == _EXPECTED_DEFAULT_KEYS
 
     def test_custom_keys_parsed(self, monkeypatch):
         monkeypatch.setenv("TEACH_BACK_ENABLED_TOPIC_KEYS", "mt_a,mt_b")

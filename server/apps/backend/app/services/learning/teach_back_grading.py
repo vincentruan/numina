@@ -30,23 +30,48 @@ _FRACTION_PATTERN = re.compile(
 _ARITHMETIC_PATTERN = re.compile(
     r"(\d+\s*/\s*\d+)\s*([+\-])\s*(\d+\s*/\s*\d+)\s*=\s*(\d+\s*/\s*\d+)"
 )
-_MULTIPLY_PATTERN = re.compile(r"(\d+)\s*[*×xX]\s*(\d+)\s*=\s*(\d+)")
-# Fraction multiplication: 1/2 × 1/3 = 1/6
+# Number operand: either a fraction (1/2) or a whole number (4).
+_NUM_OPERAND = r"(?:\d+\s*/\s*\d+|\d+)"
+# Fraction multiplication — at least one operand must be a fraction.
+# Matches 1/2 × 1/3 = 1/6, 1/2 × 4 = 2, 4 × 1/2 = 2.
 _FRACTION_MULTIPLY_PATTERN = re.compile(
-    r"(\d+\s*/\s*\d+)\s*[*×xX]\s*(\d+\s*/\s*\d+)\s*=\s*(\d+\s*/\s*\d+)"
+    rf"({_NUM_OPERAND})\s*[*×xX]\s*({_NUM_OPERAND})\s*=\s*({_NUM_OPERAND})"
 )
+# Whole-number multiplication: 3 × 2 = 6. Must come AFTER the fraction-multiply
+# pattern or its bare-digit groups shadow fraction operands ("1/2 × 4" would
+# match as "2 × 4", a false equation).
+_MULTIPLY_PATTERN = re.compile(r"(\d+)\s*[*×xX]\s*(\d+)\s*=\s*(\d+)")
 # Decimal numbers: 0.25, 3.14, 1.5
 _DECIMAL_PATTERN = re.compile(r"(\d+\.\d+)")
-# Percent values: 25%, 50%
-_PERCENT_PATTERN = re.compile(r"(\d+)\s*%")
+# Percent values: 25%, 50%, 12.5%
+_PERCENT_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+# Decimal/percent equations: "0.5 = 0.05", "50% = 5", "50% = 1/2". Captured so
+# the grader's require_true check can reject a false numeric claim — a bare-value
+# extraction would discard the equation and let "0.5 = 0.05" pass against expected
+# 0.5. Fractions are allowed on either side so a percent-to-fraction claim survives.
+_DECIMAL_EQUATION_PATTERN = re.compile(
+    r"(\d+(?:\.\d+)?%?(?:\s*/\s*\d+)?)\s*=\s*(\d+(?:\.\d+)?%?(?:\s*/\s*\d+)?)"
+)
 _WHOLE_NUMBER_PATTERN = re.compile(r"\b(\d+)\b")
+
+
+def _is_fraction_operand(text: str) -> bool:
+    """Return True if the operand text is a fraction (contains '/')."""
+    return "/" in text
+
+
+def _percent_to_fraction(operand: str) -> str:
+    """Rewrite ``"25%"`` as ``"25/100"`` so SymPy can compare it numerically."""
+    if operand.endswith("%"):
+        return f"{operand[:-1]}/100"
+    return operand
 
 
 def extract_expression(child_text: str) -> str | None:
     """Extract the most relevant math expression from a child's free-text explanation.
 
-    Priority: fraction arithmetic > whole multiply > fraction multiply >
-    decimal > percent > bare fraction > bare number.
+    Priority: fraction arithmetic > fraction multiply > whole multiply >
+    percent > decimal > bare fraction > bare number.
     Returns the extracted expression string, or None if nothing found.
     Percent values are converted to fraction form (e.g., "25%" → "25/100").
     """
@@ -58,25 +83,40 @@ def extract_expression(child_text: str) -> str | None:
     if m:
         return m.group(0).strip()
 
+    # Try fraction multiplication (e.g., "1/2 × 1/3 = 1/6" or "1/2 × 4 = 2").
+    # Checked before whole-number multiply so fraction operands are not shadowed.
+    m = _FRACTION_MULTIPLY_PATTERN.search(child_text)
+    if m and (
+        _is_fraction_operand(m.group(1)) or _is_fraction_operand(m.group(2))
+    ):
+        return m.group(0).strip()
+
     # Try whole number multiply (e.g., "3 × 2 = 6")
     m = _MULTIPLY_PATTERN.search(child_text)
     if m:
         return m.group(0).strip()
 
-    # Try fraction multiplication (e.g., "1/2 × 1/3 = 1/6")
-    m = _FRACTION_MULTIPLY_PATTERN.search(child_text)
+    # Try decimal/percent equations (e.g., "0.5 = 0.05", "50% = 5") so a false
+    # numeric claim reaches the grader's require_true check instead of being
+    # reduced to a bare value that would grade True. At least one side must carry
+    # a decimal point or percent sign, or ordinary integer prose ("3 = 5") would
+    # be captured as a false equation and downgrade a valid explanation.
+    m = _DECIMAL_EQUATION_PATTERN.search(child_text)
+    if m and ("." in m.group(1) + m.group(2) or "%" in m.group(1) + m.group(2)):
+        lhs = _percent_to_fraction(m.group(1))
+        rhs = _percent_to_fraction(m.group(2))
+        return f"{lhs} = {rhs}"
+
+    # Try percent before decimal so "12.5%" is read as a percentage, not the
+    # bare decimal 12.5. Converted to fraction form for SymPy ("12.5%" → "12.5/100").
+    m = _PERCENT_PATTERN.search(child_text)
     if m:
-        return m.group(0).strip()
+        return f"{m.group(1)}/100"
 
     # Try decimal (e.g., "0.25" or "3.14")
     m = _DECIMAL_PATTERN.search(child_text)
     if m:
         return m.group(1).strip()
-
-    # Try percent — convert to fraction form for SymPy (e.g., "25%" → "25/100")
-    m = _PERCENT_PATTERN.search(child_text)
-    if m:
-        return f"{m.group(1)}/100"
 
     # Try bare fraction (e.g., "3/4" or "2/6")
     m = _FRACTION_PATTERN.search(child_text)
@@ -101,7 +141,13 @@ def _sympy_parse(expr: str):
     try:
         import sympy
 
-        normalized = expr.strip().replace("^", "**").replace("×", "*").replace("x", "*")
+        normalized = (
+            expr.strip()
+            .replace("^", "**")
+            .replace("×", "*")
+            .replace("x", "*")
+            .replace("X", "*")
+        )
         parsed = sympy.sympify(normalized, strict=False)
     except Exception:
         return None

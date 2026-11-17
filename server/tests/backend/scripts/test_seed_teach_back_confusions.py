@@ -172,6 +172,23 @@ class TestSeedDataQuality:
             )
             assert expr_rows >= 1, f"expansion topic {key} has no expected_expression rows"
 
+    def test_fraction_multiply_rubric_example_grades_true(self, seed_module, pilot_topics, db):
+        """The seq-2 rubric's worked example must grade against its expected value.
+
+        Regression: expected_expression was '2/3' (the starting fraction) while the
+        rubric asks the child to state '2/3 × 5/4 = 10/12', so a correct answer
+        graded False and the model's 'hit' was downgraded to 'miss'.
+        """
+        _run_seed(seed_module, db)
+        topic = next(t for t in pilot_topics if t.topic_key == "mt_TgHxujL81r")
+        row = (
+            db.query(TopicConfusion)
+            .filter(TopicConfusion.topic_id == topic.id, TopicConfusion.sequence == 2)
+            .one()
+        )
+        assert row.expected_expression == "10/12"
+        assert grade_expression(row.expected_expression, "2/3 × 5/4 = 10/12") is True
+
 
 class TestSeedAgeGroupScoping:
     def test_other_age_group_rows_survive_reseed(self, seed_module, pilot_topics, db):
