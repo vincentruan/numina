@@ -9,7 +9,7 @@ Supports five match types:
 - "numeric": tolerance-based float comparison
 - "parametric": dynamic computation from question content (e.g., "add numerators
   and denominators" computes expected_wrong from the specific fractions in the question)
-- "text_match": normalized string comparison for fill_in_blank answers (strip whitespace,
+- "text_match": normalized string comparison for fill_blank answers (strip whitespace,
   case-insensitive by default)
 - "option_select": wrong option key matching for multiple_choice answers (e.g., "B", "C")
 """

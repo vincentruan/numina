@@ -666,8 +666,8 @@ class TestAnswerExtractionPrelude:
 class TestServiceNonCalcIntegration:
     """Tests that detect_and_record_misconception works for non-calculation question types."""
 
-    def test_fill_in_blank_question_detected(self, db, topic):
-        """fill_in_blank question with text_match misconception is detected via the service."""
+    def test_fill_blank_question_detected(self, db, topic):
+        """fill_blank question with text_match misconception is detected via the service."""
         from apps.backend.app.services.learning.misconception_service import (
             detect_and_record_misconception,
         )
@@ -675,9 +675,9 @@ class TestServiceNonCalcIntegration:
 
         q = Question(
             topic_id=topic.id,
-            question_type="fill_in_blank",
+            question_type="fill_blank",
             stem="The top part of a fraction is called the ___",
-            answer_json=json.dumps({"answer": "numerator"}),
+            answer_json=json.dumps({"value": "numerator"}),
             difficulty=1,
             bloom_level="remember",
             source="test",
@@ -697,12 +697,13 @@ class TestServiceNonCalcIntegration:
             description="Confuses numerator and denominator",
         )
 
+        # The child app emits {"value": ...} for fill_blank.
         result = detect_and_record_misconception(
             db,
             child_id=1,
             topic_id=topic.id,
             question_id=q.id,
-            user_answer={"answer": "denominator"},
+            user_answer={"value": "denominator"},
         )
         assert result is not None
         misconception_id, feedback = result
@@ -724,7 +725,7 @@ class TestServiceNonCalcIntegration:
                 {"key": "B", "text": "7/12"},
                 {"key": "C", "text": "4/7"},
             ]),
-            answer_json=json.dumps({"answer": "B"}),
+            answer_json=json.dumps({"key": "B"}),
             difficulty=2,
             bloom_level="apply",
             source="test",
@@ -743,13 +744,13 @@ class TestServiceNonCalcIntegration:
             description="Incorrect fraction addition",
         )
 
-        # Selecting wrong option A
+        # The child app emits {"key": ...} for multiple_choice.
         result = detect_and_record_misconception(
             db,
             child_id=1,
             topic_id=topic.id,
             question_id=q.id,
-            user_answer={"answer": "A"},
+            user_answer={"key": "A"},
         )
         assert result is not None
         misconception_id, feedback = result
