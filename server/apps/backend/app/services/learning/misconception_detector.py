@@ -286,10 +286,7 @@ def _match_text(user_str: str, pattern: _TextMatchPattern) -> bool:
 
     # Normalize: strip whitespace (already done on user_str by caller) and lowercase.
     normalize = pattern.get("normalize", True)
-    if normalize:
-        user_cmp = user_str.strip().lower()
-    else:
-        user_cmp = user_str.strip()
+    user_cmp = user_str.strip().lower() if normalize else user_str.strip()
 
     for candidate in candidates:
         if candidate is None:

@@ -249,6 +249,10 @@ def _sync_diagnostic_question(q: Question, diag_data: dict) -> None:
     script must overwrite ``answer_json``/``options_json`` too — otherwise a
     corrected seed row never reaches an already-seeded question and the child
     keeps grading against the stale payload.
+
+    ``source`` is deliberately not overwritten on an existing row: the seed
+    only owns rows it created, and the stem-dedup lookup could otherwise
+    re-label an unrelated question as seed-owned.
     """
     q.question_type = diag_data["question_type"]
     q.stem_zh = diag_data["stem_zh"]
@@ -259,7 +263,6 @@ def _sync_diagnostic_question(q: Question, diag_data: dict) -> None:
     q.options_json = json.dumps(options) if options is not None else None
     q.difficulty = diag_data["difficulty"]
     q.bloom_level = diag_data["bloom_level"]
-    q.source = "seed"
     q.age_group = "mid"
     q.review_status = "approved"
 
@@ -296,7 +299,9 @@ def seed_misconceptions() -> None:
                     _sync_diagnostic_question(existing_q, diag_data)
                     diagnostic_question_id = existing_q.id
                 else:
-                    diag_q = Question(topic_id=topic.id, stem=diag_data["stem"])
+                    diag_q = Question(
+                        topic_id=topic.id, stem=diag_data["stem"], source="seed"
+                    )
                     _sync_diagnostic_question(diag_q, diag_data)
                     db.add(diag_q)
                     db.flush()

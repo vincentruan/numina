@@ -41,7 +41,7 @@ class TestSeedMisconceptions:
     def test_seed_creates_misconceptions_with_diagnostic_questions(
         self, db, fraction_topic, monkeypatch
     ):
-        """Seeding creates one misconception per catalog entry, each with an approved diagnostic question."""
+        """Seeding creates one misconception per entry, each with an approved question."""
         from scripts import seed_misconceptions as seed_mod
 
         # Point SessionLocal at the test DB so the script writes where we can verify.
@@ -201,7 +201,7 @@ class TestSeedMisconceptions:
     def test_seeded_non_calc_misconceptions_are_detectable(
         self, db, fraction_topic, monkeypatch
     ):
-        """Seeded text_match and option_select rows actually fire on the payloads the child app sends."""
+        """Seeded text_match and option_select rows fire on the child app's payloads."""
         from scripts import seed_misconceptions as seed_mod
 
         monkeypatch.setattr(seed_mod, "SessionLocal", lambda: db)
