@@ -203,7 +203,7 @@ SAMPLE_MISCONCEPTIONS: dict[str, list[dict]] = {
             "category": "procedural_error",
             "error_pattern": {
                 "match_type": "option_select",
-                "wrong_options": ["C"],
+                "wrong_options": ["B"],
             },
             "description": (
                 "You used the product of the denominators instead of the lowest "

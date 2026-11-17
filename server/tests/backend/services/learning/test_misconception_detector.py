@@ -539,7 +539,7 @@ class TestOptionSelectMatching:
         assert result is None
 
     def test_option_select_bypasses_safe_math_re(self, db, topic, question):
-        """Option key 'B' would fail _SAFE_MATH_RE but is handled by option_select."""
+        """Option key 'B' is handled by option_select without _SAFE_MATH_RE gate."""
         m = _create_misconception(
             db, topic,
             error_pattern_json=json.dumps({
@@ -560,10 +560,10 @@ class TestServiceNonCalcIntegration:
 
     def test_fill_in_blank_question_detected(self, db, topic):
         """fill_in_blank question with text_match misconception is detected via the service."""
-        from packages.db.models.learning.question import Question
         from apps.backend.app.services.learning.misconception_service import (
             detect_and_record_misconception,
         )
+        from packages.db.models.learning.question import Question
 
         q = Question(
             topic_id=topic.id,
@@ -602,10 +602,10 @@ class TestServiceNonCalcIntegration:
 
     def test_multiple_choice_question_detected(self, db, topic):
         """multiple_choice question with option_select misconception is detected via the service."""
-        from packages.db.models.learning.question import Question
         from apps.backend.app.services.learning.misconception_service import (
             detect_and_record_misconception,
         )
+        from packages.db.models.learning.question import Question
 
         q = Question(
             topic_id=topic.id,
@@ -649,10 +649,10 @@ class TestServiceNonCalcIntegration:
 
     def test_unknown_question_type_returns_none(self, db, topic):
         """Unknown question_type runs detection but returns None when no match."""
-        from packages.db.models.learning.question import Question
         from apps.backend.app.services.learning.misconception_service import (
             detect_and_record_misconception,
         )
+        from packages.db.models.learning.question import Question
 
         q = Question(
             topic_id=topic.id,
