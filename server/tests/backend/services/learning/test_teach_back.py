@@ -83,6 +83,22 @@ class TestExtractExpression:
     def test_multiply(self):
         assert extract_expression("3 × 2 = 6 块") == "3 × 2 = 6"
 
+    def test_fraction_multiply(self):
+        assert extract_expression("1/2 × 1/3 = 1/6 对的") == "1/2 × 1/3 = 1/6"
+
+    def test_decimal(self):
+        assert extract_expression("答案是 0.25") == "0.25"
+
+    def test_decimal_in_text(self):
+        assert extract_expression("因为 0.5 等于 0.50") == "0.5"
+
+    def test_percent(self):
+        # Percent is converted to fraction form
+        assert extract_expression("25% 就是四分之一") == "25/100"
+
+    def test_percent_in_text(self):
+        assert extract_expression("我觉得 50% 就是一半") == "50/100"
+
     def test_bare_fraction(self):
         assert extract_expression("答案是 3/4") == "3/4"
 
@@ -95,6 +111,11 @@ class TestExtractExpression:
     def test_empty(self):
         assert extract_expression("") is None
         assert extract_expression(None) is None
+
+    def test_priority_fraction_multiply_over_decimal(self):
+        """Fraction multiply pattern is more specific than bare decimal."""
+        text = "1/2 × 1/3 = 1/6 也就是约 0.17"
+        assert extract_expression(text) == "1/2 × 1/3 = 1/6"
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +159,29 @@ class TestGradeExpression:
     def test_equivalent_fractions(self):
         assert grade_expression("1/2", "2/4") is True
         assert grade_expression("2/6", "1/3") is True
+
+    def test_decimal_equivalent_to_fraction(self):
+        """0.25 should grade as equivalent to 1/4."""
+        assert grade_expression("1/4", "0.25") is True
+
+    def test_decimal_equivalence(self):
+        """0.5 and 0.50 should be equivalent."""
+        assert grade_expression("0.5", "0.50") is True
+
+    def test_decimal_not_equivalent(self):
+        assert grade_expression("0.5", "0.25") is False
+
+    def test_percent_equivalent_to_fraction(self):
+        """25% (extracted as 25/100) should grade as equivalent to 1/4."""
+        assert grade_expression("1/4", "25/100") is True
+
+    def test_percent_50(self):
+        """50% (extracted as 50/100) should grade as equivalent to 1/2."""
+        assert grade_expression("1/2", "50/100") is True
+
+    def test_fraction_multiply_grading(self):
+        """1/2 × 1/3 = 1/6 should grade correctly."""
+        assert grade_expression("1/6", "1/2 × 1/3 = 1/6") is True
 
 
 # ---------------------------------------------------------------------------
@@ -280,14 +324,16 @@ class TestTeachBackService:
         assert session.topic_id == topic.id
 
     def test_validate_rejects_non_mastered(self, db, child_user, topic):
-        """A real pilot topic that is not mastered is rejected for the mastery reason.
+        """A real teach-back-enabled topic that is not mastered is rejected for the mastery reason.
 
-        #46: the previous fixture used a non-pilot topic, so this passed because of
-        the pilot-scope guard rather than the mastery guard. Put a pilot topic key
+        #46: the previous fixture used a non-enabled topic, so this passed because of
+        the scope guard rather than the mastery guard. Put an enabled topic key
         on the fixture so only the mastery check can reject.
         """
+        from packages.core.settings import settings
+
         child = db.query(User).filter(User.id == child_user["id"]).first()
-        topic.topic_key = next(iter(teach_back_service._PILOT_TOPIC_KEYS))
+        topic.topic_key = next(iter(settings.teach_back_enabled_topic_keys_set))
         db.flush()
 
         progress = LearningProgress(
@@ -309,7 +355,7 @@ class TestTeachBackService:
             f"expected the mastery guard to reject, got {details!r}"
         )
 
-    def test_validate_rejects_non_pilot_topic(self, db, child_user):
+    def test_validate_rejects_non_enabled_topic(self, db, child_user):
         child = db.query(User).filter(User.id == child_user["id"]).first()
         from apps.backend.app.errors import AppError
 

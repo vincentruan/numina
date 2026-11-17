@@ -15,6 +15,7 @@ def _check_sympy_available() -> bool:
     if _SYMBOLIC_EQ_AVAILABLE is None:
         try:
             import sympy  # noqa: F401
+
             _SYMBOLIC_EQ_AVAILABLE = True
         except ImportError:
             _SYMBOLIC_EQ_AVAILABLE = False
@@ -29,32 +30,53 @@ _FRACTION_PATTERN = re.compile(
 _ARITHMETIC_PATTERN = re.compile(
     r"(\d+\s*/\s*\d+)\s*([+\-])\s*(\d+\s*/\s*\d+)\s*=\s*(\d+\s*/\s*\d+)"
 )
-_MULTIPLY_PATTERN = re.compile(
-    r"(\d+)\s*[*×xX]\s*(\d+)\s*=\s*(\d+)"
+_MULTIPLY_PATTERN = re.compile(r"(\d+)\s*[*×xX]\s*(\d+)\s*=\s*(\d+)")
+# Fraction multiplication: 1/2 × 1/3 = 1/6
+_FRACTION_MULTIPLY_PATTERN = re.compile(
+    r"(\d+\s*/\s*\d+)\s*[*×xX]\s*(\d+\s*/\s*\d+)\s*=\s*(\d+\s*/\s*\d+)"
 )
-_WHOLE_NUMBER_PATTERN = re.compile(
-    r"\b(\d+)\b"
-)
+# Decimal numbers: 0.25, 3.14, 1.5
+_DECIMAL_PATTERN = re.compile(r"(\d+\.\d+)")
+# Percent values: 25%, 50%
+_PERCENT_PATTERN = re.compile(r"(\d+)\s*%")
+_WHOLE_NUMBER_PATTERN = re.compile(r"\b(\d+)\b")
 
 
 def extract_expression(child_text: str) -> str | None:
     """Extract the most relevant math expression from a child's free-text explanation.
 
-    Priority: arithmetic with fractions > multiply > bare fraction > bare number.
+    Priority: fraction arithmetic > whole multiply > fraction multiply >
+    decimal > percent > bare fraction > bare number.
     Returns the extracted expression string, or None if nothing found.
+    Percent values are converted to fraction form (e.g., "25%" → "25/100").
     """
     if not child_text or not child_text.strip():
         return None
 
-    # Try arithmetic pattern first (e.g., "1/4 + 2/4 = 3/4")
+    # Try fraction arithmetic pattern first (e.g., "1/4 + 2/4 = 3/4")
     m = _ARITHMETIC_PATTERN.search(child_text)
     if m:
         return m.group(0).strip()
 
-    # Try multiply pattern (e.g., "3 × 2 = 6")
+    # Try whole number multiply (e.g., "3 × 2 = 6")
     m = _MULTIPLY_PATTERN.search(child_text)
     if m:
         return m.group(0).strip()
+
+    # Try fraction multiplication (e.g., "1/2 × 1/3 = 1/6")
+    m = _FRACTION_MULTIPLY_PATTERN.search(child_text)
+    if m:
+        return m.group(0).strip()
+
+    # Try decimal (e.g., "0.25" or "3.14")
+    m = _DECIMAL_PATTERN.search(child_text)
+    if m:
+        return m.group(1).strip()
+
+    # Try percent — convert to fraction form for SymPy (e.g., "25%" → "25/100")
+    m = _PERCENT_PATTERN.search(child_text)
+    if m:
+        return f"{m.group(1)}/100"
 
     # Try bare fraction (e.g., "3/4" or "2/6")
     m = _FRACTION_PATTERN.search(child_text)
@@ -79,7 +101,8 @@ def _sympy_parse(expr: str):
     try:
         import sympy
 
-        parsed = sympy.sympify(expr.strip().replace("^", "**"), strict=False)
+        normalized = expr.strip().replace("^", "**").replace("×", "*").replace("x", "*")
+        parsed = sympy.sympify(normalized, strict=False)
     except Exception:
         return None
     if not isinstance(parsed, sympy.Expr) or parsed.free_symbols:
