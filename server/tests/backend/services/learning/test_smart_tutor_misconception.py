@@ -1,6 +1,7 @@
 """Tests for Smart Tutor misconception integration (#214 U4)."""
 
 import json
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy.orm import Session
@@ -154,3 +155,169 @@ class TestParseSmartTutorStepsMisconception:
         db.flush()
         _, _, misconceptions = _parse_smart_tutor_steps(session)
         assert misconceptions == []
+
+
+# --- MCP record_tutoring_step misconception validation (#214 U4) ---
+
+
+@pytest.fixture
+def child_user(db: Session):
+    """Create a child user for MCP session tests."""
+    from packages.db.models.user import User
+
+    u = User(username="mcptestchild", role="child", family_id=100, display_name="MCP Test Child", password_hash="x")
+    db.add(u)
+    db.flush()
+    return u
+
+
+@pytest.fixture
+def tutoring_session(db: Session, child_user, topic) -> LearningSession:
+    """Create a Smart Tutor session for the child."""
+    s = LearningSession(
+        child_id=child_user.id,
+        topic_id=topic.id,
+        session_type="smart_tutor",
+    )
+    db.add(s)
+    db.flush()
+    return s
+
+
+def _build_mcp_session(family_id: str = "100"):
+    """Build an MCPSession bound to the given family."""
+    from apps.backend.app.services.mcp_session import MCPSession
+
+    return MCPSession(
+        family_id=family_id,
+        caller_user_id="u1",
+        caller_role="owner",
+    )
+
+
+class TestRecordTutoringStepMisconceptionValidation:
+    """MCP record_tutoring_step validates misconception_id against the session topic."""
+
+    @pytest.mark.asyncio
+    async def test_valid_misconception_id_resolves(
+        self, db: Session, tutoring_session, child_user, misconception
+    ):
+        """Valid misconception_id → step record contains resolved id/category/description."""
+        mcp = _build_mcp_session(family_id=str(child_user.family_id))
+        args = {
+            "session_id": str(tutoring_session.id),
+            "question_id": "1",
+            "step_number": "1",
+            "phase": "DIAGNOSE",
+            "child_response_quality": "attempted",
+            "next_phase": "MISCONCEPTION_CORRECTION",
+            "misconception_id": str(misconception.id),
+        }
+        caller_mock = MagicMock(
+            id=str(child_user.id), family_id=str(child_user.family_id),
+            role="owner", is_active=True,
+        )
+        with patch(
+            "apps.backend.app.services.mcp_session.SessionLocal"
+        ) as mock_sl, patch(
+            "apps.backend.app.services.mcp_session._get_caller_user",
+            return_value=caller_mock,
+        ):
+            mock_sl.return_value.__enter__ = MagicMock(return_value=db)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = await mcp.call_tool("record_tutoring_step", args)
+
+        payload = json.loads(result[0].text)
+        assert payload.get("ok") is True
+
+        # Verify the step record was persisted with resolved misconception fields.
+        db.refresh(tutoring_session)
+        steps = json.loads(tutoring_session.progress_json)
+        assert len(steps) == 1
+        mc = steps[0]["misconception"]
+        assert mc["id"] == misconception.id
+        assert mc["category"] == misconception.category
+        assert mc["description"] == misconception.description
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_misconception_id_rejected(
+        self, db: Session, tutoring_session, child_user
+    ):
+        """Non-existent misconception_id → error response."""
+        mcp = _build_mcp_session(family_id=str(child_user.family_id))
+        args = {
+            "session_id": str(tutoring_session.id),
+            "question_id": "1",
+            "step_number": "1",
+            "phase": "DIAGNOSE",
+            "child_response_quality": "attempted",
+            "next_phase": "MISCONCEPTION_CORRECTION",
+            "misconception_id": "9999999",
+        }
+        caller_mock = MagicMock(
+            id=str(child_user.id), family_id=str(child_user.family_id),
+            role="owner", is_active=True,
+        )
+        with patch(
+            "apps.backend.app.services.mcp_session.SessionLocal"
+        ) as mock_sl, patch(
+            "apps.backend.app.services.mcp_session._get_caller_user",
+            return_value=caller_mock,
+        ):
+            mock_sl.return_value.__enter__ = MagicMock(return_value=db)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = await mcp.call_tool("record_tutoring_step", args)
+
+        payload = json.loads(result[0].text)
+        assert payload.get("error") == "misconception_not_found"
+
+    @pytest.mark.asyncio
+    async def test_misconception_from_different_topic_rejected(
+        self, db: Session, tutoring_session, child_user
+    ):
+        """misconception_id from a different topic → error response."""
+        # Create a second topic with its own misconception
+        other_topic = LearningTopic(
+            topic_key="mt_other_topic", topic_type="concept",
+            subject="mathematics", domain="geometry",
+            name="Other topic", age_group="mid",
+            evidence_json="[]", standards_json="[]",
+        )
+        db.add(other_topic)
+        db.flush()
+        other_m = Misconception(
+            topic_id=other_topic.id, sequence=0,
+            error_pattern_json="{}", description="Other topic's M",
+            age_group="mid", review_status="approved",
+            category="concept_confusion",
+        )
+        db.add(other_m)
+        db.flush()
+
+        mcp = _build_mcp_session(family_id=str(child_user.family_id))
+        args = {
+            "session_id": str(tutoring_session.id),
+            "question_id": "1",
+            "step_number": "1",
+            "phase": "DIAGNOSE",
+            "child_response_quality": "attempted",
+            "next_phase": "MISCONCEPTION_CORRECTION",
+            "misconception_id": str(other_m.id),
+        }
+        caller_mock = MagicMock(
+            id=str(child_user.id), family_id=str(child_user.family_id),
+            role="owner", is_active=True,
+        )
+        with patch(
+            "apps.backend.app.services.mcp_session.SessionLocal"
+        ) as mock_sl, patch(
+            "apps.backend.app.services.mcp_session._get_caller_user",
+            return_value=caller_mock,
+        ):
+            mock_sl.return_value.__enter__ = MagicMock(return_value=db)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = await mcp.call_tool("record_tutoring_step", args)
+
+        payload = json.loads(result[0].text)
+        # Cross-topic misconception should be rejected
+        assert payload.get("error") == "misconception_not_found"

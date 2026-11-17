@@ -118,7 +118,12 @@ SAMPLE_MISCONCEPTIONS: dict[str, list[dict]] = {
 
 
 def seed_misconceptions() -> None:
-    """Delete existing seeded misconceptions for pilot topics and re-insert."""
+    """Upsert hand-authored misconceptions for pilot topics.
+
+    For each (topic_id, age_group, sequence) tuple: UPDATE fields if the row
+    already exists, INSERT otherwise. Diagnostic questions are deduplicated
+    by stem as before.
+    """
     db = SessionLocal()
     try:
         for topic_key, misconceptions in SAMPLE_MISCONCEPTIONS.items():
@@ -129,17 +134,8 @@ def seed_misconceptions() -> None:
                 print(f"WARNING: topic_key '{topic_key}' not found, skipping")
                 continue
 
-            # Delete only misconceptions in the seeded sequence set so
-            # hand-curated pending rows outside the seeded set are preserved.
-            seeded_sequences = [m["sequence"] for m in misconceptions]
-            db.query(Misconception).filter(
-                Misconception.topic_id == topic.id,
-                Misconception.age_group == "mid",
-                Misconception.sequence.in_(seeded_sequences),
-            ).delete(synchronize_session=False)
-
             for m_data in misconceptions:
-                # Create or find the diagnostic question.
+                # Create or find the diagnostic question (dedup by stem).
                 diag_data = m_data["diagnostic_question"]
                 existing_q = (
                     db.query(Question)
@@ -168,18 +164,36 @@ def seed_misconceptions() -> None:
                     db.flush()
                     diagnostic_question_id = diag_q.id
 
-                row = Misconception(
-                    topic_id=topic.id,
-                    sequence=m_data["sequence"],
-                    error_pattern_json=json.dumps(m_data["error_pattern"]),
-                    description=m_data["description"],
-                    description_zh=m_data["description_zh"],
-                    age_group="mid",
-                    diagnostic_question_id=diagnostic_question_id,
-                    review_status="approved",
-                    category=m_data["category"],
+                # Upsert misconception by (topic_id, age_group, sequence).
+                existing = (
+                    db.query(Misconception)
+                    .filter(
+                        Misconception.topic_id == topic.id,
+                        Misconception.age_group == "mid",
+                        Misconception.sequence == m_data["sequence"],
+                    )
+                    .first()
                 )
-                db.add(row)
+                if existing is not None:
+                    existing.error_pattern_json = json.dumps(m_data["error_pattern"])
+                    existing.description = m_data["description"]
+                    existing.description_zh = m_data["description_zh"]
+                    existing.diagnostic_question_id = diagnostic_question_id
+                    existing.review_status = "approved"
+                    existing.category = m_data["category"]
+                else:
+                    row = Misconception(
+                        topic_id=topic.id,
+                        sequence=m_data["sequence"],
+                        error_pattern_json=json.dumps(m_data["error_pattern"]),
+                        description=m_data["description"],
+                        description_zh=m_data["description_zh"],
+                        age_group="mid",
+                        diagnostic_question_id=diagnostic_question_id,
+                        review_status="approved",
+                        category=m_data["category"],
+                    )
+                    db.add(row)
 
             db.commit()
             print(

@@ -75,15 +75,6 @@ export interface PracticeAttemptResponse {
   misconception_feedback: MisconceptionFeedback | null
 }
 
-export interface MisconceptionSummary {
-  misconception_id: string
-  topic_id: string
-  description: string
-  description_zh: string | null
-  detection_count: number
-  last_detected_at: string | null
-}
-
 export interface PracticeResultResponse {
   session_id: string
   total_score: number
