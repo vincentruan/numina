@@ -19,39 +19,39 @@ _OLD_DEFAULTS = {
     "LOG_DIR": "logs",
 }
 
+#: Topics with hand-authored teach-back confusion data (#216 pilot, #234 expansion).
+#: Keep in sync with ``scripts/seed_teach_back_confusions.py`` SAMPLE_CONFUSIONS.
+TEACH_BACK_DEFAULT_TOPIC_KEYS = (
+    "mt_9KmVWCuh5_",  # Understanding fractions
+    "mt_ndGqFPWyen",  # Fractions of a whole
+    "mt_FP-mjXaq3B",  # Equivalent fractions
+    "mt_Fl7b8q9pI1",  # Decimal place value
+    "mt_ZM9mhHsyYZ",  # Understanding Percentages
+    "mt_TgHxujL81r",  # Multiplying fractions
+)
+
 
 class Settings(BaseSettings):
     DATA_ROOT: str = "~/.numina/data"
 
     DATABASE_URL: str = "sqlite:///./data/numina.db"
     SECRET_KEY: str = _DEFAULT_SECRET
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = (
-        60  # 1 hour (was 15 min — too short for dev/testing)
-    )
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hour (was 15 min — too short for dev/testing)
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     DEVICE_TRUST_EXPIRE_DAYS: int = 30  # Device trust expiry (days since last login)
     # WebAuthn settings
     WEBAUTHN_RP_ID: str = "localhost"  # Domain (no protocol, no port)
     WEBAUTHN_RP_NAME: str = "Numina"
     WEBAUTHN_ORIGIN: str = "http://localhost:8080"  # Full origin with protocol
-    CORS_ORIGINS: list[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-    ]
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8080", "http://127.0.0.1:8080"]
     ENVIRONMENT: str = "development"  # development / production
 
     # Bootstrap: initial invitation codes for production (comma-separated)
     INIT_INVITATION_CODES: str = ""
 
     # Reconciliation system
-    DISABLE_RECONCILE: bool = (
-        False  # Set True to skip reconciliation (fallback to legacy bootstrap)
-    )
-    RECONCILE_MODE: str = (
-        ""  # Override mode: "normal", "check-only", "dry-run", "offline", "strict"
-    )
+    DISABLE_RECONCILE: bool = False  # Set True to skip reconciliation (fallback to legacy bootstrap)
+    RECONCILE_MODE: str = ""  # Override mode: "normal", "check-only", "dry-run", "offline", "strict"
 
     # Cache configuration
     CACHE_BACKEND: str = "memory"  # "memory" or "redis"
@@ -85,25 +85,19 @@ class Settings(BaseSettings):
     ENABLE_SECURITY_LOGGING: bool = True
     ALTCHA_HMAC_KEY: str = ""  # Required in production for captcha
     SEED_SECRET: str = ""  # If set, requests with X-Seed-Secret header bypass captcha
-    DISABLE_CAPTCHA: bool = (
-        False  # Set to true to disable captcha regardless of environment
-    )
+    DISABLE_CAPTCHA: bool = False  # Set to true to disable captcha regardless of environment
 
     # File storage configuration
     UPLOAD_DIR: str = "./data/uploads"
     WORKSPACE_ROOT: str = "./data/workspaces"
     FILE_SYNC_INTERVAL_MINUTES: int = 15
-    FILE_SYNC_FAILED_RECOVERY_HOURS: int = (
-        24  # Re-queue exhausted failures after this many hours
-    )
+    FILE_SYNC_FAILED_RECOVERY_HOURS: int = 24  # Re-queue exhausted failures after this many hours
     BACKUP_HOUR: int = 2  # Local hour of the daily family backup
     BACKUP_RETENTION_COUNT: int = 7  # How many dated backups to keep remotely
     STORAGE_ENCRYPTION_KEY: str = ""
 
     # Chat session storage configuration
-    CHAT_DIR: str = (
-        "./data/workspaces"  # Base dir; sessions stored under tenants/{fid}/chat/
-    )
+    CHAT_DIR: str = "./data/workspaces"  # Base dir; sessions stored under tenants/{fid}/chat/
     CHAT_ENABLE_REMOTE_SYNC: bool = False
 
     # AI Agent 配置
@@ -123,9 +117,7 @@ class Settings(BaseSettings):
     VAPID_SUBJECT: str = "mailto:admin@numina.app"
 
     # Snowflake ID generator
-    SNOWFLAKE_MACHINE_ID: int | None = (
-        None  # 0-1023; None = auto-derive from container IP
-    )
+    SNOWFLAKE_MACHINE_ID: int | None = None  # 0-1023; None = auto-derive from container IP
 
     # Logging configuration
     LOG_LEVEL: str = "INFO"
@@ -136,12 +128,11 @@ class Settings(BaseSettings):
     LOG_ROTATION_MODE: str = "size"  # "size" or "time"
     LOG_FORMAT: str | None = None  # Uses default format if None
 
-    # Teach-back enabled topic keys (comma-separated).
-    # Controls which topics allow teach-back sessions. Unset = all 6 default topics.
-    TEACH_BACK_ENABLED_TOPIC_KEYS: str = (
-        "mt_9KmVWCuh5_,mt_ndGqFPWyen,mt_FP-mjXaq3B,"
-        "mt_Fl7b8q9pI1,mt_ZM9mhHsyYZ,mt_TgHxujL81r"
-    )
+    # Teach-back enabled topic keys (comma-separated). Unset = all topics below.
+    # An empty value disables teach-back for every topic, so leave it unset to get
+    # the defaults rather than blanking it. Keep in sync with
+    # scripts/seed_teach_back_confusions.py SAMPLE_CONFUSIONS.
+    TEACH_BACK_ENABLED_TOPIC_KEYS: str = ",".join(TEACH_BACK_DEFAULT_TOPIC_KEYS)
 
     @property
     def teach_back_enabled_topic_keys_set(self) -> frozenset[str]:
@@ -149,9 +140,7 @@ class Settings(BaseSettings):
         if not self.TEACH_BACK_ENABLED_TOPIC_KEYS.strip():
             return frozenset()
         return frozenset(
-            k.strip()
-            for k in self.TEACH_BACK_ENABLED_TOPIC_KEYS.split(",")
-            if k.strip()
+            k.strip() for k in self.TEACH_BACK_ENABLED_TOPIC_KEYS.split(",") if k.strip()
         )
 
     # Load `.env` (CWD-local, e.g. server/.env) then the repo-root `.env`
@@ -176,7 +165,7 @@ class Settings(BaseSettings):
         # Always expand "~" regardless of whether the URL is explicit or default.
         if self.DATABASE_URL and self.DATABASE_URL.startswith("sqlite:///"):
             # sqlite:/// has 3 slashes: the database part starts after the 3rd /
-            db_part = self.DATABASE_URL[len("sqlite:///") :]
+            db_part = self.DATABASE_URL[len("sqlite:///"):]
             if db_part.startswith("~"):
                 expanded = str(Path(db_part).expanduser().resolve())
                 self.DATABASE_URL = f"sqlite:///{expanded}"
@@ -203,10 +192,7 @@ class Settings(BaseSettings):
         if _OLD_DEFAULTS["UPLOAD_DIR"] == self.UPLOAD_DIR or not self.UPLOAD_DIR:
             self.UPLOAD_DIR = str(Path(root) / "workspaces")
 
-        if (
-            _OLD_DEFAULTS["WORKSPACE_ROOT"] == self.WORKSPACE_ROOT
-            or not self.WORKSPACE_ROOT
-        ):
+        if _OLD_DEFAULTS["WORKSPACE_ROOT"] == self.WORKSPACE_ROOT or not self.WORKSPACE_ROOT:
             self.WORKSPACE_ROOT = str(Path(root) / "workspaces")
 
         if _OLD_DEFAULTS["CHAT_DIR"] == self.CHAT_DIR or not self.CHAT_DIR:
@@ -237,17 +223,10 @@ class Settings(BaseSettings):
 
         url = self.DATABASE_URL or ""
         is_sqlite = url.startswith("sqlite")
-        is_test = (
-            os.environ.get("PYTEST_VERSION") is not None or "pytest" in sys.modules
-        )
+        is_test = os.environ.get("PYTEST_VERSION") is not None or "pytest" in sys.modules
         allow_sqlite_override = os.environ.get("ALLOW_SQLITE") == "1"
 
-        if (
-            is_sqlite
-            and self.ENVIRONMENT == "production"
-            and not is_test
-            and not allow_sqlite_override
-        ):
+        if is_sqlite and self.ENVIRONMENT == "production" and not is_test and not allow_sqlite_override:
             raise ValueError(
                 f"SQLite is not allowed in production mode "
                 f"(DATABASE_URL={url!r}). "
@@ -256,11 +235,7 @@ class Settings(BaseSettings):
             )
 
         # Always log the chosen backend for early visibility
-        dialect = (
-            "sqlite"
-            if is_sqlite
-            else (url.split("://")[0] if "://" in url else "unknown")
-        )
+        dialect = "sqlite" if is_sqlite else (url.split("://")[0] if "://" in url else "unknown")
         logger.info("Database backend: %s (%s)", dialect, self.ENVIRONMENT)
 
         return self
@@ -343,16 +318,13 @@ def check_legacy_storage_env_vars() -> list[str]:
     """
     return [k for k in _LEGACY_STORAGE_ENV_KEYS if os.environ.get(k)]
 
-
 # CHAT_DIR validation - must not be a strict subdirectory of UPLOAD_DIR
 # (UPLOAD_DIR subtree is served as static files; equality is OK because
 # the StaticFiles mount is scoped to the upload/ subdirectory at runtime)
 try:
     chat_dir_resolved = Path(settings.CHAT_DIR).resolve()
     upload_dir_resolved = Path(settings.UPLOAD_DIR).resolve()
-    if chat_dir_resolved != upload_dir_resolved and chat_dir_resolved.is_relative_to(
-        upload_dir_resolved
-    ):
+    if chat_dir_resolved != upload_dir_resolved and chat_dir_resolved.is_relative_to(upload_dir_resolved):
         raise RuntimeError(
             f"CHAT_DIR ({settings.CHAT_DIR}) 不能位于 UPLOAD_DIR ({settings.UPLOAD_DIR}) 下！"
             "对话历史不应通过静态文件 URL 暴露。"

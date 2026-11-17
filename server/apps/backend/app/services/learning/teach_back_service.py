@@ -18,23 +18,17 @@ from packages.db.models.learning.session import LearningSession
 from packages.db.models.learning.topic import LearningTopic
 
 
-def get_approved_confusions(
-    db: Session, topic_id: int, age_group: str = "mid"
-) -> list[TopicConfusion]:
+def get_approved_confusions(db: Session, topic_id: int, age_group: str = "mid") -> list[TopicConfusion]:
     """Return approved confusions for a topic, ordered by sequence."""
-    rows = (
-        db.execute(
-            select(TopicConfusion)
-            .where(
-                TopicConfusion.topic_id == topic_id,
-                TopicConfusion.age_group == age_group,
-                TopicConfusion.review_status == "approved",
-            )
-            .order_by(TopicConfusion.sequence)
+    rows = db.execute(
+        select(TopicConfusion)
+        .where(
+            TopicConfusion.topic_id == topic_id,
+            TopicConfusion.age_group == age_group,
+            TopicConfusion.review_status == "approved",
         )
-        .scalars()
-        .all()
-    )
+        .order_by(TopicConfusion.sequence)
+    ).scalars().all()
     return list(rows)
 
 
@@ -82,10 +76,7 @@ def validate_teach_back_request(
         if not session_id:
             raise AppError(
                 ErrorCode.VALIDATION_ERROR,
-                details={
-                    "field": "session_id",
-                    "message": "session_id required for follow-up",
-                },
+                details={"field": "session_id", "message": "session_id required for follow-up"},
             )
         session = db.get(LearningSession, session_id)
         if not session or session.child_id != child.id:
@@ -103,10 +94,7 @@ def validate_teach_back_request(
         if not topic_id:
             raise AppError(
                 ErrorCode.VALIDATION_ERROR,
-                details={
-                    "field": "topic_id",
-                    "message": "topic_id required to start teach-back",
-                },
+                details={"field": "topic_id", "message": "topic_id required to start teach-back"},
             )
         topic = db.get(LearningTopic, topic_id)
         if not topic:
@@ -116,10 +104,7 @@ def validate_teach_back_request(
         if topic.topic_key not in settings.teach_back_enabled_topic_keys_set:
             raise AppError(
                 ErrorCode.VALIDATION_ERROR,
-                details={
-                    "field": "topic_id",
-                    "message": "topic not enabled for teach-back",
-                },
+                details={"field": "topic_id", "message": "topic not enabled for teach-back"},
             )
 
         # Check mastery
@@ -224,6 +209,7 @@ def build_teach_back_payload(
             "language": child.language or "zh-CN",
         },
     }
+
 
 
 # ---------------------------------------------------------------------------
@@ -370,13 +356,11 @@ def record_teach_back_turn(
 
     # "All resolved" is expressed by the distinct hit count alone: a miss early in
     # the dialogue must not permanently block a later success.
-    unique_confusions = len(
-        {
-            s.get("confusion_id")
-            for s in existing_steps
-            if s.get("type") == TEACH_BACK_TURN_TYPE and s.get("verdict") == "hit"
-        }
-    )
+    unique_confusions = len({
+        s.get("confusion_id")
+        for s in existing_steps
+        if s.get("type") == TEACH_BACK_TURN_TYPE and s.get("verdict") == "hit"
+    })
     total_confusions = (
         db.query(TopicConfusion)
         .filter(
@@ -386,7 +370,9 @@ def record_teach_back_turn(
         )
         .count()
     )
-    all_confusions_hit = total_confusions > 0 and unique_confusions >= total_confusions
+    all_confusions_hit = (
+        total_confusions > 0 and unique_confusions >= total_confusions
+    )
 
     teach_back_rewards: dict | None = None
     teach_back_success = False
@@ -459,9 +445,7 @@ def _load_turns(session: LearningSession) -> list[dict]:
     return parsed if isinstance(parsed, list) else []
 
 
-def _notify_parent(
-    db: Session, family_id: int, session: LearningSession, notifier
-) -> None:
+def _notify_parent(db: Session, family_id: int, session: LearningSession, notifier) -> None:
     """Notify the parent that the child completed a teach-back (best-effort)."""
     from packages.core.logging import get_logger
 
