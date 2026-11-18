@@ -255,6 +255,7 @@ def _sync_diagnostic_question(q: Question, diag_data: dict) -> None:
     re-label an unrelated question as seed-owned.
     """
     q.question_type = diag_data["question_type"]
+    q.stem = diag_data["stem"]
     q.stem_zh = diag_data["stem_zh"]
     q.answer_json = json.dumps(diag_data["answer"])
     # options_json is required for multiple_choice: without it the child sees a

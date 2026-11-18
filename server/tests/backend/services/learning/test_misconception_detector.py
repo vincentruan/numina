@@ -496,6 +496,41 @@ class TestTextMatching:
         assert result is not None
         assert result.id == m.id
 
+    def test_list_based_expected_wrong_matches_any_candidate(self, db, topic, question):
+        """expected_wrong as a list matches if user answer equals any candidate."""
+        m = _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "text_match",
+                "expected_wrong": ["denominator", "分母"],
+                "normalize": True,
+            }),
+        )
+        # English form matches
+        result_en = detect_misconception(db, topic.id, {"answer": "denominator"}, question)
+        assert result_en is not None
+        assert result_en.id == m.id
+        # Chinese form matches the same misconception
+        result_zh = detect_misconception(db, topic.id, {"answer": "分母"}, question)
+        assert result_zh is not None
+        assert result_zh.id == m.id
+        # Unrelated text does not match
+        result_miss = detect_misconception(db, topic.id, {"answer": "numerator"}, question)
+        assert result_miss is None
+
+    def test_empty_expected_wrong_list_returns_none(self, db, topic, question):
+        """An empty expected_wrong list matches nothing."""
+        _create_misconception(
+            db, topic,
+            error_pattern_json=json.dumps({
+                "match_type": "text_match",
+                "expected_wrong": [],
+                "normalize": True,
+            }),
+        )
+        result = detect_misconception(db, topic.id, {"answer": "anything"}, question)
+        assert result is None
+
 
 # --- option_select tests ---
 
@@ -707,7 +742,8 @@ class TestServiceNonCalcIntegration:
         )
         assert result is not None
         misconception_id, feedback = result
-        assert feedback is not None
+        assert misconception_id is not None
+        assert feedback.description is not None
 
     def test_multiple_choice_question_detected(self, db, topic):
         """multiple_choice question with option_select misconception is detected via the service."""
@@ -754,7 +790,8 @@ class TestServiceNonCalcIntegration:
         )
         assert result is not None
         misconception_id, feedback = result
-        assert feedback is not None
+        assert misconception_id is not None
+        assert feedback.description is not None
 
     def test_unknown_question_type_returns_none(self, db, topic):
         """Unknown question_type runs detection but returns None when no match."""
