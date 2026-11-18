@@ -644,6 +644,332 @@ Assertions:
 
 ---
 
+## Knowledge Castle (Issue #209)
+
+> **Why this section exists:** Issue #209 新增了「知识城堡」可视化成长功能。
+> 儿童在 `/learning/castle` 可以看到自己的知识城堡，每个学科是一座塔楼，
+> 已掌握的 topic 是塔楼里的砖块。练习首次掌握时会触发庆祝动画
+> ("你的城堡多了一块砖 🏰")。
+>
+> 路由：`${CHILD_BASE}learning/castle`
+> API：`GET /child/learning/castle/index`
+
+### C17.31 Knowledge Castle — page renders with towers
+
+> 验证城堡页面渲染学科塔楼。
+
+```
+bsk navigate ${CHILD_BASE}learning/castle --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 2000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.31-castle-page.png
+```
+
+Assertions:
+- [ ] Page loads without errors (HTTP 200, no console errors)
+- [ ] Title "我的知识城堡" or similar i18n text visible
+- [ ] At least one subject tower renders (tower with icon + floors)
+- [ ] Towers are horizontally scrollable (scroll-snap container)
+- [ ] Each tower shows a subject icon at top (emoji: 📐 数学, 🔬 科学, etc.)
+- [ ] Tower floors represent domains — each floor has brick elements
+- [ ] Mastered topics appear as lit bricks (colored/visible)
+- [ ] Unmastered topics appear as dark/empty floor slots
+- [ ] `[console]` zero errors
+
+### C17.32 Knowledge Castle — empty state (zero progress)
+
+> **前置:** Child with no learning progress. If demouser's child has progress,
+> note in report and skip gracefully.
+
+```
+bsk navigate ${CHILD_BASE}learning/castle --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] Castle renders even with zero progress (NOT blank page or error)
+- [ ] Foundation/base of castle visible with empty tower skeletons
+- [ ] Guidance text present (e.g. "快去学习，建造你的知识城堡！")
+- [ ] Navigation button to learning map present
+- [ ] `[console]` zero errors
+
+### C17.33 Knowledge Castle — celebration on first mastery
+
+> 验证练习首次掌握后触发城堡庆祝动画。
+
+```
+# After completing a practice session that results in first mastery:
+# The CastleCelebration component should appear
+bsk wait-ms --session <id> 3000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.33-castle-celebration.png
+```
+
+Assertions:
+- [ ] CastleCelebration component appears (confetti animation)
+- [ ] Title text: "你的城堡多了一块砖 🏰" or similar
+- [ ] Celebration is dismissible (close button or auto-dismiss)
+- [ ] If `prefers-reduced-motion`: static toast instead of animation
+- [ ] `[console]` zero errors
+
+### C17.34 Knowledge Castle — tower floor state transitions
+
+> 验证塔楼楼层随掌握度变化：available → learning → mastered 颜色渐变。
+
+```
+bsk navigate ${CHILD_BASE}learning/castle --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 2000
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] Mastered floors: bright/solid color (completed)
+- [ ] Learning floors: pulse or semi-transparent animation
+- [ ] Available floors: visible but dimmed
+- [ ] Locked floors: dark/faded
+- [ ] Floor state matches child's actual progress data
+- [ ] `[console]` zero errors
+
+### C17.35 Knowledge Castle — navigation from practice result
+
+> 验证练习结果页的城堡 CTA 按钮可导航到城堡页面。
+
+```
+# After a practice session, check for castle CTA button
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] Practice result page shows castle-related CTA when first mastery occurs
+- [ ] CTA button text: "看看你的城堡" or similar
+- [ ] Clicking CTA navigates to `/learning/castle`
+- [ ] `[console]` zero errors
+
+---
+
+## Teach-back — Child Teaches AI (Issue #216)
+
+> **Why this section exists:** Issue #216 新增了「反过来教 AI」功能。
+> 儿童通过教 AI 来验证深度理解。AI 扮演好奇的朋友角色
+> ("这个我总是搞不懂，你能帮帮我吗？")，儿童解释概念，
+> 系统通过 LLM + SymPy 双轨验证。完成时触发 "恍然大悟" 庆祝。
+>
+> 路由：`${CHILD_BASE}learning/teach-back/:topicId`
+> API：`GET /child/learning/teach-back/confusions` (获取预置困惑)
+> 前置：需要 child session + AI 启用 + 试点 topic (分数相关)。
+> AI 未启用标记 `SKIP-AI`。
+
+### C17.36 Teach-back — page load with AI confusion prompt
+
+> 验证 teach-back 页面加载后 AI 以"求助模式"开场。
+
+```
+# Navigate to teach-back for a pilot topic (fraction-related)
+bsk navigate ${CHILD_BASE}learning/teach-back/<pilot_topic_id> --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 3000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.36-teachback-welcome.png
+```
+
+Assertions:
+- [ ] Page loads without errors (HTTP 200, no console errors)
+- [ ] AI opens with a "help-seeking" message (e.g. "这个我总是搞不懂，你能帮帮我吗？")
+- [ ] AI persona is "curious friend" (not authoritative teacher)
+- [ ] Chat input field visible for child to type explanation
+- [ ] Topic context is mentioned in the conversation
+- [ ] `[console]` zero errors
+
+### C17.37 Teach-back — child explains concept, AI evaluates
+
+> 验证儿童输入解释后 AI 评估回答质量。
+
+```
+# Child types an explanation
+bsk snapshot --session <id>
+bsk fill @eN --session <id> --value "分数就是把一个东西平均分成几份，取其中的几份"
+bsk click @eN --session <id>   # send button
+bsk wait-ms --session <id> 5000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.37-teachback-explain.png
+```
+
+Assertions:
+- [ ] Child's explanation appears in chat (user bubble)
+- [ ] AI responds with streaming text (incremental)
+- [ ] AI response evaluates the explanation (acknowledges correct parts, asks follow-up)
+- [ ] AI does NOT simply say "correct" — engages with the content
+- [ ] Input field clears after sending
+- [ ] `[console]` zero errors
+
+### C17.38 Teach-back — eureka celebration on successful teaching
+
+> 验证儿童成功教会 AI 后触发"恍然大悟"庆祝。
+
+```
+# After multiple rounds of explanation, when AI "understands":
+bsk wait-ms --session <id> 3000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.38-teachback-eureka.png
+```
+
+Assertions:
+- [ ] Eureka celebration appears when AI "learns" from child's explanation
+- [ ] Celebration text: "哇！TA 终于明白了！你教得太棒了！" or similar
+- [ ] Score/XP indicator shown (25 XP for highest tier)
+- [ ] `assessment_type='teach_back'` recorded (verify via API if accessible)
+- [ ] `[console]` zero errors
+
+### C17.39 Teach-back — fraction-decimal topic (PR #238 expansion)
+
+> 验证分数-小数互换的 teach-back 主题可用。
+
+```
+# Navigate to a fraction-decimal teach-back topic
+bsk navigate ${CHILD_BASE}learning/teach-back/<fraction_decimal_topic_id> --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 3000
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] Topic loads without errors
+- [ ] AI's confusion relates to fraction-decimal equivalence (e.g. "0.5 和 1/2 是一样的吗？")
+- [ ] Child can explain the relationship
+- [ ] SymPy validates mathematical equivalence in the background
+- [ ] `[console]` zero errors
+
+### C17.40 Teach-back — error handling (non-pilot topic)
+
+> 验证非试点 topic 访问 teach-back 时的降级处理。
+
+```
+# Navigate to a topic outside the pilot scope
+bsk navigate ${CHILD_BASE}learning/teach-back/<non_pilot_topic_id> --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 2000
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] Page either shows a friendly "此功能即将开放" message OR redirects gracefully
+- [ ] No blank page or unhandled exception
+- [ ] Navigation back option available
+- [ ] `[console]` zero errors
+
+---
+
+## Practice Challenge Types (Issue #211)
+
+> **Why this section exists:** Issue #211 扩展了挑战类型生态，
+> 8 个学科各有独特挑战类型 + Rush 限时模式。
+> 路由：`${CHILD_BASE}learning/practice/:topicId`
+
+### C17.41 Practice — challenge type variety
+
+> 验证不同 topic 展示不同的挑战类型。
+
+```
+# Start practice for a math topic
+bsk navigate ${CHILD_BASE}learning/practice/<math_topic_id> --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 2000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.41-challenge-type.png
+```
+
+Assertions:
+- [ ] Practice page loads with a challenge scenario (not just a question)
+- [ ] Challenge type is visible (e.g. 🔍 找规律, 🧩 拼图, ⏱️ Rush, etc.)
+- [ ] Challenge has interactive elements appropriate to its type
+- [ ] Instructions/description are clear and age-appropriate
+- [ ] `[console]` zero errors
+
+### C17.42 Practice — Rush mode (timed challenge)
+
+> 验证限时挑战模式的倒计时和评分机制。
+
+```
+# Start practice for a topic that uses Rush mode
+bsk navigate ${CHILD_BASE}learning/practice/<rush_topic_id> --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 2000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.42-rush-mode.png
+```
+
+Assertions:
+- [ ] Rush mode shows a countdown timer (e.g. 60s)
+- [ ] Timer counts down visibly
+- [ ] Questions appear in rapid succession after answering
+- [ ] Score shows number of correct answers within time limit
+- [ ] Time-up screen shows final score + encouragement
+- [ ] `[console]` zero errors
+
+### C17.43 Practice — discovery-first entry (Issue #210)
+
+> 验证练习以"挑战情境"为入口，而非"先教后练"。
+
+```
+# Start practice for a topic
+bsk navigate ${CHILD_BASE}learning/practice/<topic_id> --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 2000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.43-discovery-entry.png
+```
+
+Assertions:
+- [ ] First screen is a challenge scenario (not a lesson/explanation)
+- [ ] Challenge is contextualized (real-world scenario, not abstract)
+- [ ] Child can attempt before being taught the concept
+- [ ] After attempt, concept is revealed ("你刚才做的，就是'xxx'！")
+- [ ] First attempt is not scored harshly (encouraging feedback)
+- [ ] `[console]` zero errors
+
+---
+
+## Prerequisite Diagnosis (Issue #213)
+
+> **Why this section exists:** Issue #213 新增了错题回溯先修诊断功能。
+> 当儿童在某 topic 持续失败时，系统通过 BFS 遍历先修依赖图
+> 找到真正的薄弱点，并推送诊断卡片。
+>
+> 组件：DiagnosisCard.vue
+> 触发：练习失败时自动触发 `GET /child/learning/practice/recommend?diagnosis=true`
+
+### C17.44 Diagnosis — DiagnosisCard shown after repeated failures
+
+> **前置:** Child has failed a topic 3+ times (minimum sample size).
+
+```
+# After repeated failures, navigate to practice
+bsk navigate ${CHILD_BASE}learning/practice/<struggling_topic_id> --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 3000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c17.44-diagnosis-card.png
+```
+
+Assertions:
+- [ ] DiagnosisCard appears when child struggles (3+ failures)
+- [ ] Card shows diagnosis result (e.g. "建议先复习: {prereq_name}")
+- [ ] Diagnosis depth ≤ 2 (hops in prerequisite graph)
+- [ ] "先练习" button navigates to the recommended prerequisite topic
+- [ ] "继续" button allows child to continue despite diagnosis
+- [ ] `[console]` zero errors
+
+### C17.45 Diagnosis — no diagnosis for first-time failure
+
+> 验证首次失败不触发诊断（需要 ≥3 次尝试）。
+
+```
+# First attempt at a topic
+bsk navigate ${CHILD_BASE}learning/practice/<new_topic_id> --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 2000
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] No DiagnosisCard shown for first-time failure
+- [ ] Normal practice flow continues
+- [ ] `[console]` zero errors
+
+---
+
 ## Quick Reference
 
 | Case | Feature | Route | Key assertion |
@@ -678,3 +1004,18 @@ Assertions:
 | C17.28 | Tutor SSE streaming | `/learning/smart-tutor/:id` | Incremental text + phase tracking |
 | C17.29 | Multi-round guidance | `/learning/smart-tutor/:id` | Full 4-phase flow: diagnose → consolidate |
 | C17.30 | Error pattern recognition | `/learning/smart-tutor/:id` | AI identifies misconception + targeted hint |
+| C17.31 | Castle page | `/learning/castle` | Towers with bricks, horizontal scroll |
+| C17.32 | Castle empty | `/learning/castle` | Empty towers + guidance (no error) |
+| C17.33 | Castle celebration | practice result | Confetti + "多了一块砖 🏰" |
+| C17.34 | Castle floor states | `/learning/castle` | Color transitions by mastery |
+| C17.35 | Castle CTA | practice result | "看看你的城堡" navigates to castle |
+| C17.36 | Teach-back welcome | `/learning/teach-back/:id` | AI "help-seeking" persona |
+| C17.37 | Teach-back explain | `/learning/teach-back/:id` | Child explains → AI evaluates |
+| C17.38 | Teach-back eureka | `/learning/teach-back/:id` | Celebration + 25 XP |
+| C17.39 | Teach-back fraction-decimal | `/learning/teach-back/:id` | Fraction-decimal topic works |
+| C17.40 | Teach-back non-pilot | `/learning/teach-back/:id` | Graceful degradation |
+| C17.41 | Challenge types | `/learning/practice/:id` | Different types per topic |
+| C17.42 | Rush mode | `/learning/practice/:id` | Countdown + rapid scoring |
+| C17.43 | Discovery-first entry | `/learning/practice/:id` | Challenge before teaching |
+| C17.44 | Diagnosis card | `/learning/practice/:id` | BFS prereq diagnosis + buttons |
+| C17.45 | No diagnosis for first fail | `/learning/practice/:id` | No card on first failure |

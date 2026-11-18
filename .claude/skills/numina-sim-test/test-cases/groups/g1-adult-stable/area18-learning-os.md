@@ -757,6 +757,90 @@ Assertions:
 
 ---
 
+## 10. 家长端知识城堡 (Parent Knowledge Castle — Issue #235, PR #236)
+
+> **Why this section exists:** PR #236 在家长端 BabyLearningPage 中新增了
+> 知识城堡可见模块（ParentKnowledgeCastle.vue），让家长能看到孩子的知识城堡。
+> API: `GET /family/learning/children/{child_id}/castle/index`
+> 组件: `ParentKnowledgeCastle.vue` (嵌入 BabyLearningPage)
+
+### C18.30 Parent Knowledge Castle — module renders in BabyLearningPage
+
+> 验证家长端 BabyLearningPage 中嵌入知识城堡模块。
+
+```
+bsk navigate ${BASE}baby/learning --session <id> --wait-until networkidle
+bsk wait-ms --session <id> 2000
+bsk snapshot --session <id>
+# Scroll down to find the castle module
+bsk screenshot --session <id> --out dogfood-output/c18.30-parent-castle.png
+```
+
+Assertions:
+- [ ] ParentKnowledgeCastle component renders in BabyLearningPage (as a module card)
+- [ ] Module title: "知识城堡" or i18n equivalent (`learning.castle.parentTitle`)
+- [ ] Subtitle describes what the castle shows (`learning.castle.parentSubtitle`)
+- [ ] At least one subject tower visible (horizontally scrollable strip)
+- [ ] Each tower shows subject icon + floor stack
+- [ ] If streak > 0: streak indicator shown ("🔥 连续学习 N 天")
+- [ ] `[console]` zero errors
+
+### C18.31 Parent Knowledge Castle — API data consistency
+
+> 验证家长端城堡数据与子端一致。
+
+```bash
+# Get castle data via parent API
+curl -s -H "$AUTH" "${API_BASE}/family/learning/children/${CHILD_ID}/castle/index" | jq '.'
+```
+
+Assertions:
+- [ ] API returns `towers` array with subject, icon, floors
+- [ ] Each floor has `domain`, `mastered_count`, `total_count`
+- [ ] `streak_days` integer ≥ 0
+- [ ] Zero-progress child gets 200 with empty tower skeletons (never 404)
+- [ ] Tower count matches child's subject enrollment
+- [ ] `[console]` zero errors
+
+### C18.32 Parent Knowledge Castle — child switcher updates castle
+
+> 验证切换 child tab 后城堡数据更新。
+
+```
+# Switch to second child tab
+bsk snapshot --session <id>
+bsk click @eN --session <id>   # second child tab
+bsk wait-ms --session <id> 2000
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c18.32-parent-castle-switch.png
+```
+
+Assertions:
+- [ ] Castle module reloads for the newly selected child
+- [ ] Tower data reflects the new child's progress (different from previous child)
+- [ ] Skeleton shown briefly during reload
+- [ ] No data leakage between children
+- [ ] `[console]` zero errors
+
+### C18.33 Parent Knowledge Castle — loading skeleton + error state
+
+> 验证加载骨架屏和错误重试。
+
+```
+# Navigate with slow network or check initial render
+bsk navigate ${BASE}baby/learning --session <id>
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] Skeleton (`van-skeleton`) renders during data fetch
+- [ ] Skeleton transitions to real content within 3 seconds
+- [ ] If API fails: error state shows 🏰 icon + retry button
+- [ ] Retry button triggers re-fetch
+- [ ] `[console]` zero errors
+
+---
+
 ## Quick Reference
 
 | Case | Feature | Route | Role | Key assertion |
@@ -790,3 +874,7 @@ Assertions:
 | C18.27 | Topic plan age adaptation | API | adult | Duration/objectives depth varies by age_group |
 | C18.28 | Topic plan bilingual output | API | adult | `_zh` Chinese / `_en` English per locale |
 | C18.29 | Smart Tutor E2E | multi | both | Child solves → parent sees progress update |
+| C18.30 | Parent castle module | `/baby/learning` | adult | Castle towers + streak visible |
+| C18.31 | Parent castle API | API | adult | Towers/floors data + zero-progress 200 |
+| C18.32 | Parent castle switch | `/baby/learning` | adult | Child switcher updates castle |
+| C18.33 | Parent castle skeleton | `/baby/learning` | adult | Skeleton → content + error retry |
