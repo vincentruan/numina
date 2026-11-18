@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
-"""Seed preset confusion lists for the teach-back pilot topics.
+"""Seed preset confusion lists for teach-back topics.
 
 Usage:
     cd server
     uv run python scripts/seed_teach_back_confusions.py
 
-Writes 2-4 hand-authored confusions per pilot topic into ``topic_confusions``
+Writes 2-3 hand-authored confusions per topic into ``topic_confusions``
 with ``review_status='approved'``. Idempotent: deletes existing rows for each
 topic before re-inserting.
 
-Pilot topics (3 math, age_group='mid', chosen by centrality):
+Topics (7 math, age_group='mid', chosen by centrality):
+  Pilot (3 fractions):
   - mt_9KmVWCuh5_  Understanding fractions (age 10+)
   - mt_ndGqFPWyen  Fractions of a whole
   - mt_FP-mjXaq3B  Equivalent fractions (age 8+)
+  Expansion (decimals, percentages, fraction multiplication):
+  - mt_Fl7b8q9pI1  Decimal place value (age 8-10)
+  - mt_ZM9mhHsyYZ  Understanding Percentages (age 9-11)
+  - mt_TgHxujL81r  Multiplying fractions (age 9-11)
+  Equivalence (fraction/decimal notation):
+  - mt_DRlbMok2lT  Fraction-Decimal Equivalents (age 8+)
 """
+
 import sys
 from pathlib import Path
 
@@ -95,11 +103,108 @@ SAMPLE_CONFUSIONS: dict[str, list[dict]] = {
             "expected_expression": "1/2 + 1/3 = 5/6",
         },
     ],
+    # --- Expansion topics (issue #234) ---
+    "mt_Fl7b8q9pI1": [  # Decimal place value (age 8-10)
+        {
+            "sequence": 0,
+            "confusion_text": "Is 0.5 bigger than 0.25 because 5 is bigger than 25?",
+            "confusion_text_zh": "0.5 比 0.25 大吗？因为 5 比 25 大？",
+            "rubric": "The child should explain that decimal place value matters. 0.5 means 5 tenths (5/10), while 0.25 means 2 tenths and 5 hundredths (25/100). Since 5/10 = 50/100, we can see that 0.5 = 0.50 which is bigger than 0.25. You can't just compare the digits after the decimal point as whole numbers.",
+            "expected_expression": "0.5",
+        },
+        {
+            "sequence": 1,
+            "confusion_text": "What does the 3 in 1.32 actually mean?",
+            "confusion_text_zh": "1.32 里的 3 到底表示什么？",
+            "rubric": "The child should explain place value: in 1.32, the 1 is ones, the 3 is in the tenths place (meaning 3/10 or 0.3), and the 2 is in the hundredths place (meaning 2/100 or 0.02). So 1.32 = 1 + 3/10 + 2/100.",
+            "expected_expression": None,
+        },
+        {
+            "sequence": 2,
+            "confusion_text": "Are 0.5 and 0.50 different numbers? One looks shorter.",
+            "confusion_text_zh": "0.5 和 0.50 是不同的数吗？一个看起来更短。",
+            "rubric": "The child should explain that trailing zeros after the decimal point don't change the value. 0.5 = 5/10 and 0.50 = 50/100 = 5/10. They are exactly the same number, just written differently. This is like how 1/2 and 2/4 are equivalent fractions.",
+            "expected_expression": "0.50",
+        },
+    ],
+    "mt_ZM9mhHsyYZ": [  # Understanding Percentages (age 9-11)
+        {
+            "sequence": 0,
+            "confusion_text": "Is 50% the same as the number 50?",
+            "confusion_text_zh": "50% 和数字 50 是一样的吗？",
+            "rubric": "The child should explain that percent means 'per hundred'. 50% means 50 out of 100, which equals 50/100 = 1/2 = 0.5. It is NOT the same as the whole number 50. Percent is a ratio or fraction, not a standalone number.",
+            "expected_expression": "50/100",
+        },
+        {
+            "sequence": 1,
+            "confusion_text": "If I scored 80% on a test, does that mean I got 80 questions right?",
+            "confusion_text_zh": "如果我考试得了 80 分，是不是意味着我做对了 80 道题？",
+            "rubric": "The child should explain that percent is relative to the total. 80% means 80 out of every 100. If the test had 50 questions, 80% means 80/100 × 50 = 40 questions right. You need to know the total to find the actual number.",
+            "expected_expression": None,
+        },
+        {
+            "sequence": 2,
+            "confusion_text": "Can a percentage be more than 100%? Like 150%?",
+            "confusion_text_zh": "百分比能超过 100% 吗？比如 150%？",
+            "rubric": "The child should explain that yes, percentages can exceed 100%. 100% means the whole amount, so 150% means 150/100 = 1.5 times the whole. For example, if you had 10 cookies and got 5 more, you now have 150% of your original amount.",
+            "expected_expression": "150/100",
+        },
+    ],
+    "mt_TgHxujL81r": [  # Multiplying fractions (age 9-11)
+        {
+            "sequence": 0,
+            "confusion_text": "Why do we just multiply straight across when multiplying fractions? Like 1/2 × 1/3 = 1/6?",
+            "confusion_text_zh": "为什么分数乘法直接分子乘分子、分母乘分母？比如 1/2 × 1/3 = 1/6？",
+            "rubric": "The child should explain that multiplying fractions means finding a part of a part. 1/2 × 1/3 means 'half of one-third'. If you take 1/3 and split it in half, you get 1/6. The rule (a/b × c/d = ac/bd) works because you're scaling both the parts and the whole.",
+            "expected_expression": "1/6",
+        },
+        {
+            "sequence": 1,
+            "confusion_text": "Is multiplying fractions the same as adding them? Like, is 1/2 × 1/3 the same as 1/2 + 1/3?",
+            "confusion_text_zh": "分数乘法和分数加法一样吗？比如 1/2 × 1/3 和 1/2 + 1/3 一样吗？",
+            "rubric": "The child should explain that multiplication and addition are different operations. 1/2 × 1/3 = 1/6 (finding a part of a part), while 1/2 + 1/3 = 3/6 + 2/6 = 5/6 (combining amounts). Multiplication of fractions usually makes the result smaller; addition makes it bigger.",
+            "expected_expression": "1/2 + 1/3 = 5/6",
+        },
+        {
+            "sequence": 2,
+            "confusion_text": "Does multiplying fractions always give a smaller answer?",
+            "confusion_text_zh": "分数乘法的结果总是更小吗？",
+            "rubric": "The child should explain that multiplying proper fractions (less than 1) always gives a smaller result — you're taking a part of a part. But multiplying by an improper fraction (greater than 1) can give a bigger result. For example, 2/3 × 3/2 = 1, and 2/3 × 5/4 = 10/12 which is bigger than 2/3.",
+            # The rubric's worked example, not the starting fraction: a child writing
+            # "2/3 × 5/4 = 10/12" extracts the full equation and grades against 10/12.
+            "expected_expression": "10/12",
+        },
+    ],
+    "mt_DRlbMok2lT": [  # Fraction-Decimal Equivalents (age 8+)
+        {
+            "sequence": 0,
+            "confusion_text": "Is 1/2 the same as 0.2? I divided 2 into 1 and got 0.2.",
+            "confusion_text_zh": "1/2 和 0.2 一样吗？我用 2 除 1 得到 0.2。",
+            "rubric": "The child should explain that the denominator is the number of parts and the numerator is how many of them you have, so 1/2 means 1 part out of 2 equal parts, which is 0.5 (five tenths). Dividing 2 into 1 gives 0.5, not 0.2 — 0.2 is one fifth, which is 1/5.",
+            # Correct value stated first so a refutation like "1/2 = 0.5, not 0.2"
+            # extracts the right number even without expected-value matching.
+            "expected_expression": "0.5",
+        },
+        {
+            "sequence": 1,
+            "confusion_text": "Is 1/4 the same as 0.4? The 4 is in the tenths place, right?",
+            "confusion_text_zh": "1/4 和 0.4 一样吗？4 不就是十分位吗？",
+            "rubric": "The child should explain that the denominator of the fraction and the place value of the decimal are not the same thing. 1/4 means the whole is split into 4 equal parts, and one of those parts is 0.25 (twenty-five hundredths), not 0.4. The 4 in 0.4 sits in the tenths place and means four tenths (4/10), which is 0.4 = 4/10, a different number from 0.25.",
+            "expected_expression": "0.25",
+        },
+        {
+            "sequence": 2,
+            "confusion_text": "0.75 and 3/4 look completely different. Are they really the same number?",
+            "confusion_text_zh": "0.75 和 3/4 看起来完全不同，它们真的是同一个数吗？",
+            "rubric": "The child should explain that 0.75 means 75 hundredths (75/100), and 3/4 means three out of four equal parts, which is the same as 75/100 (multiply numerator and denominator by 25). The same number can be written as a fraction or a decimal, so 0.75 and 3/4 are two names for the same value.",
+            "expected_expression": "3/4",
+        },
+    ],
 }
 
 
 def seed_confusions() -> None:
-    """Delete existing approved confusions for pilot topics and re-insert."""
+    """Delete existing approved confusions for seeded topics and re-insert."""
     db = SessionLocal()
     try:
         for topic_key, confusions in SAMPLE_CONFUSIONS.items():
