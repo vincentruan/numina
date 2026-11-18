@@ -9,7 +9,7 @@ Writes 2-3 hand-authored confusions per topic into ``topic_confusions``
 with ``review_status='approved'``. Idempotent: deletes existing rows for each
 topic before re-inserting.
 
-Topics (6 math, age_group='mid', chosen by centrality):
+Topics (7 math, age_group='mid', chosen by centrality):
   Pilot (3 fractions):
   - mt_9KmVWCuh5_  Understanding fractions (age 10+)
   - mt_ndGqFPWyen  Fractions of a whole
@@ -18,6 +18,8 @@ Topics (6 math, age_group='mid', chosen by centrality):
   - mt_Fl7b8q9pI1  Decimal place value (age 8-10)
   - mt_ZM9mhHsyYZ  Understanding Percentages (age 9-11)
   - mt_TgHxujL81r  Multiplying fractions (age 9-11)
+  Equivalence (fraction/decimal notation):
+  - mt_DRlbMok2lT  Fraction-Decimal Equivalents (age 8+)
 """
 
 import sys
@@ -166,18 +168,43 @@ SAMPLE_CONFUSIONS: dict[str, list[dict]] = {
         {
             "sequence": 2,
             "confusion_text": "Does multiplying fractions always give a smaller answer?",
-            "confusion_text_zh": "分数乘法的結果总是更小吗？",
+            "confusion_text_zh": "分数乘法的结果总是更小吗？",
             "rubric": "The child should explain that multiplying proper fractions (less than 1) always gives a smaller result — you're taking a part of a part. But multiplying by an improper fraction (greater than 1) can give a bigger result. For example, 2/3 × 3/2 = 1, and 2/3 × 5/4 = 10/12 which is bigger than 2/3.",
             # The rubric's worked example, not the starting fraction: a child writing
             # "2/3 × 5/4 = 10/12" extracts the full equation and grades against 10/12.
             "expected_expression": "10/12",
         },
     ],
+    "mt_DRlbMok2lT": [  # Fraction-Decimal Equivalents (age 8+)
+        {
+            "sequence": 0,
+            "confusion_text": "Is 1/2 the same as 0.2? I divided 2 into 1 and got 0.2.",
+            "confusion_text_zh": "1/2 和 0.2 一样吗？我用 2 除 1 得到 0.2。",
+            "rubric": "The child should explain that the denominator is the number of parts and the numerator is how many of them you have, so 1/2 means 1 part out of 2 equal parts, which is 0.5 (five tenths). Dividing 2 into 1 gives 0.5, not 0.2 — 0.2 is one fifth, which is 1/5.",
+            # Correct value stated first so a refutation like "1/2 = 0.5, not 0.2"
+            # extracts the right number even without expected-value matching.
+            "expected_expression": "0.5",
+        },
+        {
+            "sequence": 1,
+            "confusion_text": "Is 1/4 the same as 0.4? The 4 is in the tenths place, right?",
+            "confusion_text_zh": "1/4 和 0.4 一样吗？4 不就是十分位吗？",
+            "rubric": "The child should explain that the denominator of the fraction and the place value of the decimal are not the same thing. 1/4 means the whole is split into 4 equal parts, and one of those parts is 0.25 (twenty-five hundredths), not 0.4. The 4 in 0.4 sits in the tenths place and means four tenths (4/10), which is 0.4 = 4/10, a different number from 0.25.",
+            "expected_expression": "0.25",
+        },
+        {
+            "sequence": 2,
+            "confusion_text": "0.75 and 3/4 look completely different. Are they really the same number?",
+            "confusion_text_zh": "0.75 和 3/4 看起来完全不同，它们真的是同一个数吗？",
+            "rubric": "The child should explain that 0.75 means 75 hundredths (75/100), and 3/4 means three out of four equal parts, which is the same as 75/100 (multiply numerator and denominator by 25). The same number can be written as a fraction or a decimal, so 0.75 and 3/4 are two names for the same value.",
+            "expected_expression": "3/4",
+        },
+    ],
 }
 
 
 def seed_confusions() -> None:
-    """Delete existing approved confusions for pilot topics and re-insert."""
+    """Delete existing approved confusions for seeded topics and re-insert."""
     db = SessionLocal()
     try:
         for topic_key, confusions in SAMPLE_CONFUSIONS.items():
