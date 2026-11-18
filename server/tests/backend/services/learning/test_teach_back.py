@@ -228,6 +228,50 @@ class TestGradeExpression:
         assert extracted == "50/100 = 1/2"
         assert grade_expression("1/2", extracted) is True
 
+    def test_decimal_arithmetic(self):
+        """Decimal addition captures the whole statement, not just its tail.
+
+        Regression: `_DECIMAL_EQUATION_PATTERN` matched "0.3 = 1.8" inside
+        "1.5 + 0.3 = 1.8", which reads as a false equation and grades False.
+        """
+        assert extract_expression("1.5 + 0.3 = 1.8") == "1.5 + 0.3 = 1.8"
+        assert grade_expression("1.8", "1.5 + 0.3 = 1.8") is True
+        assert extract_expression("0.5+0.3=0.8") == "0.5+0.3=0.8"
+        assert extract_expression("0.5 + 0.3 = 0.8") == "0.5 + 0.3 = 0.8"
+
+    def test_decimal_arithmetic_overflow_exact(self):
+        """Decimal sums must grade exactly, not through Float residue.
+
+        `sympify` parses literals as Float by default, so 0.1 + 0.2 - 0.3 leaves
+        ~5.6e-17 and the equality check fails — a correct claim read as false.
+        Literals are parsed as Rational to keep the comparison exact.
+        """
+        assert grade_expression("0.3", "0.1 + 0.2 = 0.3") is True
+        assert grade_expression("0.9", "0.5 + 0.3 = 0.8") is False
+
+    def test_rebuttal_extracts_the_asserted_value(self):
+        """A refutation names the misconception's number before the right one.
+
+        Leftmost-match extraction would capture "0.2" from "It's not 0.2, it's
+        0.5", grade False, and let the deterministic override downgrade a
+        correct explanation to a miss.
+        """
+        assert extract_expression("It's not 0.2, it's 0.5", expected="0.5") == "0.5"
+        assert (
+            extract_expression("No, 0.4 is four tenths, 1/4 is 0.25", expected="0.25")
+            == "0.25"
+        )
+        assert (
+            grade_expression(
+                "0.5", extract_expression("0.2 is wrong. Half is 0.5", expected="0.5")
+            )
+            is True
+        )
+
+    def test_rebuttal_without_expected_keeps_leftmost(self):
+        """Without an expected value the extractor stays leftmost-match."""
+        assert extract_expression("It's not 0.2, it's 0.5") == "0.2"
+
 
 # ---------------------------------------------------------------------------
 # Progress update
@@ -443,6 +487,7 @@ _EXPECTED_DEFAULT_KEYS = frozenset(
         "mt_Fl7b8q9pI1",
         "mt_ZM9mhHsyYZ",
         "mt_TgHxujL81r",
+        "mt_DRlbMok2lT",
     }
 )
 
@@ -455,8 +500,11 @@ def settings_holder():
 
 
 class TestTeachBackEnabledTopicKeysConfig:
-    def test_default_includes_all_six_topics(self):
-        assert settings_holder().teach_back_enabled_topic_keys_set == _EXPECTED_DEFAULT_KEYS
+    def test_default_includes_all_seven_topics(self):
+        assert (
+            settings_holder().teach_back_enabled_topic_keys_set
+            == _EXPECTED_DEFAULT_KEYS
+        )
 
     def test_default_constant_matches_settings_default(self):
         """The SSOT tuple and the Settings default must not drift apart."""

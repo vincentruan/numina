@@ -43,7 +43,7 @@ def seed_module():
 
 @pytest.fixture
 def pilot_topics(db):
-    """Create the six teach-back topics the seed script expects."""
+    """Create the seven teach-back topics the seed script expects."""
     topics = []
     for key in (
         "mt_9KmVWCuh5_",
@@ -52,6 +52,7 @@ def pilot_topics(db):
         "mt_Fl7b8q9pI1",
         "mt_ZM9mhHsyYZ",
         "mt_TgHxujL81r",
+        "mt_DRlbMok2lT",
     ):
         topic = LearningTopic(
             topic_key=key,

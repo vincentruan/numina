@@ -28,6 +28,7 @@ TEACH_BACK_DEFAULT_TOPIC_KEYS = (
     "mt_Fl7b8q9pI1",  # Decimal place value
     "mt_ZM9mhHsyYZ",  # Understanding Percentages
     "mt_TgHxujL81r",  # Multiplying fractions
+    "mt_DRlbMok2lT",  # Fraction-Decimal Equivalents
 )
 
 
