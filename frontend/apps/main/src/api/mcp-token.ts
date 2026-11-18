@@ -35,7 +35,9 @@ export interface MCPToolCatalogItem {
 }
 
 export const getMCPToken = () =>
-  http.get<MCPTokenData>('/ai/mcp-token')
+  http.get<MCPTokenData>('/ai/mcp-token', {
+    _silentErrorCodes: ['NOT_FOUND'],
+  })
 export const generateMCPToken = () =>
   http.post<MCPTokenGenerateData>('/ai/mcp-token')
 export const updateMCPToken = (data: MCPTokenUpdate) =>
