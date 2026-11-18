@@ -54,7 +54,7 @@ The backend `castle_service.get_castle_index()` already accepts `child_id` + `fa
 
 - R2. Add the full `KnowledgeCastle` component as a new `van-collapse-item` module on `BabyLearningPage`, titled "Knowledge Castle". The module is collapsed by default, consistent with existing modules (DNA Graph, Smart Tutor, etc.).
 - R3. The castle module reads `babyStore.selectedChildId` and refreshes when the selected child changes, following the same data-loading pattern as existing child-dependent modules on the page.
-- R4. Window clicks in the parent castle navigate to the topic detail page (parent is an observer, not a learner — no practice mode navigation).
+- R4. Castle windows in the parent view are **display-only** (parent is an observer, not a learner). Windows render as `cursor: default` spans with tooltip / aria-label, showing the topic name and the reason label (`t('learning.castle.windowReview' | 'windowRecommended')`). Clicking a window does nothing — no practice navigation, no assignment creation. This is a deliberate scope reduction from the original "navigate to topic detail" shape; the value is parent visibility into the child's learning state, not parent-driven assignment.
 
 **Frontend — API client**
 

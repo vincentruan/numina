@@ -378,3 +378,69 @@ class TestParentCastleIndexEndpoint:
         url = PARENT_CASTLE_URL.format(child_id=999999)
         resp = client.get(url)
         assert resp.status_code == 401
+
+    def test_member_role_adult_gets_200(
+        self, client, db, parent_and_child, castle_topics
+    ):
+        """Any adult in the family (owner or member) can read any child's castle.
+
+        The authorization model is family-wide, not per-child guardian-scoped.
+        This pins the breadth so a future tightening cannot silently break it.
+        """
+        from packages.db.models.family import Family
+        from packages.db.models.user import User
+
+        child_id, owner_headers = parent_and_child
+        # Resolve the owner's family to get its invite code.
+        me = client.get("/api/v1/auth/me", headers=owner_headers).json()["data"]
+        owner = db.query(User).filter(User.id == int(me["id"])).first()
+        family = db.query(Family).filter(Family.id == owner.family_id).first()
+
+        # Join the target family — this creates a new adult member in the
+        # family directly (no prior register step).
+        resp_join = client.post(
+            "/api/v1/auth/family/join",
+            json={
+                "username": "memberadult",
+                "display_name": "Member Adult",
+                "password": "TestPass789",
+                "invite_code": family.invite_code,
+            },
+        )
+        assert resp_join.status_code == 200, f"join failed: {resp_join.text}"
+        member_headers = {
+            "Authorization": f"Bearer {resp_join.json()['data']['access_token']}",
+        }
+
+        url = PARENT_CASTLE_URL.format(child_id=child_id)
+        resp = client.get(url, headers=member_headers)
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert set(data.keys()) == {"towers", "windows", "streak_days"}
+
+    def test_child_role_token_rejected_with_403(
+        self, client, db, parent_and_child, castle_topics
+    ):
+        """Child-role Bearer tokens cannot call the parent endpoint — 403.
+
+        Defense in depth: require_adult rejects both child tokens and
+        unauthenticated requests. This pins the child-token path (403) which is
+        distinct from the unauthenticated path (401).
+        """
+        from packages.db.models.user import User
+
+        # The parent_and_child fixture already created a child in the family.
+        child_id, _ = parent_and_child
+        child = (
+            db.query(User)
+            .filter(User.id == child_id, User.role == "child")
+            .first()
+        )
+        assert child is not None
+        token = child_login_two_phase(client, child.username, "ChildPass1", PIN)
+        child_headers = {"Authorization": f"Bearer {token}"}
+
+        # Any child_id in path; child token should be rejected regardless.
+        url = PARENT_CASTLE_URL.format(child_id=child_id)
+        resp = client.get(url, headers=child_headers)
+        assert resp.status_code == 403

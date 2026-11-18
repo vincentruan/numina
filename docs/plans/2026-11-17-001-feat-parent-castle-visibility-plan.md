@@ -217,9 +217,11 @@ The knowledge castle is currently only visible in the child app. Parents lack a 
 
 - **Interaction graph:** New endpoint at `/family/learning/children/{child_id}/castle/index` — no existing endpoints affected
 - **Error propagation:** Standard `AppError` pattern — `AUTH_CHILD_NOT_FOUND` for invalid child_id
-- **State lifecycle risks:** None — castle data is read-only, no mutations
-- **API surface parity:** Child endpoint `GET /child/learning/castle/index` and parent endpoint return identical schema — no divergence risk since both call the same service
-- **Unchanged invariants:** Child-app castle page, castle_service, all existing parent learning endpoints remain untouched
+- **State lifecycle risks:** Inherited from `castle_service.get_castle_index` — first read per child creates a `ChildLearningStats` row (via `get_or_create_stats`). Not a pure GET; not cache-safe without accounting for this side effect. Behavior is identical to the child endpoint, so no new exposure.
+- **Authorization model:** `require_adult` permits owner or member of the family. Any adult (owner or invite-code joiner) can read any child's castle in the family. No per-child guardian mapping exists in the data model, so finer scoping is out of scope — consistent with all other `/family/learning/children/{child_id}/...` endpoints. A positive test pins a member-role adult to 200, and a child-role token is pinned to 403 (defense in depth via `_assert_not_child` in `get_current_user`).
+- **Data exposed:** Per-subject/per-domain mastered/learning/review_due/total counts, streak_days, and up to 10 windows carrying topic_id, topic_name(_zh), subject, domain, and reason from the closed set `{复习到期, 推荐学习}`. Highest-sensitivity items are the windows (they name topics the child has not yet reviewed or has forgotten). Exposure is family-internal and read-only; responses inherit the global `/api/*` no-store Cache-Control.
+- **API surface parity:** Child endpoint and parent endpoint return identical schema — no divergence risk since both call the single `castle_service.to_response()` mapper. **Caveat:** parity holds only when both sides share the same language. The parent endpoint passes `user.language`; the child endpoint passes `child.language`. For a mixed-language family, tower/window *topic sets* could diverge (language drives taxonomy via `get_effective_source_taxonomy`), while *labels* (`name` / `name_zh`) are carried in both and the client picks by locale. A differing-language case is intentionally not covered in tests today — the test suite assumes parent and child share a locale.
+- **Unchanged invariants:** Child-app castle page, castle_service data flow, all existing parent learning endpoints remain untouched
 
 ---
 
