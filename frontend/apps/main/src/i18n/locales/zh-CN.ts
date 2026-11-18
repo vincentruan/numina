@@ -2401,6 +2401,7 @@ export default {
     asrManage: '语音识别配置',
     skillsManage: '技能管理',
     agentsManage: '智能体管理',
+    scheduledManage: '定时任务',
     chatHistory: '对话历史',
     accountPassword: '账户密码',
     colorBlue: '蓝色',
