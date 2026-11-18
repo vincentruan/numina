@@ -11,7 +11,8 @@ Adds provenance tracking for cross-subject bridge edges:
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
+
+from apps.backend.alembic import ddl
 
 revision: str = "brg001infr"
 down_revision: str | None = "idx002clstr"
@@ -20,7 +21,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
+    ddl.add_column(
         "learning_dependencies",
         sa.Column(
             "source_type",
@@ -29,12 +30,12 @@ def upgrade() -> None:
             server_default="explicit",
         ),
     )
-    op.add_column(
+    ddl.add_column(
         "learning_dependencies",
         sa.Column("confidence", sa.Float(), nullable=True),
     )
 
 
 def downgrade() -> None:
-    op.drop_column("learning_dependencies", "confidence")
-    op.drop_column("learning_dependencies", "source_type")
+    ddl.drop_column("learning_dependencies", "confidence")
+    ddl.drop_column("learning_dependencies", "source_type")

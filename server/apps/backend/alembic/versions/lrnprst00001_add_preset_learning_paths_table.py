@@ -12,6 +12,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from apps.backend.alembic import ddl
+
 # revision identifiers, used by Alembic.
 revision: str = "lrnprst00001"
 down_revision: str | None = "1f05a4b6a5de"
@@ -21,6 +23,9 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Create preset_learning_paths table."""
+    if ddl.has_table("preset_learning_paths"):
+        # align_schema already created it from the model on an earlier boot.
+        return
     op.create_table(
         "preset_learning_paths",
         sa.Column("id", sa.BigInteger(), nullable=False),
