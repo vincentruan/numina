@@ -324,7 +324,9 @@ def record_teach_back_turn(
     # downgrades the model's claimed verdict when the SymPy check fails, so a
     # wrong expression cannot be counted as a hit (#4 review fix).
     if extracted_expression is None:
-        extracted_expression = extract_expression(child_explanation)
+        extracted_expression = extract_expression(
+            child_explanation, expected=confusion.expected_expression
+        )
     computed_verdict = None
     if confusion.expected_expression and extracted_expression:
         computed_verdict = grade_expression(
