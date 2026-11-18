@@ -11,18 +11,11 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
+from packages.core.settings import settings
 from packages.db.models.learning.confusion import TopicConfusion
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
 from packages.db.models.learning.topic import LearningTopic
-
-# Pilot topic keys — teach-back only enabled for these.
-# TODO(issue-216): move to config / feature flag when expanding beyond pilot.
-_PILOT_TOPIC_KEYS = frozenset({
-    "mt_9KmVWCuh5_",  # Understanding fractions (age 10+)
-    "mt_ndGqFPWyen",  # Fractions of a whole
-    "mt_FP-mjXaq3B",  # Equivalent fractions (age 8+)
-})
 
 
 def get_approved_confusions(db: Session, topic_id: int, age_group: str = "mid") -> list[TopicConfusion]:
@@ -107,11 +100,11 @@ def validate_teach_back_request(
         if not topic:
             raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
 
-        # Check pilot scope
-        if topic.topic_key not in _PILOT_TOPIC_KEYS:
+        # Check teach-back enabled topics
+        if topic.topic_key not in settings.teach_back_enabled_topic_keys_set:
             raise AppError(
                 ErrorCode.VALIDATION_ERROR,
-                details={"field": "topic_id", "message": "topic not in teach-back pilot"},
+                details={"field": "topic_id", "message": "topic not enabled for teach-back"},
             )
 
         # Check mastery
@@ -331,7 +324,9 @@ def record_teach_back_turn(
     # downgrades the model's claimed verdict when the SymPy check fails, so a
     # wrong expression cannot be counted as a hit (#4 review fix).
     if extracted_expression is None:
-        extracted_expression = extract_expression(child_explanation)
+        extracted_expression = extract_expression(
+            child_explanation, expected=confusion.expected_expression
+        )
     computed_verdict = None
     if confusion.expected_expression and extracted_expression:
         computed_verdict = grade_expression(

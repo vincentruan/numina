@@ -223,30 +223,205 @@ class TestMisconceptionDetectionInPracticeAPI:
         assert attempt is not None
         assert attempt.misconception_id is None
 
-    def test_non_calculation_question_skips_detection(
-        self, client, auth_headers, topic, fraction_question, misconception, db
+
+def _add_question_to_session(db, session_id, question_id):
+    """Add a question to the session's list so the membership check passes.
+
+    Adaptive selection may not pick a newly-added question, so integration
+    tests append it explicitly.
+    """
+    from packages.db.models.learning.practice import PracticeSession
+
+    session = db.query(PracticeSession).filter_by(id=session_id).first()
+    session.question_ids_json = json.dumps(
+        json.loads(session.question_ids_json) + [question_id]
+    )
+    db.flush()
+
+
+@pytest.fixture
+def fill_blank_question(db: Session, topic):
+    """A fill_blank diagnostic-style question: the top number is the numerator."""
+    q = Question(
+        topic_id=topic.id,
+        question_type="fill_blank",
+        stem="In the fraction 3/4, the number 3 is called the ___",
+        stem_zh="在分数 3/4 中，上面的 3 叫做___",
+        answer_json=json.dumps({"value": "numerator"}),
+        difficulty=1,
+        bloom_level="remember",
+        source="test",
+        age_group="mid",
+        review_status="approved",
+    )
+    db.add(q)
+    db.flush()
+    return q
+
+
+@pytest.fixture
+def text_match_misconception(db: Session, topic, fill_blank_question):
+    """Confusing numerator for denominator — the seeded shape, in both languages."""
+    m = Misconception(
+        topic_id=topic.id,
+        sequence=3,
+        error_pattern_json=json.dumps({
+            "match_type": "text_match",
+            "expected_wrong": ["denominator", "分母"],
+            "normalize": True,
+        }),
+        description="You mixed up numerator and denominator.",
+        description_zh="你把分子和分母搞混了。",
+        age_group="mid",
+        diagnostic_question_id=fill_blank_question.id,
+        review_status="approved",
+    )
+    db.add(m)
+    db.flush()
+    return m
+
+
+@pytest.fixture
+def multiple_choice_question(db: Session, topic):
+    """A multiple_choice question with options and a key-keyed answer."""
+    q = Question(
+        topic_id=topic.id,
+        question_type="multiple_choice",
+        stem="What is 1/3 + 1/6?",
+        stem_zh="1/3 + 1/6 等于多少？",
+        options_json=json.dumps([
+            {"key": "A", "text": "2/9"},
+            {"key": "B", "text": "1/2"},
+            {"key": "C", "text": "2/6"},
+            {"key": "D", "text": "1/9"},
+        ]),
+        answer_json=json.dumps({"key": "B"}),
+        difficulty=2,
+        bloom_level="apply",
+        source="test",
+        age_group="mid",
+        review_status="approved",
+    )
+    db.add(q)
+    db.flush()
+    return q
+
+
+@pytest.fixture
+def option_select_misconception(db: Session, topic, multiple_choice_question):
+    """Selecting option A means the child added numerators and denominators."""
+    m = Misconception(
+        topic_id=topic.id,
+        sequence=5,
+        error_pattern_json=json.dumps({
+            "match_type": "option_select",
+            "wrong_options": ["A"],
+        }),
+        description="You added numerators and denominators directly.",
+        description_zh="你直接把分子和分母相加了。",
+        age_group="mid",
+        diagnostic_question_id=multiple_choice_question.id,
+        review_status="approved",
+    )
+    db.add(m)
+    db.flush()
+    return m
+
+
+class TestNonCalcMisconceptionDetection:
+    """Detection through the practice API for fill_blank and multiple_choice.
+
+    Submissions use the payload shapes the child app emits (see
+    PracticeAnswerInput.vue): ``{"value": ...}`` for fill_blank and
+    ``{"key": ...}`` for multiple_choice — not ``{"answer": ...}``.
+    """
+
+    def test_fill_blank_wrong_text_triggers_detection(
+        self, client, auth_headers, db, topic, fill_blank_question, text_match_misconception
     ):
-        """Detection must not run for non-calculation questions (word_problem)."""
+        """fill_blank answer 'denominator' scores wrong and matches text_match."""
+        resp = client.post(
+            "/api/v1/practice/sessions",
+            json={"topic_id": topic.id, "count": 1},
+            headers=auth_headers,
+        )
+        session_id = resp.json()["data"]["id"]
+        _add_question_to_session(db, session_id, fill_blank_question.id)
+
+        resp = client.post(
+            f"/api/v1/practice/sessions/{session_id}/answer",
+            json={
+                "question_id": fill_blank_question.id,
+                "user_answer": {"value": "denominator"},
+                "time_spent_seconds": 10,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["is_correct"] is False
+        assert data["misconception_feedback"] is not None
+        feedback = data["misconception_feedback"]
+        assert feedback["misconception_id"] == str(text_match_misconception.id)
+
+    def test_fill_blank_chinese_answer_triggers_detection(
+        self, client, auth_headers, db, topic, fill_blank_question, text_match_misconception
+    ):
+        """Bilingual stems: answering 分母 matches the same misconception."""
+        resp = client.post(
+            "/api/v1/practice/sessions",
+            json={"topic_id": topic.id, "count": 1},
+            headers=auth_headers,
+        )
+        session_id = resp.json()["data"]["id"]
+        _add_question_to_session(db, session_id, fill_blank_question.id)
+
+        resp = client.post(
+            f"/api/v1/practice/sessions/{session_id}/answer",
+            json={
+                "question_id": fill_blank_question.id,
+                "user_answer": {"value": "分母"},
+                "time_spent_seconds": 10,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["is_correct"] is False
+        assert data["misconception_feedback"] is not None
+
+    def test_fill_blank_correct_answer_scores_correct(
+        self, client, auth_headers, db, topic, fill_blank_question, text_match_misconception
+    ):
+        """The seeded fill_blank shape grades correctly — 'numerator' is right."""
+        resp = client.post(
+            "/api/v1/practice/sessions",
+            json={"topic_id": topic.id, "count": 1},
+            headers=auth_headers,
+        )
+        session_id = resp.json()["data"]["id"]
+        _add_question_to_session(db, session_id, fill_blank_question.id)
+
+        resp = client.post(
+            f"/api/v1/practice/sessions/{session_id}/answer",
+            json={
+                "question_id": fill_blank_question.id,
+                "user_answer": {"value": "numerator"},
+                "time_spent_seconds": 10,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["is_correct"] is True
+        assert data["misconception_feedback"] is None
+
+    def test_fill_blank_non_matching_text_returns_null_feedback(
+        self, client, auth_headers, db, topic, fill_blank_question, text_match_misconception
+    ):
+        """An unrelated wrong answer records the attempt without feedback."""
         from apps.backend.app.models.user import User
         from packages.db.models.learning.practice import PracticeAttempt
-
-        wp_q = Question(
-            topic_id=topic.id,
-            question_type="word_problem",
-            stem="Word problem: 1/3 of a cake plus 1/4 of a cake?",
-            stem_zh="应用题：一个蛋糕的 1/3 加上 1/4？",
-            answer_json=json.dumps({
-                "answer": "7/12",
-                "fractions": [[1, 3], [1, 4]],
-            }),
-            difficulty=2,
-            bloom_level="apply",
-            source="test",
-            age_group="mid",
-            review_status="approved",
-        )
-        db.add(wp_q)
-        db.flush()
 
         resp = client.post(
             "/api/v1/practice/sessions",
@@ -254,23 +429,13 @@ class TestMisconceptionDetectionInPracticeAPI:
             headers=auth_headers,
         )
         session_id = resp.json()["data"]["id"]
+        _add_question_to_session(db, session_id, fill_blank_question.id)
 
-        # Add the word_problem question to the session's question list so the
-        # session membership check passes (adaptive selection may not pick it).
-        from packages.db.models.learning.practice import PracticeSession
-        session = db.query(PracticeSession).filter_by(id=session_id).first()
-        session.question_ids_json = json.dumps(
-            json.loads(session.question_ids_json) + [wp_q.id]
-        )
-        db.flush()
-
-        # Wrong answer matching the misconception pattern — but the question
-        # is not a calculation question, so detection must not run.
         resp = client.post(
             f"/api/v1/practice/sessions/{session_id}/answer",
             json={
-                "question_id": wp_q.id,
-                "user_answer": {"answer": "2/7"},
+                "question_id": fill_blank_question.id,
+                "user_answer": {"value": "whole"},
                 "time_spent_seconds": 10,
             },
             headers=auth_headers,
@@ -283,7 +448,113 @@ class TestMisconceptionDetectionInPracticeAPI:
         user = db.query(User).filter_by(username="testuser").first()
         attempt = db.query(PracticeAttempt).filter_by(
             child_id=user.id,
-            question_id=wp_q.id,
+            question_id=fill_blank_question.id,
+        ).first()
+        assert attempt is not None
+        assert attempt.is_correct is False
+        assert attempt.misconception_id is None
+
+    def test_multiple_choice_wrong_key_triggers_detection(
+        self, client, auth_headers, db, topic, multiple_choice_question,
+        option_select_misconception,
+    ):
+        """The {"key": "A"} payload the child app sends reaches option_select."""
+        resp = client.post(
+            "/api/v1/practice/sessions",
+            json={"topic_id": topic.id, "count": 1},
+            headers=auth_headers,
+        )
+        session_id = resp.json()["data"]["id"]
+        _add_question_to_session(db, session_id, multiple_choice_question.id)
+
+        resp = client.post(
+            f"/api/v1/practice/sessions/{session_id}/answer",
+            json={
+                "question_id": multiple_choice_question.id,
+                "user_answer": {"key": "A"},
+                "time_spent_seconds": 10,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["is_correct"] is False
+        assert data["misconception_feedback"] is not None
+        feedback = data["misconception_feedback"]
+        assert feedback["misconception_id"] == str(option_select_misconception.id)
+
+        # The attempt is annotated too, which drives adaptive boosting.
+        from apps.backend.app.models.user import User
+        from packages.db.models.learning.practice import PracticeAttempt
+
+        user = db.query(User).filter_by(username="testuser").first()
+        attempt = db.query(PracticeAttempt).filter_by(
+            child_id=user.id,
+            question_id=multiple_choice_question.id,
+        ).first()
+        assert attempt.misconception_id == option_select_misconception.id
+
+    def test_multiple_choice_correct_key_scores_correct(
+        self, client, auth_headers, db, topic, multiple_choice_question,
+        option_select_misconception,
+    ):
+        """The seeded MCQ answer key grades correctly — option B is right."""
+        resp = client.post(
+            "/api/v1/practice/sessions",
+            json={"topic_id": topic.id, "count": 1},
+            headers=auth_headers,
+        )
+        session_id = resp.json()["data"]["id"]
+        _add_question_to_session(db, session_id, multiple_choice_question.id)
+
+        resp = client.post(
+            f"/api/v1/practice/sessions/{session_id}/answer",
+            json={
+                "question_id": multiple_choice_question.id,
+                "user_answer": {"key": "B"},
+                "time_spent_seconds": 10,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["is_correct"] is True
+        assert data["misconception_feedback"] is None
+
+    def test_multiple_choice_unlisted_key_returns_null_feedback(
+        self, client, auth_headers, db, topic, multiple_choice_question,
+        option_select_misconception,
+    ):
+        """A wrong key not in wrong_options records the attempt, no feedback."""
+        from apps.backend.app.models.user import User
+        from packages.db.models.learning.practice import PracticeAttempt
+
+        resp = client.post(
+            "/api/v1/practice/sessions",
+            json={"topic_id": topic.id, "count": 1},
+            headers=auth_headers,
+        )
+        session_id = resp.json()["data"]["id"]
+        _add_question_to_session(db, session_id, multiple_choice_question.id)
+
+        resp = client.post(
+            f"/api/v1/practice/sessions/{session_id}/answer",
+            json={
+                "question_id": multiple_choice_question.id,
+                "user_answer": {"key": "D"},
+                "time_spent_seconds": 10,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["is_correct"] is False
+        assert data["misconception_feedback"] is None
+
+        user = db.query(User).filter_by(username="testuser").first()
+        attempt = db.query(PracticeAttempt).filter_by(
+            child_id=user.id,
+            question_id=multiple_choice_question.id,
         ).first()
         assert attempt is not None
         assert attempt.misconception_id is None

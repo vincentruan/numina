@@ -6,6 +6,7 @@ Covers:
 - every non-null expected_expression round-trips through the grader
 - rows for other age groups survive a re-seed (#38)
 """
+
 import importlib.util
 import sys
 from pathlib import Path
@@ -42,12 +43,16 @@ def seed_module():
 
 @pytest.fixture
 def pilot_topics(db):
-    """Create the three pilot topics the seed script expects."""
+    """Create the seven teach-back topics the seed script expects."""
     topics = []
     for key in (
         "mt_9KmVWCuh5_",
         "mt_ndGqFPWyen",
         "mt_FP-mjXaq3B",
+        "mt_Fl7b8q9pI1",
+        "mt_ZM9mhHsyYZ",
+        "mt_TgHxujL81r",
+        "mt_DRlbMok2lT",
     ):
         topic = LearningTopic(
             topic_key=key,
@@ -123,9 +128,7 @@ class TestSeedDataQuality:
         form the extractor can actually produce, or the track can never pass.
         """
         _run_seed(seed_module, db)
-        rows = [
-            r for r in db.query(TopicConfusion).all() if r.expected_expression
-        ]
+        rows = [r for r in db.query(TopicConfusion).all() if r.expected_expression]
         assert rows, "no seeded confusion has an expected_expression"
 
         for row in rows:
@@ -148,11 +151,48 @@ class TestSeedDataQuality:
                 f"confusion seq={row.sequence} on topic {row.topic_id} has no rubric"
             )
 
+    def test_expansion_topics_have_expected_expressions(self, seed_module, pilot_topics, db):
+        """Each expansion topic (issue #234) has at least one gradeable expression.
+
+        Pins that decimals/percents/fraction-multiply seeds exercise the SymPy
+        track — the round-trip test alone would pass if their expected_expression
+        values were all null while old fraction topics still supply rows.
+        """
+        _run_seed(seed_module, db)
+        expansion_keys = ("mt_Fl7b8q9pI1", "mt_ZM9mhHsyYZ", "mt_TgHxujL81r")
+        key_to_topic = {t.topic_key: t for t in pilot_topics}
+        for key in expansion_keys:
+            topic = key_to_topic[key]
+            expr_rows = (
+                db.query(TopicConfusion)
+                .filter(
+                    TopicConfusion.topic_id == topic.id,
+                    TopicConfusion.expected_expression.isnot(None),
+                )
+                .count()
+            )
+            assert expr_rows >= 1, f"expansion topic {key} has no expected_expression rows"
+
+    def test_fraction_multiply_rubric_example_grades_true(self, seed_module, pilot_topics, db):
+        """The seq-2 rubric's worked example must grade against its expected value.
+
+        Regression: expected_expression was '2/3' (the starting fraction) while the
+        rubric asks the child to state '2/3 × 5/4 = 10/12', so a correct answer
+        graded False and the model's 'hit' was downgraded to 'miss'.
+        """
+        _run_seed(seed_module, db)
+        topic = next(t for t in pilot_topics if t.topic_key == "mt_TgHxujL81r")
+        row = (
+            db.query(TopicConfusion)
+            .filter(TopicConfusion.topic_id == topic.id, TopicConfusion.sequence == 2)
+            .one()
+        )
+        assert row.expected_expression == "10/12"
+        assert grade_expression(row.expected_expression, "2/3 × 5/4 = 10/12") is True
+
 
 class TestSeedAgeGroupScoping:
-    def test_other_age_group_rows_survive_reseed(
-        self, seed_module, pilot_topics, db
-    ):
+    def test_other_age_group_rows_survive_reseed(self, seed_module, pilot_topics, db):
         """Re-seeding only replaces age_group='mid' rows (#38)."""
         topic = pilot_topics[0]
         other = TopicConfusion(
@@ -190,8 +230,7 @@ class TestSeedSequenceScoping:
         """Re-seed must not destroy hand-curated rows at unseeded sequences (#15)."""
         topic = pilot_topics[0]
         seeded_sequences = {
-            c["sequence"]
-            for c in seed_module.SAMPLE_CONFUSIONS[topic.topic_key]
+            c["sequence"] for c in seed_module.SAMPLE_CONFUSIONS[topic.topic_key]
         }
         curated_seq = max(seeded_sequences) + 100
         curated = TopicConfusion(

@@ -10,11 +10,19 @@ Windows = review_due ∩ scope + recommended ∩ scope, dedup + cap ≤ 10.
 
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.topic import LearningTopic
+
+if TYPE_CHECKING:
+    from apps.backend.app.schemas.learning import (
+        CastleIndexResponse,
+        CastleTowerSchema,
+        CastleWindowSchema,
+    )
 
 # Cap constants (KTD4)
 MAX_TOTAL_WINDOWS = 10
@@ -60,6 +68,62 @@ class CastleIndexData:
     towers: list[CastleTowerData]
     windows: list[CastleWindowData]
     streak_days: int
+
+
+# ---------------------------------------------------------------------------
+# Dataclass -> response schema mapping
+# ---------------------------------------------------------------------------
+
+
+def to_response(data: CastleIndexData) -> "CastleIndexResponse":
+    """Map ``CastleIndexData`` onto the API response schema.
+
+    Lives here so the child and parent routers share one mapper — a field added
+    to ``CastleTowerData``/``CastleWindowData`` cannot then land on only one of
+    the two endpoints.
+    """
+    from apps.backend.app.schemas.learning import CastleIndexResponse
+
+    return CastleIndexResponse(
+        towers=[_tower_to_schema(t) for t in data.towers],
+        windows=[_window_to_schema(w) for w in data.windows],
+        streak_days=data.streak_days,
+    )
+
+
+def _tower_to_schema(tower: CastleTowerData) -> "CastleTowerSchema":
+    from apps.backend.app.schemas.learning import CastleFloorSchema, CastleTowerSchema
+
+    return CastleTowerSchema(
+        subject=tower.subject,
+        mastered_count=tower.mastered_count,
+        learning_count=tower.learning_count,
+        review_due_count=tower.review_due_count,
+        total_count=tower.total_count,
+        floors=[
+            CastleFloorSchema(
+                domain=f.domain,
+                mastered_count=f.mastered_count,
+                learning_count=f.learning_count,
+                review_due_count=f.review_due_count,
+                total_count=f.total_count,
+            )
+            for f in tower.floors
+        ],
+    )
+
+
+def _window_to_schema(window: CastleWindowData) -> "CastleWindowSchema":
+    from apps.backend.app.schemas.learning import CastleWindowSchema
+
+    return CastleWindowSchema(
+        topic_id=window.topic_id,
+        topic_name=window.topic_name,
+        topic_name_zh=window.topic_name_zh,
+        reason=window.reason,
+        subject=window.subject,
+        domain=window.domain,
+    )
 
 
 # ---------------------------------------------------------------------------

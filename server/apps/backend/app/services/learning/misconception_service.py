@@ -42,10 +42,10 @@ def detect_and_record_misconception(
     of ``(misconception_id, feedback_response)``.  The caller uses
     ``misconception_id`` to annotate the PracticeAttempt before commit.
 
-    Returns None on no match or when the question is not a calculation type.
+    Returns None on no match or when the question is not found.
     """
     question = db.query(Question).filter_by(id=question_id).first()
-    if not question or question.question_type != "calculation":
+    if not question:
         return None
 
     misconception = detect_misconception(

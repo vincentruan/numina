@@ -410,3 +410,45 @@ export async function getChildSmartTutorSession(
   )
   return res.data
 }
+
+// --- Knowledge Castle (Parent View, Issue #235) ---
+
+export interface CastleFloor {
+  domain: string
+  mastered_count: number
+  learning_count: number
+  review_due_count: number
+  total_count: number
+}
+
+export interface CastleTower {
+  subject: string
+  mastered_count: number
+  learning_count: number
+  review_due_count: number
+  total_count: number
+  floors: CastleFloor[]
+}
+
+/** Closed set emitted by the backend (see castle_service). */
+export type CastleWindowReason = '复习到期' | '推荐学习'
+
+export interface CastleWindow {
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string
+  reason: CastleWindowReason
+  subject: string
+  domain: string
+}
+
+export interface CastleIndex {
+  towers: CastleTower[]
+  windows: CastleWindow[]
+  streak_days: number
+}
+
+export async function fetchChildCastle(childId: string): Promise<CastleIndex> {
+  const res = await http.get(`/family/learning/children/${childId}/castle/index`)
+  return res.data
+}

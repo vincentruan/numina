@@ -1,4 +1,4 @@
-"""Tests for teach-back dual-track grading and progress update (Issue #216)."""
+"""Tests for teach-back dual-track grading and progress update (Issue #216, #234)."""
 
 import pytest
 
@@ -83,6 +83,22 @@ class TestExtractExpression:
     def test_multiply(self):
         assert extract_expression("3 × 2 = 6 块") == "3 × 2 = 6"
 
+    def test_fraction_multiply(self):
+        assert extract_expression("1/2 × 1/3 = 1/6 对的") == "1/2 × 1/3 = 1/6"
+
+    def test_decimal(self):
+        assert extract_expression("答案是 0.25") == "0.25"
+
+    def test_decimal_in_text(self):
+        assert extract_expression("因为 0.5 等于 0.50") == "0.5"
+
+    def test_percent(self):
+        # Percent is converted to fraction form
+        assert extract_expression("25% 就是四分之一") == "25/100"
+
+    def test_percent_in_text(self):
+        assert extract_expression("我觉得 50% 就是一半") == "50/100"
+
     def test_bare_fraction(self):
         assert extract_expression("答案是 3/4") == "3/4"
 
@@ -95,6 +111,11 @@ class TestExtractExpression:
     def test_empty(self):
         assert extract_expression("") is None
         assert extract_expression(None) is None
+
+    def test_priority_fraction_multiply_over_decimal(self):
+        """Fraction multiply pattern is more specific than bare decimal."""
+        text = "1/2 × 1/3 = 1/6 也就是约 0.17"
+        assert extract_expression(text) == "1/2 × 1/3 = 1/6"
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +159,118 @@ class TestGradeExpression:
     def test_equivalent_fractions(self):
         assert grade_expression("1/2", "2/4") is True
         assert grade_expression("2/6", "1/3") is True
+
+    def test_decimal_equivalent_to_fraction(self):
+        """0.25 should grade as equivalent to 1/4."""
+        assert grade_expression("1/4", "0.25") is True
+
+    def test_decimal_equivalence(self):
+        """0.5 and 0.50 should be equivalent."""
+        assert grade_expression("0.5", "0.50") is True
+
+    def test_decimal_not_equivalent(self):
+        assert grade_expression("0.5", "0.25") is False
+
+    def test_percent_equivalent_to_fraction(self):
+        """25% (extracted as 25/100) should grade as equivalent to 1/4."""
+        assert grade_expression("1/4", "25/100") is True
+
+    def test_percent_50(self):
+        """50% (extracted as 50/100) should grade as equivalent to 1/2."""
+        assert grade_expression("1/2", "50/100") is True
+
+    def test_fraction_multiply_grading(self):
+        """1/2 × 1/3 = 1/6 should grade correctly."""
+        assert grade_expression("1/6", "1/2 × 1/3 = 1/6") is True
+
+    def test_x_letter_multiply_form(self):
+        """The ASCII 'x' separator the extractor accepts must also grade."""
+        assert extract_expression("3 x 2 = 6") == "3 x 2 = 6"
+        assert grade_expression("6", "3 × 2 = 6") is True
+
+    def test_decimal_expected_fraction_child(self):
+        """Reverse direction: expected is a decimal seed, child text yields a fraction."""
+        assert grade_expression("0.25", "1/4") is True
+        assert grade_expression("0.5", "2/4") is True
+
+    def test_percent_expected_fraction_child(self):
+        assert grade_expression("50/100", "1/2") is True
+
+    def test_fraction_times_whole_number(self):
+        """A fraction × whole statement must not be shadowed by the whole-number pattern.
+
+        Regression: _MULTIPLY_PATTERN once matched "2 × 4 = 2" inside
+        "1/2 × 4 = 2", turning a correct explanation into a 'miss'.
+        """
+        assert extract_expression("1/2 × 4 = 2") == "1/2 × 4 = 2"
+        assert grade_expression("2", "1/2 × 4 = 2") is True
+        assert extract_expression("4 × 1/2 = 2") == "4 × 1/2 = 2"
+        assert grade_expression("2", "4 × 1/2 = 2") is True
+
+    def test_uppercase_x_multiplier(self):
+        """The extractor accepts 'X'; _sympy_parse must normalize it too."""
+        assert grade_expression("6", "3 X 2 = 6") is True
+
+    def test_decimal_percent(self):
+        """'12.5%' must be read as a percentage, not the bare decimal 12.5."""
+        assert extract_expression("12.5% 就是 1/8") == "12.5/100"
+        assert grade_expression("1/8", "12.5/100") is True
+
+    def test_false_decimal_equation_rejected(self):
+        """A false numeric claim must reach require_true, not collapse to a bare value."""
+        assert extract_expression("0.5 = 0.05") == "0.5 = 0.05"
+        assert grade_expression("0.5", "0.5 = 0.05") is False
+        assert grade_expression("1/2", extract_expression("50% = 5")) is False
+
+    def test_true_percent_equation_accepted(self):
+        """A true percent claim survives the extract → grade pipeline."""
+        extracted = extract_expression("50% = 1/2")
+        assert extracted == "50/100 = 1/2"
+        assert grade_expression("1/2", extracted) is True
+
+    def test_decimal_arithmetic(self):
+        """Decimal addition captures the whole statement, not just its tail.
+
+        Regression: `_DECIMAL_EQUATION_PATTERN` matched "0.3 = 1.8" inside
+        "1.5 + 0.3 = 1.8", which reads as a false equation and grades False.
+        """
+        assert extract_expression("1.5 + 0.3 = 1.8") == "1.5 + 0.3 = 1.8"
+        assert grade_expression("1.8", "1.5 + 0.3 = 1.8") is True
+        assert extract_expression("0.5+0.3=0.8") == "0.5+0.3=0.8"
+        assert extract_expression("0.5 + 0.3 = 0.8") == "0.5 + 0.3 = 0.8"
+
+    def test_decimal_arithmetic_overflow_exact(self):
+        """Decimal sums must grade exactly, not through Float residue.
+
+        `sympify` parses literals as Float by default, so 0.1 + 0.2 - 0.3 leaves
+        ~5.6e-17 and the equality check fails — a correct claim read as false.
+        Literals are parsed as Rational to keep the comparison exact.
+        """
+        assert grade_expression("0.3", "0.1 + 0.2 = 0.3") is True
+        assert grade_expression("0.9", "0.5 + 0.3 = 0.8") is False
+
+    def test_rebuttal_extracts_the_asserted_value(self):
+        """A refutation names the misconception's number before the right one.
+
+        Leftmost-match extraction would capture "0.2" from "It's not 0.2, it's
+        0.5", grade False, and let the deterministic override downgrade a
+        correct explanation to a miss.
+        """
+        assert extract_expression("It's not 0.2, it's 0.5", expected="0.5") == "0.5"
+        assert (
+            extract_expression("No, 0.4 is four tenths, 1/4 is 0.25", expected="0.25")
+            == "0.25"
+        )
+        assert (
+            grade_expression(
+                "0.5", extract_expression("0.2 is wrong. Half is 0.5", expected="0.5")
+            )
+            is True
+        )
+
+    def test_rebuttal_without_expected_keeps_leftmost(self):
+        """Without an expected value the extractor stays leftmost-match."""
+        assert extract_expression("It's not 0.2, it's 0.5") == "0.2"
 
 
 # ---------------------------------------------------------------------------
@@ -280,14 +413,16 @@ class TestTeachBackService:
         assert session.topic_id == topic.id
 
     def test_validate_rejects_non_mastered(self, db, child_user, topic):
-        """A real pilot topic that is not mastered is rejected for the mastery reason.
+        """A real teach-back-enabled topic that is not mastered is rejected for the mastery reason.
 
-        #46: the previous fixture used a non-pilot topic, so this passed because of
-        the pilot-scope guard rather than the mastery guard. Put a pilot topic key
+        #46: the previous fixture used a non-enabled topic, so this passed because of
+        the scope guard rather than the mastery guard. Put an enabled topic key
         on the fixture so only the mastery check can reject.
         """
+        from packages.core.settings import settings
+
         child = db.query(User).filter(User.id == child_user["id"]).first()
-        topic.topic_key = next(iter(teach_back_service._PILOT_TOPIC_KEYS))
+        topic.topic_key = next(iter(settings.teach_back_enabled_topic_keys_set))
         db.flush()
 
         progress = LearningProgress(
@@ -309,7 +444,7 @@ class TestTeachBackService:
             f"expected the mastery guard to reject, got {details!r}"
         )
 
-    def test_validate_rejects_non_pilot_topic(self, db, child_user):
+    def test_validate_rejects_non_enabled_topic(self, db, child_user):
         child = db.query(User).filter(User.id == child_user["id"]).first()
         from apps.backend.app.errors import AppError
 
@@ -317,3 +452,83 @@ class TestTeachBackService:
             teach_back_service.validate_teach_back_request(
                 db=db, child=child, topic_id=999999
             )
+
+    def test_validate_rejects_topic_outside_allowlist(self, db, child_user, topic):
+        """A topic that exists but is not in the enabled set is rejected (#234).
+
+        The default allowlist contains real taxonomy keys, so a fixture key like
+        'teachback-topic-1' is never in the set — this isolates the allowlist guard.
+        """
+        from apps.backend.app.errors import AppError
+
+        child = db.query(User).filter(User.id == child_user["id"]).first()
+        assert topic.topic_key not in (
+            settings_holder().teach_back_enabled_topic_keys_set
+        )
+        with pytest.raises(AppError) as exc_info:
+            teach_back_service.validate_teach_back_request(
+                db=db, child=child, topic_id=topic.id
+            )
+        details = getattr(exc_info.value, "details", None) or {}
+        assert "enabled" in str(details), (
+            f"expected the allowlist guard to reject, got {details!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TEACH_BACK_ENABLED_TOPIC_KEYS configuration (Issue #234)
+# ---------------------------------------------------------------------------
+
+_EXPECTED_DEFAULT_KEYS = frozenset(
+    {
+        "mt_9KmVWCuh5_",
+        "mt_ndGqFPWyen",
+        "mt_FP-mjXaq3B",
+        "mt_Fl7b8q9pI1",
+        "mt_ZM9mhHsyYZ",
+        "mt_TgHxujL81r",
+        "mt_DRlbMok2lT",
+    }
+)
+
+
+def settings_holder():
+    """Lazy settings import to keep module-level import ordering tidy."""
+    from packages.core.settings import settings
+
+    return settings
+
+
+class TestTeachBackEnabledTopicKeysConfig:
+    def test_default_includes_all_seven_topics(self):
+        assert (
+            settings_holder().teach_back_enabled_topic_keys_set
+            == _EXPECTED_DEFAULT_KEYS
+        )
+
+    def test_default_constant_matches_settings_default(self):
+        """The SSOT tuple and the Settings default must not drift apart."""
+        from packages.core.settings import TEACH_BACK_DEFAULT_TOPIC_KEYS
+
+        assert frozenset(TEACH_BACK_DEFAULT_TOPIC_KEYS) == _EXPECTED_DEFAULT_KEYS
+
+    def test_custom_keys_parsed(self, monkeypatch):
+        monkeypatch.setenv("TEACH_BACK_ENABLED_TOPIC_KEYS", "mt_a,mt_b")
+        from packages.core.settings import Settings
+
+        s = Settings()
+        assert s.teach_back_enabled_topic_keys_set == frozenset({"mt_a", "mt_b"})
+
+    def test_whitespace_stripped(self, monkeypatch):
+        monkeypatch.setenv("TEACH_BACK_ENABLED_TOPIC_KEYS", " mt_a ,  mt_b ")
+        from packages.core.settings import Settings
+
+        s = Settings()
+        assert s.teach_back_enabled_topic_keys_set == frozenset({"mt_a", "mt_b"})
+
+    def test_empty_string_yields_empty_set(self, monkeypatch):
+        monkeypatch.setenv("TEACH_BACK_ENABLED_TOPIC_KEYS", "")
+        from packages.core.settings import Settings
+
+        s = Settings()
+        assert s.teach_back_enabled_topic_keys_set == frozenset()

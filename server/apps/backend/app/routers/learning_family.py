@@ -19,6 +19,7 @@ from apps.backend.app.schemas.learning import (
     AssignmentCreate,
     AssignmentResponse,
     BridgeResponse,
+    CastleIndexResponse,
     ChildLearningOverview,
     ChildSessionLogResponse,
     ClusterResponse,
@@ -37,6 +38,7 @@ from apps.backend.app.schemas.learning import (
 )
 from apps.backend.app.services.learning import (
     assignment_service,
+    castle_service,
     path_service,
     progress_service,
     stats_service,
@@ -779,6 +781,35 @@ def get_child_bridges(
 
     taxonomy = get_effective_source_taxonomy(db, user.language)
     return get_cross_subject_bridges(db, source_taxonomy=taxonomy, subject=subject)
+
+
+# ── Knowledge Castle (Parent View, Issue #235) ───────────────────────────────
+
+
+@router.get(
+    "/children/{child_id}/castle/index",
+    response_model=CastleIndexResponse,
+)
+def get_child_castle(
+    child_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Return aggregated castle data for a child (parent view).
+
+    Reuses castle_service — the same data the child sees in their castle.
+    Zero-progress children get empty tower skeletons (200, never 404).
+    """
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    data = castle_service.get_castle_index(db, child.id, user.family_id, user.language)
+    return castle_service.to_response(data)
 
 
 # ── Learning Topic Generator (Issue #190) ────────────────────────────────────

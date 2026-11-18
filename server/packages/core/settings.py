@@ -19,6 +19,18 @@ _OLD_DEFAULTS = {
     "LOG_DIR": "logs",
 }
 
+#: Topics with hand-authored teach-back confusion data (#216 pilot, #234 expansion).
+#: Keep in sync with ``scripts/seed_teach_back_confusions.py`` SAMPLE_CONFUSIONS.
+TEACH_BACK_DEFAULT_TOPIC_KEYS = (
+    "mt_9KmVWCuh5_",  # Understanding fractions
+    "mt_ndGqFPWyen",  # Fractions of a whole
+    "mt_FP-mjXaq3B",  # Equivalent fractions
+    "mt_Fl7b8q9pI1",  # Decimal place value
+    "mt_ZM9mhHsyYZ",  # Understanding Percentages
+    "mt_TgHxujL81r",  # Multiplying fractions
+    "mt_DRlbMok2lT",  # Fraction-Decimal Equivalents
+)
+
 
 class Settings(BaseSettings):
     DATA_ROOT: str = "~/.numina/data"
@@ -116,6 +128,21 @@ class Settings(BaseSettings):
     LOG_RETENTION_DAYS: int = 30
     LOG_ROTATION_MODE: str = "size"  # "size" or "time"
     LOG_FORMAT: str | None = None  # Uses default format if None
+
+    # Teach-back enabled topic keys (comma-separated). Unset = all topics below.
+    # An empty value disables teach-back for every topic, so leave it unset to get
+    # the defaults rather than blanking it. Keep in sync with
+    # scripts/seed_teach_back_confusions.py SAMPLE_CONFUSIONS.
+    TEACH_BACK_ENABLED_TOPIC_KEYS: str = ",".join(TEACH_BACK_DEFAULT_TOPIC_KEYS)
+
+    @property
+    def teach_back_enabled_topic_keys_set(self) -> frozenset[str]:
+        """Parse TEACH_BACK_ENABLED_TOPIC_KEYS into a frozenset."""
+        if not self.TEACH_BACK_ENABLED_TOPIC_KEYS.strip():
+            return frozenset()
+        return frozenset(
+            k.strip() for k in self.TEACH_BACK_ENABLED_TOPIC_KEYS.split(",") if k.strip()
+        )
 
     # Load `.env` (CWD-local, e.g. server/.env) then the repo-root `.env`
     # with higher precedence — same precedence as apps/agent/app/config.py.

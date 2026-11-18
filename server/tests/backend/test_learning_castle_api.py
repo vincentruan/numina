@@ -243,4 +243,204 @@ class TestCastleIndexEndpoint:
         stats = client.get("/api/v1/child/learning/stats", headers=headers).json()[
             "data"
         ]
+
         assert castle["streak_days"] == stats["learning_streak_days"]
+
+
+# ---------------------------------------------------------------------------
+# Parent castle endpoint tests (Issue #235)
+# ---------------------------------------------------------------------------
+
+PARENT_CASTLE_URL = "/api/v1/family/learning/children/{child_id}/castle/index"
+
+
+@pytest.fixture
+def parent_and_child(db: Session, client, auth_headers):
+    """Create an adult (via auth_headers) + child in same family. Returns (child_id, auth_headers)."""
+    from packages.db.models.user import User
+
+    resp = client.post(
+        "/api/v1/family/children",
+        headers=auth_headers,
+        json={
+            "username": "parentcastlekid",
+            "password": "ChildPass1",
+            "display_name": "Parent Castle Kid",
+            "avatar_color": "#FF5733",
+            "pin": ["🐱", "🌟", "🎈", "🐶"],
+        },
+    )
+    assert resp.status_code == 201
+    child_id = int(resp.json()["data"]["id"])
+    child = db.query(User).filter(User.id == child_id).first()
+    child.birthday = date(2017, 6, 1)
+    db.flush()
+    return child_id, auth_headers
+
+
+class TestParentCastleIndexEndpoint:
+    def test_parent_gets_child_castle(self, client, parent_and_child, castle_topics):
+        """Parent can fetch castle for their child — same shape as child endpoint."""
+        child_id, headers = parent_and_child
+        url = PARENT_CASTLE_URL.format(child_id=child_id)
+        resp = client.get(url, headers=headers)
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert set(data.keys()) == {"towers", "windows", "streak_days"}
+        assert len(data["towers"]) > 0
+
+    def test_zero_progress_returns_200(self, client, parent_and_child, castle_topics):
+        """Zero-progress child gets empty tower skeletons (200, never 404)."""
+        child_id, headers = parent_and_child
+        url = PARENT_CASTLE_URL.format(child_id=child_id)
+        resp = client.get(url, headers=headers)
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["windows"] == []
+        assert data["streak_days"] >= 0
+        # Skeleton contract: towers exist with unstarted floors, not towers == [].
+        assert len(data["towers"]) > 0
+        for tower in data["towers"]:
+            assert tower["mastered_count"] == 0
+            assert tower["learning_count"] == 0
+            assert tower["total_count"] > 0
+            for floor in tower["floors"]:
+                assert floor["total_count"] > 0
+                assert floor["mastered_count"] == 0
+
+    def test_parent_payload_matches_child_payload(
+        self, client, db, parent_and_child, castle_topics
+    ):
+        """Parent and child endpoints serialize identically for the same child.
+
+        Guards the shared mapper in castle_service against one-sided field drift.
+        """
+        from packages.db.models.user import User
+
+        child_id, headers = parent_and_child
+        # Seed a mastered + overdue progress row so windows and counters are exercised.
+        topic = castle_topics["in_range"][0]
+        db.add(
+            LearningProgress(
+                child_id=child_id,
+                topic_id=topic.id,
+                mastery_level="mastered",
+                first_mastered_at=datetime.now(UTC) - timedelta(days=30),
+                next_review_at=datetime.now(UTC) - timedelta(days=1),
+            )
+        )
+        db.flush()
+
+        parent_payload = client.get(
+            PARENT_CASTLE_URL.format(child_id=child_id), headers=headers
+        ).json()["data"]
+
+        child = db.query(User).filter(User.id == child_id).first()
+        token = child_login_two_phase(client, "parentcastlekid", CHILD_PASSWORD, PIN)
+        child_payload = client.get(
+            CASTLE_URL, headers={"Authorization": f"Bearer {token}"}
+        ).json()["data"]
+
+        assert parent_payload == child_payload
+        # Snowflake + closed-set contract on the parent path.
+        for window in parent_payload["windows"]:
+            assert isinstance(window["topic_id"], str)
+            assert window["reason"] in {"复习到期", "推荐学习"}
+        assert child is not None
+
+    def test_cross_family_rejected(
+        self, client, parent_and_child, second_user_headers, castle_topics
+    ):
+        """Parent cannot fetch castle for a child in a different family."""
+        other_child_resp = client.post(
+            "/api/v1/family/children",
+            headers=second_user_headers,
+            json={
+                "username": "otherkid",
+                "password": "ChildPass1",
+                "display_name": "Other Kid",
+                "avatar_color": "#123456",
+                "pin": ["🐱", "🌟", "🎈", "🐶"],
+            },
+        )
+        assert other_child_resp.status_code == 201
+        other_child_id = int(other_child_resp.json()["data"]["id"])
+
+        # Original parent tries to access other family's child castle
+        _, headers = parent_and_child
+        url = PARENT_CASTLE_URL.format(child_id=other_child_id)
+        resp = client.get(url, headers=headers)
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "AUTH_CHILD_NOT_FOUND"
+
+    def test_requires_adult_auth(self, client):
+        """Unauthenticated requests are rejected."""
+        url = PARENT_CASTLE_URL.format(child_id=999999)
+        resp = client.get(url)
+        assert resp.status_code == 401
+
+    def test_member_role_adult_gets_200(
+        self, client, db, parent_and_child, castle_topics
+    ):
+        """Any adult in the family (owner or member) can read any child's castle.
+
+        The authorization model is family-wide, not per-child guardian-scoped.
+        This pins the breadth so a future tightening cannot silently break it.
+        """
+        from packages.db.models.family import Family
+        from packages.db.models.user import User
+
+        child_id, owner_headers = parent_and_child
+        # Resolve the owner's family to get its invite code.
+        me = client.get("/api/v1/auth/me", headers=owner_headers).json()["data"]
+        owner = db.query(User).filter(User.id == int(me["id"])).first()
+        family = db.query(Family).filter(Family.id == owner.family_id).first()
+
+        # Join the target family — this creates a new adult member in the
+        # family directly (no prior register step).
+        resp_join = client.post(
+            "/api/v1/auth/family/join",
+            json={
+                "username": "memberadult",
+                "display_name": "Member Adult",
+                "password": "TestPass789",
+                "invite_code": family.invite_code,
+            },
+        )
+        assert resp_join.status_code == 200, f"join failed: {resp_join.text}"
+        member_headers = {
+            "Authorization": f"Bearer {resp_join.json()['data']['access_token']}",
+        }
+
+        url = PARENT_CASTLE_URL.format(child_id=child_id)
+        resp = client.get(url, headers=member_headers)
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert set(data.keys()) == {"towers", "windows", "streak_days"}
+
+    def test_child_role_token_rejected_with_403(
+        self, client, db, parent_and_child, castle_topics
+    ):
+        """Child-role Bearer tokens cannot call the parent endpoint — 403.
+
+        Defense in depth: require_adult rejects both child tokens and
+        unauthenticated requests. This pins the child-token path (403) which is
+        distinct from the unauthenticated path (401).
+        """
+        from packages.db.models.user import User
+
+        # The parent_and_child fixture already created a child in the family.
+        child_id, _ = parent_and_child
+        child = (
+            db.query(User)
+            .filter(User.id == child_id, User.role == "child")
+            .first()
+        )
+        assert child is not None
+        token = child_login_two_phase(client, child.username, "ChildPass1", PIN)
+        child_headers = {"Authorization": f"Bearer {token}"}
+
+        # Any child_id in path; child token should be rejected regardless.
+        url = PARENT_CASTLE_URL.format(child_id=child_id)
+        resp = client.get(url, headers=child_headers)
+        assert resp.status_code == 403

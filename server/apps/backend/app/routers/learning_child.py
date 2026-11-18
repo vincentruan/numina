@@ -199,52 +199,10 @@ def my_castle_index(
     Towers = subjects; floors = domains; windows = review_due + recommended.
     Zero-progress children get empty tower skeletons (200, never 404).
     """
-    from apps.backend.app.services.learning.castle_service import get_castle_index
+    from apps.backend.app.services.learning import castle_service
 
-    data = get_castle_index(db, child.id, child.family_id, child.language)
-    return CastleIndexResponse(
-        towers=[_tower_to_schema(t) for t in data.towers],
-        windows=[_window_to_schema(w) for w in data.windows],
-        streak_days=data.streak_days,
-    )
-
-
-def _tower_to_schema(tower):
-    from apps.backend.app.schemas.learning import (
-        CastleFloorSchema,
-        CastleTowerSchema,
-    )
-
-    return CastleTowerSchema(
-        subject=tower.subject,
-        mastered_count=tower.mastered_count,
-        learning_count=tower.learning_count,
-        review_due_count=tower.review_due_count,
-        total_count=tower.total_count,
-        floors=[
-            CastleFloorSchema(
-                domain=f.domain,
-                mastered_count=f.mastered_count,
-                learning_count=f.learning_count,
-                review_due_count=f.review_due_count,
-                total_count=f.total_count,
-            )
-            for f in tower.floors
-        ],
-    )
-
-
-def _window_to_schema(window):
-    from apps.backend.app.schemas.learning import CastleWindowSchema
-
-    return CastleWindowSchema(
-        topic_id=window.topic_id,
-        topic_name=window.topic_name,
-        topic_name_zh=window.topic_name_zh,
-        reason=window.reason,
-        subject=window.subject,
-        domain=window.domain,
-    )
+    data = castle_service.get_castle_index(db, child.id, child.family_id, child.language)
+    return castle_service.to_response(data)
 
 
 @router.get("/bridges", response_model=list[BridgeResponse])

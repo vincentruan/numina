@@ -272,6 +272,21 @@
                 </template>
               </template>
             </van-collapse-item>
+
+            <!-- Module 7: Knowledge Castle (Issue #235) -->
+            <van-collapse-item name="castle">
+              <template #title>
+                <div class="collapse-title-row">
+                  <IIcon icon="mdi:castle-outline" size="18" color="var(--van-warning-color)" />
+                  <span>{{ t('learning.castle.title') }}</span>
+                </div>
+              </template>
+              <ParentKnowledgeCastle
+                :castle="castleData"
+                :state="castleState"
+                @retry="loadCastle"
+              />
+            </van-collapse-item>
           </van-collapse>
         </template>
       </van-pull-refresh>
@@ -342,6 +357,7 @@ import {
   getChildMap,
   getTopicsBatch,
   getChildSmartTutorSessions,
+  fetchChildCastle,
   type ChildLearningOverview,
   type ReviewItem,
   type PathResponse,
@@ -351,12 +367,14 @@ import {
   type ProgressWithTopic,
   type TopicResponse,
   type SmartTutorSessionResponse,
+  type CastleIndex,
 } from '@/api/learning'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import IIcon from '@/components/IIcon.vue'
 import DnaGraph2D from '@/components/learning/DnaGraph2D.vue'
 import ParentClusterMap from '@/components/learning/ParentClusterMap.vue'
+import ParentKnowledgeCastle from '@/components/learning/ParentKnowledgeCastle.vue'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -376,6 +394,17 @@ const presetPathsLoading = ref(false)
 const pathsLoading = ref(false)
 const smartTutorSessions = ref<SmartTutorSessionResponse[]>([])
 const smartTutorLoading = ref(false)
+// Castle (Issue #235)
+const castleData = ref<CastleIndex | null>(null)
+const castleLoading = ref(false)
+const castleError = ref(false)
+let castleLoaded = false
+
+const castleState = computed<'loading' | 'error' | 'content'>(() => {
+  if (castleLoading.value) return 'loading'
+  if (castleError.value) return 'error'
+  return 'content'
+})
 const actioningId = ref<string | null>(null)
 const dnaGraphItems = ref<ProgressWithTopic[]>([])
 const dnaGraphLoading = ref(false)
@@ -574,6 +603,31 @@ async function loadSmartTutorSessions() {
   }
 }
 
+async function loadCastle() {
+  const childId = babyStore.selectedChildId
+  if (!childId) {
+    // Nothing selected: never leave the spinner running on a no-op.
+    castleData.value = null
+    castleError.value = false
+    castleLoading.value = false
+    return
+  }
+  castleLoading.value = true
+  castleError.value = false
+  try {
+    const data = await fetchChildCastle(childId)
+    // Discard a response that outlived its child selection (rapid switching).
+    if (babyStore.selectedChildId !== childId) return
+    castleData.value = data
+  } catch {
+    if (babyStore.selectedChildId !== childId) return
+    castleData.value = null
+    castleError.value = true
+  } finally {
+    if (babyStore.selectedChildId === childId) castleLoading.value = false
+  }
+}
+
 // Shared progress rows from getChildMap — avoids duplicate fetch between DNA graph and cluster map
 const sharedProgressRows = ref<ProgressResponse[]>([])
 
@@ -651,6 +705,14 @@ watch(graphViewMode, async (mode) => {
   }
 })
 
+// Lazy-load castle data when user expands the castle module
+watch(expandedModules, (modules) => {
+  if (modules.includes('castle') && !castleLoaded) {
+    castleLoaded = true
+    loadCastle()
+  }
+})
+
 async function loadData() {
   await Promise.all([
     loadChildren(),
@@ -715,7 +777,15 @@ async function refreshRecommendations() {
 }
 
 async function onRefresh() {
-  await Promise.all([loadData(), loadChildDependentData()])
+  // Pull-to-refresh is the page's canonical recovery gesture — let it retry the
+  // castle too instead of leaving an errored module stuck.
+  const castleExpanded = expandedModules.value.includes('castle')
+  if (castleExpanded) castleLoaded = true
+  await Promise.all([
+    loadData(),
+    loadChildDependentData(),
+    castleExpanded ? loadCastle() : Promise.resolve(),
+  ])
   refreshing.value = false
 }
 
@@ -723,6 +793,15 @@ async function onRefresh() {
 watch(() => babyStore.selectedChildId, (newId) => {
   if (newId) {
     clusterMapLoaded = false
+    castleLoaded = false
+    castleData.value = null
+    castleError.value = false
+    // An already-expanded castle module must refetch — the expand watcher only
+    // fires when the collapse array changes, which a child switch does not do.
+    if (expandedModules.value.includes('castle')) {
+      castleLoaded = true
+      loadCastle()
+    }
     loadChildDependentData()
   }
 })
