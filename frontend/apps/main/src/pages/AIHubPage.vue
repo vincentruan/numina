@@ -32,8 +32,8 @@
           </div>
         </div>
       </div>
-      <!-- Stats row -->
-      <div class="hub-stats">
+      <!-- Stats row — hidden until first report exists to avoid zero-value noise -->
+      <div v-if="currentReport" class="hub-stats">
         <template v-for="stat in statItems" :key="stat.type">
           <div class="hub-stat-item">
             <div class="hub-stat-num-wrap">

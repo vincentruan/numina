@@ -1152,16 +1152,27 @@ onUnmounted(() => {
 
 /* ── Premium Gradient Border wrapper ── */
 .input-card-border {
-  background: linear-gradient(135deg, #4040ff, #ff49fd, #d763fc, #3cc4fa);
+  /* Light mode: subtle indigo gradient — not the vivid rainbow of dark mode */
+  background: linear-gradient(135deg, #c7d2fe, #e0d4fe, #ddd6fe);
   border-radius: 16px;
   padding: 1.5px; /* Border thickness */
-  box-shadow: 0 8px 30px rgba(64, 64, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: box-shadow 0.25s ease, transform 0.25s ease;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.25s ease, transform 0.25s ease, background 0.3s ease;
   width: 100%;
   box-sizing: border-box;
 }
 
 .input-box.is-focused .input-card-border {
+  background: linear-gradient(135deg, #a5b4fc, #c4b5fd, #c7d2fe);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+:global([data-theme='dark'] .input-card-border) {
+  background: linear-gradient(135deg, #4040ff, #ff49fd, #d763fc, #3cc4fa);
+  box-shadow: 0 8px 30px rgba(64, 64, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+:global([data-theme='dark'] .input-box.is-focused .input-card-border) {
   box-shadow: 0 12px 32px rgba(64, 64, 255, 0.15), 0 4px 16px rgba(215, 99, 252, 0.08);
 }
 

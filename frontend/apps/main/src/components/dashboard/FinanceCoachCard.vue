@@ -307,7 +307,7 @@ onUnmounted(() => {
               <van-button
                 v-if="resumeHandle.taskId"
                 plain
-                type="danger"
+                type="default"
                 size="mini"
                 :loading="cancelling"
                 :disabled="cancelling"

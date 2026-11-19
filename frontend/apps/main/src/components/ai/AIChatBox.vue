@@ -962,7 +962,7 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
       <div v-if="chatTaskStatus === 'running'" class="chat-task-banner chat-task-banner--running">
         <van-loading size="14" type="spinner" color="var(--van-primary-color)" />
         <span class="chat-task-banner__text">{{ t('aiChat.chatTaskRunning') }}</span>
-        <van-button plain type="danger" size="small" @click="onChatTaskCancel">
+        <van-button plain type="default" size="small" @click="onChatTaskCancel">
           {{ t('aiTask.cancelBtn') }}
         </van-button>
       </div>
