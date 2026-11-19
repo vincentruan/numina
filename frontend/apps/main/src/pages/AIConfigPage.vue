@@ -2,15 +2,6 @@
   <div class="ai-config-page">
     <PageHeader :title="t('aiConfig.pageTitle')" />
 
-    <van-tabs v-model:active="activeTab" shrink class="ai-config-tabs">
-      <van-tab name="providers">
-        <template #title>
-          <div class="tab-title">
-            <van-icon name="setting-o" />
-            <span>{{ t('aiConfig.tabProviders') }}</span>
-          </div>
-        </template>
-
     <!-- Owner view -->
     <template v-if="isOwner">
       <div v-if="aiStore.configs.length === 0" class="empty-state">
@@ -223,19 +214,6 @@
       </div>
     </template>
 
-      </van-tab>
-
-      <van-tab name="scheduled">
-        <template #title>
-          <div class="tab-title">
-            <van-icon name="clock-o" />
-            <span>{{ t('aiConfig.tabScheduled') }}</span>
-          </div>
-        </template>
-        <ScheduledTasksTab :is-owner="isOwner" />
-      </van-tab>
-    </van-tabs>
-
     <!-- Error detail popup -->
     <van-popup
       v-model:show="showErrorPopup"
@@ -278,7 +256,6 @@ import { useAIStore } from '@/stores/ai'
 import * as aiApi from '@/api/ai'
 import type { ProviderConfig } from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
-import ScheduledTasksTab from '@/components/ai/ScheduledTasksTab.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -286,7 +263,6 @@ const authStore = useAuthStore()
 const aiStore = useAIStore()
 
 const isOwner = computed(() => authStore.user?.role === 'owner')
-const activeTab = ref('providers')
 const deletingId = ref<string | null>(null)
 const testingKeys = ref<Set<string>>(new Set())
 const testPassedKeys = ref<Set<string>>(new Set())

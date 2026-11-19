@@ -141,14 +141,51 @@ else
   fi
 fi
 
+# --- 9) MCP token pre-check (Area 20 runs last, so without this it is silently skipped) ---
+# GET /ai/mcp-token returns 404 NOT_FOUND when the family has never generated a
+# token — that is normal, not a failure. What must be verified here is that
+# POST actually succeeds: token generation creates a synthetic
+# role='external_token' user, and a schema drift on users.role (VARCHAR(10) vs
+# the 14-char value) makes it 500. Area 20 is the last area in G1 and is the
+# first thing dropped from a partial run, so a generation failure would go
+# unnoticed for the whole run.
+MCP_GET_CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH" "$API/ai/mcp-token")
+if [ "$MCP_GET_CODE" != "200" ] && [ "$MCP_GET_CODE" != "404" ]; then
+  echo "GATE FAIL: GET /ai/mcp-token returned HTTP $MCP_GET_CODE (expected 200 or 404)"
+  exit 1
+fi
+
+MCP_GEN=$(curl -s -w "\n%{http_code}" -X POST "$API/ai/mcp-token" -H "$AUTH")
+MCP_GEN_CODE=$(echo "$MCP_GEN" | tail -1)
+if [ "$MCP_GEN_CODE" != "201" ]; then
+  echo "GATE FAIL: POST /ai/mcp-token returned HTTP $MCP_GEN_CODE — Area 20 cannot run."
+  echo "  body: $(echo "$MCP_GEN" | sed '$d' | head -c 400)"
+  echo "  Common cause: schema drift. Check users.role is VARCHAR(20) and that"
+  echo "  'alembic upgrade head' has been applied (see server/apps/backend/AGENTS.md)."
+  exit 1
+fi
+MCP_TOKEN_PROBE=$(echo "$MCP_GEN" | sed '$d' | jq -r '.data.token // empty')
+if [ -z "$MCP_TOKEN_PROBE" ]; then
+  echo "GATE FAIL: POST /ai/mcp-token returned 201 but no plaintext token in body"
+  exit 1
+fi
+echo "  (MCP token generation OK: ${MCP_TOKEN_PROBE:0:8}••••${MCP_TOKEN_PROBE: -4})"
+
+# Leave the family with a revoked token so Area 20 starts from the "no token"
+# state its M20.1.1 case asserts. The probe token was only needed to prove
+# generation works.
+curl -s -o /dev/null -X DELETE "$API/ai/mcp-token" -H "$AUTH"
+echo "  (probe token revoked — Area 20 M20.1.1 starts from empty state)"
+
 # Export CHILD_NAMES for downstream phases/report (single source of truth).
 echo "export SIM_CHILD_NAMES=\"$CHILD_NAMES\""
 echo "GATE OK: demouser family present with $CHILD_COUNT child(ren) [$CHILD_NAMES] and $ASSET_COUNT assets."
 
-# --- 9) Token cleanup — do not leave auth material in shell environment ---
+# --- 10) Token cleanup — do not leave auth material in shell environment ---
 unset LOGIN BODY ME ME_USER ME_ROLE ME_FAM MEMBERS CHILD_COUNT OV ASSET_COUNT TOTAL_LIAB
 unset AI_CONFIGS AI_ACTIVE WISHES WISH_SAVINGS LIABILITIES HIGH_RATE
 unset STEP1 STEP1_CODE STEP1_BODY FIRST_CHILD_NAME FIRST_CHILD_USER CHILD_USERNAME CHILD_PASSWORD
+unset MCP_GET_CODE MCP_GEN MCP_GEN_CODE MCP_TOKEN_PROBE
 # Keep TOKEN and AUTH for subsequent phases; unset after Phase 5 cleanup.
 ```
 

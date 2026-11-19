@@ -19,6 +19,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from apps.backend.alembic import ddl
+
 revision: str = "mc001misc0002"
 down_revision: tuple[str, ...] = ("mc001misc0001",)  # type: ignore[assignment]
 branch_labels: str | Sequence[str] | None = None
@@ -30,7 +32,7 @@ def upgrade() -> None:
     is_sqlite = bind.dialect.name == "sqlite"
 
     if bind.dialect.has_table(bind, "misconceptions"):
-        op.add_column(
+        ddl.add_column(
             "misconceptions",
             sa.Column("category", sa.String(30), nullable=True),
         )

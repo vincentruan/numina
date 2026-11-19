@@ -306,6 +306,11 @@ const router = createRouter({
           component: () => import('@/pages/SkillsManagePage.vue')
         },
         {
+          path: 'settings/ai/scheduled',
+          name: 'ScheduledTasks',
+          component: () => import('@/pages/ScheduledTasksPage.vue')
+        },
+        {
           path: 'settings/ai/agents',
           name: 'AgentsManage',
           component: () => import('@/pages/AgentsManagePage.vue')

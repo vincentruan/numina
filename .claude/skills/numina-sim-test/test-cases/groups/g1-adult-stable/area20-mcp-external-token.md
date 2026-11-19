@@ -59,7 +59,14 @@ Assertions:
 - [ ] "Backend MCP" 卡片渲染, 与 "系统内置" 标签视觉区分
 - [ ] 无 token 时显示 "生成令牌" / "Generate Token" 按钮
 - [ ] 无 token 掩码显示区域
+- [ ] **页面上不存在错误 toast** — snapshot 中没有 `.van-toast` / `.van-notify` 节点,
+      也没有 "资源不存在" / "请求失败" / "NOT_FOUND" 文案
 - [ ] `[console]` zero errors
+
+> **为什么单独断言 toast:** `GET /ai/mcp-token` 在无 token 时返回 404 `NOT_FOUND`,
+> 这是预期行为。若前端未声明 `_silentErrorCodes`, 全局 axios 拦截器会为这个 404
+> 弹红色错误提示 —— 该提示由 Vant 渲染, **不产生 console error**, 也不影响按钮存在性。
+> 只断言 "按钮存在 + console 干净" 会漏掉它。必须显式检查 toast 节点不存在。
 
 ### M20.1.2 首次生成 token
 
@@ -78,7 +85,16 @@ Assertions:
 - [ ] 复制按钮可用
 - [ ] 过期时间选择器默认为 "永不过期"
 - [ ] `allow_external` 和 `allow_write` 开关默认关闭
+- [ ] **无失败 toast** (见 M20.1.1 的 toast 说明)
 - [ ] `[console]` zero errors
+
+> **若出现失败 toast 或 500:** 记 `RENDER`/`DATA` 分类并保留
+> `dogfood-output/m20.1.2-*` 截图。常见根因是 schema drift —
+> `POST` 要为 family 创建一个 `role='external_token'` 的合成用户 (14 字符),
+> 而 `users.role` 若仍是 `VARCHAR(10)` 会抛
+> `DataError: value too long for type character varying(10)` 返回 500。
+> 该类问题已在 Phase 1.5 门禁第 9 步前置拦截; 若门禁通过此处仍失败,
+> 说明是新的回归。
 
 ### M20.1.3 API 验证: 生成返回明文
 

@@ -12,7 +12,9 @@
 
       <!-- Session topic info -->
       <div class="session-header">
-        <div class="session-header__icon">🎓</div>
+        <div class="session-header__icon">
+          <IIcon icon="mdi:school" :size="32" aria-label="学习会话" />
+        </div>
         <div class="session-header__info">
           <h2 class="session-header__title">{{ topicDisplayNameText }}</h2>
           <div class="session-header__meta">
@@ -33,29 +35,31 @@
       </div>
 
       <!-- Chat messages -->
-      <div class="chat-area" ref="chatAreaRef">
+      <div class="chat-area" ref="chatAreaRef" aria-live="polite" aria-relevant="additions">
         <div v-if="messages.length === 0 && !isStreaming" class="chat-empty">
-          <div class="chat-empty__icon">💬</div>
+          <div class="chat-empty__icon">
+            <IIcon icon="mdi:chat-processing-outline" :size="48" aria-hidden="true" />
+          </div>
           <p class="chat-empty__title">{{ t('learning.session.chatTitle') }}</p>
           <p class="chat-empty__desc">{{ t('learning.session.chatDesc') }}</p>
         </div>
 
         <div
-          v-for="msg in messages"
+          v-for="msg in visibleMessages"
           :key="msg.id"
           class="chat-msg"
           :class="`chat-msg--${msg.role}`"
         >
           <div class="chat-msg__bubble">
-            <!-- Regular text content -->
-            <div v-if="msg.content" class="chat-msg__text">{{ msg.content }}</div>
+            <!-- Regular text content (rendered as markdown for assistant, plain for user) -->
+            <div v-if="msg.content" class="chat-msg__text" v-html="msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content"></div>
           </div>
         </div>
 
         <!-- Streaming text (current response being typed) -->
         <div v-if="currentStreamText" class="chat-msg chat-msg--assistant">
           <div class="chat-msg__bubble">
-            <div class="chat-msg__text">{{ currentStreamText }}</div>
+            <div class="chat-msg__text" v-html="renderMarkdown(currentStreamText)"></div>
             <span class="typing-cursor">|</span>
           </div>
         </div>
@@ -116,8 +120,10 @@ import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { showSuccessToast, showFailToast } from 'vant'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useLearningChat } from '@/composables/useLearningChat'
+import { renderMarkdown } from '@/utils/markdown'
 import { getSession, getTopicDetail, endSession, type SessionResponse, type TopicResponse } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
+import IIcon from '@/components/IIcon.vue'
 
 const { t } = useI18n()
 const { topicDisplayName } = useLocalizedTopic()
@@ -146,6 +152,11 @@ const {
   sendMessage,
   disconnect,
 } = useLearningChat()
+
+// Filter out tool messages — only show assistant and user roles
+const visibleMessages = computed(() => {
+  return messages.value.filter(msg => msg.role === 'assistant' || msg.role === 'user')
+})
 
 const topicDisplayNameText = computed(() => {
   if (!topic.value) return ''
@@ -254,7 +265,16 @@ onUnmounted(() => {
   font-size: 14px;
   color: var(--color-body);
   cursor: pointer;
-  padding: 4px 0;
+  padding: 8px 4px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.back-btn:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
 }
 
 .session-header {
@@ -337,6 +357,25 @@ onUnmounted(() => {
   overflow-y: auto;
   margin-bottom: 16px;
   padding: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.chat-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-area::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+.chat-area::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .chat-empty {
@@ -420,6 +459,65 @@ onUnmounted(() => {
   white-space: pre-wrap;
 }
 
+/* Markdown rendered content styles */
+.chat-msg__text :deep(strong) {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.chat-msg__text :deep(em) {
+  font-style: italic;
+}
+
+.chat-msg__text :deep(ul),
+.chat-msg__text :deep(ol) {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.chat-msg__text :deep(li) {
+  margin: 0.25em 0;
+}
+
+.chat-msg__text :deep(a) {
+  color: var(--color-primary, #3b82f6);
+  text-decoration: underline;
+}
+
+.chat-msg__text :deep(code) {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.chat-msg__text :deep(pre) {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 8px 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.chat-msg__text :deep(blockquote) {
+  border-left: 3px solid var(--color-hairline);
+  padding-left: 12px;
+  margin: 0.5em 0;
+  color: var(--color-body);
+}
+
+/* User message markdown inherits white text */
+.chat-msg--user .chat-msg__text :deep(strong),
+.chat-msg--user .chat-msg__text :deep(em),
+.chat-msg--user .chat-msg__text :deep(a),
+.chat-msg--user .chat-msg__text :deep(code) {
+  color: inherit;
+}
+
+.chat-msg--user .chat-msg__text :deep(code) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 .typing-cursor {
   display: inline-block;
   animation: blink 1s step-end infinite;
@@ -456,6 +554,12 @@ onUnmounted(() => {
   font-family: Inter, sans-serif;
   font-size: 13px;
   cursor: pointer;
+  min-height: 44px;
+}
+
+.btn-retry:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
 }
 
 /* Input area */
@@ -482,7 +586,12 @@ onUnmounted(() => {
 }
 
 .chat-input::placeholder {
-  color: var(--color-hairline);
+  color: var(--color-muted);
+}
+
+.chat-input:disabled::placeholder {
+  color: var(--color-muted-soft);
+  opacity: 0.8;
 }
 
 .chat-input:disabled {
@@ -499,8 +608,13 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  min-height: 40px;
+  min-height: 44px;
   transition: transform 0.1s;
+}
+
+.chat-send-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .chat-send-btn:active {
@@ -530,6 +644,11 @@ onUnmounted(() => {
   cursor: pointer;
   min-height: 48px;
   transition: transform 0.1s;
+}
+
+.btn-finish:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
 }
 
 .btn-finish:active {

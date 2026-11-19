@@ -213,6 +213,16 @@
           <SvgIcon name="robot" :size="16" class="cell-icon" />
         </template>
       </van-cell>
+      <van-cell
+        v-if="authStore.user?.role === 'owner'"
+        :title="t('settings.scheduledManage')"
+        is-link
+        to="/settings/ai/scheduled"
+      >
+        <template #icon>
+          <van-icon name="clock-o" size="16" class="cell-icon" />
+        </template>
+      </van-cell>
     </van-cell-group>
 
     <!-- 数据管理 -->

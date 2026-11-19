@@ -114,6 +114,14 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 > session read-only probes. Area 20 (MCP token) runs last since it
 > generates/consumes tokens.
 
+> **Area 20 is the first area dropped from a partial run** — it sits at the end
+> of G1, so any time-boxed or domain-scoped run silently skips it. Two
+> mitigations are in place: (1) Phase 1.5's gate step 9 exercises
+> `POST /ai/mcp-token` up front, so a token-generation regression fails the gate
+> rather than going unnoticed; (2) when Area 20 does not run, the report MUST
+> carry an explicit "未执行" line for it (see Phase 6 §Report scope). Do not let
+> it vanish from the report.
+
 > **Docker mode caveat:** nginx serves adult + child under **one origin** (:80)
 > → G3 is NOT parallel-safe with G1/G2 (shared cookie + localStorage). The
 > adult `access_token` cookie causes the child SPA's `verifyChildSession()` to
@@ -588,6 +596,14 @@ case's outcome, then write the report.
 > Do NOT include P0–P3 severity grading, effort estimates, or fix plans.
 > This skill records test results. If the user wants follow-up fix commits,
 > see Phase 7 (OPTIONAL — triggered by "修复" / "fix" / "按分类提交").
+
+> **MANDATORY: unrun areas must be declared, not omitted.** Any area listed in
+> "Run Modes" that was not executed (time-boxed run, partial mode, driver
+> failure) MUST appear in the report as an explicit skipped entry with a
+> reason — e.g. `Area 20 (M20.1–M20.15) — 未执行: 本次为 learning 域定向运行`.
+> A report that silently lists only the areas that ran reads as full coverage
+> and hides whole feature surfaces behind it. Never let an area disappear
+> from the report without a line saying it did not run.
 >
 > **UI quality observations:** When Area 15 (UI quality) is run, include a
 > fourth section "UI 质量观察" summarizing design-system findings (dark mode

@@ -9,6 +9,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from apps.backend.alembic import ddl
+
 revision: str = "h0011q22r3s4"
 down_revision: str | None = "0147f812a544"
 branch_labels: str | Sequence[str] | None = None
@@ -16,6 +18,9 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    if ddl.has_table("topic_hook_questions"):
+        # align_schema already created it from the model on an earlier boot.
+        return
     op.create_table(
         "topic_hook_questions",
         sa.Column("id", sa.BigInteger(), nullable=False),

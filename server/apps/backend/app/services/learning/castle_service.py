@@ -202,12 +202,12 @@ def get_castle_index(
         )
         scope_ids.update(row[0] for row in mid_range)
 
-    # UNION: topics where child has first_mastered_at IS NOT NULL
+    # UNION: topics where child has mastery_level == "mastered"
     mastered_rows = (
         db.query(LearningProgress.topic_id)
         .filter(
             LearningProgress.child_id == child_id,
-            LearningProgress.first_mastered_at.isnot(None),
+            LearningProgress.mastery_level == "mastered",
         )
         .all()
     )

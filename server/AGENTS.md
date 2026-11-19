@@ -158,6 +158,7 @@ Check these docs before working in `server/` — they document verified fixes fo
 | Doc | Topic |
 |-----|-------|
 | [`auto-migrate-string-default`](../docs/solutions/database-issues/auto-migrate-string-default-quoting-postgresql.md) | SQLAlchemy auto-migrate VARCHAR 默认值引号 |
+| [`alembic-version-drift`](../docs/solutions/database-issues/alembic-version-drift-align-schema-2026-11-18.md) | align_schema 建了 schema 但不盖版本 → 迁移永久卡住 (多 head + DuplicateColumn) |
 
 ### Workflow
 

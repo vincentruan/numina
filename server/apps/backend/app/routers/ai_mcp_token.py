@@ -55,12 +55,6 @@ def generate_token(
         current_user.family_id, db, revoked_by=current_user.id
     )
 
-    # Apply optional flags before commit
-    import os as _os
-    _dbg = f'body={body} allow_external={getattr(body, "allow_external", "N/A") if body else "None"}'
-    _os.environ.get('')  # no-op to avoid unused import
-    with open('/tmp/mcp_debug.log', 'a') as _f:
-        _f.write(_dbg + '\n')
     if body is not None:
         if body.allow_external is not None:
             row.allow_external = body.allow_external

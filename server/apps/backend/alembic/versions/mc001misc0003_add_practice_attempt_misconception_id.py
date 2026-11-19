@@ -17,6 +17,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from apps.backend.alembic import ddl
+
 revision: str = "mc001misc0003"
 down_revision: tuple[str, ...] = ("mc001misc0002",)  # type: ignore[assignment]
 branch_labels: str | Sequence[str] | None = None
@@ -28,7 +30,7 @@ def upgrade() -> None:
     is_sqlite = bind.dialect.name == "sqlite"
 
     if bind.dialect.has_table(bind, "practice_attempts"):
-        op.add_column(
+        ddl.add_column(
             "practice_attempts",
             sa.Column("misconception_id", sa.BigInteger(), nullable=True),
         )
@@ -36,19 +38,23 @@ def upgrade() -> None:
             # SQLite cannot ALTER constraints after table creation.
             # PRAGMA foreign_keys=OFF by default; tests use in-memory
             # create_all which builds the FK via declarative.
-            op.create_foreign_key(
-                "fk_practice_attempt_misconception_id",
-                "practice_attempts",
-                "misconceptions",
-                ["misconception_id"],
-                ["id"],
-                ondelete="SET NULL",
-            )
-        op.create_index(
+            existing_fks = {
+                fk["name"]
+                for fk in sa.inspect(bind).get_foreign_keys("practice_attempts")
+            }
+            if "fk_practice_attempt_misconception_id" not in existing_fks:
+                op.create_foreign_key(
+                    "fk_practice_attempt_misconception_id",
+                    "practice_attempts",
+                    "misconceptions",
+                    ["misconception_id"],
+                    ["id"],
+                    ondelete="SET NULL",
+                )
+        ddl.create_index(
             "ix_practice_attempt_child_topic_misconception",
             "practice_attempts",
             ["child_id", "topic_id", "misconception_id"],
-            unique=False,
         )
 
 
