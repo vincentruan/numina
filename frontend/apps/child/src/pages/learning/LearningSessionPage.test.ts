@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { ref } from 'vue'
 import { createI18n } from 'vue-i18n'
 import zhCN from '@/i18n/locales/zh-CN'
 import enUS from '@/i18n/locales/en-US'
@@ -7,7 +8,7 @@ import enUS from '@/i18n/locales/en-US'
 // Stub composables used by LearningSessionPage
 vi.mock('@/composables/useLearningChat', () => ({
   useLearningChat: () => ({
-    messages: [
+    messages: ref([
       {
         id: 'm1',
         role: 'assistant',
@@ -21,7 +22,7 @@ vi.mock('@/composables/useLearningChat', () => ({
         toolResult: { name: 'get_hint', output: { hint: 'Think about equal parts' } },
       },
       { id: 'm3', role: 'assistant', content: 'Here is the answer.' },
-    ],
+    ]),
     status: 'idle',
     currentStreamText: '',
     error: '',
@@ -39,6 +40,10 @@ vi.mock('@/composables/usePageLoading', () => ({
 
 vi.mock('@/composables/useLocalizedTopic', () => ({
   useLocalizedTopic: () => ({ topicDisplayName: (t: { name: string }) => t.name }),
+}))
+
+vi.mock('@/utils/markdown', () => ({
+  renderMarkdown: (content: string) => content,
 }))
 
 vi.mock('vue-router', () => ({

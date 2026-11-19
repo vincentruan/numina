@@ -24,6 +24,8 @@
     "axios": "^1.13.6",
     "cytoscape": "^3.34.4",
     "cytoscape-dagre": "^4.0.1",
+    "dompurify": "^3.4.1",
+    "marked": "^18.0.2",
     "nprogress": "^0.2.0",
     "pinia": "^3.0.4",
     "vant": "^4.10.2",

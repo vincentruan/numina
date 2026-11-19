@@ -167,6 +167,12 @@
   --constellation-edge-color: rgba(70, 96, 128, 0.45);
   --constellation-label-outline: rgba(255, 255, 255, 0.8);
 
+  /* ── Learning system tokens (light mode) ── */
+  --color-learning-warm:        #F5F0E0;  /* 米黄色卡片背景 */
+  --color-learning-warm-deep:   #EBE5D5;  /* 深米色分隔 */
+  --color-learning-accent:      #E8B94A;  /* 品牌金色 */
+  --color-learning-accent-hover:#D4A843;
+
   /* Challenge interaction tokens (U5) */
   --challenge-object-bg: var(--color-surface-card);
   --challenge-object-active: rgba(var(--color-brand-ochre-rgb), 0.2);
@@ -300,6 +306,12 @@
   --challenge-object-active: rgba(var(--color-brand-ochre-rgb), 0.15);
   --challenge-zone-bg: var(--color-surface-soft);
   --challenge-zone-active: rgba(var(--color-brand-mint-rgb), 0.18);
+
+  /* ── Learning system tokens (dark mode) ── */
+  --color-learning-warm:        #152828;
+  --color-learning-warm-deep:   #1F3535;
+  --color-learning-accent:      #E8B94A;
+  --color-learning-accent-hover:#F0C45A;
 }
 
 /* ── Vant dark mode overrides ── */

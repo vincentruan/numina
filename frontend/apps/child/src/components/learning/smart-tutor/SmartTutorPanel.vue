@@ -20,6 +20,7 @@ import SocraticSteps from './SocraticSteps.vue'
 import QuickActions from './QuickActions.vue'
 import KnowledgeBridgeOverlay from './KnowledgeBridgeOverlay.vue'
 import { useSmartTutor } from '@/composables/useSmartTutor'
+import { renderMarkdown } from '@/utils/markdown'
 
 interface Props {
   sessionId: string
@@ -133,10 +134,10 @@ const effectiveAgeGroup = computed(() => persona.value?.age_group ?? props.ageGr
 
       <!-- Messages -->
       <template v-for="msg in messages" :key="msg.id">
-        <!-- Assistant message -->
+        <!-- Assistant message (rendered as markdown) -->
         <div v-if="msg.role === 'assistant'" class="smart-tutor-panel__msg smart-tutor-panel__msg--assistant">
           <div class="smart-tutor-panel__bubble smart-tutor-panel__bubble--assistant">
-            {{ msg.content }}
+            <div class="markdown-content" v-html="renderMarkdown(msg.content)"></div>
           </div>
         </div>
 
@@ -147,13 +148,7 @@ const effectiveAgeGroup = computed(() => persona.value?.age_group ?? props.ageGr
           </div>
         </div>
 
-        <!-- Tool call/result (collapsed) -->
-        <div v-else-if="msg.role === 'tool'" class="smart-tutor-panel__msg smart-tutor-panel__msg--tool">
-          <div class="smart-tutor-panel__tool-badge">
-            <span v-if="msg.toolCall">🔧 {{ msg.toolCall.name }}</span>
-            <span v-else-if="msg.toolResult">✓ {{ msg.toolResult.name }}</span>
-          </div>
-        </div>
+        <!-- Tool call/result — hidden from UI (debug info) -->
       </template>
 
       <!-- Streaming indicator -->
@@ -300,6 +295,37 @@ const effectiveAgeGroup = computed(() => persona.value?.age_group ?? props.ageGr
   color: var(--color-ink, #0a0a0a);
   border-bottom-left-radius: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* Markdown rendered content */
+.smart-tutor-panel__bubble .markdown-content :deep(strong) {
+  font-weight: 600;
+}
+
+.smart-tutor-panel__bubble .markdown-content :deep(em) {
+  font-style: italic;
+}
+
+.smart-tutor-panel__bubble .markdown-content :deep(ul),
+.smart-tutor-panel__bubble .markdown-content :deep(ol) {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.smart-tutor-panel__bubble .markdown-content :deep(li) {
+  margin: 0.25em 0;
+}
+
+.smart-tutor-panel__bubble .markdown-content :deep(a) {
+  color: var(--color-primary, #3b82f6);
+  text-decoration: underline;
+}
+
+.smart-tutor-panel__bubble .markdown-content :deep(code) {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 0.9em;
 }
 
 .smart-tutor-panel__bubble--user {

@@ -41,21 +41,21 @@
         </div>
 
         <div
-          v-for="msg in messages"
+          v-for="msg in visibleMessages"
           :key="msg.id"
           class="chat-msg"
           :class="`chat-msg--${msg.role}`"
         >
           <div class="chat-msg__bubble">
-            <!-- Regular text content -->
-            <div v-if="msg.content" class="chat-msg__text">{{ msg.content }}</div>
+            <!-- Regular text content (rendered as markdown for assistant, plain for user) -->
+            <div v-if="msg.content" class="chat-msg__text" v-html="msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content"></div>
           </div>
         </div>
 
         <!-- Streaming text (current response being typed) -->
         <div v-if="currentStreamText" class="chat-msg chat-msg--assistant">
           <div class="chat-msg__bubble">
-            <div class="chat-msg__text">{{ currentStreamText }}</div>
+            <div class="chat-msg__text" v-html="renderMarkdown(currentStreamText)"></div>
             <span class="typing-cursor">|</span>
           </div>
         </div>
@@ -116,6 +116,7 @@ import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { showSuccessToast, showFailToast } from 'vant'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useLearningChat } from '@/composables/useLearningChat'
+import { renderMarkdown } from '@/utils/markdown'
 import { getSession, getTopicDetail, endSession, type SessionResponse, type TopicResponse } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 
@@ -146,6 +147,11 @@ const {
   sendMessage,
   disconnect,
 } = useLearningChat()
+
+// Filter out tool messages — only show assistant and user roles
+const visibleMessages = computed(() => {
+  return messages.value.filter(msg => msg.role === 'assistant' || msg.role === 'user')
+})
 
 const topicDisplayNameText = computed(() => {
   if (!topic.value) return ''
@@ -420,6 +426,65 @@ onUnmounted(() => {
   white-space: pre-wrap;
 }
 
+/* Markdown rendered content styles */
+.chat-msg__text :deep(strong) {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.chat-msg__text :deep(em) {
+  font-style: italic;
+}
+
+.chat-msg__text :deep(ul),
+.chat-msg__text :deep(ol) {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.chat-msg__text :deep(li) {
+  margin: 0.25em 0;
+}
+
+.chat-msg__text :deep(a) {
+  color: var(--color-primary, #3b82f6);
+  text-decoration: underline;
+}
+
+.chat-msg__text :deep(code) {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.chat-msg__text :deep(pre) {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 8px 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.chat-msg__text :deep(blockquote) {
+  border-left: 3px solid var(--color-hairline);
+  padding-left: 12px;
+  margin: 0.5em 0;
+  color: var(--color-body);
+}
+
+/* User message markdown inherits white text */
+.chat-msg--user .chat-msg__text :deep(strong),
+.chat-msg--user .chat-msg__text :deep(em),
+.chat-msg--user .chat-msg__text :deep(a),
+.chat-msg--user .chat-msg__text :deep(code) {
+  color: inherit;
+}
+
+.chat-msg--user .chat-msg__text :deep(code) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 .typing-cursor {
   display: inline-block;
   animation: blink 1s step-end infinite;
@@ -482,7 +547,12 @@ onUnmounted(() => {
 }
 
 .chat-input::placeholder {
-  color: var(--color-hairline);
+  color: var(--color-muted);
+}
+
+.chat-input:disabled::placeholder {
+  color: var(--color-muted-soft);
+  opacity: 0.8;
 }
 
 .chat-input:disabled {

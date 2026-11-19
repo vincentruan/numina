@@ -13,6 +13,7 @@ import { ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TeacherAvatar from './TeacherAvatar.vue'
 import { useTeachBack, type TeachBackTurn } from '@/composables/useTeachBack'
+import { renderMarkdown } from '@/utils/markdown'
 
 interface Props {
   topicId: string
@@ -112,7 +113,7 @@ onUnmounted(() => {
       <template v-for="msg in messages" :key="msg.id">
         <div v-if="msg.role === 'assistant'" class="teach-back-panel__msg teach-back-panel__msg--assistant">
           <div class="teach-back-panel__bubble teach-back-panel__bubble--assistant">
-            {{ msg.content }}
+            <div class="markdown-content" v-html="renderMarkdown(msg.content)"></div>
           </div>
         </div>
         <div v-else-if="msg.role === 'user'" class="teach-back-panel__msg teach-back-panel__msg--user">
@@ -247,6 +248,37 @@ onUnmounted(() => {
   background: var(--color-surface-card, #fff);
   color: var(--color-ink, #0a0a0a);
   border-top-left-radius: 2px;
+}
+
+/* Markdown rendered content */
+.teach-back-panel__bubble .markdown-content :deep(strong) {
+  font-weight: 600;
+}
+
+.teach-back-panel__bubble .markdown-content :deep(em) {
+  font-style: italic;
+}
+
+.teach-back-panel__bubble .markdown-content :deep(ul),
+.teach-back-panel__bubble .markdown-content :deep(ol) {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.teach-back-panel__bubble .markdown-content :deep(li) {
+  margin: 0.25em 0;
+}
+
+.teach-back-panel__bubble .markdown-content :deep(a) {
+  color: var(--color-primary, #3b82f6);
+  text-decoration: underline;
+}
+
+.teach-back-panel__bubble .markdown-content :deep(code) {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 0.9em;
 }
 
 .teach-back-panel__bubble--user {
