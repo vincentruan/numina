@@ -21,6 +21,7 @@ import QuickActions from './QuickActions.vue'
 import KnowledgeBridgeOverlay from './KnowledgeBridgeOverlay.vue'
 import { useSmartTutor } from '@/composables/useSmartTutor'
 import { renderMarkdown } from '@/utils/markdown'
+import IIcon from '@/components/IIcon.vue'
 
 interface Props {
   sessionId: string
@@ -123,7 +124,9 @@ const effectiveAgeGroup = computed(() => persona.value?.age_group ?? props.ageGr
     <div ref="chatContainer" class="smart-tutor-panel__chat">
       <!-- Start state -->
       <div v-if="!started" class="smart-tutor-panel__welcome">
-        <div class="smart-tutor-panel__welcome-icon">🎓</div>
+        <div class="smart-tutor-panel__welcome-icon">
+          <IIcon icon="mdi:school" :size="48" aria-hidden="true" />
+        </div>
         <p class="smart-tutor-panel__welcome-text">
           {{ t('learning.smart_tutor.welcome') }}
         </p>

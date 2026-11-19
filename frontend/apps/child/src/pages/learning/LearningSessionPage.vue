@@ -12,7 +12,9 @@
 
       <!-- Session topic info -->
       <div class="session-header">
-        <div class="session-header__icon">🎓</div>
+        <div class="session-header__icon">
+          <IIcon icon="mdi:school" :size="32" aria-label="学习会话" />
+        </div>
         <div class="session-header__info">
           <h2 class="session-header__title">{{ topicDisplayNameText }}</h2>
           <div class="session-header__meta">
@@ -33,9 +35,11 @@
       </div>
 
       <!-- Chat messages -->
-      <div class="chat-area" ref="chatAreaRef">
+      <div class="chat-area" ref="chatAreaRef" aria-live="polite" aria-relevant="additions">
         <div v-if="messages.length === 0 && !isStreaming" class="chat-empty">
-          <div class="chat-empty__icon">💬</div>
+          <div class="chat-empty__icon">
+            <IIcon icon="mdi:chat-processing-outline" :size="48" aria-hidden="true" />
+          </div>
           <p class="chat-empty__title">{{ t('learning.session.chatTitle') }}</p>
           <p class="chat-empty__desc">{{ t('learning.session.chatDesc') }}</p>
         </div>
@@ -119,6 +123,7 @@ import { useLearningChat } from '@/composables/useLearningChat'
 import { renderMarkdown } from '@/utils/markdown'
 import { getSession, getTopicDetail, endSession, type SessionResponse, type TopicResponse } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
+import IIcon from '@/components/IIcon.vue'
 
 const { t } = useI18n()
 const { topicDisplayName } = useLocalizedTopic()
@@ -260,7 +265,16 @@ onUnmounted(() => {
   font-size: 14px;
   color: var(--color-body);
   cursor: pointer;
-  padding: 4px 0;
+  padding: 8px 4px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.back-btn:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
 }
 
 .session-header {
@@ -343,6 +357,25 @@ onUnmounted(() => {
   overflow-y: auto;
   margin-bottom: 16px;
   padding: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.chat-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-area::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+.chat-area::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .chat-empty {
@@ -521,6 +554,12 @@ onUnmounted(() => {
   font-family: Inter, sans-serif;
   font-size: 13px;
   cursor: pointer;
+  min-height: 44px;
+}
+
+.btn-retry:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
 }
 
 /* Input area */
@@ -569,8 +608,13 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  min-height: 40px;
+  min-height: 44px;
   transition: transform 0.1s;
+}
+
+.chat-send-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .chat-send-btn:active {
@@ -600,6 +644,11 @@ onUnmounted(() => {
   cursor: pointer;
   min-height: 48px;
   transition: transform 0.1s;
+}
+
+.btn-finish:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
 }
 
 .btn-finish:active {

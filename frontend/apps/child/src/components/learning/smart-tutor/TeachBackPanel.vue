@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 import TeacherAvatar from './TeacherAvatar.vue'
 import { useTeachBack, type TeachBackTurn } from '@/composables/useTeachBack'
 import { renderMarkdown } from '@/utils/markdown'
+import IIcon from '@/components/IIcon.vue'
 
 interface Props {
   topicId: string
@@ -100,7 +101,9 @@ onUnmounted(() => {
     <div ref="chatContainer" class="teach-back-panel__chat">
       <!-- Start state -->
       <div v-if="!started" class="teach-back-panel__welcome">
-        <div class="teach-back-panel__welcome-icon">🧑‍🎓</div>
+        <div class="teach-back-panel__welcome-icon">
+          <IIcon icon="mdi:school" :size="48" aria-hidden="true" />
+        </div>
         <p class="teach-back-panel__welcome-text">
           {{ t('learning.teach_back.welcome') }}
         </p>
@@ -148,7 +151,9 @@ onUnmounted(() => {
 
       <!-- Eureka celebration -->
       <div v-if="teachBackSuccess && allConfusionsHit" class="teach-back-panel__eureka">
-        <div class="teach-back-panel__eureka-icon">🎉</div>
+        <div class="teach-back-panel__eureka-icon">
+          <IIcon icon="mdi:party-popper" :size="48" aria-hidden="true" />
+        </div>
         <p class="teach-back-panel__eureka-text">
           {{ t('learning.teach_back.eureka') }}
         </p>
