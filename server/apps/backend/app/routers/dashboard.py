@@ -10,6 +10,7 @@ from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import SessionLocal, get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
+from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.responses import SnowflakeResponse
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
@@ -46,6 +47,20 @@ from packages.core.logging import get_logger
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 logger = get_logger(__name__)
+
+
+def _check_ai_enabled(db: Session, family_id: int) -> None:
+    """Raise AI_NOT_ENABLED when the family's AI master switch is off."""
+    family = db.query(Family).filter(Family.id == family_id).first()
+    if not family or not family.ai_enabled:
+        raise AppError(ErrorCode.AI_NOT_ENABLED)
+
+
+def _check_narrative_enabled(db: Session, family_id: int) -> None:
+    """Raise AI_NOT_ENABLED when the family's narrative feature toggle is off."""
+    family = db.query(Family).filter(Family.id == family_id).first()
+    if not family or not family.narrative_enabled:
+        raise AppError(ErrorCode.AI_NOT_ENABLED)
 
 
 @router.get("/overview", response_model=OverviewResponse)
@@ -330,6 +345,13 @@ async def generate_narrative(
                 "reason": "insufficient_history",
             }
         )
+
+    # AI-enabled gate (only enforced on generation path, not cache reads).
+    # When no cache and thresholds pass, require ai_enabled + narrative_enabled
+    # before creating a new generation task. This allows cached results to be
+    # displayed even when the AI master switch or feature toggle is turned off.
+    _check_ai_enabled(db, int(family_id))
+    _check_narrative_enabled(db, int(family_id))
 
     # 3. Build context — uses request-scoped db for insights
     try:

@@ -9,6 +9,9 @@ export interface FamilySettings {
   education_reward_enabled: boolean
   coin_to_yuan_rate: number
   report_auto_generate_enabled: boolean
+  finance_coach_enabled: boolean
+  narrative_enabled: boolean
+  literacy_enabled: boolean
 }
 
 export function getFamily() {
@@ -51,6 +54,9 @@ export function updateFamilySettings(settings: {
   educationRewardEnabled?: boolean
   coinToYuanRate?: number
   reportAutoGenerateEnabled?: boolean
+  financeCoachEnabled?: boolean
+  narrativeEnabled?: boolean
+  literacyEnabled?: boolean
 }) {
   const body: Record<string, unknown> = {}
   if (settings.autoApproveHours !== undefined) body.auto_approve_hours = settings.autoApproveHours
@@ -60,6 +66,9 @@ export function updateFamilySettings(settings: {
   if (settings.educationRewardEnabled !== undefined) body.education_reward_enabled = settings.educationRewardEnabled
   if (settings.coinToYuanRate !== undefined) body.coin_to_yuan_rate = settings.coinToYuanRate
   if (settings.reportAutoGenerateEnabled !== undefined) body.report_auto_generate_enabled = settings.reportAutoGenerateEnabled
+  if (settings.financeCoachEnabled !== undefined) body.finance_coach_enabled = settings.financeCoachEnabled
+  if (settings.narrativeEnabled !== undefined) body.narrative_enabled = settings.narrativeEnabled
+  if (settings.literacyEnabled !== undefined) body.literacy_enabled = settings.literacyEnabled
   return http.patch<FamilySettings>('/family/settings', body)
 }
 

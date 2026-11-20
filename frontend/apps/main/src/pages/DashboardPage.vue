@@ -25,13 +25,13 @@
         </div>
 
         <!-- D2/A1a: finance_coach proactive suggestions card (Plan B T5) -->
-        <FinanceCoachCard />
+        <FinanceCoachCard v-if="familyStore.financeCoachEnabled" />
 
         <!-- U15+U17: Dashboard narrative — AI-generated monthly financial story -->
-        <DashboardNarrativeCard />
+        <DashboardNarrativeCard v-if="familyStore.narrativeEnabled" />
 
         <!-- Literacy weekly report status (per-child) -->
-        <LiteracyStatusCard ref="literacyStatusRef" />
+        <LiteracyStatusCard v-if="familyStore.literacyEnabled" ref="literacyStatusRef" />
 
         <!-- Smart Reminders (includes expiring soon + upcoming payments + rental reminders + idle + AI reminders) -->
         <SmartRemindersCard
@@ -83,6 +83,7 @@ import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
+import { useFamilyStore } from '@/stores/family'
 
 import { getUpcomingPayments, getUpcomingRentals } from '@/api/dashboard'
 import type { UpcomingPaymentItem, UpcomingRentalItem } from '@/api/dashboard'
@@ -114,6 +115,7 @@ const router = useRouter()
 const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
 const choreStore = useChoreStore()
+const familyStore = useFamilyStore()
 
 const { increment, decrement } = usePageLoading()
 const { checkFamilyChanges } = useMemberNotify()

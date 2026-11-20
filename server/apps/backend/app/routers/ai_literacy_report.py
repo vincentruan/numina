@@ -48,6 +48,13 @@ def _check_ai_enabled(db: Session, family_id: int) -> None:
         raise AppError(ErrorCode.AI_NOT_ENABLED)
 
 
+def _check_literacy_enabled(db: Session, family_id: int) -> None:
+    """Raise AI_NOT_ENABLED when the family's literacy report toggle is off."""
+    family = db.query(Family).filter(Family.id == family_id).first()
+    if not family or not family.literacy_enabled:
+        raise AppError(ErrorCode.AI_NOT_ENABLED)
+
+
 @router.post("/generate")
 async def trigger_generate(
     child_id: str = Query(..., description="Child user ID"),
@@ -85,6 +92,7 @@ async def trigger_generate(
 
     # AI-enabled gate (only enforced on generation path, not cache reads).
     _check_ai_enabled(db, current_user.family_id)
+    _check_literacy_enabled(db, current_user.family_id)
 
     report = await generate_literacy_report(
         db,
@@ -167,6 +175,7 @@ async def trigger_generate_events(
 
     # AI-enabled gate (only enforced on generation path, not cache reads).
     _check_ai_enabled(db, current_user.family_id)
+    _check_literacy_enabled(db, current_user.family_id)
 
     # Check if there's already a running task - resume it
     existing = AITaskService.get_running_task(current_user.family_id, SKILL_ID, db)

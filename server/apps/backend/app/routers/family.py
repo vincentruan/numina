@@ -426,6 +426,17 @@ def update_family_settings(
             family.ai_enabled = body.ai_enabled
             db.commit()
 
+    # Handle per-feature homepage toggles on Family model
+    family_for_features = db.query(Family).filter_by(id=user.family_id).first()
+    if body.finance_coach_enabled is not None and family_for_features:
+        family_for_features.finance_coach_enabled = body.finance_coach_enabled
+    if body.narrative_enabled is not None and family_for_features:
+        family_for_features.narrative_enabled = body.narrative_enabled
+    if body.literacy_enabled is not None and family_for_features:
+        family_for_features.literacy_enabled = body.literacy_enabled
+    if any([body.finance_coach_enabled is not None, body.narrative_enabled is not None, body.literacy_enabled is not None]):
+        db.commit()
+
     family_row = db.query(Family).filter_by(id=user.family_id).first()
 
     return FamilySettingsResponse(
@@ -436,6 +447,9 @@ def update_family_settings(
         education_reward_enabled=config.education_reward_enabled,
         coin_to_yuan_rate=config.coin_to_yuan_rate,
         report_auto_generate_enabled=family_row.report_auto_generate_enabled if family_row else False,
+        finance_coach_enabled=family_row.finance_coach_enabled if family_row else True,
+        narrative_enabled=family_row.narrative_enabled if family_row else True,
+        literacy_enabled=family_row.literacy_enabled if family_row else True,
     )
 
 
@@ -461,6 +475,9 @@ def get_family_settings(
         education_reward_enabled=config.education_reward_enabled,
         coin_to_yuan_rate=config.coin_to_yuan_rate,
         report_auto_generate_enabled=family_row.report_auto_generate_enabled if family_row else False,
+        finance_coach_enabled=family_row.finance_coach_enabled if family_row else True,
+        narrative_enabled=family_row.narrative_enabled if family_row else True,
+        literacy_enabled=family_row.literacy_enabled if family_row else True,
     )
 
 
