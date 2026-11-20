@@ -638,7 +638,8 @@ router.afterEach((_to) => {
   //
   // Timeout must exceed the page-mount delay so increment() always fires
   // before the timeout. 500ms covers a generous GC / scheduler buffer.
-  // (MainLayout no longer uses out-in Transition — removed to fix blank-screen.)
+  // (MainLayout uses bare KeepAlive — no Transition wrapper — to avoid
+  // Transition+KeepAlive+:key lifecycle conflicts that block tab switching.)
   const timeoutId = setTimeout(() => {
     completeGlobalLoading()
   }, 500)

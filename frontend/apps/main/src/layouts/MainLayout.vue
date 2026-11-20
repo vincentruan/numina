@@ -4,11 +4,9 @@
       {{ t('toast.networkError') }}
     </div>
     <router-view v-slot="{ Component }">
-      <Transition>
-        <KeepAlive :include="cachedTabs">
-          <component :is="Component" :key="$route.path" />
-        </KeepAlive>
-      </Transition>
+      <KeepAlive :include="cachedTabs">
+        <component :is="Component" />
+      </KeepAlive>
     </router-view>
     <AppTabBar />
     <Transition name="slide-up">
