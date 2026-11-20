@@ -307,6 +307,32 @@ Assertions:
 - [ ] The cell `:value` reflects the new currency
 - [ ] `[console]` zero errors
 
+**Settings → 备份/存储 导航交互闭环** (owner-only cells — `SettingsPage.vue:104-120`;
+demouser is owner per the gate). C4.10 only snapshot-checks these two routes;
+here we click the actual nav cell and assert the resulting route:
+
+```
+bsk navigate ${BASE}settings --session <id> --wait-until networkidle
+bsk snapshot --session <id>              # 定位 "备份与恢复" cell → @eN
+bsk click @eN --session <id>             # 点击 cell (to="/settings/family/backup")
+bsk wait-ms 1s
+bsk evaluate --session <id> "location.pathname"   # 期望 "/settings/family/backup"
+bsk snapshot --session <id>              # FamilyBackupPage 渲染 (不是空白/重定向回 /settings)
+
+bsk navigate ${BASE}settings --session <id> --wait-until networkidle
+bsk snapshot --session <id>              # 定位 "家庭远程备份"/远程存储 cell → @eM
+bsk click @eM --session <id>             # 点击 cell (to="/settings/family/storage")
+bsk wait-ms 1s
+bsk evaluate --session <id> "location.pathname"   # 期望 "/settings/family/storage"
+bsk snapshot --session <id>              # FamilyStorageBackendPage 渲染
+```
+
+Assertions (interaction — not just render):
+- [ ] 点击 Settings 页 "备份与恢复" cell → `location.pathname === '/settings/family/backup'`，页面显示 FamilyBackupPage（手动备份按钮/空态）
+- [ ] 点击 Settings 页 "家庭远程备份" cell → `location.pathname === '/settings/family/storage'`，页面显示 FamilyStorageBackendPage（S3/WebDAV 配置区）
+- [ ] 两个 cell 仅 owner 可见；若 demouser 非 owner 则记 `SKIP-ROLE` 并在报告注明，不得当作 fail
+- [ ] `[console]` zero errors
+
 ---
 
 ## Cross-tab invariants

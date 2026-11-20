@@ -409,9 +409,70 @@ Assertions:
 
 ### F.4.11b 备份与恢复页面
 
+> **交互验证案例 (interaction-driven)** — 此 case 必须走完 click → wait → assert 闭环，
+> 不能只靠 snapshot/screenshot 的渲染检查。页面加载时 `load()` 通过
+> `Promise.all([listBackups(), getStorageBackendStatus()])` 并发获取备份列表与存储状态，
+> 两个响应都返回后才设置 `storageConfigured` 并解除按钮 disabled
+> (`FamilyBackupPage.vue:241-256`)；`triggering` ref 驱动手动备份按钮的 loading
+> (`:loading="triggering"`, L29-37)，成功 Toast 后 `await load()` 刷新列表
+> (L265-267)，失败时展示错误 Toast (L268-278)。
+
 ```
 bsk navigate ${BASE}settings/family/backup --session <id> --wait-until networkidle
 bsk snapshot --session <id>
+# --- 时序验证：API 调用顺序 / 状态门控 ---
+bsk evaluate --session <id> "JSON.stringify(performance.getEntriesByType('resource').map(r=>r.name).filter(n=>n.includes('/backups')||n.includes('/family/storage/status')))"
+# 期望：/api/v1/import/backups 与 /api/v1/family/storage/status 均发出 (Promise.all 并发发起, 顺序不保证)
+# 使用 network-capable driver 时可查请求: mcp__chrome-devtools__list_network_requests
+# 断言：storage status 响应之前, 手动备份按钮不存在可点击态 (初始 storageConfigured=true 但 loading 中)
+# 若未配置存储后端 → status 返回 configured=false, 按钮变 disabled + 出现"去配置"提示
+
+# --- Path A: 未配置存储后端 → "去配置"按钮跳转 ---
+bsk snapshot --session <id>                      # 定位"去配置"按钮 @eN (仅 configured=false 时存在)
+bsk click @eN --session <id>                     # 点击 → $router.push({ name: 'FamilyStorageBackend' })
+bsk wait-ms 1s
+bsk evaluate --session <id> "location.pathname"   # 期望 "/settings/family/storage"
+bsk navigate ${BASE}settings/family/backup --session <id> --wait-until networkidle
+bsk snapshot --session <id>                      # 重新定位手动备份按钮 @eM
+
+# --- Path B: 已配置存储后端 → 手动备份 click → wait → assert ---
+bsk evaluate --session <id> "(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('手动备份')); return JSON.stringify({found:!!b,disabled:b?.disabled??null}); })()"
+# 期望 found=true, disabled=false (storageConfigured=true)
+bsk click @eM --session <id>                     # 手动备份
+bsk snapshot --session <id>                      # 立即 snapshot: 按钮应进入 loading 态 (van-button loading)
+bsk evaluate --session <id> "(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('手动备份')); return JSON.stringify({loading:!!b?.classList?.contains('van-button--loading'),disabled:b?.disabled??null}); })()"
+# 期望 loading=true (可能极快完成, 若已 done 则记为"未捕获 loading 态"但不 fail —后端同步返回时窗口很短)
+bsk wait-ms 2s
+bsk snapshot --session <id>                      # 成功 Toast "备份完成" + 列表新增/刷新
+bsk evaluate --session <id> "JSON.stringify([...document.querySelectorAll('.van-toast')].map(t=>t.textContent))"
+# 期望含 t('backup.backupSuccess')="备份完成" (成功路径)
+# 刷新验证: 列表首条 backup_date/状态更新, 或数量 +1
+
+# --- Path C: 失败路径 (错误 Toast + 错误文本) ---
+# 方式 1 (推荐, 不改配置): 用 API 层面直接 POST /api/v1/import/backup 在无后端时验证错误码
+bsk evaluate --session <id> "fetch('${API_BASE}/import/backup',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:'{}'}).then(async r=>({status:r.status,body:await r.json()}))"
+# 期望 status=422 + body.code='BACKUP_NO_STORAGE_BACKEND', message=中文错误提示
+# 方式 2 (状态漂移): 在 click 与响应之间 disable 后端, 使前端 storageConfigured 仍 true 但后端拒绝
+# 期望 showFailToast(err.response.data.message) 含后端 message; 按钮脱离 loading 恢复可重试
+```
+
+**临时配置测试后端 (当环境未配置存储后端时):**
+
+```bash
+# 真实 API 是 POST ${API_BASE}/family/storage (不是 /family/storage-backends),
+# owner-only, 需要 AUTH header。config 需匹配 backend_type。
+# WebDAV 示例 (base_url 不能是 localhost/127.0.0.1/回环 IP, 否则 422):
+curl -sf -X POST "${API_BASE}/family/storage" -H "$AUTH" \
+  -H 'Content-Type: application/json' \
+  -d '{"backend_type":"webdav","display_name":"sim-test-temp","is_active":true,"config":{"base_url":"http://nas.example.local/dav","username":"simtest","password":"simtest"}}'
+# 期望 201 + 响应含 id (string, SnowflakeBase)。每个家庭只能有 1 个后端,
+# 若已存在则 409 STORAGE_BACKEND_ALREADY_EXISTS — 先 GET /family/storage 查看。
+# 清理 (测试后 disable, 保留配置以便其他 case 使用):
+BACKEND_ID=$(curl -sf "${API_BASE}/family/storage" -H "$AUTH" | jq -r '.data.id')
+curl -sf -X PATCH "${API_BASE}/family/storage/${BACKEND_ID}" -H "$AUTH" \
+  -H 'Content-Type: application/json' -d '{"is_active":false}'
+# 或完整删除: curl -sf -X DELETE "${API_BASE}/family/storage/${BACKEND_ID}" -H "$AUTH"
+# 注意: 禁用/删除后需重新导航 (reload) 页面, storageConfigured 才会重新读取 status。
 ```
 
 Assertions:
@@ -421,6 +482,11 @@ Assertions:
 - [ ] 如未配置存储后端 → 显示"未配置远程存储"提示 + "去配置"按钮
 - [ ] 如已配置存储后端 → 手动备份按钮可点击
 - [ ] `[console]` zero errors
+- [ ] **交互**: 点击"去配置"按钮 → 跳转到 `/settings/family/storage` (`bsk evaluate "location.pathname"` 断言)
+- [ ] **交互**: 已配置存储后端时点击"手动备份" → 按钮进入 loading 态 (evaluate 检查 `van-button--loading`/disabled) → 等待响应
+- [ ] **结果**: 备份成功 → 成功 Toast "备份完成" + 列表刷新 (新记录出现/数量+1)
+- [ ] **结果**: 备份失败 → 错误 Toast + 后端错误文本 (`err.response.data.message`)，按钮脱离 loading 恢复可重试
+- [ ] **时序**: 页面加载时 `/api/v1/import/backups` + `/api/v1/family/storage/status` 两个 API 均发出 (`performance.getEntriesByType('resource')` 或 network list)；storage status 响应后按钮才脱离初始态（状态门控先于启用）
 
 ### F.4.12 用户名修改
 

@@ -170,6 +170,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 | **learning** | "learning test", "学习测试" | Area 16 + Area 17 (G3) + Area 18 (G1) + Area 19 (G1) + Area 20 (G1) — includes Smart Tutor (C17.22–C17.30) + 知识城堡 (C17.31–C17.35) + Teach-back (C17.36–C17.40) + 挑战类型 (C17.41–C17.43) + 先修诊断 (C17.44–C17.45) + 家长城堡 (C18.30–C18.33) + 课题方案 (C18.25–C18.28) | ~100-120 min |
 | **taste** | "taste review", "品味审查" | Phase 5.8 only (截图品味审查，需先有功能测试截图) | ~10-15 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
+| **settings** | "settings test", "设置测试", "备份测试", "backup test" | Area 8 F.4.1–F.4.12 + Area 4 settings 相关 case (C4.10–C4.11, 含备份/存储导航交互闭环) | ~15-20 min |
 | **settings-scheduled** | "定时任务测试", "scheduled task test", "测试定时任务" | Settings 定时任务：家庭管理入口、默认任务展示、统一列表、简洁/Cron 编辑 | ~8-12 min |
 
 **选择逻辑:**
@@ -179,7 +180,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 4. `smoke` 模式跳过 Area 1/5/7/8/9/10/11/12/14/15, 仅验证核心 adult 功能 + 币种回归 + 通知触发
 5. `ui-quality` 模式需要 adult + child 两个 session; 先跑 G0 前置, 再跑 Area 15
 7. `taste` 模式在功能测试 + UX 审查后执行品味审查 (Phase 5.8)，截图驱动
-6. 域别名（`child`/`finance`/`ai`/`regression`/`security`/`travel`/`ui-quality`）等同于对应的 Area 组合，执行路径与 `area-N` 相同——别名仅用于触发词匹配，不引入额外执行逻辑
+6. 域别名（`child`/`finance`/`ai`/`regression`/`security`/`travel`/`ui-quality`/`settings`）等同于对应的 Area 组合，执行路径与 `area-N` 相同——别名仅用于触发词匹配，不引入额外执行逻辑
 
 ---
 
@@ -381,6 +382,50 @@ Key concepts common to all drivers:
 - **Observation priority**: Accessibility tree / snapshot first; screenshot or raw HTML only when snapshot is insufficient
 - **Refs invalidate after navigation**: Always re-snapshot before interacting on a new page
 - **Mobile viewport**: Numina is mobile-first (375×812); set viewport if the driver supports it
+
+## 交互验证原则（Mandatory）
+
+> ⚠️ 截图 ≠ 功能验证。每个测试用例必须包含至少一个交互闭环。
+
+方法论背景：一次方法论评审发现 F.4.11b 的 6 条断言中 5 条是渲染检查 (83%)，
+全库纯渲染检查占比 75%，交互+状态验证仅 12%，时序/并发测试仅 2%。
+`/settings/family/backup` 的 bug 在多轮"声明覆盖"的 sim-test 中漏检，根因就是
+只验证"页面渲染了"而没有验证"点击后发生了什么"。以下原则对所有 Phase 的
+case 强制执行。
+
+**每个 case 的断言必须覆盖三个层次：**
+1. **渲染层** (Render) — DOM 元素是否存在（snapshot/screenshot）
+2. **交互层** (Interaction) — 点击/输入后是否正确响应（click → evaluate）
+3. **结果层** (Outcome) — API 响应/状态变更/Toast/跳转是否符合预期
+
+**错误路径必须测试：**
+- 每个 mutation 操作（创建/更新/删除/触发任务）必须验证成功 + 失败两条路径
+- 失败路径需验证：错误码/错误提示/状态回滚/按钮可重试
+
+**API 层面验证：**
+- 使用 `bsk evaluate` + `fetch` 直接调用 API 验证后端错误码
+- 使用 `bsk list_network_requests` 检查请求是否发出、响应状态码
+  （bsk 无该子命令时用 `mcp__chrome-devtools__list_network_requests`）
+- `[console] zero errors` 只捕获 JS 异常，不等同于 API 成功
+
+**时序验证：**
+- 异步操作需验证 loading → done/error 状态转换
+- 页面加载时的 API 调用顺序需验证（如：先检查权限/存储状态，再显示操作按钮）
+
+**标准闭环写法（写 case 时照抄）：**
+
+```
+bsk snapshot --session <id>                      # 1) 定位交互元素 ref
+bsk click @eN --session <id>                     # 2) 交互
+bsk snapshot --session <id>                      # 3) 立即观察 loading/disabled 变化
+bsk evaluate --session <id> "...DOM/route/state..."  # 4) 机器可判定的断言
+bsk wait-ms 2s                                   # 5) 等待异步完成
+bsk snapshot --session <id>                      # 6) 验证结果 Toast/列表/跳转
+bsk evaluate --session <id> "...fetch/response..."  # 7) API 结果层断言
+```
+
+> 报告时：只有渲染层断言的 case 必须标注 `[RENDER-ONLY]` 并说明为何无法交互
+> （如只读展示页），否则视为覆盖不足。
 
 ---
 

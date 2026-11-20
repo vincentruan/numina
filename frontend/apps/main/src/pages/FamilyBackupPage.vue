@@ -61,15 +61,6 @@
             >
               {{ t('backup.createFirst') }}
             </van-button>
-            <van-button
-              v-else
-              type="primary"
-              size="small"
-              plain
-              @click="$router.push({ name: 'FamilyStorageBackend' })"
-            >
-              {{ t('backup.goToStorage') }}
-            </van-button>
           </template>
         </van-empty>
 
