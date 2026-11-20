@@ -4717,6 +4717,9 @@ export default {
     restoreFilesPartial: '数据已恢复，{failed} 个文件失败',
     restoreFilesFailed: '数据已恢复，但文件恢复失败',
     restoreTimeout: '恢复超时，数据已提交',
+    noBackend: '未配置远程存储',
+    noBackendHint: '请先配置 GitHub 或 WebDAV 远程存储，再创建备份',
+    goToStorage: '去配置',
     table: {
       users: '用户',
       assets: '资产',

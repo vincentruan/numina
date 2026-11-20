@@ -30,18 +30,47 @@
           type="primary"
           block
           :loading="triggering"
+          :disabled="!storageConfigured"
           @click="onTrigger"
         >
           {{ t('backup.manualBackup') }}
         </van-button>
       </van-cell-group>
 
+      <!-- No storage backend hint -->
+      <van-cell-group v-if="!storageConfigured" inset class="section">
+        <div class="no-backend-hint">
+          <van-icon name="warning-o" size="24" color="#ee0a24" />
+          <p class="no-backend-text">{{ t('backup.noBackendHint') }}</p>
+          <van-button size="small" type="primary" plain @click="$router.push({ name: 'FamilyStorageBackend' })">
+            {{ t('backup.goToStorage') }}
+          </van-button>
+        </div>
+      </van-cell-group>
+
       <!-- Backup list -->
       <van-cell-group inset class="section">
         <van-empty v-if="!loading && backups.length === 0" :description="t('backup.noRecords')">
-          <van-button type="primary" size="small" :loading="triggering" @click="onTrigger">
-            {{ t('backup.createFirst') }}
-          </van-button>
+          <template #default>
+            <van-button
+              v-if="storageConfigured"
+              type="primary"
+              size="small"
+              :loading="triggering"
+              @click="onTrigger"
+            >
+              {{ t('backup.createFirst') }}
+            </van-button>
+            <van-button
+              v-else
+              type="primary"
+              size="small"
+              plain
+              @click="$router.push({ name: 'FamilyStorageBackend' })"
+            >
+              {{ t('backup.goToStorage') }}
+            </van-button>
+          </template>
         </van-empty>
 
         <template v-else>
@@ -140,6 +169,7 @@ import {
   type BackupRun,
   type RestorePreview,
 } from '@/api/backup'
+import { getStorageBackendStatus } from '@/api/storageBackend'
 import { useFamilyStore } from '@/stores/family'
 
 const { t } = useI18n()
@@ -149,6 +179,7 @@ const refreshing = ref(false)
 const loading = ref(true)
 const backups = ref<BackupRun[]>([])
 const triggering = ref(false)
+const storageConfigured = ref(true)
 
 const showConfirm = ref(false)
 const preview = ref<RestorePreview | null>(null)
@@ -219,8 +250,12 @@ function formatBytes(bytes: number | null): string {
 async function load() {
   loading.value = true
   try {
-    const res = await listBackups()
-    backups.value = res.data?.items ?? []
+    const [backupRes, storageRes] = await Promise.all([
+      listBackups(),
+      getStorageBackendStatus(),
+    ])
+    backups.value = backupRes.data?.items ?? []
+    storageConfigured.value = storageRes.data?.configured ?? true
   } catch {
     showFailToast(t('backup.loadFailed'))
   } finally {
@@ -230,6 +265,10 @@ async function load() {
 }
 
 async function onTrigger() {
+  if (!storageConfigured.value) {
+    showFailToast(t('backup.noBackend'))
+    return
+  }
   triggering.value = true
   try {
     await triggerBackup()
@@ -391,5 +430,17 @@ onMounted(load)
 .progress-body p {
   margin-top: 12px;
   color: var(--van-text-color-2, #969799);
+}
+.no-backend-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px;
+}
+.no-backend-text {
+  margin: 8px 0 12px;
+  color: var(--van-text-color-2, #969799);
+  font-size: 13px;
+  text-align: center;
 }
 </style>
