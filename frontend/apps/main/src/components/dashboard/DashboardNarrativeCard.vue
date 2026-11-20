@@ -450,19 +450,14 @@ function formatTime(iso: string | null): string {
               </span>
             </span>
 
-            <!-- Done: thinking elapsed time -->
-            <span v-else-if="generatedAt && thinkingElapsed > 0" class="narrative-status narrative-status--done">
-              {{ t('dashboard.narrative.thoughtFor', { duration: formattedElapsed }) }}
-            </span>
-
-            <!-- Done: generated time (cache hit, no elapsed tracked) -->
+            <!-- Done: generated (icon only) -->
             <span v-else-if="generatedAt" class="narrative-status narrative-status--done">
-              {{ t('dashboard.narrative.generatedAt', { time: formatTime(generatedAt) }) }}
+              <IIcon :icon="'lucide:check-circle-2'" size="16" class="narrative-status-icon narrative-status-icon--done" />
             </span>
 
-            <!-- Empty / blocked -->
+            <!-- Empty / blocked (icon only) -->
             <span v-else-if="blockReason || (!loading && !hasContent)" class="narrative-status narrative-status--empty">
-              {{ t('dashboard.narrative.empty') }}
+              <IIcon :icon="'lucide:circle-dashed'" size="16" class="narrative-status-icon narrative-status-icon--empty" />
             </span>
 
             <!-- Loading -->
@@ -692,7 +687,19 @@ function formatTime(iso: string | null): string {
   color: var(--text-secondary);
 }
 .narrative-status--empty {
-  opacity: 0.6;
+  opacity: 0.4;
+}
+.narrative-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.narrative-status-icon--done {
+  color: #52c41a;
+}
+.narrative-status-icon--empty {
+  color: var(--text-secondary);
 }
 .narrative-thinking-label {
   display: inline-flex;
