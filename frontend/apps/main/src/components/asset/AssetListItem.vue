@@ -254,6 +254,10 @@ const remainingLabel = computed(() =>
   flex-shrink: 0;
   overflow: hidden;
 }
+/* Dark mode: shift warm reds/oranges to cool tones to harmonize with navy bg. */
+[data-theme='dark'] .item-icon {
+  filter: hue-rotate(180deg) saturate(0.75) brightness(0.9);
+}
 .item-icon::before {
   content: '';
   position: absolute;

@@ -562,7 +562,10 @@ function cardAriaLabel(q: ResolvedWelcomeQuestion): string {
 }
 
 :global([data-theme='dark']) .card-index {
-  /* #bdbdff on dark bg — full opacity for ≥3:1 UI contrast */
+  /* Explicit lighter lavender for ≥4.5:1 text contrast on dark card bg.
+     --van-primary-color (#bdbbff) alone can be dimmed by card gradient;
+     boost to #d0d0ff for reliable WCAG AA on the dark suggestion cards. */
+  color: #d0d0ff;
   opacity: 1;
 }
 

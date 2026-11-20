@@ -272,6 +272,12 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
   overflow: hidden;
   flex-shrink: 0;
 }
+/* Dark mode: shift warm reds/oranges to cool tones to harmonize with navy bg.
+   hue-rotate(180deg) maps red→cyan, keeping categories distinguishable.
+   Desaturate slightly to avoid neon clash on dark backgrounds. */
+[data-theme='dark'] .card-icon {
+  filter: hue-rotate(180deg) saturate(0.75) brightness(0.9);
+}
 .card-icon::before {
   content: '';
   position: absolute;
