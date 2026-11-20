@@ -234,15 +234,17 @@ def setup_all_jobs() -> None:
 
     import os
 
-    disable_legacy = os.environ.get("DISABLE_LEGACY_REPORT_JOBS", "").lower() in (
+    # Legacy APScheduler report jobs (auto_report_job, literacy_report_weekly_job)
+    # were superseded by the DB-driven scheduled_tasks system. The DB poll job
+    # dispatches equivalent work with per-family granularity. Legacy jobs are
+    # retained behind an opt-in env var for rollback only.
+    enable_legacy = os.environ.get("ENABLE_LEGACY_REPORT_JOBS", "").lower() in (
         "true",
         "1",
         "yes",
     )
 
-    if disable_legacy:
-        logger.info("已跳过遗留报告任务（DISABLE_LEGACY_REPORT_JOBS=true）")
-    else:
+    if enable_legacy:
         # Job 8: Auto report generation — daily at 08:35
         scheduler.add_job(
             auto_report_job,

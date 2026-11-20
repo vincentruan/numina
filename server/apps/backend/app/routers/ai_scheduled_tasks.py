@@ -1,6 +1,3 @@
-from datetime import datetime
-
-from croniter import CroniterBadCronError, CroniterBadDateError
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -15,8 +12,8 @@ from apps.backend.app.schemas.scheduled_task import (
     ScheduledTaskResponse,
     ScheduledTaskUpdate,
 )
-from packages.core.cron import compute_next_run_at, is_valid_cron
-from packages.db.models.scheduled_task import ScheduledTask, ScheduledTaskStatus
+from apps.backend.app.services.scheduled_task import validate_cron_expression
+from packages.db.models.scheduled_task import ScheduledTask
 
 router = APIRouter(prefix="/ai/scheduled-tasks", tags=["ai-scheduled-tasks"])
 
@@ -26,22 +23,6 @@ def _validate_skill(skill_id: str) -> str:
     if skill not in ALLOWED_SCHEDULABLE_SKILLS:
         raise AppError(ErrorCode.SCHEDULED_TASK_SKILL_INVALID)
     return skill
-
-
-def _next_run_or_reject(cron_expression: str) -> tuple[str, datetime]:
-    """Normalize a cron expression and compute its next run.
-
-    Enforces the documented 5-field contract with ``is_valid_cron`` first,
-    because ``compute_next_run_at`` (croniter) silently accepts 6-field
-    expressions (with a seconds field) and macros like ``@daily``.
-    """
-    expression = cron_expression.strip()
-    if not is_valid_cron(expression):
-        raise AppError(ErrorCode.SCHEDULED_TASK_CRON_INVALID)
-    try:
-        return expression, compute_next_run_at(expression)
-    except (ValueError, KeyError, CroniterBadCronError, CroniterBadDateError):
-        raise AppError(ErrorCode.SCHEDULED_TASK_CRON_INVALID) from None
 
 
 def _get_family_task(db: Session, *, task_id: int, family_id: int) -> ScheduledTask:
@@ -63,7 +44,11 @@ def list_scheduled_tasks(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> ScheduledTaskListResponse:
-    """列出当前家庭的全部定时任务（仅 owner）。"""
+    """List all scheduled tasks for the current family (owner only).
+
+    Defaults are materialized at family creation; an empty list after explicit
+    deletion stays empty.
+    """
     tasks = (
         db.query(ScheduledTask)
         .filter(ScheduledTask.family_id == current_user.family_id)
@@ -81,17 +66,17 @@ def create_scheduled_task(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> ScheduledTaskResponse:
-    """创建定时任务（仅 owner）。"""
+    """Create a scheduled task (owner only)."""
     skill_id = _validate_skill(payload.skill_id)
-    cron_expression, next_run_at = _next_run_or_reject(payload.cron_expression)
+    cron_expression, next_run_at = validate_cron_expression(payload.cron_expression)
 
     task = ScheduledTask(
         family_id=current_user.family_id,
         skill_id=skill_id,
         cron_expression=cron_expression,
         is_enabled=payload.is_enabled,
+        is_default=False,
         next_run_at=next_run_at,
-        status=ScheduledTaskStatus.IDLE,
     )
     db.add(task)
     db.commit()
@@ -107,20 +92,23 @@ def update_scheduled_task(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> ScheduledTaskResponse:
-    """更新定时任务（仅 owner）。"""
+    """Update a scheduled task (owner only)."""
     task = _get_family_task(db, task_id=task_id, family_id=current_user.family_id)
 
     if payload.skill_id is not None:
         task.skill_id = _validate_skill(payload.skill_id)
 
     if payload.cron_expression is not None:
-        cron_expression, next_run_at = _next_run_or_reject(payload.cron_expression)
+        cron_expression, next_run_at = validate_cron_expression(payload.cron_expression)
         if cron_expression != task.cron_expression:
             task.cron_expression = cron_expression
             task.next_run_at = next_run_at
 
     if payload.is_enabled is not None:
         task.is_enabled = payload.is_enabled
+
+    # Any owner edit makes the task a family-specific configuration.
+    task.is_default = False
 
     db.commit()
     db.refresh(task)
@@ -134,7 +122,7 @@ def delete_scheduled_task(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> None:
-    """删除定时任务（仅 owner）。"""
+    """Delete a scheduled task (owner only)."""
     task = _get_family_task(db, task_id=task_id, family_id=current_user.family_id)
     db.delete(task)
     db.commit()

@@ -263,6 +263,7 @@ Assertions:
 for R in settings settings/categories settings/tags \
          settings/ai settings/ai/provider/new \
          settings/ai/mcp settings/ai/web-search settings/ai/skills settings/ai/agents settings/ai/agents/new \
+         settings/ai/scheduled settings/family/config \
          settings/devices settings/notifications settings/notifications/threshold \
          settings/password settings/second-factor settings/family/coin-rates; do
   bsk navigate ${BASE}${R} --session <id> --wait-until networkidle
@@ -276,6 +277,8 @@ Assertions (per route — render + no console error):
 - [ ] `/settings/ai` (AIConfigPage): draggable config list, API-key reveal/copy, per-slot test (`onTestModel` → `testSuccess`/`testFailed`), add/edit/delete, reset circuit; owner-only
 - [ ] `/settings/ai/provider/new` + `/:id/edit` (AIProviderFormPage): provider_name, api_key reveal/copy, base_url, timeout_seconds, max_tokens, per-slot model+capabilities pickers
 - [ ] `/settings/ai/mcp`, `/settings/ai/web-search` (+`/form`), `/settings/ai/skills`, `/settings/ai/agents` (+`/new`, `/:id/edit`)
+- [ ] `/settings/ai/scheduled` (ScheduledTasksPage): 统一列表无顶层页签；系统默认任务「资产报告」「识字周报」显示「默认」徽章； GET 无 500（详见 Area 22 FS.2–FS.3）
+- [ ] `/settings/family/config` (FamilyConfigPage): 家庭参数可编辑；旧「定时任务」滑块组已移除（详见 Area 22 FS.6）
 - [ ] `/settings/devices`, `/settings/notifications` (+`/threshold`)
 - [ ] `/settings/password`, `/settings/second-factor`
 - [ ] `/finance/import` (ImportReportPage: upload + parse + preview + confirm; `fileTooLarge` toast on `@oversize`)

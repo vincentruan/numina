@@ -170,6 +170,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 | **learning** | "learning test", "学习测试" | Area 16 + Area 17 (G3) + Area 18 (G1) + Area 19 (G1) + Area 20 (G1) — includes Smart Tutor (C17.22–C17.30) + 知识城堡 (C17.31–C17.35) + Teach-back (C17.36–C17.40) + 挑战类型 (C17.41–C17.43) + 先修诊断 (C17.44–C17.45) + 家长城堡 (C18.30–C18.33) + 课题方案 (C18.25–C18.28) | ~100-120 min |
 | **taste** | "taste review", "品味审查" | Phase 5.8 only (截图品味审查，需先有功能测试截图) | ~10-15 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
+| **settings-scheduled** | "定时任务测试", "scheduled task test", "测试定时任务" | Settings 定时任务：家庭管理入口、默认任务展示、统一列表、简洁/Cron 编辑 | ~8-12 min |
 
 **选择逻辑:**
 1. 用户未指定模式 → 默认 `full`
@@ -859,6 +860,7 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | **18 — Learning OS 家长端 + 端到端闭环 (Hub/推荐/路径/DNA/双轨审核/闭环/课题方案/家长城堡)** | **G1** | **C18.1–C18.33** | [`test-cases/groups/g1-adult-stable/area18-learning-os.md`](./test-cases/groups/g1-adult-stable/area18-learning-os.md) |
 | **20 — MCP external API token & governance (Token 生命周期/认证/审计/速率限制)** | **G1** | **M20.1–M20.15** | [`test-cases/groups/g1-adult-stable/area20-mcp-external-token.md`](./test-cases/groups/g1-adult-stable/area20-mcp-external-token.md) |
 | **21 — 前端品味审查 (taste review, 截图驱动)** | **G1** | **T21.1–T21.6** | [`references/phase-5-8-taste-review.md`](./references/phase-5-8-taste-review.md) |
+| **22 — Settings 定时任务 (统一列表/默认任务/编辑模式)** | **G1** | **FS.1–FS.7** | [`test-cases/groups/g1-adult-stable/area22-settings-scheduled.md`](./test-cases/groups/g1-adult-stable/area22-settings-scheduled.md) |
 
 ### Supporting References
 

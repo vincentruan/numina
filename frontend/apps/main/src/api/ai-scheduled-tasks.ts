@@ -11,6 +11,7 @@ export interface ScheduledTask {
   skill_id: string
   cron_expression: string
   is_enabled: boolean
+  is_default: boolean
   next_run_at: string
   last_run_at: string | null
   status: ScheduledTaskStatus

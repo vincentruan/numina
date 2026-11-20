@@ -77,6 +77,7 @@ Sim-test 用例按角色视角划分覆盖范围。`demouser` 默认角色为 **
 | `/family/chore-approvals` | ChoreApprovalsPage | — |
 | `/family/children/:childId/reset` | ChildResetPage | — |
 | `/settings/family/coin-rates`, `/settings/family/config`, `/settings/family/debt-thresholds`, `/settings/family/manifesto` | 家庭治理设置 | — |
+| `/settings/ai/scheduled` | ScheduledTasksPage (家庭管理入口；默认任务+自定义任务) | Settings |
 
 ### 来宾页面 (无需认证)
 
