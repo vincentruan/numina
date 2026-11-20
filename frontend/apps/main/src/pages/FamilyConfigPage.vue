@@ -9,6 +9,25 @@
     <van-skeleton v-if="loading" :row="8" class="skeleton" />
 
     <template v-else>
+      <!-- Homepage AI Feature Toggles -->
+      <van-cell-group inset :title="t('familyConfig.aiFeaturesGroup')" class="section">
+        <van-cell center :title="t('familyConfig.financeCoachEnabled')" :label="t('familyConfig.financeCoachEnabledDesc')">
+          <template #right-icon>
+            <van-switch v-model="financeCoachEnabled" size="20" @update:model-value="onFinanceCoachToggle" />
+          </template>
+        </van-cell>
+        <van-cell center :title="t('familyConfig.narrativeEnabled')" :label="t('familyConfig.narrativeEnabledDesc')">
+          <template #right-icon>
+            <van-switch v-model="narrativeEnabled" size="20" @update:model-value="onNarrativeToggle" />
+          </template>
+        </van-cell>
+        <van-cell center :title="t('familyConfig.literacyEnabled')" :label="t('familyConfig.literacyEnabledDesc')">
+          <template #right-icon>
+            <van-switch v-model="literacyEnabled" size="20" @update:model-value="onLiteracyToggle" />
+          </template>
+        </van-cell>
+      </van-cell-group>
+
       <!-- AI Cache Duration -->
       <van-cell-group inset :title="t('familyConfig.aiCacheGroup')" class="section">
         <van-cell>
@@ -91,63 +110,6 @@
               <van-slider v-model="form.dashboard_expiring_days_threshold" :min="7" :max="365" :step="7" @change="onSave" />
             </div>
             <div class="slider-scale"><span>7</span><span>182</span><span>365</span></div>
-          </template>
-        </van-cell>
-      </van-cell-group>
-
-      <!-- Scheduled Tasks (disabled note) -->
-      <van-cell-group inset :title="t('familyConfig.scheduledGroup')" class="section">
-        <van-cell :label="t('familyConfig.scheduledDisabled')" />
-        <van-cell>
-          <template #title>
-            <span>{{ t('familyConfig.monthlyReportDay') }}</span>
-            <span class="value">{{ form.scheduled_monthly_report_day }}</span>
-          </template>
-          <template #label>
-            <span class="desc">{{ t('familyConfig.monthlyReportDayDesc') }}</span>
-            <div class="slider-track">
-              <van-slider v-model="form.scheduled_monthly_report_day" :min="1" :max="28" :step="1" @change="onSave" />
-            </div>
-            <div class="slider-scale"><span>1</span><span>14</span><span>28</span></div>
-          </template>
-        </van-cell>
-        <van-cell>
-          <template #title>
-            <span>{{ t('familyConfig.monthlyReportHour') }}</span>
-            <span class="value">{{ form.scheduled_monthly_report_hour }} {{ t('familyConfig.unitHour') }}</span>
-          </template>
-          <template #label>
-            <span class="desc">{{ t('familyConfig.monthlyReportHourDesc') }}</span>
-            <div class="slider-track">
-              <van-slider v-model="form.scheduled_monthly_report_hour" :min="0" :max="23" :step="1" @change="onSave" />
-            </div>
-            <div class="slider-scale"><span>0</span><span>12</span><span>23</span></div>
-          </template>
-        </van-cell>
-        <van-cell>
-          <template #title>
-            <span>{{ t('familyConfig.weeklyScanDay') }}</span>
-            <span class="value">{{ dayLabels[form.scheduled_weekly_scan_day] }}</span>
-          </template>
-          <template #label>
-            <span class="desc">{{ t('familyConfig.weeklyScanDayDesc') }}</span>
-            <div class="slider-track">
-              <van-slider v-model="form.scheduled_weekly_scan_day" :min="0" :max="6" :step="1" @change="onSave" />
-            </div>
-            <div class="slider-scale"><span>0</span><span>3</span><span>6</span></div>
-          </template>
-        </van-cell>
-        <van-cell>
-          <template #title>
-            <span>{{ t('familyConfig.weeklyScanHour') }}</span>
-            <span class="value">{{ form.scheduled_weekly_scan_hour }} {{ t('familyConfig.unitHour') }}</span>
-          </template>
-          <template #label>
-            <span class="desc">{{ t('familyConfig.weeklyScanHourDesc') }}</span>
-            <div class="slider-track">
-              <van-slider v-model="form.scheduled_weekly_scan_hour" :min="0" :max="23" :step="1" @change="onSave" />
-            </div>
-            <div class="slider-scale"><span>0</span><span>12</span><span>23</span></div>
           </template>
         </van-cell>
       </van-cell-group>
@@ -259,7 +221,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { getFamilyConfig, updateFamilyConfig } from '@/api/config'
@@ -281,6 +243,9 @@ const coinToYuanRate = ref(1)
 const autoApproveHours = ref(0)
 const coinCopperToSilver = ref(10)
 const coinSilverToGold = ref(10)
+const financeCoachEnabled = ref(true)
+const narrativeEnabled = ref(true)
+const literacyEnabled = ref(true)
 
 const dayLabels = computed<string[]>(() => {
   const labels = t('familyConfig.dayLabels', { returnObjects: true }) as unknown
@@ -294,10 +259,6 @@ const form = ref({
   dashboard_min_asset_count: 5,
   dashboard_min_history_months: 1,
   dashboard_expiring_days_threshold: 180,
-  scheduled_monthly_report_day: 1,
-  scheduled_monthly_report_hour: 8,
-  scheduled_weekly_scan_day: 0,
-  scheduled_weekly_scan_hour: 8,
   literacy_report_day: 0,
   literacy_report_hour: 8,
   ai_cache_ttl_literacy_weekly_report: 10080,
@@ -394,6 +355,39 @@ function onAutoApproveChange() {
     })
 }
 
+function onFinanceCoachToggle() {
+  updateFamilySettings({ financeCoachEnabled: financeCoachEnabled.value })
+    .then(() => {
+      familyStore.financeCoachEnabled = financeCoachEnabled.value
+      showSuccessToast(t('toast.saveSuccess'))
+    })
+    .catch(() => {
+      showFailToast(t('toast.saveFailed'))
+    })
+}
+
+function onNarrativeToggle() {
+  updateFamilySettings({ narrativeEnabled: narrativeEnabled.value })
+    .then(() => {
+      familyStore.narrativeEnabled = narrativeEnabled.value
+      showSuccessToast(t('toast.saveSuccess'))
+    })
+    .catch(() => {
+      showFailToast(t('toast.saveFailed'))
+    })
+}
+
+function onLiteracyToggle() {
+  updateFamilySettings({ literacyEnabled: literacyEnabled.value })
+    .then(() => {
+      familyStore.literacyEnabled = literacyEnabled.value
+      showSuccessToast(t('toast.saveSuccess'))
+    })
+    .catch(() => {
+      showFailToast(t('toast.saveFailed'))
+    })
+}
+
 async function loadFamilyConfig() {
   loading.value = true
   try {
@@ -439,6 +433,9 @@ async function loadEducationSettings() {
     autoApproveHours.value = res.data.auto_approve_hours
     coinCopperToSilver.value = res.data.coin_copper_to_silver
     coinSilverToGold.value = res.data.coin_silver_to_gold
+    financeCoachEnabled.value = res.data.finance_coach_enabled
+    narrativeEnabled.value = res.data.narrative_enabled
+    literacyEnabled.value = res.data.literacy_enabled
   } catch {
     // non-critical
   }

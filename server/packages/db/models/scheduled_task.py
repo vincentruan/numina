@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, String, Text, func, true
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, String, Text, false, func, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
@@ -31,6 +31,9 @@ class ScheduledTask(Base):
     cron_expression: Mapped[str] = mapped_column(String(100), nullable=False)
     is_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=true(), nullable=False
+    )
+    is_default: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
     )
     next_run_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     last_run_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

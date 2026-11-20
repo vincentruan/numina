@@ -47,6 +47,19 @@ def member_headers(client, auth_headers, db):
     return {"Authorization": f"Bearer {token['access_token']}"}
 
 
+@pytest.fixture()
+def _clear_defaults(db, auth_headers):
+    """Remove the default scheduled tasks seeded at family registration.
+
+    Depends on auth_headers so registration (which seeds defaults) runs first.
+    """
+    from packages.db.models.scheduled_task import ScheduledTask
+
+    db.query(ScheduledTask).delete()
+    db.commit()
+
+
+@pytest.mark.usefixtures("_clear_defaults")
 class TestCreateScheduledTask:
     def test_creates_daily_task_with_utc_next_run(self, client, auth_headers):
         response = client.post(
@@ -103,6 +116,7 @@ class TestCreateScheduledTask:
         assert response.status_code == 403
 
 
+@pytest.mark.usefixtures("_clear_defaults")
 class TestListScheduledTasks:
     def test_empty_initially(self, client, auth_headers):
         response = client.get(BASE, headers=auth_headers)
@@ -136,6 +150,7 @@ class TestListScheduledTasks:
         }
 
     def test_scoped_to_callers_family(self, client, auth_headers, second_user_headers):
+        """Custom tasks created by one family are not visible to another family."""
         client.post(
             BASE,
             headers=auth_headers,
@@ -145,7 +160,11 @@ class TestListScheduledTasks:
         response = client.get(BASE, headers=second_user_headers)
 
         assert response.status_code == 200
-        assert _body(response)["items"] == []
+        items = _body(response)["items"]
+        # Second family has defaults seeded at registration, but not the custom task
+        # created by the first family. Verify no custom (is_default=False) tasks.
+        custom_tasks = [i for i in items if not i.get("is_default", True)]
+        assert custom_tasks == []
 
     def test_non_owner_cannot_list(self, client, member_headers):
         response = client.get(BASE, headers=member_headers)
@@ -153,6 +172,7 @@ class TestListScheduledTasks:
         assert response.status_code == 403
 
 
+@pytest.mark.usefixtures("_clear_defaults")
 class TestUpdateScheduledTask:
     def test_updates_cron_and_recomputes_next_run(self, client, auth_headers):
         created = _body(
@@ -264,6 +284,7 @@ class TestUpdateScheduledTask:
         assert response.status_code == 403
 
 
+@pytest.mark.usefixtures("_clear_defaults")
 class TestDeleteScheduledTask:
     def test_deletes_task(self, client, auth_headers):
         created = _body(
@@ -319,3 +340,51 @@ class TestDeleteScheduledTask:
         )
 
         assert response.status_code == 403
+
+
+class TestDefaultScheduledTasks:
+    """Defaults are seeded at family registration and marked is_default."""
+
+    def test_registration_seeds_defaults(self, client, auth_headers):
+        items = _body(client.get(BASE, headers=auth_headers))["items"]
+
+        assert len(items) == 2
+        skill_ids = {i["skill_id"] for i in items}
+        assert skill_ids == {"asset-report", "literacy-weekly-report"}
+        for item in items:
+            assert item["is_default"] is True
+            assert item["is_enabled"] is True
+            assert item["status"] == "idle"
+
+    def test_default_cron_matches_code_constants(self, client, auth_headers):
+        items = _body(client.get(BASE, headers=auth_headers))["items"]
+        by_skill = {i["skill_id"]: i for i in items}
+
+        # Daily 08:35 Asia/Shanghai (legacy auto_report_job alignment)
+        assert by_skill["asset-report"]["cron_expression"] == "35 8 * * *"
+        # Sunday 02:00 Asia/Shanghai (legacy literacy_report_weekly_job alignment)
+        assert by_skill["literacy-weekly-report"]["cron_expression"] == "0 2 * * 0"
+
+    def test_update_flips_is_default_to_false(self, client, auth_headers):
+        defaults = _body(client.get(BASE, headers=auth_headers))["items"]
+        default = next(i for i in defaults if i["skill_id"] == "asset-report")
+
+        response = client.put(
+            f"{BASE}/{default['id']}",
+            headers=auth_headers,
+            json={"is_enabled": False},
+        )
+
+        assert response.status_code == 200
+        data = _body(response)
+        assert data["is_default"] is False
+        assert data["is_enabled"] is False
+
+    def test_delete_all_stays_empty(self, client, auth_headers):
+        defaults = _body(client.get(BASE, headers=auth_headers))["items"]
+        for d in defaults:
+            response = client.delete(f"{BASE}/{d['id']}", headers=auth_headers)
+            assert response.status_code == 204
+
+        remaining = _body(client.get(BASE, headers=auth_headers))["items"]
+        assert remaining == []

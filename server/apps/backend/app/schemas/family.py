@@ -25,6 +25,9 @@ class FamilySettingsUpdate(BaseModel):
     education_reward_enabled: bool | None = None
     coin_to_yuan_rate: int | None = None
     report_auto_generate_enabled: bool | None = None
+    finance_coach_enabled: bool | None = None
+    narrative_enabled: bool | None = None
+    literacy_enabled: bool | None = None
 
     @field_validator("auto_approve_hours")
     @classmethod
@@ -56,6 +59,9 @@ class FamilySettingsResponse(BaseModel):
     education_reward_enabled: bool
     coin_to_yuan_rate: int
     report_auto_generate_enabled: bool
+    finance_coach_enabled: bool
+    narrative_enabled: bool
+    literacy_enabled: bool
     model_config = ConfigDict(from_attributes=True)
 
 

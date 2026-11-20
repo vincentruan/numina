@@ -49,6 +49,13 @@ def _check_ai_enabled(db: Session, family_id: int) -> None:
         raise AppError(ErrorCode.AI_NOT_ENABLED)
 
 
+def _check_finance_coach_enabled(db: Session, family_id: int) -> None:
+    """Raise AI_NOT_ENABLED when the family's finance coach toggle is off."""
+    family = db.query(Family).filter(Family.id == family_id).first()
+    if not family or not family.finance_coach_enabled:
+        raise AppError(ErrorCode.AI_NOT_ENABLED)
+
+
 @router.post("/generate")
 async def trigger_finance_coach(
     request: Request,
@@ -91,11 +98,12 @@ async def trigger_finance_coach(
     existing = AITaskService.get_running_task(current_user.family_id, SKILL_ID, db)
 
     # AI-enabled gate (only enforced on generation path, not cache reads).
-    # When no cache and no running task, require ai_enabled before creating
-    # a new generation task. This allows cached results to be displayed even
-    # when the AI master switch is turned off.
+    # When no cache and no running task, require ai_enabled + finance_coach_enabled
+    # before creating a new generation task. This allows cached results to be
+    # displayed even when the AI master switch or feature toggle is turned off.
     if not existing:
         _check_ai_enabled(db, current_user.family_id)
+        _check_finance_coach_enabled(db, current_user.family_id)
     if existing:
         # Already running — clear stale run_id (from auto-promote or previous
         # attempt) so trigger_and_stream can set a fresh one.  If the agent is

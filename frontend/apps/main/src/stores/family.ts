@@ -16,6 +16,10 @@ export const useFamilyStore = defineStore('family', () => {
   const coinToYuanRate = ref(1)
   // AI assistant master switch (family-level toggle, independent of provider configs)
   const aiEnabled = ref(false)
+  // Per-feature homepage toggles
+  const financeCoachEnabled = ref(true)
+  const narrativeEnabled = ref(true)
+  const literacyEnabled = ref(true)
 
   let _fetchPromise: Promise<void> | null = null
 
@@ -48,6 +52,9 @@ export const useFamilyStore = defineStore('family', () => {
       educationRewardEnabled.value = res.data.education_reward_enabled
       coinToYuanRate.value = res.data.coin_to_yuan_rate
       aiEnabled.value = res.data.ai_enabled
+      financeCoachEnabled.value = res.data.finance_coach_enabled
+      narrativeEnabled.value = res.data.narrative_enabled
+      literacyEnabled.value = res.data.literacy_enabled
     } catch {
       // Keep defaults on failure — non-critical
     }
@@ -81,6 +88,7 @@ export const useFamilyStore = defineStore('family', () => {
     family, members, loading,
     coinCopperToSilver, coinSilverToGold,
     educationRewardEnabled, coinToYuanRate, aiEnabled,
+    financeCoachEnabled, narrativeEnabled, literacyEnabled,
     fetchFamily, fetchMembers, loadCoinConfig,
     regenerateInviteCode, updateMemberRole, removeMember, updateFamilyTitle,
   }

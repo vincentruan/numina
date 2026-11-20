@@ -20,6 +20,7 @@ description: >
   "smart tutor test", "智能解题测试", "topic generator test", "课题方案测试",
   "castle test", "城堡测试", "teach-back test", "反转教学测试",
   "challenge test", "挑战类型测试", "diagnosis test", "诊断测试",
+  "taste review", "品味审查", "前端品味", "taste test",
   or any request to verify the deployed app's features.
 ---
 
@@ -64,6 +65,7 @@ Covers **twenty** feature areas (detailed cases split by area under
 17. **Learning OS core flows (child)** — 知识地图 / Topic 详情 / AI 导师对话 / 学习进度 / 今日学习卡片 / 自选学习难度提示 / Smart Tutor 苏格拉底解题 / 知识城堡 / Teach-back 反转教学 / 挑战类型生态 / 先修诊断 (C17.1–C17.45) ([`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md))
 18. **Learning OS (家长端 + 端到端闭环)** — 学习 Hub / 智能推荐 / 预设路径 / DNA图谱 / 双轨审核 / 来源标签 / 闭环流程 / 课题方案生成 / 家长端知识城堡 (C18.1–C18.33) ([`test-cases/groups/g1-adult-stable/area18-learning-os.md`](./test-cases/groups/g1-adult-stable/area18-learning-os.md))
 19. **MCP external API token & governance** — Token 生命周期 / 认证 / 两级访问控制 / 审计日志 / 速率限制 (M20.1–M20.15) ([`test-cases/groups/g1-adult-stable/area20-mcp-external-token.md`](./test-cases/groups/g1-adult-stable/area20-mcp-external-token.md))
+20. **前端品味审查** — 截图驱动的前端品味检查: 排版/布局/动效/视觉质感/文案 (T21.1–T21.6) ([`references/phase-5-8-taste-review.md`](./references/phase-5-8-taste-review.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching
@@ -166,7 +168,9 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 | **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.40, two files) | ~45-55 min |
 | **ui-quality** | "ui quality", "设计审查", "UI 质量检查" | Area 15 only (UIQ.1–UIQ.10) | ~25-35 min |
 | **learning** | "learning test", "学习测试" | Area 16 + Area 17 (G3) + Area 18 (G1) + Area 19 (G1) + Area 20 (G1) — includes Smart Tutor (C17.22–C17.30) + 知识城堡 (C17.31–C17.35) + Teach-back (C17.36–C17.40) + 挑战类型 (C17.41–C17.43) + 先修诊断 (C17.44–C17.45) + 家长城堡 (C18.30–C18.33) + 课题方案 (C18.25–C18.28) | ~100-120 min |
+| **taste** | "taste review", "品味审查" | Phase 5.8 only (截图品味审查，需先有功能测试截图) | ~10-15 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
+| **settings-scheduled** | "定时任务测试", "scheduled task test", "测试定时任务" | Settings 定时任务：家庭管理入口、默认任务展示、统一列表、简洁/Cron 编辑 | ~8-12 min |
 
 **选择逻辑:**
 1. 用户未指定模式 → 默认 `full`
@@ -174,6 +178,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 3. 用户明确指定某个 area 或功能域 → 跑对应的 area
 4. `smoke` 模式跳过 Area 1/5/7/8/9/10/11/12/14/15, 仅验证核心 adult 功能 + 币种回归 + 通知触发
 5. `ui-quality` 模式需要 adult + child 两个 session; 先跑 G0 前置, 再跑 Area 15
+7. `taste` 模式在功能测试 + UX 审查后执行品味审查 (Phase 5.8)，截图驱动
 6. 域别名（`child`/`finance`/`ai`/`regression`/`security`/`travel`/`ui-quality`）等同于对应的 Area 组合，执行路径与 `area-N` 相同——别名仅用于触发词匹配，不引入额外执行逻辑
 
 ---
@@ -564,6 +569,21 @@ screenshots from user perspective. Issues tagged `UI-EXP`.
 Skip in smoke mode.
 > **Agent template + orchestration:** [`references/phase-5-6-7-ui-audit.md`](./references/phase-5-6-7-ui-audit.md)
 
+### Phase 5.8 — Taste Review (前端品味审查)
+
+After functional cases + UX review complete, review all captured screenshots
+against frontend taste principles (adapted from `design-taste-frontend` skill).
+This is a **screenshot-driven** taste assessment, not a functional re-test.
+
+**Covers:** 排版/布局/动效/视觉质感/文案 — 5 dimensions, 9 principles.
+
+**When:** After every functional test round that produces screenshots. Runs
+after Phase 5.7 (UX review agent). Skipped in smoke mode.
+
+**TASTE-* failure codes** are used for taste issues (see failure taxonomy below).
+
+> **Details:** [`references/phase-5-8-taste-review.md`](./references/phase-5-8-taste-review.md)
+
 ---
 
 ## Phase 6 — Generate Test Report
@@ -646,7 +666,7 @@ the skill log.
 - 截图目录: dogfood-output/
 
 ## 成功摘要
-- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.8/F.11/F.12, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.40, Area15: UIQ.1–UIQ.10, Area16: C16.1–C16.14, Area17: C17.1–C17.45, Area18: C18.1–C18.33, Area20: M20.1–M20.15)
+- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.8/F.11/F.12, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.40, Area15: UIQ.1–UIQ.10, Area16: C16.1–C16.14, Area17: C17.1–C17.45, Area18: C18.1–C18.33, Area20: M20.1–M20.15, Area21: T21.1–T21.6)
 - 通过: X
 - 失败: Y
 - 跳过: Z (注明原因, 如 AI 未启用、数据不足)
@@ -680,6 +700,11 @@ the skill log.
 - 视口溢出: {N} 项 (列出 UI-OVERFLOW 用例)
 - 无障碍: {N} 项 (列出 UI-A11Y 用例)
 - 跨应用一致性: {通过/不通过} (UIQ.10 结论)
+
+## 品味审查 (Phase 5.8 — 仅当运行全量/功能测试后)
+- 审查截图数: {N}
+- TASTE-* 发现: {N} 项 (按 TASTE-GENERIC/TASTE-VISUAL/TASTE-TYPE/TASTE-LAYOUT/TASTE-MOTION/TASTE-COPY 分类列出)
+- 品味总结: {一句话}
 ```
 
 ### Writing rules
@@ -718,6 +743,12 @@ the skill log.
 | `UI-CONSIST` | 跨应用不一致 | 两个 app 的空态/骨架屏/Toast 风格不同 |
 | `UI-PROGRESS` | NProgress 回归 | 闪烁 / 卡住 / 滚动后不可见 |
 | `UI-EXP` | 体验审查发现 (Phase 5.7) | 输入输出正确但存在错位/图标丢失/交互不连贯等体验缺陷 |
+| `TASTE-GENERIC` | AI 生成感/模板感 | 整体看起来像模板生成，缺乏品牌特征 |
+| `TASTE-VISUAL` | 视觉缺失 | 缺少真实产品 UI，占位内容，空状态像通用素材 |
+| `TASTE-TYPE` | 排版品味 | 字体层级不清，标题风格花哨，行距异常 |
+| `TASTE-LAYOUT` | 布局失调 | 对齐不一致，间距不规律，内容偏左/偏右 |
+| `TASTE-MOTION` | 动效缺失/过度 | 缺少微交互，或动效过度干扰 |
+| `TASTE-COPY` | 文案品味 | 空洞形容词，中英文混排滥用，jargon 标题 |
 
 ### After writing
 
@@ -745,6 +776,11 @@ Your final response MUST contain the full report inline. Use this structure:
 - 预期表现: ...
 - 当前错误表现: ...
 - 初步判断: ...
+
+## 品味审查 (Phase 5.8)
+- 审查截图: {截图文件名列表}
+- 发现: {TASTE-* 表格}
+- 总结: {一句话}
 ```
 
 Also write to file if possible: `tests/reports/ui-audit-{date}.md`
@@ -823,6 +859,8 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | **17 — Learning OS core flows (child: 知识地图/Topic/AI 导师/进度/自选学习/Smart Tutor/城堡/Teach-back/挑战类型/诊断)** | **G3** | **C17.1–C17.45** | [`test-cases/groups/g3-child/area17-learning-os-core.md`](./test-cases/groups/g3-child/area17-learning-os-core.md) |
 | **18 — Learning OS 家长端 + 端到端闭环 (Hub/推荐/路径/DNA/双轨审核/闭环/课题方案/家长城堡)** | **G1** | **C18.1–C18.33** | [`test-cases/groups/g1-adult-stable/area18-learning-os.md`](./test-cases/groups/g1-adult-stable/area18-learning-os.md) |
 | **20 — MCP external API token & governance (Token 生命周期/认证/审计/速率限制)** | **G1** | **M20.1–M20.15** | [`test-cases/groups/g1-adult-stable/area20-mcp-external-token.md`](./test-cases/groups/g1-adult-stable/area20-mcp-external-token.md) |
+| **21 — 前端品味审查 (taste review, 截图驱动)** | **G1** | **T21.1–T21.6** | [`references/phase-5-8-taste-review.md`](./references/phase-5-8-taste-review.md) |
+| **22 — Settings 定时任务 (统一列表/默认任务/编辑模式)** | **G1** | **FS.1–FS.7** | [`test-cases/groups/g1-adult-stable/area22-settings-scheduled.md`](./test-cases/groups/g1-adult-stable/area22-settings-scheduled.md) |
 
 ### Supporting References
 
@@ -832,6 +870,7 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | [`references/ui-quality-checklist.md`](./references/ui-quality-checklist.md) | UI quality reference: design tokens, dark mode methodology, Vant4 patterns, accessibility checklist, cross-app consistency matrix |
 | [`references/phase-1-5-gate.md`](./references/phase-1-5-gate.md) | Precondition gate bash script (login, family, assets, AI, child auth checks) |
 | [`references/phase-5-6-7-ui-audit.md`](./references/phase-5-6-7-ui-audit.md) | UI audit case details (UIQ.1–10) + UX review agent template + orchestration rules |
+| [`references/phase-5-8-taste-review.md`](./references/phase-5-8-taste-review.md) | Taste review: 9 principles (from design-taste-frontend), anti-pattern catalog, screenshot review methodology |
 | [`references/phase-7-fix-workflow.md`](./references/phase-7-fix-workflow.md) | Fix workflow: dev-logs correlation, checklist generation, categorized commits |
 | [`test-cases/_common.md`](./test-cases/_common.md) | Shared conventions (session, refs, console capture, child injection) |
 | [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md) | Role capability matrix (owner/member/child 权限边界 + 页面清单) |
@@ -876,6 +915,8 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | Choosing docker mode just because `docker ps` shows containers Up | nginx may be in a restart loop with :80 dead (verified 2026-10-14). Docker-mode eligibility = `curl -sf http://localhost/` 200, nothing else |
 | Dev-mode probe matches a 5173 from a DIFFERENT repo/worktree | cwd check must be under `git rev-parse --show-toplevel` of the current repo — a vite from another checkout answers on 5173 but tests the wrong code |
 | Phase 7 fix loop in dev mode skips `.dev-logs` | Before localizing a fix, grep `server/.dev-logs/*-app.log` in the failure time window (±5 min); empty/missing dir = LOG=0 was on, note it, don't treat as test failure |
+| Taste review re-tests functionality | Phase 5.8 is screenshot-only — do not re-run browser commands. Review existing `dogfood-output/*.png` against the 9 principles |
+| Taste review flags Vant4 default styles as "template feel" | Vant4 default styling is the project's intentional choice — only flag deviations from the design system, not Vant4's built-in look |
 
 ### bsk-specific Mistakes (only when bsk is the active driver)
 
