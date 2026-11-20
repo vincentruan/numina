@@ -180,10 +180,12 @@ async def create_family_backup(
     user: User = Depends(require_owner),
 ):
     """Trigger an immediate backup and return its location."""
-    from packages.domain.backup.orchestrator import create_backup
+    from packages.domain.backup.orchestrator import NoStorageBackendError, create_backup
 
     try:
         run, _ = await create_backup(db, user.family_id, trigger_type="manual")
+    except NoStorageBackendError:
+        raise AppError(ErrorCode.BACKUP_NO_STORAGE_BACKEND) from None
     except Exception as exc:
         raise AppError(
             ErrorCode.BACKUP_FAILED, details={"reason": str(exc)}

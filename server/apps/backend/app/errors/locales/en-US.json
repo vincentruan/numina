@@ -75,6 +75,7 @@
   "IMPORT_FILE_TOO_LARGE": "File exceeds the size limit",
   "IMPORT_DRAFT_NOT_FOUND": "Import record not found",
   "BACKUP_FAILED": "Backup failed — check the storage backend configuration",
+  "BACKUP_NO_STORAGE_BACKEND": "Please configure a remote storage backend before creating a backup",
   "BACKUP_NOT_FOUND": "The requested backup was not found",
   "BACKUP_INVALID": "The backup data is invalid and cannot be restored",
   "IMPORT_ROLLBACK_EXPIRED": "Rollback period (30 days) has expired",

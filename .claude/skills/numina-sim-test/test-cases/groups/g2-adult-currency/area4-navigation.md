@@ -285,6 +285,7 @@ Assertions (per route — render + no console error):
 - [ ] `/settings/family/coin-rates` (CoinRatesPage)
 - [ ] `/settings/username` (ChangeUsernamePage: current username, remaining changes counter, cooldown, format validation)
 - [ ] `/settings/family/storage` (FamilyStorageBackendPage: S3/WebDAV config, enable/disable toggle)
+- [ ] `/settings/family/backup` (FamilyBackupPage: backup list, manual backup button, storage status hint)
 - [ ] **All `/settings/*` + `/family/*` routes show the `settings` tab active**
 - [ ] `[console]` zero errors across all routes
 

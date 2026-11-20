@@ -846,7 +846,7 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | 5 — Child app nav coverage (页签+子页面) | G3 | C5.1–C5.10 | [`test-cases/groups/g3-child/area5-child-navigation.md`](./test-cases/groups/g3-child/area5-child-navigation.md) |
 | 6 — AI chat DeerFlow parity (输入/输出/集成+设计出入) | G1 | C6.1–C6.27 (D1–D7) | [`test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md`](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md) |
 | **7 — Regression sweep (历史缺陷回归)** | **G1** | **R1–R9** | [`test-cases/groups/g1-adult-stable/area7-regression.md`](./test-cases/groups/g1-adult-stable/area7-regression.md) |
-| **8 — Expanded coverage (Manifesto/盲盒/Baby/Settings/Gift)** | **G1** | **F.1–F.8, F.11, F.12** | [`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md) |
+| **8 — Expanded coverage (Manifesto/盲盒/Baby/Settings/备份/Gift)** | **G1** | **F.1–F.8, F.11, F.11b, F.12** | [`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md) |
 | **9 — Security + notification (WebAuthn/2FA/通知)** | **G1** | **C9.1–C9.7** | [`test-cases/groups/g1-adult-stable/area9-security-notification.md`](./test-cases/groups/g1-adult-stable/area9-security-notification.md) |
 | **10 — Guest 端到端 (注册/邀请码/加入家庭)** | **G1** | **C10.1–C10.4** | [`test-cases/groups/g1-adult-stable/area10-guest-join-flow.md`](./test-cases/groups/g1-adult-stable/area10-guest-join-flow.md) |
 | **11 — AI/agent adversarial security (提示词注入/租户隔离/越权)** | **G1** | **C11.1–C11.20** | [`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md) |

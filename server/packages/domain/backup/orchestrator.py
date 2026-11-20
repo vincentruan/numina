@@ -28,6 +28,10 @@ logger = get_logger(__name__)
 BACKUP_ROOT = "backups"
 
 
+class NoStorageBackendError(Exception):
+    """Raised when a family has no active storage backend configured."""
+
+
 def _json_default(obj: Any) -> Any:
     """Fallback serializer for types that ``json.dumps`` cannot handle."""
     if isinstance(obj, (date, datetime, time)):
@@ -98,7 +102,7 @@ async def create_backup(
     try:
         backend = resolve_backend(db, family_id)
         if backend is None:
-            raise ValueError("该家庭没有启用的存储后端")
+            raise NoStorageBackendError("该家庭没有启用的存储后端")
         # Ask the backend to store it as-is; a payload over its limit must fail
         # loudly rather than be silently truncated or skipped.
         date_dir, _, filename = path.rpartition("/")

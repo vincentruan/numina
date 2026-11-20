@@ -139,6 +139,18 @@ class TestManualBackup:
         assert response.status_code == 502
         assert response.json()["code"] == "BACKUP_FAILED"
 
+    def test_no_storage_backend_returns_specific_error(self, client, owner_headers):
+        from packages.domain.backup.orchestrator import NoStorageBackendError
+
+        with patch(
+            "packages.domain.backup.orchestrator.create_backup",
+            new=AsyncMock(side_effect=NoStorageBackendError("该家庭没有启用的存储后端")),
+        ):
+            response = client.post("/api/v1/import/backup", headers=owner_headers)
+
+        assert response.status_code == 422
+        assert response.json()["code"] == "BACKUP_NO_STORAGE_BACKEND"
+
     def test_success_returns_backup_metadata(self, client, owner_headers):
         from types import SimpleNamespace
 

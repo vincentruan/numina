@@ -275,10 +275,14 @@ async function onTrigger() {
     showSuccessToast(t('backup.backupSuccess'))
     await load()
   } catch (e: unknown) {
-    showFailToast(
-      (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        t('backup.backupFailed'),
-    )
+    const err = e as { response?: { data?: { code?: string; message?: string } } }
+    const code = err?.response?.data?.code
+    if (code === 'BACKUP_NO_STORAGE_BACKEND') {
+      storageConfigured.value = false
+      showFailToast(t('backup.noBackend'))
+    } else {
+      showFailToast(err?.response?.data?.message ?? t('backup.backupFailed'))
+    }
   } finally {
     triggering.value = false
   }

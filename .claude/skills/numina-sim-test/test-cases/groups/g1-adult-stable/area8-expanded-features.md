@@ -407,6 +407,21 @@ Assertions:
 - [ ] 必填字段 (endpoint, bucket/prefix, access_key 等) 有 placeholder/label
 - [ ] `[console]` zero errors
 
+### F.4.11b 备份与恢复页面
+
+```
+bsk navigate ${BASE}settings/family/backup --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] FamilyBackupPage 渲染
+- [ ] 最近一次备份区域显示（有空态或最近备份记录）
+- [ ] 手动备份按钮可见
+- [ ] 如未配置存储后端 → 显示"未配置远程存储"提示 + "去配置"按钮
+- [ ] 如已配置存储后端 → 手动备份按钮可点击
+- [ ] `[console]` zero errors
+
 ### F.4.12 用户名修改
 
 ```
