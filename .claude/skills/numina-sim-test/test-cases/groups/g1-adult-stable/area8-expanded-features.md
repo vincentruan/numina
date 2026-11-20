@@ -324,7 +324,26 @@ bsk snapshot --session <id>
 Assertions:
 - [ ] 家庭配置页渲染 (经济参数等)
 - [ ] 配置项可编辑
+- [ ] **不再出现旧「定时任务」分组或月报/周扫滑块** (已统一至 `/settings/ai/scheduled`)
 - [ ] `[console]` zero errors
+
+### F.4.13 定时任务统一入口与系统默认任务 (owner-only)
+
+```
+bsk navigate ${BASE}settings --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+bsk navigate ${BASE}settings/ai/scheduled --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/f4.13-scheduled-tasks.png
+```
+
+Assertions:
+- [ ] `/settings` 「家庭管理」分组可见「定时任务」入口；「AI 助手设置」分组不再出现该入口
+- [ ] `/settings/ai/scheduled` 页面统一展示任务列表，无顶层「简洁模式 / Cron 模式」页签
+- [ ] 系统默认任务「资产报告」「识字周报」可见，显示「默认」徽章且默认开启
+- [ ] 编辑弹窗内可切换「简洁 / Cron」；不保存关闭后任务仍为默认
+- [ ] `[console]` zero errors；`GET /api/v1/ai/scheduled-tasks` 无 500
+- [ ] 详细用例见 Area 22 FS.1–FS.7
 
 ### F.4.7 币种汇率配置
 

@@ -38,6 +38,7 @@ from apps.backend.app.schemas.auth import (
 )
 from apps.backend.app.services.audit_log import write_audit_log
 from apps.backend.app.services.device import rotate_device_session_jti
+from apps.backend.app.services.scheduled_task import create_default_tasks_if_missing
 from apps.backend.app.services.security_log import (
     SecurityEventType,
     _log_security_event,
@@ -392,6 +393,10 @@ async def register(
         role="owner",
     )
     db.add(user)
+    db.commit()
+
+    # Seed the system-default scheduled tasks so DB is authoritative from day one.
+    create_default_tasks_if_missing(db, family_id=family_id)
     db.commit()
 
     # Create default backend MCP server for this family

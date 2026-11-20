@@ -28,6 +28,7 @@ class ScheduledTaskResponse(SnowflakeBase):
     skill_id: str
     cron_expression: str
     is_enabled: bool
+    is_default: bool = False
     next_run_at: datetime
     last_run_at: datetime | None = None
     status: str
