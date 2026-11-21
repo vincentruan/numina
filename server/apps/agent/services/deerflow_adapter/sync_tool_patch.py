@@ -201,10 +201,14 @@ def apply_sync_tool_patches() -> None:
             if family_id:
                 existing_names = {t.name for t in tools}
                 if "thread_search" not in existing_names:
-                    tools.append(build_thread_search_tool(family_id))
+                    search_tool = build_thread_search_tool(family_id)
+                    _ensure_sync_invocable_tool(search_tool)
+                    tools.append(search_tool)
                 if "thread_read" not in existing_names:
                     checkpointer = _get_shared_checkpointer(None)
-                    tools.append(build_thread_read_tool(checkpointer, family_id))
+                    read_tool = build_thread_read_tool(checkpointer, family_id)
+                    _ensure_sync_invocable_tool(read_tool)
+                    tools.append(read_tool)
         except Exception as e:  # noqa: BLE001 — tool-assembly must not break chat
             logger.warning(
                 "[sync_tool_patch] thread_search/thread_read append failed (continuing without): %s",
