@@ -166,6 +166,10 @@ const router = createRouter({
           redirect: '/finance?tab=travel',
         },
         {
+          path: 'rental',
+          redirect: '/finance?tab=rentals',
+        },
+        {
           path: 'travel/new',
           name: 'TravelCreate',
           component: () => import('@/pages/TravelFormPage.vue'),
@@ -311,6 +315,10 @@ const router = createRouter({
           component: () => import('@/pages/ScheduledTasksPage.vue')
         },
         {
+          path: 'settings/scheduled-tasks',
+          redirect: '/settings/ai/scheduled',
+        },
+        {
           path: 'settings/ai/agents',
           name: 'AgentsManage',
           component: () => import('@/pages/AgentsManagePage.vue')
@@ -395,6 +403,10 @@ const router = createRouter({
           // R16: old route redirects to new /finance/import (client-side redirect).
           path: 'settings/import-report',
           redirect: '/finance/import',
+        },
+        {
+          path: 'settings/family',
+          redirect: '/settings/family/members',
         },
         {
           path: 'settings/family/config',
