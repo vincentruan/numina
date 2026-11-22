@@ -67,7 +67,6 @@ Numina — 隐私优先、自托管的家庭资产可视化管理系统。帮助
 These supersede general defaults in this repo:
 
 - **Match user language.** Respond in the language used by the user in their prompt (e.g., Chinese if asked in Chinese, English if asked in English).
-- **Never run dev servers from automated agents.** `uvicorn` and `pnpm dev` block indefinitely. Use `pytest` and `typecheck` for verification.
 
 ## Repository Structure
 
