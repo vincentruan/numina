@@ -1,7 +1,5 @@
 # AGENTS.md
 
-AI coding agent guidance for this repository.
-
 **Language:** Match the user's language in their prompt (e.g., Chinese if asked in Chinese, English if asked in English).
 
 ## Project Overview
@@ -114,13 +112,7 @@ Format only files you touch. Do not run formatters on entire modules in a single
 
 This is a `pnpm` workspace (`pnpm-workspace.yaml`) for the frontend, and a `uv` workspace (single `pyproject.toml` at `server/`) for all Python apps. Use those tools — never `npm install` or `pip install` directly.
 
-### Frontend
-
-See [`frontend/AGENTS.md`](./frontend/AGENTS.md) §Commands.
-
-### Server
-
-See [`server/AGENTS.md`](./server/AGENTS.md) §Quality Commands.
+Module commands: [Frontend](./frontend/AGENTS.md) · [Server](./server/AGENTS.md)
 
 ### Docker (all services)
 
@@ -136,12 +128,7 @@ docker-compose down           # Stop all
 
 Verification is scoped to the module you changed. Run the commands its `AGENTS.md` defines before reporting completion, and state which commands you ran.
 
-| Area | Commands defined in |
-|------|---------------------|
-| Python apps + packages | [`server/AGENTS.md`](./server/AGENTS.md) §Quality Commands |
-| Frontend | [`frontend/AGENTS.md`](./frontend/AGENTS.md) §Commands |
-| Android shell | [`frontend/apps/android/AGENTS.md`](./frontend/apps/android/AGENTS.md) §Commands |
-| E2E / visual regression | [`tests/AGENTS.md`](./tests/AGENTS.md) §Commands |
+Test commands: [Python](./server/AGENTS.md) · [Frontend](./frontend/AGENTS.md) · [Android](./frontend/apps/android/AGENTS.md) · [E2E](./tests/AGENTS.md)
 
 Test locations: Python backend → `server/tests/backend/`, E2E/visual → `tests/e2e/` (specs) and `tests/visual/` (screenshots). New E2E specs go in `tests/e2e/`, shell runners in `tests/e2e/scripts/`.
 
