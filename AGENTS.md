@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents working with code in this reposi
 
 ## Project Overview
 
-Numina (Family Asset Visualization) is a privacy-first, self-hosted family asset visualization and management system. It helps families track, manage, and visualize their assets and liabilities across multiple members with role-based access control.
+Numina — 隐私优先、自托管的家庭资产可视化管理系统。帮助家庭跨成员跟踪、管理、可视化资产与负债，支持角色权限控制。
 
 **Tech Stack:**
 
@@ -14,22 +14,62 @@ Numina (Family Asset Visualization) is a privacy-first, self-hosted family asset
 | Frontend | Vue 3 + TypeScript + Vite + Vant 4 + ECharts |
 | Infrastructure | Docker Compose + Nginx |
 
-**Note:** This repo uses `AGENTS.md` files, not `CLAUDE.md`. Do not add a `CLAUDE.md` — it would shadow the `AGENTS.md` at the same level and silently skip it.
+> **Note:** 本仓库使用 `AGENTS.md`，不要创建 `CLAUDE.md` — 它会遮蔽同级 `AGENTS.md` 导致其失效。
+
+---
+
+## 协作底线
+
+始终生效，优先级最高。
+
+1. **结论先行。** 先给结论/结果，再给理由和步骤。短句白描，不空谈。
+2. **禁止迎合。** 发现逻辑漏洞、反例或风险直接指出，不绕弯、不附和。
+3. **未验证必须标注。** 没实际运行或核对过的内容标「未验证」；不编造数据、链接或结果。
+4. **不做需求之外的事。** 不擅自加功能、抽象或错误处理。复杂任务先确认使用场景、验收标准和「本次不做什么」再动工。
+5. **改局部先看上下游。** 修改前检查影响范围。同一问题基于同一前提连续两次修复失败 → 立刻停下查根因与底层假设，不再打补丁。
+6. **遇到阻碍先自救。** 外部工具受限、网络报错、依赖缺失 → 先在可控范围内尝试替代方案。确实硬阻断时再清晰说明卡点与需要你介入的具体一步；禁止把任务原样推回。
+7. **高风险操作必须谨慎。** 任何可能造成数据丢失、覆盖或外发的操作（哪怕只有一步）：写明影响范围 → 准备可回退方案 → 在副本上验证后再执行。
+
+---
+
+## 复杂任务工作流
+
+> 按需触发：产品立项、开放性方案、架构选型、重要决策、多步骤拆解、返工复盘。简单任务跳过。
+
+### 开工前
+
+- 对齐场景与验收标准（最多问 3 个关键问题）
+- 做减法：3 个以上功能点 → 挑 1-2 个主干，其余明确移出首版
+- 拆细到可独立验证
+
+### 方案期
+
+- 开放性问题给 2-3 个差异化方案，标短期/长期取舍
+- 改局部前查上下游影响
+- 优先可逆方案
+- 连续失败 → 强制熔断，回到根因
+
+### 交付前
+
+- 禁止迎合：逆向列出 2-3 个最易出错边界，优先验证
+- 大白话交接：核心逻辑、已验证、未验证
+
+### 收尾时
+
+- 顺利 → 不强行复盘
+- 有返工 → 简要复盘，提炼 1-2 条可执行检查项
+- 若已有检查清单 → 主动调用
+
+---
 
 ## Engineering Principles
 
 These supersede general defaults in this repo:
 
-- **State assumptions before coding.** If multiple interpretations exist, present them — don't pick silently. If a simpler approach exists, say so. If something is unclear, stop and ask.
 - **Match user language.** Respond in the language used by the user in their prompt (e.g., Chinese if asked in Chinese, English if asked in English).
-- **Surgical changes.** Touch only what the request requires. Don't refactor adjacent code, "improve" formatting, or delete pre-existing dead code. Match existing style, even if you'd do it differently. Do remove imports/variables that *your* changes left unused.
-- **Goal-driven verification.** "Fix bug" → reproduce with a failing test, then make it pass. "Refactor X" → tests pass before and after. "Add validation" → invalid-input test first.
-- **No work claimed done without evidence.** Run the module's quality commands (`pytest`, `typecheck`, `ruff check`) and confirm they pass. "Looks right" is not verification.
 - **Never run dev servers from automated agents.** `uvicorn` and `pnpm dev` block indefinitely. Use `pytest` and `typecheck` for verification.
 
 ## Repository Structure
-
-Repository layout — two workspaces plus supporting trees:
 
 ```
 numina/
@@ -46,7 +86,7 @@ Rules in this section apply to every module. Module files should reference them 
 
 All API endpoints must respond with 200 directly — no 307 redirects.
 
-**Rule:** `redirect_slashes=False` is set in `app/main.py`. All router root-path decorators must use `""` not `"/"`:
+`redirect_slashes=False` is set in `app/main.py`. All router root-path decorators must use `""` not `"/"`:
 ```python
 # ✅ Correct — hits 200 directly
 @router.get("")
@@ -76,10 +116,6 @@ JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts
 ### Incremental Formatting
 
 Format only files you touch. Do not run formatters on entire modules in a single commit.
-
-### No Speculative Code
-
-Don't add features, abstractions, or error handling beyond what was asked. No abstractions for single-use code. No error handling for impossible scenarios.
 
 ## Development Commands
 
