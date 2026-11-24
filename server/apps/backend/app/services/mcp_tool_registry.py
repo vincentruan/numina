@@ -952,10 +952,13 @@ def _validate_child_scope(name: str, meta: MCPToolMeta) -> None:
             f"'{meta.child_scope}' but its schema carries "
             f"(child_id, session_id)={actual_handles}"
         )
-    if "child" in meta.allowed_roles and any(actual_handles):
-        if meta.child_scope in ("none", "session_unscoped"):
-            raise RuntimeError(
-                f"MCP tool registry invalid: '{name}' is available to a child "
-                f"caller but declares child_scope='{meta.child_scope}', which "
-                "leaves its per-child handle unguarded"
-            )
+    if (
+        "child" in meta.allowed_roles
+        and any(actual_handles)
+        and meta.child_scope in ("none", "session_unscoped")
+    ):
+        raise RuntimeError(
+            f"MCP tool registry invalid: '{name}' is available to a child "
+            f"caller but declares child_scope='{meta.child_scope}', which "
+            "leaves its per-child handle unguarded"
+        )
