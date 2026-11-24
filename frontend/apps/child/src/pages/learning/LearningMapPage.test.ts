@@ -1,8 +1,17 @@
+/// <reference types="node" />
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import zhCN from '@/i18n/locales/zh-CN'
 import enUS from '@/i18n/locales/en-US'
+import pageSource from './LearningMapPage.vue?raw'
+import layoutSource from '../../layouts/ChildLayout.vue?raw'
+
+// vitest runs ESM, so resolve the colocated source paths from this module.
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // --- Mocks ---
 
@@ -493,10 +502,31 @@ describe('LearningMapPage — layout contract (#246)', () => {
     })
   })
 
-  it('renders the ocean inside the page root that reserves TabBar clearance', async () => {
-    const wrapper = mountPage()
-    await flushPromises()
-    const page = wrapper.find('.learning-map-page')
-    expect(page.findComponent({ name: 'KnowledgeOcean' }).exists()).toBe(true)
+  it('reserves TabBar clearance with --child-tabbar-height, not Vant\'s private variable', () => {
+    // R6: page uses 100dvh, not 100vh
+    expect(pageSource).toContain('100dvh')
+    expect(pageSource).not.toMatch(/min-height:\s*100vh\s*[;}]/)
+    // R8: padding-bottom reserves the TabBar band using the child-owned token
+    expect(pageSource).toContain('--child-tabbar-height')
+    expect(pageSource).toContain('env(safe-area-inset-bottom)')
+  })
+
+  it('clay.css defines the child-owned TabBar token', () => {
+    // ?raw doesn't work for .css in vitest (Vite injects CSS as stylesheets),
+    // so read the file directly.
+    const clay = readFileSync(resolve(__dirname, '../../assets/clay.css'), 'utf8')
+    expect(clay).toMatch(/--child-tabbar-height:\s*50px/)
+  })
+
+  it('no in-app source still references Vant\'s private tabbar height variable', () => {
+    // R7: --van-tabbar-height is declared nowhere in the repo, so the existing
+    // calc() relied on a Vant internal. Every in-app reference must use the
+    // child-owned token. The only allowed mention is the explanatory comment
+    // in clay.css.
+    const clay = readFileSync(resolve(__dirname, '../../assets/clay.css'), 'utf8')
+    const clayNoComment = clay.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(pageSource).not.toContain('--van-tabbar-height')
+    expect(layoutSource).not.toContain('--van-tabbar-height')
+    expect(clayNoComment).not.toContain('--van-tabbar-height')
   })
 })

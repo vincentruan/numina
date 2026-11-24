@@ -4,6 +4,7 @@ import { createI18n } from 'vue-i18n'
 import zhCN from '@/i18n/locales/zh-CN'
 import enUS from '@/i18n/locales/en-US'
 import SubjectTabs from './SubjectTabs.vue'
+import subjectTabsSource from './SubjectTabs.vue?raw'
 
 function mountTabs(tabs: Array<{ subject: string; count: number }>, selected = tabs[0]?.subject ?? '') {
   const i18n = createI18n({
@@ -42,5 +43,22 @@ describe('SubjectTabs — badge (#246 A)', () => {
     const wrapper = mountTabs([{ subject: 'biology', count: 358 }])
     const badge = wrapper.find('.subject-tab__badge')
     expect(badge.attributes('style')).toBeUndefined()
+  })
+
+  it('badge stylesheet declares no fixed height (regression guard)', () => {
+    // R1: a reintroduced `height: 20px` or `border-radius: 10px` would silently
+    // squash multi-digit counts again. Assert the scoped style block stays
+    // free of those fixed-size rules. happy-dom has no layout engine, so the
+    // inline-style test above covers runtime regressions; this one covers the
+    // stylesheet itself.
+    const styleMatch = subjectTabsSource.match(/<style[^>]*>([\s\S]*?)<\/style>/)
+    expect(styleMatch).not.toBeNull()
+    const css = styleMatch![1]
+    const badgeBlock = css.match(/\.subject-tab__badge\s*\{([^}]*)\}/)
+    expect(badgeBlock).not.toBeNull()
+    expect(badgeBlock![1]).not.toMatch(/(?:^|[^a-z-])height:\s*\d+px/)
+    expect(badgeBlock![1]).not.toMatch(/border-radius:\s*10px/)
+    expect(badgeBlock![1]).toMatch(/min-height:/)
+    expect(badgeBlock![1]).toMatch(/border-radius:\s*var\(--radius-pill\)/)
   })
 })
