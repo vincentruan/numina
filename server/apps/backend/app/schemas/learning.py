@@ -388,6 +388,26 @@ class ChildProgressOverview(BaseModel):
     today_study_minutes: int = 0
 
 
+class ParentChildLearningStats(SnowflakeBase):
+    """Parent-facing learning stats for a child (U1)."""
+
+    child_id: int
+    cumulative_xp: int
+    level: int
+    level_name_zh: str
+    level_name_en: str
+    level_emoji: str
+    next_level_threshold: int | None
+    next_level_name_zh: str | None
+    learning_streak_days: int
+    total_study_minutes: int
+    today_study_minutes: int
+    mastered_count: int
+    learning_count: int
+    available_count: int
+    review_count: int
+
+
 # --- Learning Path ---
 
 

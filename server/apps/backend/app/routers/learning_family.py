@@ -23,6 +23,7 @@ from apps.backend.app.schemas.learning import (
     ChildLearningOverview,
     ChildSessionLogResponse,
     ClusterResponse,
+    ParentChildLearningStats,
     PathCreate,
     PathResponse,
     ProgressResponse,
@@ -265,6 +266,53 @@ def get_child_sessions(
             )
         )
     return result
+
+
+@router.get("/children/{child_id}/learning-stats", response_model=ParentChildLearningStats)
+def get_child_learning_stats(
+    child_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get child's learning stats for parent view (U1)."""
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    # Get or create stats (KTD3: after ownership check)
+    stats = stats_service.get_or_create_stats(db, child_id, user.family_id)
+
+    # Get level info
+    level_info = stats_service.get_level_info(stats.level)
+
+    # Get progress counts
+    overview = progress_service.get_child_progress_overview(db, child_id)
+
+    # Get study minutes
+    minutes = progress_service.aggregate_study_minutes(db, child_id)
+
+    return ParentChildLearningStats(
+        child_id=child_id,
+        cumulative_xp=stats.cumulative_xp,
+        level=stats.level,
+        level_name_zh=level_info["name_zh"],
+        level_name_en=level_info["name_en"],
+        level_emoji=level_info["emoji"],
+        next_level_threshold=level_info["next_threshold"],
+        next_level_name_zh=level_info["next_level_name_zh"],
+        learning_streak_days=stats.learning_streak_days,
+        total_study_minutes=minutes["total_study_minutes"],
+        today_study_minutes=minutes["today_study_minutes"],
+        mastered_count=overview["mastered"],
+        learning_count=overview["learning"],
+        available_count=overview["available"],
+        review_count=overview["review"],
+    )
 
 
 @router.get("/children/{child_id}/recommendations", response_model=RecommendationPathResponse)
