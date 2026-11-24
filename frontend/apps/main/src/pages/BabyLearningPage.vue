@@ -365,6 +365,9 @@
                 </div>
                 <div v-else-if="recentActivityState === 'error'" class="progress-error">
                   <span>{{ t('learning.progressOverview.loadFailed') }}</span>
+                  <van-button size="mini" plain @click="reloadRecentActivity">
+                    {{ t('learning.progressOverview.retry') }}
+                  </van-button>
                 </div>
                 <div v-else-if="recentActivityRows.length === 0" class="progress-empty">
                   {{ t('learning.progressOverview.noActivity') }}
@@ -405,12 +408,12 @@
                     {{ t('learning.progressOverview.retry') }}
                   </van-button>
                 </div>
-                <div v-else-if="weakTopics.length === 0" class="progress-empty">
+                <div v-else-if="visibleWeakTopics.length === 0" class="progress-empty">
                   {{ t('learning.progressOverview.weakTopicsEmpty') }}
                 </div>
                 <template v-else>
                   <div
-                    v-for="wt in weakTopics.slice(0, 5)"
+                    v-for="wt in visibleWeakTopics.slice(0, 5)"
                     :key="wt.topic_id"
                     class="progress-weak-item"
                   >
@@ -617,7 +620,8 @@ const childMapFailed = ref(false)
 
 // Per-child resource loader: one data ref plus its own loading/error flags, so
 // a failing endpoint only affects its own sub-block. Responses that outlive a
-// child switch are discarded (rapid tab switching).
+// child switch OR a newer load are discarded (rapid tab switching, pull-to-refresh
+// during an in-flight load).
 function useChildResource<T>(fetcher: (childId: string) => Promise<T>, empty: T) {
   const data = ref(empty) as Ref<T>
   const loading = ref(false)
@@ -625,28 +629,32 @@ function useChildResource<T>(fetcher: (childId: string) => Promise<T>, empty: T)
   const state = computed<LoadState>(() =>
     loading.value ? 'loading' : error.value ? 'error' : 'content',
   )
+  let sequence = 0
 
   async function load(): Promise<void> {
     const childId = babyStore.selectedChildId
     if (!childId) return
+    const mine = ++sequence
     loading.value = true
     error.value = false
     try {
       const result = await fetcher(childId)
-      if (babyStore.selectedChildId !== childId) return
+      if (babyStore.selectedChildId !== childId || mine !== sequence) return
       data.value = result
     } catch {
-      if (babyStore.selectedChildId !== childId) return
+      if (babyStore.selectedChildId !== childId || mine !== sequence) return
       data.value = empty
       error.value = true
     } finally {
-      if (babyStore.selectedChildId === childId) loading.value = false
+      if (mine === sequence && babyStore.selectedChildId === childId) loading.value = false
     }
   }
 
   function reset(): void {
+    sequence++
     data.value = empty
     error.value = false
+    loading.value = false
   }
 
   return { data, loading, error, state, load, reset }
@@ -685,6 +693,12 @@ const recentActivityRows = computed(() =>
 
 const visibleSessions = computed(() =>
   practiceSessions.value.filter((s) => s.ended_at != null),
+)
+
+const visibleWeakTopics = computed(() =>
+  weakTopics.value.filter(
+    (wt) => (wt.topic_name_zh || wt.topic_name || '').trim() !== '',
+  ),
 )
 
 const actioningId = ref<string | null>(null)
@@ -989,9 +1003,45 @@ async function loadChildren() {
   }
 }
 
+// Recent activity re-fetch (error-state retry button). Same childMap + topic
+// cache population path as the page-level load.
+async function reloadRecentActivity(): Promise<void> {
+  const childId = babyStore.selectedChildId
+  if (!childId) return
+  childMapFailed.value = false
+  try {
+    sharedProgressRows.value = await getChildMap(childId)
+  } catch {
+    sharedProgressRows.value = []
+    childMapFailed.value = true
+    return
+  }
+  const ids = [
+    ...new Set(
+      sharedProgressRows.value
+        .filter((r) => r.last_practice_at != null)
+        .map((r) => r.topic_id),
+    ),
+  ]
+  const uncached = ids.filter((id) => !clusterMapTopicCache.value.has(id))
+  if (uncached.length > 0) {
+    try {
+      const topics = await getTopicsBatch(uncached)
+      if (babyStore.selectedChildId === childId) {
+        const next = new Map(clusterMapTopicCache.value)
+        for (const t of topics) next.set(t.id, t)
+        clusterMapTopicCache.value = next
+      }
+    } catch {
+      // Activity degrades to blank names; error branch itself is cleared.
+    }
+  }
+}
+
 async function loadChildDependentData() {
   const childId = babyStore.selectedChildId
-  // Fetch progress rows once — shared between DNA graph and cluster map
+  // Fetch progress rows once — shared between DNA graph, cluster map, and
+  // recent-activity list.
   if (childId) {
     childMapFailed.value = false
     try {
@@ -999,6 +1049,29 @@ async function loadChildDependentData() {
     } catch {
       sharedProgressRows.value = []
       childMapFailed.value = true
+    }
+  }
+  // Populate the shared topic cache for recent-activity topic names, so the
+  // list doesn't sit blank on a fresh visit (cluster view still fills it
+  // lazily with the full page, but activity only needs these ids).
+  const activityIds = [
+    ...new Set(
+      sharedProgressRows.value
+        .filter((r) => r.last_practice_at != null)
+        .map((r) => r.topic_id),
+    ),
+  ]
+  const uncached = activityIds.filter((id) => !clusterMapTopicCache.value.has(id))
+  if (childId && uncached.length > 0) {
+    try {
+      const topics = await getTopicsBatch(uncached)
+      if (babyStore.selectedChildId === childId) {
+        const next = new Map(clusterMapTopicCache.value)
+        for (const t of topics) next.set(t.id, t)
+        clusterMapTopicCache.value = next
+      }
+    } catch {
+      // Activity rows degrade to missing names; other blocks unaffected.
     }
   }
   dnaGraphLoading.value = true
@@ -1033,7 +1106,7 @@ watch(expandedModules, (modules) => {
     progressOverviewLoaded = true
     loadProgressOverview()
   }
-})
+}, { deep: true })
 
 async function loadData() {
   await Promise.all([

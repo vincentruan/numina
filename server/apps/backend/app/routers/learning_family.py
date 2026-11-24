@@ -296,22 +296,30 @@ def get_child_learning_stats(
     """Get child's learning stats for parent view."""
     child = _require_family_child(db, child_id, user)
 
-    stats = stats_service.get_or_create_stats(db, child.id, user.family_id)
-    level_info = stats_service.get_level_info(stats.level)
+    # Read-only path: list_children already handles a missing stats row with
+    # sensible defaults, and get_or_create_stats would INSERT+commit as a side
+    # effect of a GET — keep the write path reserved for XP awards.
+    stats = (
+        db.query(ChildLearningStats)
+        .filter(ChildLearningStats.child_id == child.id)
+        .first()
+    )
+    level = stats.level if stats else 1
+    level_info = stats_service.get_level_info(level)
     overview = progress_service.get_child_progress_overview(db, child.id)
     minutes = progress_service.aggregate_study_minutes(db, child.id)
 
     return ParentChildLearningStats(
-        child_id=child_id,
-        cumulative_xp=stats.cumulative_xp,
-        level=stats.level,
+        child_id=child.id,
+        cumulative_xp=stats.cumulative_xp if stats else 0,
+        level=level,
         level_name_zh=level_info["name_zh"],
         level_name_en=level_info["name_en"],
         level_emoji=level_info["emoji"],
         next_level_threshold=level_info["next_threshold"],
         next_level_name_zh=level_info["next_level_name_zh"],
         next_level_name_en=level_info["next_level_name_en"],
-        learning_streak_days=stats.learning_streak_days,
+        learning_streak_days=stats.learning_streak_days if stats else 0,
         total_study_minutes=minutes["total_study_minutes"],
         today_study_minutes=minutes["today_study_minutes"],
         mastered_count=overview["mastered"],
@@ -333,9 +341,7 @@ def get_child_weak_topics(
     weak_topics = practice_service.get_weak_topics(
         db=db,
         child_id=child.id,
-        limit=10,
-        min_attempts=3,
-        max_accuracy=0.6,
+        **practice_service.PARENT_WEAK_TOPIC_POLICY,
     )
 
     return [ParentWeakTopicItem(**wt) for wt in weak_topics]

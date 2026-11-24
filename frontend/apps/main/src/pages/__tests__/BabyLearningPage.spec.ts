@@ -9,7 +9,6 @@ import type {
   ParentChildLearningStats,
   ParentWeakTopicItem,
   ParentPracticeSessionItem,
-  ProgressResponse,
 } from '@/api/learning'
 
 function makeI18n(locale: 'zh-CN' | 'en-US' = 'zh-CN') {
@@ -108,24 +107,12 @@ vi.mock('@/stores/baby', () => ({
   }),
 }))
 
-function makeProgressResponse(overrides: Partial<ProgressResponse> = {}): ProgressResponse {
-  return {
-    id: '1',
-    child_id: '1001',
-    topic_id: '201',
-    mastery_level: 'learning',
-    mastery_score: 0.6,
-    completed_via: null,
-    attempts: 3,
-    xp_earned: 30,
-    last_practice_at: '2026-11-24T10:00:00Z',
-    first_mastered_at: null,
-    stability: null,
-    next_review_at: null,
-    ability_dimensions_score: null,
-    ...overrides,
-  }
-}
+import {
+  getChildLearningStats,
+  getChildWeakTopics,
+  getChildPracticeSessions,
+} from '@/api/learning'
+
 
 async function mountPage(locale: 'zh-CN' | 'en-US' = 'zh-CN') {
   const pinia = createPinia()
@@ -229,50 +216,51 @@ describe('BabyLearningPage - Progress Overview', () => {
     expect(page.expandedModules).not.toContain('progressOverview')
   })
 
-  it('mock data has correct shape', () => {
-    expect(mockStats.child_id).toBe('1001')
-    expect(typeof mockStats.cumulative_xp).toBe('number')
-    expect(mockWeakTopics[0].topic_id).toBe('201')
-    expect(typeof mockWeakTopics[0].accuracy).toBe('number')
-    expect(mockSessions[0].session_id).toBe('301')
-    expect(mockSessions[0].ended_at).toBeDefined()
+  it('renders the Learning Overview panel with mocked data when expanded', async () => {
+    vi.mocked(getChildLearningStats).mockResolvedValueOnce(mockStats)
+    vi.mocked(getChildWeakTopics).mockResolvedValueOnce(mockWeakTopics)
+    vi.mocked(getChildPracticeSessions).mockResolvedValueOnce(mockSessions)
+
+    const wrapper = await mountPage()
+    await flushPromises()
+    const page = wrapper.vm as unknown as { expandedModules: string[] }
+    page.expandedModules.push('progressOverview')
+    await flushPromises()
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('学习概览')
+    expect(text).toContain('花蕾')
+    expect(text).toContain('250')  // cumulative XP
+    expect(text).toContain('5')    // streak days
+    expect(text).toContain('分数') // weak topic name
+    expect(text).toContain('25%')  // weak topic accuracy
+    expect(text).toContain('80%')  // session score (0.8)
+    expect(text).toContain('5/5')  // session completed/total
+
+    expect(getChildLearningStats).toHaveBeenCalledWith('1001')
+    expect(getChildWeakTopics).toHaveBeenCalledWith('1001')
+    expect(getChildPracticeSessions).toHaveBeenCalledWith('1001', 10, 0)
   })
 
-  it('in-progress sessions have null ended_at', () => {
-    const inProgress: ParentPracticeSessionItem = {
-      ...mockSessions[0],
-      ended_at: null,
-    }
-    expect(inProgress.ended_at).toBeNull()
-  })
+  it('renders each sub-block independently on partial failure', async () => {
+    vi.mocked(getChildLearningStats).mockResolvedValueOnce(mockStats)
+    vi.mocked(getChildWeakTopics).mockRejectedValueOnce(new Error('fail'))
+    vi.mocked(getChildPracticeSessions).mockResolvedValueOnce(mockSessions)
 
-  it('recent activity rows can be derived from ProgressResponse[]', () => {
-    const rows: ProgressResponse[] = [
-      makeProgressResponse({ topic_id: '201', last_practice_at: '2026-11-24T10:00:00Z' }),
-      makeProgressResponse({ topic_id: '202', last_practice_at: '2026-11-24T11:00:00Z' }),
-      makeProgressResponse({ topic_id: '203', last_practice_at: null }),
-    ]
+    const wrapper = await mountPage()
+    await flushPromises()
+    const page = wrapper.vm as unknown as { expandedModules: string[] }
+    page.expandedModules.push('progressOverview')
+    await flushPromises()
+    await flushPromises()
 
-    const withActivity = rows.filter((r) => r.last_practice_at != null)
-    expect(withActivity.length).toBe(2)
-
-    const sorted = withActivity.sort((a, b) =>
-      (b.last_practice_at ?? '').localeCompare(a.last_practice_at ?? ''),
-    )
-    expect(sorted[0].topic_id).toBe('202')
-    expect(sorted[1].topic_id).toBe('201')
-  })
-
-  it('weak topics sorted by accuracy ascending', () => {
-    const sorted = [...mockWeakTopics].sort((a, b) => a.accuracy - b.accuracy)
-    expect(sorted[0].accuracy).toBeLessThanOrEqual(sorted[sorted.length - 1].accuracy)
-  })
-
-  it('stats ID fields are strings (SnowflakeBase)', () => {
-    expect(typeof mockStats.child_id).toBe('string')
-    expect(typeof mockWeakTopics[0].topic_id).toBe('string')
-    expect(typeof mockSessions[0].session_id).toBe('string')
-    expect(typeof mockSessions[0].topic_id).toBe('string')
+    const text = wrapper.text()
+    // Stats and sessions render despite weak-topics failure
+    expect(text).toContain('花蕾')
+    expect(text).toContain('80%')
+    // Weak-topics error branch renders its load-failed message
+    expect(text).toContain('加载失败')
   })
 })
 

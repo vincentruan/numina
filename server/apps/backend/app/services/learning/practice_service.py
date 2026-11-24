@@ -206,6 +206,16 @@ def get_session(db: Session, session_id: int) -> PracticeSession | None:
 # --- Phase 5: Weak points + history ---
 
 
+# Parent-view definition of "weak": at most 10 topics, at least 3 attempts,
+# accuracy strictly below 0.6. Kept in the service so the router has no magic
+# numbers and the child-facing endpoint keeps its own (no upper bound).
+PARENT_WEAK_TOPIC_POLICY: dict = {
+    "limit": 10,
+    "min_attempts": 3,
+    "max_accuracy": 0.6,
+}
+
+
 def get_weak_topics(
     db: Session,
     child_id: int,
@@ -215,10 +225,20 @@ def get_weak_topics(
 ) -> list[dict]:
     """Find topics where the child has low accuracy (sorted by accuracy ASC).
 
-    Only includes topics with >= min_attempts total attempts. When
-    ``max_accuracy`` is set, topics at or above that accuracy are excluded —
-    the parent view needs an upper bound so a barely-practised topic the child
-    happened to ace is not called "weak".
+    Args:
+        db: Active database session.
+        child_id: Child whose attempts to aggregate.
+        limit: Maximum topics returned (applied after sort).
+        min_attempts: Topics with fewer attempts are excluded.
+        max_accuracy: When set, topics at or above this accuracy are excluded;
+            compared as scaled integers to avoid float rounding at the
+            boundary. None disables the upper bound.
+
+    Returns:
+        List of dicts with topic_id, topic_name, topic_name_zh, total_attempts,
+        correct_attempts, accuracy (float), last_practice_at (datetime), and
+        mastery_level (from LearningProgress when present, else "available").
+        Sorted ascending by accuracy and sliced to ``limit``.
     """
     query = (
         db.query(

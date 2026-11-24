@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import zhCN from '@/i18n/locales/zh-CN'
 import enUS from '@/i18n/locales/en-US'
+import pageSource from './LearningProgressPage.vue?raw'
 
 // --- Mocks ---
 
@@ -91,6 +92,21 @@ describe('LearningProgressPage (U5)', () => {
     expect(wrapper.find('.sessions-section').exists()).toBe(false)
   })
 
+  it('source has no commented-out panel markers (regression guard)', () => {
+    const src = pageSource as string
+    const markers = [
+      'xp-level-section',
+      'stats-grid',
+      'study-section',
+      'activity-section',
+      'weak-topics-section',
+      'sessions-section',
+    ]
+    for (const marker of markers) {
+      expect(src).not.toContain(marker)
+    }
+  })
+
   it('calls getMyLearningMap but NOT getMyProgress or getMyLearningStats', async () => {
     await mountPage()
     expect(mockGetMyLearningMap).toHaveBeenCalled()
@@ -98,10 +114,14 @@ describe('LearningProgressPage (U5)', () => {
     expect(mockGetMyLearningStats).not.toHaveBeenCalled()
   })
 
-  it('heatmap uses locale for day labels', async () => {
-    const wrapper = await mountPage('en-US')
-    const dayLabels = wrapper.findAll('.streak-dot__day')
-    expect(dayLabels.length).toBe(7)
+  it('heatmap renders locale-aware day labels', async () => {
+    const zh = await mountPage('zh-CN')
+    const en = await mountPage('en-US')
+    const zhLabels = zh.findAll('.streak-dot__day').map((n) => n.text())
+    const enLabels = en.findAll('.streak-dot__day').map((n) => n.text())
+    expect(zhLabels).toHaveLength(7)
+    expect(enLabels).toHaveLength(7)
+    expect(zhLabels.join('')).not.toBe(enLabels.join(''))
   })
 
   it('has all required learning.progress keys', () => {
@@ -113,14 +133,5 @@ describe('LearningProgressPage (U5)', () => {
     expect(zhCN.learning.progress.recentActivity).toBeDefined()
     expect(zhCN.learning.progress.weakTopics).toBeDefined()
     expect(zhCN.learning.progress.recentSessions).toBeDefined()
-  })
-
-  it('does not contain commented-out panel markers in template', async () => {
-    const wrapper = await mountPage()
-    const html = wrapper.html()
-    expect(html).not.toContain('xp-level-section')
-    expect(html).not.toContain('stats-grid')
-    expect(html).not.toContain('weak-topics-section')
-    expect(html).not.toContain('sessions-section')
   })
 })

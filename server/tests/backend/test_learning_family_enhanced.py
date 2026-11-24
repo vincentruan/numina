@@ -221,10 +221,10 @@ class TestChildLearningStats:
         # Response ID fields are strings (Snowflake serialization)
         assert isinstance(data["child_id"], str)
 
-    def test_creates_stats_for_child_without_existing(
+    def test_returns_defaults_without_writing_when_stats_missing(
         self, db: Session, parent_children_family
     ):
-        """Child without stats row gets auto-created on first access."""
+        """Child without stats row gets defaults; the GET does NOT persist a row."""
         child_id = parent_children_family["child_ids"][1]  # Second child has no stats
 
         resp = parent_children_family["client"].get(
@@ -233,15 +233,15 @@ class TestChildLearningStats:
         )
         assert resp.status_code == 200
         data = resp.json()["data"]
-        
+
         # Defaults
         assert data["level"] == 1
         assert data["cumulative_xp"] == 0
         assert data["learning_streak_days"] == 0
-        
-        # Verify stats row was created
+
+        # Read-only: no stats row should be created by a GET.
         stats = db.query(ChildLearningStats).filter_by(child_id=child_id).first()
-        assert stats is not None
+        assert stats is None
 
     def test_rejects_cross_family_child(
         self, db: Session, parent_children_family, child_of_another_family
