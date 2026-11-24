@@ -128,8 +128,9 @@ describe('LearningTopicPage — curriculum badge and callout', () => {
     vi.clearAllMocks()
   })
 
-  it('renders badge and callout for a topic with one resolved standard', async () => {
+  it('renders stage tag and callout for a topic with one resolved standard', async () => {
     const wrapper = await mountPage({
+      locale: 'zh-CN',
       topic: baseTopic({
         curriculum_standards: [
           { key: 'S1.NA.02', name: '义务教育数学课程标准（2022年版）', code: 'S1.NA.02' },
@@ -137,8 +138,9 @@ describe('LearningTopicPage — curriculum badge and callout', () => {
       }),
     })
 
-    expect(wrapper.find('.curriculum-badge').exists()).toBe(true)
-    expect(wrapper.find('.curriculum-badge').text()).toBe('课')
+    // The tag speaks 学段, not the raw standard code.
+    expect(wrapper.find('.curriculum-tag').exists()).toBe(true)
+    expect(wrapper.find('.curriculum-tag').text()).toBe(zhCN.learning.curriculum.stage1)
 
     const callout = wrapper.find('.curriculum-callout')
     expect(callout.exists()).toBe(true)
@@ -153,7 +155,7 @@ describe('LearningTopicPage — curriculum badge and callout', () => {
       topic: baseTopic({ curriculum_standards: null }),
     })
 
-    expect(wrapper.find('.curriculum-badge').exists()).toBe(false)
+    expect(wrapper.find('.curriculum-tag').exists()).toBe(false)
     expect(wrapper.find('.curriculum-callout').exists()).toBe(false)
     wrapper.unmount()
   })
@@ -163,7 +165,7 @@ describe('LearningTopicPage — curriculum badge and callout', () => {
       topic: baseTopic({ curriculum_standards: [] }),
     })
 
-    expect(wrapper.find('.curriculum-badge').exists()).toBe(false)
+    expect(wrapper.find('.curriculum-tag').exists()).toBe(false)
     expect(wrapper.find('.curriculum-callout').exists()).toBe(false)
     wrapper.unmount()
   })
@@ -196,38 +198,39 @@ describe('LearningTopicPage — curriculum badge and callout', () => {
       }),
     })
 
-    expect(wrapper.find('.curriculum-badge').exists()).toBe(false)
+    expect(wrapper.find('.curriculum-tag').exists()).toBe(false)
     expect(wrapper.find('.curriculum-callout').exists()).toBe(false)
     wrapper.unmount()
   })
 
-  it('badge has a non-empty aria-label in both locales', async () => {
+  it('tag reads the 学段 prefix in both locales', async () => {
     const enWrapper = await mountPage({
       locale: 'en-US',
       topic: baseTopic({
         curriculum_standards: [
-          { key: 'k', name: 'Math Standard', code: 'M.01' },
+          { key: 'k', name: 'Math Standard', code: 'S2.NA.01' },
         ],
       }),
     })
 
-    const enBadge = enWrapper.find('.curriculum-badge')
-    expect(enBadge.attributes('aria-label')).toBeTruthy()
-    expect(enBadge.attributes('aria-label')).toBe(enUS.learning.curriculum.ariaLabel)
+    // S2 is 第二学段 -> grades 3-4, phrased for a child.
+    const enTag = enWrapper.find('.curriculum-tag')
+    expect(enTag.exists()).toBe(true)
+    expect(enTag.text()).toBe(enUS.learning.curriculum.stage2)
     enWrapper.unmount()
 
     const zhWrapper = await mountPage({
       locale: 'zh-CN',
       topic: baseTopic({
         curriculum_standards: [
-          { key: 'k', name: '数学标准', code: 'M.01' },
+          { key: 'k', name: '数学标准', code: 'S2.NA.01' },
         ],
       }),
     })
 
-    const zhBadge = zhWrapper.find('.curriculum-badge')
-    expect(zhBadge.attributes('aria-label')).toBeTruthy()
-    expect(zhBadge.attributes('aria-label')).toBe(zhCN.learning.curriculum.ariaLabel)
+    const zhTag = zhWrapper.find('.curriculum-tag')
+    expect(zhTag.exists()).toBe(true)
+    expect(zhTag.text()).toBe(zhCN.learning.curriculum.stage2)
     zhWrapper.unmount()
   })
 })

@@ -1,10 +1,10 @@
 # AGENTS.md
 
-This file provides guidance to AI coding agents working with code in this repository.
+**Language:** Match the user's language in their prompt (e.g., Chinese if asked in Chinese, English if asked in English).
 
 ## Project Overview
 
-Numina (Family Asset Visualization) is a privacy-first, self-hosted family asset visualization and management system. It helps families track, manage, and visualize their assets and liabilities across multiple members with role-based access control.
+Numina — privacy-first, self-hosted family asset visualization and management system. Helps families track, manage, and visualize assets and liabilities across members with role-based access control.
 
 **Tech Stack:**
 
@@ -14,22 +14,53 @@ Numina (Family Asset Visualization) is a privacy-first, self-hosted family asset
 | Frontend | Vue 3 + TypeScript + Vite + Vant 4 + ECharts |
 | Infrastructure | Docker Compose + Nginx |
 
-**Note:** This repo uses `AGENTS.md` files, not `CLAUDE.md`. Do not add a `CLAUDE.md` — it would shadow the `AGENTS.md` at the same level and silently skip it.
+---
 
-## Engineering Principles
+## Collaboration Baselines
 
-These supersede general defaults in this repo:
+Always active, highest priority.
 
-- **State assumptions before coding.** If multiple interpretations exist, present them — don't pick silently. If a simpler approach exists, say so. If something is unclear, stop and ask.
-- **Match user language.** Respond in the language used by the user in their prompt (e.g., Chinese if asked in Chinese, English if asked in English).
-- **Surgical changes.** Touch only what the request requires. Don't refactor adjacent code, "improve" formatting, or delete pre-existing dead code. Match existing style, even if you'd do it differently. Do remove imports/variables that *your* changes left unused.
-- **Goal-driven verification.** "Fix bug" → reproduce with a failing test, then make it pass. "Refactor X" → tests pass before and after. "Add validation" → invalid-input test first.
-- **No work claimed done without evidence.** Run the module's quality commands (`pytest`, `typecheck`, `ruff check`) and confirm they pass. "Looks right" is not verification.
-- **Never run dev servers from automated agents.** `uvicorn` and `pnpm dev` block indefinitely. Use `pytest` and `typecheck` for verification.
+1. **Conclusion first.** State conclusion/result first, then reasoning and steps. Short sentences, no fluff.
+2. **No sycophancy.** Point out logical flaws, counter-examples, or risks directly — don't hedge or agree just to please.
+3. **Mark unverified claims.** Content not actually run or verified must be labeled "unverified"; never fabricate data, links, or results.
+4. **Do nothing beyond scope.** Don't add features, abstractions, or error handling unprompted. For complex tasks, confirm use case, acceptance criteria, and "what we're NOT doing this time" before starting.
+5. **Check upstream/downstream before changing.** Inspect impact scope before modifying. If the same fix fails twice on the same premise → stop immediately, investigate root cause and underlying assumptions, no more patching.
+6. **Self-rescue on blockers.** External tool limits, network errors, missing deps → try alternatives within your control first. Only when truly blocked, clearly state the blocker and the specific step needing human intervention; never push the task back as-is.
+7. **High-risk operations require caution.** Any operation that could cause data loss, overwrite, or external transmission (even a single step): state impact scope → prepare rollback plan → verify on a copy before executing.
+
+---
+
+## Complex Task Workflow
+
+> Opt-in triggers: product planning, open-ended solutions, architecture decisions, important decisions, multi-step breakdowns, rework retrospectives. Skip for simple tasks.
+
+### Before starting
+
+- Align on scenario and acceptance criteria (ask at most 3 key questions)
+- Subtract: 3+ feature points → pick 1-2 core ones, explicitly defer the rest
+- Break down to independently verifiable units
+
+### During planning
+
+- For open questions, provide 2-3 differentiated options with short-term/long-term trade-offs
+- Check upstream/downstream impact before changing local parts
+- Prefer reversible solutions
+- Consecutive failures → forced circuit-breaker, return to root cause
+
+### Before delivery
+
+- No sycophancy: reverse-list 2-3 most error-prone edge cases, verify them first
+- Plain-language handoff: core logic, what's verified, what's not
+
+### After completion
+
+- Smooth sailing → no forced retrospective
+- Rework occurred → brief retrospective, extract 1-2 actionable check items
+- If a checklist already exists → proactively use it
+
+---
 
 ## Repository Structure
-
-Repository layout — two workspaces plus supporting trees:
 
 ```
 numina/
@@ -46,7 +77,7 @@ Rules in this section apply to every module. Module files should reference them 
 
 All API endpoints must respond with 200 directly — no 307 redirects.
 
-**Rule:** `redirect_slashes=False` is set in `app/main.py`. All router root-path decorators must use `""` not `"/"`:
+`redirect_slashes=False` is set in `app/main.py`. All router root-path decorators must use `""` not `"/"`:
 ```python
 # ✅ Correct — hits 200 directly
 @router.get("")
@@ -77,21 +108,11 @@ JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts
 
 Format only files you touch. Do not run formatters on entire modules in a single commit.
 
-### No Speculative Code
-
-Don't add features, abstractions, or error handling beyond what was asked. No abstractions for single-use code. No error handling for impossible scenarios.
-
 ## Development Commands
 
 This is a `pnpm` workspace (`pnpm-workspace.yaml`) for the frontend, and a `uv` workspace (single `pyproject.toml` at `server/`) for all Python apps. Use those tools — never `npm install` or `pip install` directly.
 
-### Frontend
-
-See [`frontend/AGENTS.md`](./frontend/AGENTS.md) §Commands.
-
-### Server
-
-See [`server/AGENTS.md`](./server/AGENTS.md) §Quality Commands.
+Module commands: [Frontend](./frontend/AGENTS.md) · [Server](./server/AGENTS.md)
 
 ### Docker (all services)
 
@@ -107,12 +128,7 @@ docker-compose down           # Stop all
 
 Verification is scoped to the module you changed. Run the commands its `AGENTS.md` defines before reporting completion, and state which commands you ran.
 
-| Area | Commands defined in |
-|------|---------------------|
-| Python apps + packages | [`server/AGENTS.md`](./server/AGENTS.md) §Quality Commands |
-| Frontend | [`frontend/AGENTS.md`](./frontend/AGENTS.md) §Commands |
-| Android shell | [`frontend/apps/android/AGENTS.md`](./frontend/apps/android/AGENTS.md) §Commands |
-| E2E / visual regression | [`tests/AGENTS.md`](./tests/AGENTS.md) §Commands |
+Test commands: [Python](./server/AGENTS.md) · [Frontend](./frontend/AGENTS.md) · [Android](./frontend/apps/android/AGENTS.md) · [E2E](./tests/AGENTS.md)
 
 Test locations: Python backend → `server/tests/backend/`, E2E/visual → `tests/e2e/` (specs) and `tests/visual/` (screenshots). New E2E specs go in `tests/e2e/`, shell runners in `tests/e2e/scripts/`.
 
@@ -145,14 +161,14 @@ The MCP server returns "not initialized." Ask: *"Want me to run `codegraph init 
 
 | Doc | Topic |
 |-----|-------|
-| [`three-state-circuit-breaker`](./docs/solutions/architecture-patterns/three-state-circuit-breaker-with-cascade-retry-2026-05-20.md) | 三态熔断器 + 多 Provider 级联重试 |
-| [`gateway-worker-responsibility-separation`](./docs/solutions/architecture-patterns/gateway-worker-responsibility-separation-2026-08-15.md) | Gateway/Worker 职责分离 |
-| [`two-ai-apps-unified-dispatch`](./docs/solutions/architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) | 双 AI 应用统一 dispatch |
-| [`unified-data-root-path`](./docs/solutions/architecture-patterns/unified-data-root-path-management-2026-05-17.md) | DATA_ROOT 统一路径管理 |
-| [`ai-task-page-leave-continuity`](./docs/solutions/architecture-patterns/ai-task-page-leave-continuity-2026-08-21.md) | AI 任务页面离开连续性 |
-| [`nginx-proxy-buffer`](./docs/solutions/integration-issues/nginx-proxy-buffer-sizing-frontend-assets.md) | Nginx 代理缓冲区 (大 JS/CJK 字体) |
-| [`nginx-stale-dns`](./docs/solutions/integration-issues/nginx-stale-dns-upstream-cache.md) | Nginx DNS 缓存过期导致 502 |
-| [`production-deployment-config`](./docs/solutions/integration-issues/production-deployment-config-mismatches.md) | 生产部署配置不匹配 (CSP/pool/volume) |
-| [`basehttpmiddleware-exception`](./docs/solutions/runtime-errors/basehttpmiddleware-exception-bypasses-fastapi-handlers.md) | BaseHTTPMiddleware 异常绕过 FastAPI 处理器 |
+| [`three-state-circuit-breaker`](./docs/solutions/architecture-patterns/three-state-circuit-breaker-with-cascade-retry-2026-05-20.md) | Three-state circuit breaker + multi-provider cascade retry |
+| [`gateway-worker-responsibility-separation`](./docs/solutions/architecture-patterns/gateway-worker-responsibility-separation-2026-08-15.md) | Gateway/Worker responsibility separation |
+| [`two-ai-apps-unified-dispatch`](./docs/solutions/architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) | Unified dispatch for two AI apps |
+| [`unified-data-root-path`](./docs/solutions/architecture-patterns/unified-data-root-path-management-2026-05-17.md) | DATA_ROOT unified path management |
+| [`ai-task-page-leave-continuity`](./docs/solutions/architecture-patterns/ai-task-page-leave-continuity-2026-08-21.md) | AI task page-leave continuity |
+| [`nginx-proxy-buffer`](./docs/solutions/integration-issues/nginx-proxy-buffer-sizing-frontend-assets.md) | Nginx proxy buffer sizing (large JS/CJK fonts) |
+| [`nginx-stale-dns`](./docs/solutions/integration-issues/nginx-stale-dns-upstream-cache.md) | Nginx stale DNS cache causing 502 |
+| [`production-deployment-config`](./docs/solutions/integration-issues/production-deployment-config-mismatches.md) | Production deployment config mismatches (CSP/pool/volume) |
+| [`basehttpmiddleware-exception`](./docs/solutions/runtime-errors/basehttpmiddleware-exception-bypasses-fastapi-handlers.md) | BaseHTTPMiddleware exception bypasses FastAPI handlers |
 
 Domain-specific solutions: see [`server/AGENTS.md`](./server/AGENTS.md) §Solutions, [`frontend/AGENTS.md`](./frontend/AGENTS.md) §Solutions, [`tests/AGENTS.md`](./tests/AGENTS.md) §Solutions.

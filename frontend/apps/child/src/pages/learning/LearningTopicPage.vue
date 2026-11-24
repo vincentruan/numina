@@ -3,37 +3,23 @@
     <RoleShimmer v-if="loading" variant="clay-pulse" />
 
     <template v-else-if="topic">
-      <!-- Breadcrumb -->
-      <div class="breadcrumb">
-        <button class="breadcrumb__back" @click="goBack" :aria-label="t('learning.backToMap')">
-          {{ t('learning.backToMap') }}
+      <!-- Simplified top bar — back arrow + subject name -->
+      <div class="top-bar">
+        <button class="top-bar__back" @click="goBack" :aria-label="t('learning.backToMap')">
+          <IIcon icon="lucide:chevron-left" size="20" />
         </button>
+        <span class="top-bar__subject">{{ subjectLabel(topic.subject) }}</span>
       </div>
 
-      <div class="breadcrumb__trail">
-        <span class="breadcrumb__item" @click="goBack">{{ t('learning.title') }}</span>
-        <span class="breadcrumb__sep">/</span>
-        <span class="breadcrumb__item">{{ subjectLabel(topic.subject) }}</span>
-        <span v-if="topic.domain" class="breadcrumb__sep">/</span>
-        <span v-if="topic.domain" class="breadcrumb__item breadcrumb__item--active">{{ translateDomain(t, topic.domain) }}</span>
-      </div>
-
-      <!-- Topic title row with curriculum badge -->
+      <!-- Topic title row with curriculum friendly tag -->
       <div class="topic-title-row">
         <h1 class="topic-title">{{ displayName }}</h1>
-        <span
-          v-if="firstResolvedStandard"
-          class="curriculum-badge"
-          :aria-label="t('learning.curriculum.ariaLabel')"
-        >{{ t('learning.curriculum.badgeGlyph') }}</span>
+        <span v-if="firstResolvedStandard" class="curriculum-tag">
+          {{ curriculumFriendlyLabel(firstResolvedStandard) }}
+        </span>
       </div>
 
-      <!-- Curriculum standard callout -->
-      <div v-if="firstResolvedStandard" class="curriculum-callout">
-        {{ firstResolvedStandard.name }} · {{ firstResolvedStandard.code }}
-      </div>
-
-      <!-- Mastery progress bar -->
+      <!-- Mastery progress bar — compact -->
       <div v-if="progress" class="mastery-section">
         <div class="mastery-header">
           <span class="mastery-label">{{ t(`learning.status.${progress.mastery_level}`) }}</span>
@@ -41,13 +27,12 @@
             {{ Math.round(progress.mastery_score * 100) }}%
           </span>
         </div>
-        <div class="mastery-bar">
-          <div
-            class="mastery-bar__fill"
-            :style="{ width: `${(progress.mastery_score ?? 0) * 100}%` }"
-          />
+        <div v-if="progress.mastery_score != null" class="mastery-bar">
+          <div class="mastery-bar__fill" :style="{ width: `${progress.mastery_score * 100}%` }" />
         </div>
-        <p class="mastery-attempts">{{ t('learning.attempts', { count: progress.attempts }) }}</p>
+        <div v-else class="mastery-bar mastery-bar--empty">
+          <span class="mastery-bar__empty-label">{{ t('learning.notStartedYet') }}</span>
+        </div>
       </div>
 
       <!-- Socratic curiosity hook -->
@@ -62,119 +47,151 @@
         <p class="description-text">{{ displayDescription }}</p>
       </div>
 
-      <!-- Translate button -->
-      <van-button
-        v-if="showTranslateButton"
-        :loading="translating"
-        :loading-text="t('learning.translating')"
-        size="normal"
-        type="primary"
-        block
-        class="translate-btn"
-        @click="handleTranslate"
-      >
-        {{ topic?.name_zh ? t('learning.retranslate') : t('learning.translate') }}
-      </van-button>
-
-      <!-- Evidence / Standards -->
-      <div v-if="topic.evidence && topic.evidence.length > 0" class="evidence-section">
-        <h3 class="section-title">{{ t('learning.evidence') }}</h3>
-        <ul class="evidence-list">
-          <li v-for="(item, idx) in displayEvidence" :key="idx" class="evidence-item">
-            {{ item }}
-          </li>
-        </ul>
-      </div>
-
-      <!-- Real-world connections (Issue #201) -->
-      <RealWorldConnections :connections="displayRealWorldConnections" />
-
-      <!-- Learning path: prerequisites + dependents -->
-      <div v-if="graphData?.prerequisites?.length" class="graph-section">
-        <h3 class="section-title">{{ t('learning.prerequisites') }}</h3>
-        <div class="topic-chips">
-          <van-tag
-            v-for="edge in graphData.prerequisites"
-            :key="edge.topic.id"
-            :type="prereqStatusTagType(edge.topic)"
-            plain
-            size="medium"
-            :class="['topic-chip', { 'topic-chip--machine': edge.review_status === 'machine' }]"
-            :aria-label="edge.review_status === 'machine'
-              ? t('learning.machineEdge.ariaLabel', { name: topicDisplayName(edge.topic) })
-              : undefined"
-            @click="navigateToTopic(edge.topic.id)"
-          >
-            <van-icon
-              :name="prereqStatusIconName(edge.topic.id)"
-              size="12"
-              :aria-label="t(`learning.status.${getProgressLevel(edge.topic.id)}`)"
-            />
-            {{ topicDisplayName(edge.topic) }}
-            <span v-if="edge.review_status === 'machine'" class="ai-badge">{{ t('learning.machineEdge.aiBadge') }}</span>
-          </van-tag>
-        </div>
-      </div>
-
-      <div v-if="graphData?.dependents?.length" class="graph-section">
-        <h3 class="section-title">{{ t('learning.nextSteps') }}</h3>
-        <div class="topic-chips">
-          <van-tag
-            v-for="edge in graphData.dependents"
-            :key="edge.topic.id"
-            :type="prereqStatusTagType(edge.topic)"
-            plain
-            size="medium"
-            :class="['topic-chip', { 'topic-chip--machine': edge.review_status === 'machine' }]"
-            :aria-label="edge.review_status === 'machine'
-              ? t('learning.machineEdge.ariaLabel', { name: topicDisplayName(edge.topic) })
-              : undefined"
-            @click="navigateToTopic(edge.topic.id)"
-          >
-            <van-icon
-              :name="prereqStatusIconName(edge.topic.id)"
-              size="12"
-              :aria-label="t(`learning.status.${getProgressLevel(edge.topic.id)}`)"
-            />
-            {{ topicDisplayName(edge.topic) }}
-            <span v-if="edge.review_status === 'machine'" class="ai-badge">{{ t('learning.machineEdge.aiBadge') }}</span>
-          </van-tag>
-        </div>
-      </div>
-
-      <!-- Path context bar -->
-      <div v-if="activePathInfo" class="path-context-bar">
-        <span>{{ t('learning.path.contextBar', activePathInfo) }}</span>
-        <van-button
-          size="mini"
-          type="primary"
-          plain
-          @click="router.push(`/learning/path/${activePathInfo.pathId}`)"
-        >
-          {{ t('learning.path.detail') }}
-        </van-button>
-      </div>
-
-      <!-- Action buttons -->
-      <div class="action-buttons">
-        <button class="btn-primary" :disabled="starting" @click="onStartLearning">
-          {{ starting ? t('common.loading') : t('learning.startLearning') }}
+      <!-- Hero action buttons — above the fold -->
+      <div class="hero-actions">
+        <button class="btn-primary btn-cta" :disabled="starting" @click="onStartLearning">
+          <IIcon icon="lucide:play" size="18" />
+          {{ starting ? t('common.loading') : t('learning.startLearningCta') }}
         </button>
         <button class="btn-secondary" @click="goToPractice">
           {{ t('practice.startPractice') }}
         </button>
-        <!-- Teach-back entry: only for mastered topics (Issue #216) -->
-        <button
-          v-if="isMastered"
-          class="btn-secondary"
-          @click="goToTeachBack"
-        >
-          {{ t('learning.teach_back.start_btn') }}
-        </button>
-        <button class="btn-secondary" :disabled="submitting" @click="onSubmitAssignment">
-          {{ submitting ? t('common.loading') : t('learning.submitAssignment') }}
+      </div>
+
+      <!-- Teach-back — only for mastered topics, styled as text link -->
+      <div v-if="isMastered" class="teach-back-link-row">
+        <button class="btn-text-link" @click="goToTeachBack">
+          🎓 {{ t('learning.teach_back.start_btn') }}
         </button>
       </div>
+
+      <!-- "Learn more" collapsible section -->
+      <div class="details-section">
+        <button class="details-toggle" @click="detailsExpanded = !detailsExpanded">
+          <span>{{ t('learning.learnMore') }}</span>
+          <IIcon :icon="detailsExpanded ? 'lucide:chevron-up' : 'lucide:chevron-down'" size="16" />
+        </button>
+        <div v-show="detailsExpanded" class="details-body">
+          <!-- Breadcrumb path — moved here -->
+          <div class="breadcrumb-trail-compact">
+            <span class="breadcrumb-item" @click="goBack">{{ t('learning.title') }}</span>
+            <span class="breadcrumb-sep">/</span>
+            <span class="breadcrumb-item">{{ subjectLabel(topic.subject) }}</span>
+            <span v-if="topic.domain" class="breadcrumb-sep">/</span>
+            <span v-if="topic.domain" class="breadcrumb-item breadcrumb-item--active">
+              {{ translateDomain(t, topic.domain) }}
+            </span>
+          </div>
+
+          <!-- Curriculum standard callout — detailed -->
+          <div v-if="firstResolvedStandard" class="curriculum-callout">
+            {{ firstResolvedStandard.name }} · {{ firstResolvedStandard.code }}
+          </div>
+
+          <!-- Translate button -->
+          <van-button
+            v-if="showTranslateButton"
+            :loading="translating"
+            :loading-text="t('learning.translating')"
+            size="normal"
+            type="primary"
+            block
+            class="translate-btn"
+            @click="handleTranslate"
+          >
+            {{ topic?.name_zh ? t('learning.retranslate') : t('learning.translate') }}
+          </van-button>
+
+          <!-- Evidence / Standards -->
+          <div v-if="topic.evidence && topic.evidence.length > 0" class="evidence-section">
+            <h3 class="section-title">{{ t('learning.evidence') }}</h3>
+            <ul class="evidence-list">
+              <li v-for="(item, idx) in displayEvidence" :key="idx" class="evidence-item">
+                {{ item }}
+              </li>
+            </ul>
+          </div>
+
+          <!-- Real-world connections (Issue #201) -->
+          <RealWorldConnections :connections="displayRealWorldConnections" />
+
+          <!-- Learning path: prerequisites + dependents -->
+          <div v-if="graphData?.prerequisites?.length" class="graph-section">
+            <h3 class="section-title">{{ t('learning.prerequisites') }}</h3>
+            <div class="topic-chips">
+              <van-tag
+                v-for="edge in graphData.prerequisites"
+                :key="edge.topic.id"
+                :type="prereqStatusTagType(edge.topic)"
+                plain
+                size="medium"
+                :class="['topic-chip', { 'topic-chip--machine': edge.review_status === 'machine' }]"
+                :aria-label="edge.review_status === 'machine'
+                  ? t('learning.machineEdge.ariaLabel', { name: topicDisplayName(edge.topic) })
+                  : undefined"
+                @click="navigateToTopic(edge.topic.id)"
+              >
+                <van-icon
+                  :name="prereqStatusIconName(edge.topic.id)"
+                  size="12"
+                  :aria-label="t(`learning.status.${getProgressLevel(edge.topic.id)}`)"
+                />
+                {{ topicDisplayName(edge.topic) }}
+                <span v-if="edge.review_status === 'machine'" class="ai-badge">{{ t('learning.machineEdge.aiBadge') }}</span>
+              </van-tag>
+            </div>
+          </div>
+
+          <div v-if="graphData?.dependents?.length" class="graph-section">
+            <h3 class="section-title">{{ t('learning.nextSteps') }}</h3>
+            <div class="topic-chips">
+              <van-tag
+                v-for="edge in graphData.dependents"
+                :key="edge.topic.id"
+                :type="prereqStatusTagType(edge.topic)"
+                plain
+                size="medium"
+                :class="['topic-chip', { 'topic-chip--machine': edge.review_status === 'machine' }]"
+                :aria-label="edge.review_status === 'machine'
+                  ? t('learning.machineEdge.ariaLabel', { name: topicDisplayName(edge.topic) })
+                  : undefined"
+                @click="navigateToTopic(edge.topic.id)"
+              >
+                <van-icon
+                  :name="prereqStatusIconName(edge.topic.id)"
+                  size="12"
+                  :aria-label="t(`learning.status.${getProgressLevel(edge.topic.id)}`)"
+                />
+                {{ topicDisplayName(edge.topic) }}
+                <span v-if="edge.review_status === 'machine'" class="ai-badge">{{ t('learning.machineEdge.aiBadge') }}</span>
+              </van-tag>
+            </div>
+          </div>
+
+          <!-- Path context bar -->
+          <div v-if="activePathInfo" class="path-context-bar">
+            <span>{{ t('learning.path.contextBar', activePathInfo) }}</span>
+            <van-button
+              size="mini"
+              type="primary"
+              plain
+              @click="router.push(`/learning/path/${activePathInfo.pathId}`)"
+            >
+              {{ t('learning.path.detail') }}
+            </van-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit assignment — bottom, only when pending -->
+      <button
+        v-if="hasPendingAssignment"
+        class="btn-secondary btn-submit-assignment"
+        :disabled="submitting"
+        @click="onSubmitAssignment"
+      >
+        {{ submitting ? t('common.loading') : t('learning.submitAssignment') }}
+      </button>
     </template>
 
     <!-- Error state -->
@@ -237,6 +254,7 @@ import {
   getMyPaths,
   type TopicResponse,
   type ProgressResponse,
+  type CurriculumStandard,
   type AssignmentResponse,
   type TopicGraphResponse,
   type SessionResponse,
@@ -245,6 +263,7 @@ import {
 import RoleShimmer from '@/components/RoleShimmer.vue'
 import TopicHookQuestion from '@/components/learning/TopicHookQuestion.vue'
 import RealWorldConnections from '@/components/learning/RealWorldConnections.vue'
+import IIcon from '@/components/IIcon.vue'
 import { hasChineseChars } from '@numina/shared'
 
 const { t, locale } = useI18n()
@@ -253,10 +272,40 @@ const route = useRoute()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
 
+// Collapsible details section
+const detailsExpanded = ref(false)
+
 function subjectLabel(subject: string): string {
   const key = `learning.subject.${subject}`
   const translated = t(key)
   return translated === key ? subject.charAt(0).toUpperCase() + subject.slice(1) : translated
+}
+
+/**
+ * Map a curriculum standard code to a child-friendly stage label.
+ * 2022 MOE codes carry a 学段 prefix: S1 (grades 1-2), S2 (3-4), S3 (5-6),
+ * S4 (7-9), SH (high school). UK codes use KS1-KS4.
+ * e.g., "S2.AP.03" → "三四年级会学到" / "Grades 3-4"
+ */
+const STAGE_LABEL_KEYS: Record<string, string> = {
+  S1: 'learning.curriculum.stage1',
+  S2: 'learning.curriculum.stage2',
+  S3: 'learning.curriculum.stage3',
+  S4: 'learning.curriculum.stage4',
+  SH: 'learning.curriculum.stageHS',
+  KS1: 'learning.curriculum.stage1',
+  KS2: 'learning.curriculum.stage2',
+  KS3: 'learning.curriculum.stage4',
+  KS4: 'learning.curriculum.stageHS',
+}
+
+function curriculumFriendlyLabel(standard: CurriculumStandard): string {
+  if (!standard.code) return t('learning.curriculum.ariaLabel')
+  const moe = standard.code.match(/^(S[1-4]|SH)\./)
+  const uk = standard.code.match(/^[A-Z]+\.(KS[1-4])\./)
+  const stage = moe?.[1] ?? uk?.[1]
+  const key = stage ? STAGE_LABEL_KEYS[stage] : undefined
+  return key ? t(key) : t('learning.curriculum.ariaLabel')
 }
 
 const topicId = computed(() => route.params.id as string)
@@ -271,6 +320,7 @@ const topic = ref<TopicResponse | null>(null)
 const progress = ref<ProgressResponse | null>(null)
 const allProgress = ref<ProgressResponse[]>([])
 const graphData = ref<TopicGraphResponse | null>(null)
+const pendingAssignment = ref<AssignmentResponse | null>(null)
 
 // Hook question state
 const hookQuestion = ref<HookQuestionResponse | null>(null)
@@ -352,6 +402,9 @@ const showTranslateButton = computed(() => {
   return true
 })
 
+/** Whether this topic has a pending assignment for the current child */
+const hasPendingAssignment = computed(() => pendingAssignment.value !== null)
+
 async function handleTranslate() {
   if (!topic.value) return
   translating.value = true
@@ -414,16 +467,19 @@ async function load() {
   errorIsNotFound.value = false
   hookSkipped.value = false
   try {
-    const [topicDetail, progressList, graph, hook] = await Promise.all([
+    const [topicDetail, progressList, graph, hook, assignments] = await Promise.all([
       getTopicDetail(topicId.value),
       getMyLearningMap(),
       getTopicGraph(topicId.value).catch(() => null),
       getTopicHook(topicId.value).catch(() => null),
+      getMyAssignments().catch(() => [] as AssignmentResponse[]),
     ])
     topic.value = topicDetail
     allProgress.value = progressList
     graphData.value = graph
     hookQuestion.value = hook
+    pendingAssignment.value =
+      assignments.find((a) => a.topic_id === topicId.value && a.status === 'pending') ?? null
 
     // Find progress for this topic
     const topicProgress = progressList.find((p) => p.topic_id === topicId.value)
@@ -521,17 +577,10 @@ function goToSuggestedTopic() {
 
 async function onSubmitAssignment() {
   if (submitting.value) return
+  const pending = pendingAssignment.value
+  if (!pending) return
   submitting.value = true
   try {
-    // Find a pending assignment for this topic
-    const assignments = await getMyAssignments()
-    const pending = assignments.find(
-      (a: AssignmentResponse) => a.topic_id === topicId.value && a.status === 'pending',
-    )
-    if (!pending) {
-      showFailToast(t('learning.noPendingAssignment'))
-      return
-    }
     await submitAssignment(pending.id)
     showSuccessToast(t('learning.submitSuccess'))
     // Reload progress
@@ -560,57 +609,37 @@ onMounted(async () => {
   min-height: 100vh;
 }
 
-.breadcrumb {
+/* Top bar — simplified */
+.top-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  color: var(--color-body);
-  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.breadcrumb__back {
+.top-bar__back {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-md);
   background: var(--color-surface-soft);
   color: var(--color-ink);
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
   cursor: pointer;
-  min-height: 36px;
   transition: background 0.15s;
 }
 
-.breadcrumb__back:active {
+.top-bar__back:active {
   background: var(--color-hairline);
 }
 
-.breadcrumb__trail {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 4px;
-}
-
-.breadcrumb__item {
-  cursor: pointer;
-}
-
-.breadcrumb__item--active {
-  color: var(--color-ink);
+.top-bar__subject {
+  font-family: Inter, sans-serif;
+  font-size: 15px;
   font-weight: 500;
-}
-
-.breadcrumb__sep {
-  color: var(--color-body);
-  opacity: 0.5;
+  color: var(--color-ink);
 }
 
 .topic-title-row {
@@ -631,20 +660,21 @@ onMounted(async () => {
   min-width: 0;
 }
 
-.curriculum-badge {
+.curriculum-tag {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(var(--color-brand-ochre-rgb), 0.18);
-  color: var(--color-brand-ochre);
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(var(--color-brand-ochre-rgb), 0.15);
+  /* Ochre #e8b94a on this tint is 1.62:1 — unreadable. Darkened ochre
+     keeps the hue and reaches 5.52:1 (WCAG AA at 12px). */
+  color: #7a5c0e;
   font-family: Inter, "PingFang SC", sans-serif;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .curriculum-callout {
@@ -693,18 +723,31 @@ onMounted(async () => {
   overflow: hidden;
 }
 
+.mastery-bar--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  background: transparent;
+  border: 1px dashed var(--color-hairline);
+  border-radius: var(--radius-md);
+  overflow: visible;
+}
+
+.mastery-bar__empty-label {
+  font-family: Inter, "PingFang SC", sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--color-body);
+  opacity: 0.75;
+}
+
 .mastery-bar__fill {
   height: 100%;
   background: var(--color-primary);
   border-radius: 4px;
   transition: width 0.4s ease;
-}
-
-.mastery-attempts {
-  font-family: Inter, sans-serif;
-  font-size: 12px;
-  color: var(--color-body);
-  margin: 6px 0 0;
 }
 
 /* Description */
@@ -757,12 +800,13 @@ onMounted(async () => {
   line-height: 1.5;
 }
 
-/* Action buttons */
-.action-buttons {
+/* Hero action buttons — above the fold */
+.hero-actions {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 24px;
+  margin-top: 20px;
+  margin-bottom: 16px;
 }
 
 .btn-primary,
@@ -777,6 +821,10 @@ onMounted(async () => {
   cursor: pointer;
   min-height: 48px;
   transition: transform 0.1s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .btn-primary {
@@ -799,6 +847,100 @@ onMounted(async () => {
 .btn-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn-cta {
+  font-size: 16px;
+  min-height: 52px;
+}
+
+/* Teach-back text link */
+.teach-back-link-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.btn-text-link {
+  background: none;
+  border: none;
+  color: var(--color-brand-ochre, #e8b94a);
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 16px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-text-link:active {
+  opacity: 0.7;
+}
+
+/* Details collapsible section */
+.details-section {
+  margin-bottom: 20px;
+}
+
+.details-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px;
+  background: none;
+  border: 1px dashed var(--color-hairline);
+  border-radius: var(--radius-md);
+  color: var(--color-body);
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 44px;
+  transition: background 0.15s;
+}
+
+.details-toggle:active {
+  background: var(--color-surface-soft);
+}
+
+.details-body {
+  margin-top: 16px;
+}
+
+/* Breadcrumb trail inside details */
+.breadcrumb-trail-compact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-body);
+  flex-wrap: wrap;
+}
+
+.breadcrumb-item {
+  cursor: pointer;
+}
+
+.breadcrumb-item--active {
+  color: var(--color-ink);
+  font-weight: 500;
+}
+
+.breadcrumb-sep {
+  color: var(--color-body);
+  opacity: 0.5;
+}
+
+/* Submit assignment button at bottom */
+.btn-submit-assignment {
+  margin-top: 16px;
 }
 
 /* Difficulty dialog */
@@ -912,8 +1054,11 @@ onMounted(async () => {
   border-left-color: rgba(var(--color-brand-ochre-rgb), 0.65);
 }
 
-[data-theme="dark"] .curriculum-badge {
+[data-theme="dark"] .curriculum-tag {
   background: rgba(var(--color-brand-ochre-rgb), 0.28);
+  /* --color-brand-ochre (#d4a83a) on this tint is 4.0:1 — below AA for 12px.
+     This lighter ochre keeps the hue at 5.08:1. */
+  color: #f5d27a;
 }
 
 [data-theme="dark"] .topic-chip--machine {

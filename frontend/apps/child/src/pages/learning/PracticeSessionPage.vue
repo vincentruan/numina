@@ -146,6 +146,8 @@
         :challenge-discovery="challengeDiscoveryMessage || undefined"
         :topic-id="topicId"
         :is-first-mastery="isFirstMastery"
+        :topic-subject="topicSubject"
+        :topic-age-group="topicAgeGroup"
         @again="onAgain"
         @back="goBack"
       />
@@ -226,14 +228,21 @@ const lastAttempt = ref<PracticeAttemptResponse | null>(null)
 const feedbackShown = ref(false)
 const sessionResult = ref<PracticeResultResponse | null>(null)
 const recommendations = ref<RecommendResponse[]>([])
-/** Mastery level for the current topic — drives the Rush entry button. */
+/** True when this topic has been mastered — drives the Rush entry button. */
 const topicMastery = ref<string>('available')
+
+/** Topic subject for teach-back route — sourced from the topic detail fetched
+ * during fetchDiagnosisAndTarget. */
+const topicSubject = computed(() => targetTopicDetail.value?.subject ?? 'mathematics')
+
+/** Topic age_group for teach-back route. */
+const topicAgeGroup = computed(() => targetTopicDetail.value?.age_group ?? 'mid')
 
 // Diagnosis state (issue #213)
 const diagnosisCandidate = ref<RecommendResponse | null>(null)
 const diagnosisLoading = ref(false)
 const diagnosisDismissed = ref(false)
-const targetTopicDetail = ref<{ name: string | null; name_zh: string | null } | null>(null)
+const targetTopicDetail = ref<{ name: string | null; name_zh: string | null; subject?: string; age_group?: string } | null>(null)
 
 const answerInputRef = ref<InstanceType<typeof PracticeAnswerInput> | null>(null)
 
@@ -554,7 +563,7 @@ async function fetchDiagnosisAndTarget() {
       getPracticeRecommendations(topicId.value, true),
       getTopicDetail(topicId.value),
     ])
-    targetTopicDetail.value = { name: detail.name, name_zh: detail.name_zh }
+    targetTopicDetail.value = { name: detail.name, name_zh: detail.name_zh, subject: detail.subject, age_group: detail.age_group }
     diagnosisCandidate.value = diagnosis.find((r) => r.is_diagnosis) ?? null
   } catch {
     // Per R8: silently omitted on failure (no retry, no error toast).

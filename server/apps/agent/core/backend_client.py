@@ -782,7 +782,7 @@ async def get_ai_enabled_families() -> list[str]:
         from packages.security.service_auth.agent_jwt import create_agent_token
 
         resp = await client.get(
-            "/api/v1/admin/ai/enabled-families",
+            "/api/v1/internal/ai/enabled-families",
             headers={
                 "Authorization": f"Bearer {create_agent_token('0')}",
                 "Content-Type": "application/json",

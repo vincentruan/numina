@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import ScheduledTasksTab from '../ScheduledTasksTab.vue'
 import type { ScheduledTask } from '@/api/ai-scheduled-tasks'
+import zhCN from '@/i18n/locales/zh-CN'
 
 vi.mock('@/api/ai-scheduled-tasks', () => ({
   fetchScheduledTasks: vi.fn(),
@@ -24,21 +25,25 @@ vi.mock('vant', async () => {
 import * as api from '@/api/ai-scheduled-tasks'
 import { showConfirmDialog, showFailToast } from 'vant'
 
-// Only the keys these tests read back are supplied: ``van-field`` label lookups
-// match on rendered text, so an empty message table would leave raw key paths.
+// Use the real locale file rather than a hand-picked key subset: ``van-field``
+// label lookups and card text assert on rendered strings, so a partial table
+// renders raw key paths the moment the component reads one more key.
 const i18n = createI18n({
   legacy: false,
   locale: 'zh-CN',
   messages: {
     'zh-CN': {
-      scheduledTasks: {
-        time: '时间',
-        cron: 'Cron 表达式',
-        cronInvalid: 'cron 表达式无效，请使用 5 字段格式',
+      ...zhCN,
+      // The component reads this list with `returnObjects`, and falls back to
+      // [] — hiding the weekly day picker — unless it resolves as an array.
+      familyConfig: {
+        ...zhCN.familyConfig,
+        dayLabels: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
       },
     },
   },
 })
+
 
 function makeTask(overrides: Partial<ScheduledTask> = {}): ScheduledTask {
   return {
@@ -95,7 +100,8 @@ describe('ScheduledTasksTab', () => {
     await flushPromises()
 
     expect(wrapper.findAll('.task-card')).toHaveLength(2)
-    expect(wrapper.text()).toContain('0 9 * * *')
+    // The card renders describeCron() text, not the raw expression.
+    expect(wrapper.text()).toContain('09:00')
   })
 
   it('shows the empty state when the family has no tasks', async () => {
@@ -224,6 +230,22 @@ function mountInteractive(isOwner = true) {
 
 type Wrapper = ReturnType<typeof mountInteractive>
 
+/** Set hour/minute on the split time input (the preset picker uses two
+ *  number fields, not a single "HH:mm" control). */
+async function setTime(wrapper: Wrapper, hour: string, minute: string) {
+  const inputs = formField(wrapper, '时间').findAll('input.time-input')
+  await inputs[0].setValue(hour)
+  await inputs[1].setValue(minute)
+}
+
+/** Switch the form to raw-cron mode — the custom radio and the cron input
+ *  only render there. */
+async function switchToCronMode(wrapper: Wrapper) {
+  const items = wrapper.findAll('.form-mode-toggle__item')
+  await items[1].trigger('click')
+  await flushPromises()
+}
+
 function formField(wrapper: Wrapper, label: string) {
   const field = wrapper.findAll('.form-field').find((f) => f.attributes('data-label') === label)
   if (!field) throw new Error(`no form field labelled ${label}`)
@@ -249,7 +271,7 @@ describe('ScheduledTasksTab form behavior', () => {
     await flushPromises()
     await openCreateForm(wrapper)
 
-    await formField(wrapper, '时间').find('input').setValue('09:30')
+    await setTime(wrapper, '9', '30')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
@@ -266,7 +288,12 @@ describe('ScheduledTasksTab form behavior', () => {
     await openCreateForm(wrapper)
 
     await wrapper.find('.radio[data-name="weekly"]').trigger('click')
-    await formField(wrapper, '时间').find('input').setValue('07:05')
+    await flushPromises()
+    await setTime(wrapper, '7', '5')
+    // UI index 0=Mon … 6=Sun. Sunday must produce cron day-of-week 0.
+    const dayButtons = wrapper.findAll('.weekly-day-btn')
+    expect(dayButtons).toHaveLength(7)
+    await dayButtons[6].trigger('click')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
@@ -282,6 +309,7 @@ describe('ScheduledTasksTab form behavior', () => {
     await flushPromises()
     await openCreateForm(wrapper)
 
+    await switchToCronMode(wrapper)
     await wrapper.find('.radio[data-name="custom"]').trigger('click')
     await flushPromises()
     await formField(wrapper, 'Cron 表达式').find('input').setValue('0 9 * *')
@@ -297,6 +325,7 @@ describe('ScheduledTasksTab form behavior', () => {
     await flushPromises()
     await openCreateForm(wrapper)
 
+    await switchToCronMode(wrapper)
     await wrapper.find('.radio[data-name="custom"]').trigger('click')
     await flushPromises()
     await formField(wrapper, 'Cron 表达式').find('input').setValue('15 6 * * 1-5')

@@ -41,7 +41,7 @@ const defaultIcons = [
   'lucide:chef-hat',
   'lucide:music',
   'lucide:palette',
-  'lucide:football',
+  'lucide:volleyball',
   'lucide:building',
   'lucide:leaf',
   'lucide:gamepad-2',

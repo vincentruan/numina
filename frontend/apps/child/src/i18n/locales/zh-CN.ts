@@ -477,6 +477,7 @@ export default {
     topicNotFound: '知识点不存在或已下架',
     todayRecommend: '今日推荐',
     startLearning: '🎓 开始学习',
+    startLearningCta: '开始学习',
     submitAssignment: '📝 提交审核',
     hook: {
       skip: '跳过，直接开始',
@@ -859,6 +860,7 @@ export default {
       title: '小老师时间',
       welcome: '有一个好奇的朋友总是不明白这个知识点，你来当小老师，教教 TA 吧！',
       start_btn: '开始教',
+      result_cta: '当小老师教 AI',
       input_placeholder: '用你自己的话解释给 TA 听...',
       send_btn: '发送',
       verdict_hit: '解释对了',
@@ -871,6 +873,10 @@ export default {
     },
     progress: {
       title: '学习进度',
+      childTitle: '我的学习',
+      nextUp: '接下来学',
+      streakTitle: '这周的学习',
+      streakSummary: '这周你学了 {days} 天！',
       studyTime: '学习时长',
       minutes: '分钟',
       recentActivity: '最近活动',
@@ -1029,7 +1035,15 @@ export default {
     curriculum: {
       ariaLabel: '对应课程标准',
       badgeGlyph: '课',
+      stage1: '一二年级会学到',
+      stage2: '三四年级会学到',
+      stage3: '五六年级会学到',
+      stage4: '初中会学到',
+      stageHS: '高中会学到',
     },
+    learnMore: '了解更多',
+    notStartedYet: '还没开始',
+    breadcrumbPath: '{subject} / {domain}',
     machineEdge: {
       ariaLabel: '{name}（AI 推荐）',
       aiBadge: 'AI',

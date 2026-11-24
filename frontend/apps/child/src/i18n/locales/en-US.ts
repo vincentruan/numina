@@ -475,6 +475,7 @@ export default {
     empty: 'No learning content yet — ask your parents to assign some!',
     todayRecommend: 'Today\'s Pick',
     startLearning: '🎓 Start Learning',
+    startLearningCta: 'Start Learning',
     submitAssignment: '📝 Submit for Review',
     hook: {
       skip: 'Skip, start directly',
@@ -639,6 +640,7 @@ export default {
       title: 'Little Teacher Time',
       welcome: 'A curious friend just cannot get this topic. Be the teacher and explain it to them!',
       start_btn: 'Start teaching',
+      result_cta: 'Teach it to AI',
       input_placeholder: 'Explain it in your own words...',
       send_btn: 'Send',
       verdict_hit: 'Explained!',
@@ -651,6 +653,10 @@ export default {
     },
     progress: {
       title: 'Learning Progress',
+      childTitle: 'My Learning',
+      nextUp: 'Up next',
+      streakTitle: 'This week',
+      streakSummary: 'You studied {days} days this week!',
       studyTime: 'Study Time',
       minutes: 'min',
       recentActivity: 'Recent Activity',
@@ -809,7 +815,15 @@ export default {
     curriculum: {
       ariaLabel: 'Mapped to curriculum standard',
       badgeGlyph: '课',
+      stage1: 'Grades 1-2',
+      stage2: 'Grades 3-4',
+      stage3: 'Grades 5-6',
+      stage4: 'Middle school',
+      stageHS: 'High school',
     },
+    learnMore: 'Learn more',
+    notStartedYet: 'Not started yet',
+    breadcrumbPath: '{subject} / {domain}',
     machineEdge: {
       ariaLabel: '{name} (AI suggested)',
       aiBadge: 'AI',
