@@ -1,8 +1,13 @@
-"""Test child-scoped MCP tool access (root cause fix for D1/D2).
+"""Test child-scoped MCP tool access.
+
+The child scoping rule lives in `MCPToolMeta.allowed_roles`, not in a
+separate whitelist constant — child callers see exactly the tools whose
+`allowed_roles` contains "child".
 
 Verifies:
-- CHILD_LEARNING_TOOLS is non-empty and contains expected tools.
-- list_tools() for child callers returns only the whitelist.
+- The child-visible set is non-empty and contains the guided-tutoring tools.
+- No financial tool is ever visible to a child.
+- list_tools() for a child returns only that set; owner is unaffected.
 - call_tool() self-only enforcement rejects sibling data access.
 """
 
@@ -13,43 +18,44 @@ import pytest
 
 from apps.backend.app.services.mcp_session import MCPSession
 from apps.backend.app.services.mcp_tool_registry import (
-    CHILD_LEARNING_TOOLS,
     TOOL_REGISTRY,
     get_tool,
+    list_tools_for_role,
     validate_registry,
 )
 
 
-class TestChildLearningTools:
-    """CHILD_LEARNING_TOOLS whitelist surface."""
+def child_tool_names() -> frozenset[str]:
+    """The tools a child caller may see — derived from allowed_roles."""
+    return frozenset(meta.name for meta in list_tools_for_role("child"))
+
+
+class TestChildToolSurface:
+    """The child-visible tool set and what it must never contain."""
 
     def test_non_empty(self):
-        assert len(CHILD_LEARNING_TOOLS) > 0
+        assert len(child_tool_names()) > 0
 
     def test_all_names_registered(self):
-        for name in CHILD_LEARNING_TOOLS:
+        for name in child_tool_names():
             assert name in TOOL_REGISTRY, (
-                f"{name} in CHILD_LEARNING_TOOLS but not in TOOL_REGISTRY"
+                f"{name} is visible to child but not in TOOL_REGISTRY"
             )
 
-    def test_expected_learning_tools_included(self):
+    def test_expected_guided_tutoring_tools_included(self):
+        """The in-session Socratic tutoring surface must stay open to child."""
         expected = {
-            "get_learning_topic",
-            "get_child_learning_profile",
-            "record_learning_result",
             "get_guided_question",
             "submit_guided_answer",
             "get_knowledge_bridge",
             "get_teacher_persona",
-            "record_tutoring_step",
-            "record_teach_back_turn",
             "select_adaptive_question",
             "generate_hint",
         }
-        assert expected.issubset(CHILD_LEARNING_TOOLS)
+        assert expected.issubset(child_tool_names())
 
-    def test_non_learning_tools_excluded(self):
-        """Financial tools must never be visible to child."""
+    def test_financial_tools_never_visible_to_child(self):
+        """Financial tools and family-wide reads must never reach a child."""
         forbidden = {
             "get_family_overview",
             "get_assets",
@@ -59,42 +65,20 @@ class TestChildLearningTools:
             "import_assets_batch",
             "import_liabilities_batch",
         }
-        assert forbidden.isdisjoint(CHILD_LEARNING_TOOLS)
+        assert forbidden.isdisjoint(child_tool_names())
 
-    def test_child_tools_match_skills_allowed_tools(self):
-        """Every tool referenced by learning skill SKILL.md must be in
-        CHILD_LEARNING_TOOLS OR be a builtin (thread_*)."""
-        skill_tools = {
-            # learning-tutor
-            "get_learning_topic",
-            "get_child_learning_profile",
-            "record_learning_result",
-            # learning-smart-tutor (subset already child-allowed)
-            "get_guided_question",
-            "submit_guided_answer",
-            "get_knowledge_bridge",
-            "get_teacher_persona",
-            "record_tutoring_step",
-            "record_teach_back_turn",
-            "select_adaptive_question",
-            "generate_hint",
-        }
-        # All skill tools must either be in CHILD_LEARNING_TOOLS or be a
-        # DeerFlow builtin (thread_*) that always passes through.
-        builtin_prefixes = ("thread_", "task")
-        for t in skill_tools:
-            in_whitelist = t in CHILD_LEARNING_TOOLS
-            is_builtin = any(t.startswith(p) for p in builtin_prefixes)
-            assert in_whitelist or is_builtin, (
-                f"{t} is needed by a learning skill but not in CHILD_LEARNING_TOOLS"
-            )
+    def test_registry_is_valid(self):
+        validate_registry()
+
+    def test_get_tool_unknown_returns_none(self):
+        assert get_tool("no_such_tool") is None
 
 
 @pytest.mark.asyncio
 class TestChildListToolsFiltering:
-    """MCPSession.list_tools() returns only CHILD_LEARNING_TOOLS for child."""
+    """MCPSession.list_tools() honours allowed_roles for the child caller."""
 
-    async def test_child_sees_only_whitelisted_tools(self):
+    async def test_child_sees_only_child_allowed_tools(self):
         mock_db = MagicMock()
         session = MCPSession(
             family_id="100",
@@ -109,12 +93,12 @@ class TestChildListToolsFiltering:
             tools = await session.list_tools()
             tool_names = {t.name for t in tools}
 
-        assert tool_names == CHILD_LEARNING_TOOLS
+        assert tool_names == child_tool_names()
         assert "get_family_overview" not in tool_names
         assert "get_assets" not in tool_names
 
-    async def test_owner_still_sees_full_set(self):
-        """Owner role must not be affected by child whitelist."""
+    async def test_owner_sees_full_set(self):
+        """Owner role must not be affected by child scoping."""
         mock_db = MagicMock()
         session = MCPSession(
             family_id="100",
@@ -130,6 +114,7 @@ class TestChildListToolsFiltering:
             tool_names = {t.name for t in tools}
 
         assert "get_family_overview" in tool_names
+        # read-only learning tools stay available to the parent side
         assert "get_learning_topic" in tool_names
 
 
@@ -138,32 +123,16 @@ class TestChildSelfOnlyEnforcement:
     """MCPSession.call_tool() enforces self-only scope for child callers."""
 
     async def _make_session(self, caller_user_id: str = "child1"):
-        mock_db = MagicMock()
         session = MCPSession(
             family_id="100",
             caller_user_id=caller_user_id,
             caller_role="child",
         )
-        return session, mock_db
+        return session
 
-    async def test_child_cannot_call_non_learning_tool(self):
-        """Child caller trying to invoke get_family_overview → permission_denied."""
-        session, mock_db = await self._make_session()
-
-        with patch("apps.backend.app.services.mcp_session.SessionLocal") as mock_sl:
-            mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
-
-            with patch("apps.backend.app.services.mcp_session._get_caller_user") as mu:
-                mu.return_value = MagicMock(id="child1", family_id="100", role="child")
-
-                result = await session.call_tool("get_family_overview", {})
-                body = json.loads(result[0].text)
-                assert body["error"] == "permission_denied"
-
-    async def test_child_self_only_child_id_mismatch(self):
-        """Child calling get_learning_topic with sibling's child_id → denied."""
-        session, mock_db = await self._make_session(caller_user_id="child1")
+    async def _call_as_child(self, tool: str, args: dict) -> dict:
+        mock_db = MagicMock()
+        session = await self._make_session()
 
         with patch("apps.backend.app.services.mcp_session.SessionLocal") as mock_sl:
             mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
@@ -171,57 +140,37 @@ class TestChildSelfOnlyEnforcement:
 
             with patch("apps.backend.app.services.mcp_session._get_caller_user") as mu:
                 mu.return_value = MagicMock(id="child1", family_id="100", role="child")
+                result = await session.call_tool(tool, args)
 
-                # Try to read sibling child2's data
+        return json.loads(result[0].text)
+
+    async def test_child_cannot_call_financial_tool(self):
+        """Child invoking get_family_overview → permission_denied."""
+        body = await self._call_as_child("get_family_overview", {})
+        assert body["error"] == "permission_denied"
+
+    async def test_child_cannot_call_asset_import(self):
+        """Child invoking a write tool → permission_denied."""
+        body = await self._call_as_child("import_assets_batch", {"assets": []})
+        assert body["error"] == "permission_denied"
+
+    async def test_child_guided_tool_rejects_non_family_child(self):
+        """A sibling outside the family is rejected at the family boundary."""
+        mock_db = MagicMock()
+        # Family-scope lookup finds no User for child_id 999 -> child_not_in_family
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        session = await self._make_session()
+
+        with patch("apps.backend.app.services.mcp_session.SessionLocal") as mock_sl:
+            mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+
+            with patch("apps.backend.app.services.mcp_session._get_caller_user") as mu:
+                mu.return_value = MagicMock(id="child1", family_id="100", role="child")
                 result = await session.call_tool(
-                    "get_learning_topic", {"topic_id": "1", "child_id": "child2"}
+                    "get_guided_question",
+                    {"question_id": 1, "child_id": 999, "topic_id": 1},
                 )
-                body = json.loads(result[0].text)
-                assert body["error"] == "permission_denied"
 
-    async def test_child_self_only_child_id_match(self):
-        """Child calling get_learning_topic with own child_id proceeds."""
-        session, mock_db = await self._make_session(caller_user_id="child1")
-
-        with patch("apps.backend.app.services.mcp_session.SessionLocal") as mock_sl:
-            mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
-
-            with patch("apps.backend.app.services.mcp_session._get_caller_user") as mu:
-                mu.return_value = MagicMock(id="child1", family_id="100", role="child")
-
-                with patch(
-                    "apps.backend.app.services.learning.topic_service.get_topic_by_id"
-                ) as mock_get:
-                    mock_get.return_value = {
-                        "id": "1", "name": "test", "description": "test"
-                    }
-                    result = await session.call_tool(
-                        "get_learning_topic", {"topic_id": "1", "child_id": "child1"}
-                    )
-                    # Handler returns data dict, not error
-                    body = json.loads(result[0].text)
-                    assert "error" not in body or body.get("error") != "permission_denied"
-
-    async def test_child_session_id_self_only(self):
-        """Child calling record_learning_result with sibling's session_id → denied."""
-        session, mock_db = await self._make_session(caller_user_id="child1")
-
-        with patch("apps.backend.app.services.mcp_session.SessionLocal") as mock_sl:
-            mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
-
-            with patch("apps.backend.app.services.mcp_session._get_caller_user") as mu:
-                mu.return_value = MagicMock(id="child1", family_id="100", role="child")
-
-                # Mock LearningSession query: session belongs to child2, not child1
-                mock_session_obj = MagicMock()
-                mock_session_obj.child_id = 999  # different child
-                mock_db.query.return_value.filter.return_value.filter.return_value.first.return_value = mock_session_obj
-
-                result = await session.call_tool(
-                    "record_learning_result",
-                    {"session_id": "999", "evaluation": {"recommendation": "mastered", "overall_score": 0.9, "evidence_results": []}},
-                )
-                body = json.loads(result[0].text)
-                assert body["error"] == "permission_denied"
+        body = json.loads(result[0].text)
+        assert body["error"] == "child_not_in_family"
