@@ -49,7 +49,7 @@ const cachedTabs = ref<string[]>([
 <style scoped>
 .child-layout {
   min-height: 100vh;
-  padding-bottom: calc(var(--van-tabbar-height) + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--child-tabbar-height) + env(safe-area-inset-bottom));
   background: var(--color-canvas);
 }
 
@@ -67,7 +67,7 @@ const cachedTabs = ref<string[]>([
 
 .install-prompt {
   position: fixed;
-  bottom: calc(var(--van-tabbar-height) + env(safe-area-inset-bottom));
+  bottom: calc(var(--child-tabbar-height) + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
   z-index: 2000;

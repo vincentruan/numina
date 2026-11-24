@@ -96,6 +96,12 @@
   --color-on-feature-ochre:    var(--color-ink);
 
   /* ── Spacing ── */
+  /* #246 C / KTD4: child app's own TabBar height token. Vant 4 renders the
+     bar at 50px by default and no theme overrides it in this app.
+     ChildLayout and LearningMapPage reference this instead of Vant's private
+     --van-tabbar-height, so a Vant upgrade cannot silently shift our padding. */
+  --child-tabbar-height: 50px;
+
   --space-xxs: 4px;
   --space-xs:  8px;
   --space-sm:  12px;

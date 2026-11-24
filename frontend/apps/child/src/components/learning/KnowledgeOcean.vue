@@ -5,9 +5,12 @@
       one subject), topic (constellation of one domain). All levels are always
       computed; zoom changes which is legible, never what exists.
     -->
+    <!-- preserveAspectRatio is the default xMidYMid meet; declaring it
+         documents the intent per #246 KTD3. -->
     <svg
       class="knowledge-ocean"
       :viewBox="`0 0 ${VIEW_W} ${VIEW_H}`"
+      preserveAspectRatio="xMidYMid meet"
       role="application"
       :aria-label="t('learning.ocean.a11yLabel')"
       @touchstart.passive="onTouchStart"
@@ -509,15 +512,36 @@ function onTouchEnd(_e: TouchEvent) {
 </script>
 
 <style scoped>
+/* ── Container ── */
+
+/* #246 B / KTD3: a definite-height box so the SVG has something to resolve
+   against when aspect-ratio and max-height disagree. The viewBox is 360:480
+   (3/4), so using that ratio here avoids extra letterboxing. The wrap is
+   centered with auto margins; at ≥768 px it is also viewport-height bounded
+   (R4). 560 px is the upper bound so tablets do not stretch the map into a
+   flat panel. */
 .knowledge-ocean-wrap {
   position: relative;
-  width: 100%;
+  max-width: min(100%, 560px);
+  margin-inline: auto;
+  aspect-ratio: 3 / 4;
+}
+
+@media (min-width: 768px) {
+  .knowledge-ocean-wrap {
+    /* Leave room for the tabs + toggle + hint + TabBar clearance at the top
+       and bottom of the viewport; the exact height is derived by the page
+       and propagated through max-height: inherit on the SVG. */
+    max-height: calc(100dvh - 260px);
+    padding-inline: var(--space-md);
+  }
 }
 
 .knowledge-ocean {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+  max-height: inherit;
   touch-action: pan-y; /* we own pinch; browser must not zoom the page */
   user-select: none;
   -webkit-user-select: none;
@@ -657,8 +681,11 @@ function onTouchEnd(_e: TouchEvent) {
   cursor: pointer;
 }
 
+/* #246 C: the hint lives inside the bounded wrap and the wrap's bottom edge
+   clears the TabBar via the page padding. Extra top margin keeps the hint
+   visually separated from the last island. */
 .ocean-hint {
-  margin: 6px 0 0;
+  margin: var(--space-sm) 0 0;
   text-align: center;
   font-family: Inter, sans-serif;
   font-size: 12px;

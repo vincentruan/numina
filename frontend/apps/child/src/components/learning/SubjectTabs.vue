@@ -10,7 +10,7 @@
       >
         <span class="subject-tab__icon">{{ subjectIcon(tab.subject) }}</span>
         <span class="subject-tab__label">{{ subjectLabel(tab.subject) }}</span>
-        <span v-if="tab.count > 0" class="subject-tab__badge">{{ tab.count }}</span>
+        <span class="subject-tab__badge">{{ tab.count }}</span>
       </button>
     </div>
   </div>
@@ -138,19 +138,26 @@ function subjectIcon(subject: string): string {
   line-height: 1;
 }
 
+/* #246 A: content-sized, never a fixed capsule. A pinned height plus a
+   10px radius made every three-digit count read as a squashed pill. Sizing
+   comes from padding so 0 / 9 / 99 / 358 / 1234 all stay on one line. */
 .subject-tab__badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 10px;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
   background: var(--color-brand-ochre);
   color: var(--color-ink);
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
+  white-space: nowrap;
+  /* Tabular figures: the badge width must not jitter as counts update. */
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
 }
 
 .subject-tab.active .subject-tab__badge {

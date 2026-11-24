@@ -281,17 +281,23 @@ const nextTopic = computed<ProgressWithTopic | null>(() => {
   return null
 })
 
-// Subject tabs derived from the progress index (subject is joined into
-// /child/learning/map/index), so tabs render before any topic detail is fetched.
+// #246 A / KTD2: the tab badge is the subject's total topic count — the same
+// number the island shows for that subject — NOT a progress count. It is built
+// from `topicIndex` so a subject with zero progress still gets a tab and shows
+// how much there is to learn. While the index has not loaded yet the strip
+// falls back to the progress rows (subject is joined into
+// /child/learning/map/index), so tabs still render before topic detail arrives.
+// The list/graph views' progress-row counts are a different measure and are
+// not covered by this number.
 const subjectTabs = computed<SubjectTab[]>(() => {
   const counts = new Map<string, number>()
-  for (const p of progressList.value) {
-    const s = p.subject
+  const source = topicIndex.value.length > 0 ? topicIndex.value : progressList.value
+  for (const row of source) {
+    const s = row.subject
     if (!s) continue
     counts.set(s, (counts.get(s) || 0) + 1)
   }
   return Array.from(counts.entries())
-    .filter(([, count]) => count > 0)
     .map(([subject, count]) => ({ subject, count }))
     .sort((a, b) => a.subject.localeCompare(b.subject))
 })
@@ -451,10 +457,11 @@ watch(oceanSubject, (subject) => {
 
 // Bridge navigation: switch subject tab
 function onSwitchSubject(subject: string) {
-  // Tabs are derived from the child's progress items, but bridge targets come
-  // from cluster domains. A bridge can point at a subject the child has no
-  // progress in — that subject has no tab, and setting it here would leave
-  // every tab inactive with no way back. Keep the current tab and explain.
+  // Tabs are derived from the topic index (#246), but bridge targets come from
+  // cluster domains. A bridge can point at a subject that is not in the index
+  // at all — that subject has no tab, and setting it here would leave every
+  // tab inactive with no way back. A subject merely lacking progress DOES have
+  // a tab now, so it passes this guard. Keep the current tab and explain.
   if (subjectTabs.value.some((tab) => tab.subject === subject)) {
     selectedSubject.value = subject
     return
@@ -665,10 +672,16 @@ onActivated(async () => {
 </script>
 
 <style scoped>
+/* #246 B/D: 100dvh so mobile browser chrome does not hide the bottom
+   of the map. Padding-bottom reserves the TabBar + safe area + breathing room,
+   so the last island and the zoom hint clear the TabBar (#246 C). */
 .learning-map-page {
   padding: var(--space-md);
+  padding-bottom: calc(
+    var(--child-tabbar-height) + env(safe-area-inset-bottom) + var(--space-md)
+  );
   background: var(--color-canvas);
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .map-content {

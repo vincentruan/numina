@@ -426,3 +426,77 @@ describe('LearningMapPage — topic index fetch failure surfaces (M-1)', () => {
     expect(wrapper.findComponent({ name: 'KnowledgeOcean' }).exists()).toBe(false)
   })
 })
+
+// --- Subject tab counts (#246 A / KTD2) ---
+
+describe('LearningMapPage — subject tab counts match the islands (#246)', () => {
+  beforeEach(() => {
+    mockGetTopicIndex.mockImplementation(async () => [
+      { id: 't1', subject: 'mathematics', domain: 'Addition', name: 'Add', name_zh: '加', age_group: 'mid' },
+      { id: 't2', subject: 'mathematics', domain: 'Addition', name: 'Add more', name_zh: '再加', age_group: 'mid' },
+      { id: 't3', subject: 'mathematics', domain: 'Addition', name: 'Add again', name_zh: '又加', age_group: 'mid' },
+      { id: 't4', subject: 'science', domain: 'Forces', name: 'Push', name_zh: '推', age_group: 'mid' },
+      { id: 't5', subject: 'biology', domain: 'Cells', name: 'Cell', name_zh: '细胞', age_group: 'mid' },
+    ])
+  })
+
+  it('shows the topic-index total, not the progress-row count, and renders zero', async () => {
+    // mathematics: 3 progress rows of 3 index rows; biology: 0 progress of 1.
+    rows.push(
+      { topic_id: 't1', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid' },
+      { topic_id: 't2', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid' },
+      { topic_id: 't3', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid' },
+    )
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const tabs = wrapper.findAll('.subject-tab')
+    const badgeFor = (subjectLabelFragment: string) => {
+      const tab = tabs.find((t) => t.find('.subject-tab__label').text().includes(subjectLabelFragment))
+      return tab?.find('.subject-tab__badge')
+    }
+    // tab count == topicCount passed to the ocean for the same subject
+    const ocean = wrapper.findComponent({ name: 'KnowledgeOcean' })
+    const props = ocean.props() as unknown as { subjects: Array<{ id: string; topicCount: number }> }
+    const mathIsland = props.subjects.find((s) => s.id === 'mathematics')!
+    expect(mathIsland.topicCount).toBe(3)
+    expect(badgeFor('数学')?.text()).toBe('3')
+    // A subject with index rows but no progress still gets a tab, showing 1.
+    expect(badgeFor('生物')?.text()).toBe('1')
+  })
+
+  it('skips index rows with an empty subject', async () => {
+    mockGetTopicIndex.mockImplementation(async () => [
+      { id: 't1', subject: 'mathematics', domain: 'Addition', name: 'Add', name_zh: '加', age_group: 'mid' },
+      { id: 't9', subject: '', domain: 'Orphan', name: 'Orphan', name_zh: '孤儿', age_group: 'mid' },
+    ])
+    rows.push({
+      topic_id: 't1', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid',
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const labels = wrapper.findAll('.subject-tab__label').map((l) => l.text())
+    expect(labels).toHaveLength(1)
+  })
+})
+
+// --- Layout contract (#246 B / C / D) ---
+
+describe('LearningMapPage — layout contract (#246)', () => {
+  beforeEach(() => {
+    mockGetTopicIndex.mockImplementation(async () => [
+      { id: 't1', subject: 'mathematics', domain: 'Addition', name: 'Add', name_zh: '加', age_group: 'mid' },
+    ])
+    rows.push({
+      topic_id: 't1', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid',
+    })
+  })
+
+  it('renders the ocean inside the page root that reserves TabBar clearance', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+    const page = wrapper.find('.learning-map-page')
+    expect(page.findComponent({ name: 'KnowledgeOcean' }).exists()).toBe(true)
+  })
+})
