@@ -1,13 +1,39 @@
 """MCP Tool Registry — centralized metadata SSOT for all MCP tools.
 
-Each tool declares allowed_roles and requires_write upfront.
+Each tool declares allowed_roles, requires_write and child_scope upfront.
 list_tools_for_role() filters at protocol layer; call_tool() re-checks at enforcement layer.
+
+child_scope says which per-child identifier the tool's arguments carry, so call_tool()
+can keep a child caller on their own data without every handler repeating the check:
+
+  none             no per-child identifier at all
+  child            required child_id
+  child_optional   optional child_id (omitted -> the caller themselves)
+  session          required session_id, which must name a session the caller owns
+  session_child    both child_id and session_id
+  session_unscoped session_id whose ownership is not yet enforced
+
+The declaration is required: a new tool cannot be registered without answering it.
 """
 
 from dataclasses import dataclass
 from typing import Any
 
 _VALID_ROLES = frozenset({"owner", "member", "child", "external_token"})
+
+VALID_CHILD_SCOPES = frozenset(
+    {"none", "child", "child_optional", "session", "session_child", "session_unscoped"}
+)
+
+# child_scope -> (carries child_id, carries session_id)
+_CHILD_SCOPE_HANDLES: dict[str, tuple[bool, bool]] = {
+    "none": (False, False),
+    "child": (True, False),
+    "child_optional": (True, False),
+    "session": (False, True),
+    "session_child": (True, True),
+    "session_unscoped": (False, True),
+}
 
 
 @dataclass(frozen=True)
@@ -17,6 +43,7 @@ class MCPToolMeta:
     input_schema: dict[str, Any]
     allowed_roles: frozenset[str]
     requires_write: bool
+    child_scope: str
 
 
 TOOL_REGISTRY: dict[str, MCPToolMeta] = {
@@ -26,6 +53,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         input_schema={"type": "object", "properties": {}, "required": []},
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     "get_assets": MCPToolMeta(
         name="get_assets",
@@ -45,6 +73,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     "get_liabilities": MCPToolMeta(
         name="get_liabilities",
@@ -63,6 +92,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     "get_members": MCPToolMeta(
         name="get_members",
@@ -70,6 +100,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         input_schema={"type": "object", "properties": {}, "required": []},
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     "get_recent_alerts": MCPToolMeta(
         name="get_recent_alerts",
@@ -88,6 +119,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     # Resolved-3 (U5 cleanup): the domain-specific ``write_numina_report`` /
     # ``read_numina_report`` MCP tools were deleted — asset-report now uses
@@ -143,6 +175,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=True,
+        child_scope="none",
     ),
     "import_liabilities_batch": MCPToolMeta(
         name="import_liabilities_batch",
@@ -188,6 +221,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=True,
+        child_scope="none",
     ),
     "import_credit_cards_batch": MCPToolMeta(
         name="import_credit_cards_batch",
@@ -239,6 +273,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=True,
+        child_scope="none",
     ),
     "get_child_literacy_profile": MCPToolMeta(
         name="get_child_literacy_profile",
@@ -258,6 +293,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="child_optional",
     ),
     "get_literacy_weekly_data": MCPToolMeta(
         name="get_literacy_weekly_data",
@@ -281,6 +317,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="child",
     ),
     "get_travel_trips": MCPToolMeta(
         name="get_travel_trips",
@@ -303,6 +340,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     "get_travel_expenses": MCPToolMeta(
         name="get_travel_expenses",
@@ -322,6 +360,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     "get_travel_split_balances": MCPToolMeta(
         name="get_travel_split_balances",
@@ -335,6 +374,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     # ── Learning-tutor skill (Task 4 SDD) ──────────────────────────────
     "get_learning_topic": MCPToolMeta(
@@ -353,6 +393,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="child",
     ),
     "get_child_learning_profile": MCPToolMeta(
         name="get_child_learning_profile",
@@ -370,6 +411,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="child",
     ),
     "record_learning_result": MCPToolMeta(
         name="record_learning_result",
@@ -411,6 +453,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=True,
+        child_scope="session_unscoped",
     ),
     # ── Smart-tutor skill (Issue #191 — Socratic guidance) ─────────────
     "get_guided_question": MCPToolMeta(
@@ -430,6 +473,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "child", "external_token"}),
         requires_write=False,
+        child_scope="child",
     ),
     "submit_guided_answer": MCPToolMeta(
         name="submit_guided_answer",
@@ -459,6 +503,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "child", "external_token"}),
         requires_write=False,
+        child_scope="session_child",
     ),
     "get_knowledge_bridge": MCPToolMeta(
         name="get_knowledge_bridge",
@@ -481,6 +526,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "child", "external_token"}),
         requires_write=False,
+        child_scope="child",
     ),
     "get_teacher_persona": MCPToolMeta(
         name="get_teacher_persona",
@@ -504,6 +550,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "child", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     "record_tutoring_step": MCPToolMeta(
         name="record_tutoring_step",
@@ -569,6 +616,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=True,
+        child_scope="session",
     ),
     # ── Teach-back skill (Issue #216) ───────────────────────────────────
     "record_teach_back_turn": MCPToolMeta(
@@ -618,6 +666,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=True,
+        child_scope="session",
     ),
     # ── Learning-topic-generator skill (Issue #190) ───────────────────
     "get_taxonomy_topic": MCPToolMeta(
@@ -639,6 +688,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     "get_taxonomy_dependencies": MCPToolMeta(
         name="get_taxonomy_dependencies",
@@ -655,6 +705,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     "list_taxonomy_topics": MCPToolMeta(
         name="list_taxonomy_topics",
@@ -683,6 +734,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     "validate_question": MCPToolMeta(
         name="validate_question",
@@ -728,6 +780,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="none",
     ),
     "get_child_weak_points": MCPToolMeta(
         name="get_child_weak_points",
@@ -754,6 +807,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "external_token"}),
         requires_write=False,
+        child_scope="child",
     ),
     # ── Adaptive question selection (Issue #191 Phase 3) ────────────────
     "select_adaptive_question": MCPToolMeta(
@@ -810,6 +864,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "child", "external_token"}),
         requires_write=False,
+        child_scope="child",
     ),
     # ── Hint generation (Issue #191 Phase 4) ────────────────────────────
     "generate_hint": MCPToolMeta(
@@ -850,6 +905,7 @@ TOOL_REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member", "child", "external_token"}),
         requires_write=False,
+        child_scope="child",
     ),
 }
 
@@ -873,3 +929,36 @@ def validate_registry() -> None:
             raise RuntimeError(
                 f"MCP tool registry invalid: '{name}' has unknown roles: {invalid}"
             )
+        _validate_child_scope(name, meta)
+
+
+def _validate_child_scope(name: str, meta: MCPToolMeta) -> None:
+    """The declared child_scope must agree with the schema it describes.
+
+    Derived from input_schema rather than a hand-kept list, so a tool added
+    later cannot quietly escape the child self-scope rule.
+    """
+    if meta.child_scope not in VALID_CHILD_SCOPES:
+        raise RuntimeError(
+            f"MCP tool registry invalid: '{name}' has unknown child_scope: "
+            f"{meta.child_scope!r}"
+        )
+    props = meta.input_schema.get("properties", {})
+    actual_handles = ("child_id" in props, "session_id" in props)
+    declared_handles = _CHILD_SCOPE_HANDLES[meta.child_scope]
+    if declared_handles != actual_handles:
+        raise RuntimeError(
+            f"MCP tool registry invalid: '{name}' declares child_scope="
+            f"'{meta.child_scope}' but its schema carries "
+            f"(child_id, session_id)={actual_handles}"
+        )
+    if (
+        "child" in meta.allowed_roles
+        and any(actual_handles)
+        and meta.child_scope in ("none", "session_unscoped")
+    ):
+        raise RuntimeError(
+            f"MCP tool registry invalid: '{name}' is available to a child "
+            f"caller but declares child_scope='{meta.child_scope}', which "
+            "leaves its per-child handle unguarded"
+        )
