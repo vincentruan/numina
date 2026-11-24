@@ -273,7 +273,203 @@
               </template>
             </van-collapse-item>
 
-            <!-- Module 7: Knowledge Castle (Issue #235) -->
+            <!-- Module 7: Progress Overview (Issue #245) -->
+            <van-collapse-item name="progressOverview">
+              <template #title>
+                <div class="collapse-title-row">
+                  <IIcon icon="mdi:chart-box-outline" size="18" color="var(--van-primary-color)" />
+                  <span>{{ t('learning.progressOverview.title') }}</span>
+                </div>
+              </template>
+
+              <!-- Sub-block 1: XP / Level / Streak -->
+              <div v-if="statsState === 'loading'" class="progress-loading">
+                <van-skeleton :rows="2" :round="true" />
+              </div>
+              <div v-else-if="statsState === 'error'" class="progress-error">
+                <span>{{ t('learning.progressOverview.loadFailed') }}</span>
+                <van-button size="mini" plain @click="loadProgressOverview">
+                  {{ t('learning.progressOverview.retry') }}
+                </van-button>
+              </div>
+              <template v-else-if="statsState === 'content'">
+                <div class="progress-xp-section">
+                  <div class="progress-level-row">
+                    <span class="progress-emoji">{{ learningStats?.level_emoji }}</span>
+                    <span class="progress-level-name">
+                      {{ locale.startsWith('zh') ? learningStats?.level_name_zh : learningStats?.level_name_en }}
+                    </span>
+                    <van-tag type="primary" plain>
+                      {{ t('learning.progressOverview.level') }} {{ learningStats?.level }}
+                    </van-tag>
+                  </div>
+                  <div class="progress-meta-row">
+                    <span class="progress-meta-item">
+                      <strong>{{ learningStats?.cumulative_xp }}</strong>
+                      <em>{{ t('learning.progressOverview.xp') }}</em>
+                    </span>
+                    <span class="progress-meta-item">
+                      <strong>{{ learningStats?.learning_streak_days }}</strong>
+                      <em>{{ t('learning.progressOverview.streakDays') }}</em>
+                    </span>
+                  </div>
+                  <div v-if="learningStats?.next_level_threshold != null" class="progress-next-level">
+                    <span>{{ t('learning.progressOverview.nextLevel') }}：
+                      {{ learningStats.next_level_name_zh }}
+                      （{{ learningStats.next_level_threshold }} {{ t('learning.progressOverview.xp') }}）
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Sub-block 2: Four status cards -->
+                <div class="progress-status-grid">
+                  <div class="progress-status-card progress-status-card--mastered">
+                    <span class="progress-status-count">{{ learningStats?.mastered_count }}</span>
+                    <span class="progress-status-label">{{ t('learning.mastered') }}</span>
+                  </div>
+                  <div class="progress-status-card progress-status-card--learning">
+                    <span class="progress-status-count">{{ learningStats?.learning_count }}</span>
+                    <span class="progress-status-label">{{ t('learning.learning') }}</span>
+                  </div>
+                  <div class="progress-status-card progress-status-card--available">
+                    <span class="progress-status-count">{{ learningStats?.available_count }}</span>
+                    <span class="progress-status-label">
+                      {{ t('learning.available') }}
+                      <em class="progress-status-hint">{{ t('learning.progressOverview.availableHint') }}</em>
+                    </span>
+                  </div>
+                  <div class="progress-status-card progress-status-card--review">
+                    <span class="progress-status-count">{{ learningStats?.review_count }}</span>
+                    <span class="progress-status-label">{{ t('learning.review') }}</span>
+                  </div>
+                </div>
+
+                <!-- Sub-block 3: Study time -->
+                <div class="progress-study-time">
+                  <div class="progress-section-title">{{ t('learning.progressOverview.studyTime') }}</div>
+                  <div class="progress-study-time-row">
+                    <span class="progress-study-time-item">
+                      <strong>{{ learningStats?.total_study_minutes }}</strong>
+                      <em>{{ t('learning.progressOverview.totalMinutes') }}</em>
+                    </span>
+                    <span class="progress-study-time-item">
+                      <strong>{{ learningStats?.today_study_minutes }}</strong>
+                      <em>{{ t('learning.progressOverview.todayMinutes') }}</em>
+                    </span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Sub-block 4: Recent Activity (derived from sharedProgressRows) -->
+              <div class="progress-section">
+                <div class="progress-section-title">{{ t('learning.progressOverview.recentActivity') }}</div>
+                <div v-if="recentActivityState === 'loading'" class="progress-loading">
+                  <van-skeleton :rows="2" :round="true" />
+                </div>
+                <div v-else-if="recentActivityState === 'error'" class="progress-error">
+                  <span>{{ t('learning.progressOverview.loadFailed') }}</span>
+                </div>
+                <div v-else-if="recentActivityRows.length === 0" class="progress-empty">
+                  {{ t('learning.progressOverview.noActivity') }}
+                </div>
+                <template v-else>
+                  <div
+                    v-for="row in recentActivityRows.slice(0, 5)"
+                    :key="row.topic_id"
+                    class="progress-activity-item"
+                  >
+                    <div class="progress-activity-name">
+                      {{ topicDisplayName(row) }}
+                    </div>
+                    <div class="progress-activity-meta">
+                      <van-tag :type="masteryTagType(row.mastery_level)" size="medium">
+                        {{ masteryLabel(row.mastery_level) }}
+                      </van-tag>
+                      <span v-if="row.mastery_score != null" class="progress-activity-score">
+                        {{ Math.round(row.mastery_score * 100) }}%
+                      </span>
+                      <span v-if="row.last_practice_at" class="progress-activity-time">
+                        {{ formatSessionTime(row.last_practice_at) }}
+                      </span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Sub-block 5: Weak Topics -->
+              <div class="progress-section">
+                <div class="progress-section-title">{{ t('learning.progressOverview.weakTopics') }}</div>
+                <div v-if="weakState === 'loading'" class="progress-loading">
+                  <van-skeleton :rows="2" :round="true" />
+                </div>
+                <div v-else-if="weakState === 'error'" class="progress-error">
+                  <span>{{ t('learning.progressOverview.loadFailed') }}</span>
+                  <van-button size="mini" plain @click="loadWeakTopics">
+                    {{ t('learning.progressOverview.retry') }}
+                  </van-button>
+                </div>
+                <div v-else-if="weakTopics.length === 0" class="progress-empty">
+                  {{ t('learning.progressOverview.weakTopicsEmpty') }}
+                </div>
+                <template v-else>
+                  <div
+                    v-for="wt in weakTopics.slice(0, 5)"
+                    :key="wt.topic_id"
+                    class="progress-weak-item"
+                  >
+                    <div class="progress-weak-name">
+                      {{ locale.startsWith('zh') ? (wt.topic_name_zh || wt.topic_name) : wt.topic_name }}
+                    </div>
+                    <div class="progress-weak-meta">
+                      <span class="progress-weak-accuracy">{{ Math.round(wt.accuracy * 100) }}%</span>
+                      <span class="progress-weak-attempts">
+                        {{ wt.total_attempts }} {{ t('learning.progressOverview.attempts') }}
+                      </span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Sub-block 6: Recent Sessions -->
+              <div class="progress-section">
+                <div class="progress-section-title">{{ t('learning.progressOverview.recentSessions') }}</div>
+                <div v-if="sessionsState === 'loading'" class="progress-loading">
+                  <van-skeleton :rows="2" :round="true" />
+                </div>
+                <div v-else-if="sessionsState === 'error'" class="progress-error">
+                  <span>{{ t('learning.progressOverview.loadFailed') }}</span>
+                  <van-button size="mini" plain @click="loadPracticeSessions">
+                    {{ t('learning.progressOverview.retry') }}
+                  </van-button>
+                </div>
+                <div v-else-if="visibleSessions.length === 0" class="progress-empty">
+                  {{ t('learning.progressOverview.sessionsEmpty') }}
+                </div>
+                <template v-else>
+                  <div
+                    v-for="sess in visibleSessions.slice(0, 5)"
+                    :key="sess.session_id"
+                    class="progress-session-item"
+                  >
+                    <div class="progress-session-name">
+                      {{ locale.startsWith('zh') ? (sess.topic_name_zh || sess.topic_name) : sess.topic_name }}
+                    </div>
+                    <div class="progress-session-meta">
+                      <van-tag
+                        :type="sess.total_score != null && sess.total_score >= 0.8 ? 'success' : sess.total_score != null && sess.total_score >= 0.6 ? 'warning' : 'danger'"
+                        size="medium"
+                      >
+                        {{ sess.total_score != null ? Math.round(sess.total_score * 100) : '-' }}%
+                      </van-tag>
+                      <span>{{ sess.completed_count }}/{{ sess.total_count }}</span>
+                      <span>{{ formatSessionTime(sess.started_at) }}</span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </van-collapse-item>
+
+            <!-- Module 8: Knowledge Castle (Issue #235) -->
             <van-collapse-item name="castle">
               <template #title>
                 <div class="collapse-title-row">
@@ -358,6 +554,9 @@ import {
   getTopicsBatch,
   getChildSmartTutorSessions,
   fetchChildCastle,
+  getChildLearningStats,
+  getChildWeakTopics,
+  getChildPracticeSessions,
   type ChildLearningOverview,
   type ReviewItem,
   type PathResponse,
@@ -368,6 +567,9 @@ import {
   type TopicResponse,
   type SmartTutorSessionResponse,
   type CastleIndex,
+  type ParentChildLearningStats,
+  type ParentWeakTopicItem,
+  type ParentPracticeSessionItem,
 } from '@/api/learning'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -405,6 +607,59 @@ const castleState = computed<'loading' | 'error' | 'content'>(() => {
   if (castleError.value) return 'error'
   return 'content'
 })
+
+// Progress Overview (Issue #245)
+const learningStats = ref<ParentChildLearningStats | null>(null)
+const statsLoading = ref(false)
+const statsError = ref(false)
+const weakTopics = ref<ParentWeakTopicItem[]>([])
+const weakLoading = ref(false)
+const weakError = ref(false)
+const practiceSessions = ref<ParentPracticeSessionItem[]>([])
+const sessionsLoading = ref(false)
+const sessionsError = ref(false)
+let progressOverviewLoaded = false
+
+const statsState = computed<'loading' | 'error' | 'content'>(() => {
+  if (statsLoading.value) return 'loading'
+  if (statsError.value) return 'error'
+  return 'content'
+})
+
+const weakState = computed<'loading' | 'error' | 'content'>(() => {
+  if (weakLoading.value) return 'loading'
+  if (weakError.value) return 'error'
+  return 'content'
+})
+
+const sessionsState = computed<'loading' | 'error' | 'content'>(() => {
+  if (sessionsLoading.value) return 'loading'
+  if (sessionsError.value) return 'error'
+  return 'content'
+})
+
+// Recent activity derived from sharedProgressRows (getChildMap)
+const recentActivityState = computed<'loading' | 'error' | 'content'>(() => {
+  if (loading.value && sharedProgressRows.value.length === 0) return 'loading'
+  return 'content'
+})
+
+const recentActivityRows = computed(() => {
+  return sharedProgressRows.value
+    .filter((r) => r.last_practice_at != null)
+    .sort((a, b) => {
+      const at = a.last_practice_at ?? ''
+      const bt = b.last_practice_at ?? ''
+      return bt.localeCompare(at)
+    })
+    .slice(0, 10)
+})
+
+// Filter out in-progress sessions (ended_at is null)
+const visibleSessions = computed(() =>
+  practiceSessions.value.filter((s) => s.ended_at != null),
+)
+
 const actioningId = ref<string | null>(null)
 const dnaGraphItems = ref<ProgressWithTopic[]>([])
 const dnaGraphLoading = ref(false)
@@ -628,6 +883,81 @@ async function loadCastle() {
   }
 }
 
+async function loadProgressOverview() {
+  const childId = babyStore.selectedChildId
+  if (!childId) return
+
+  statsLoading.value = true
+  statsError.value = false
+  try {
+    const data = await getChildLearningStats(childId)
+    if (babyStore.selectedChildId !== childId) return
+    learningStats.value = data
+  } catch {
+    if (babyStore.selectedChildId !== childId) return
+    learningStats.value = null
+    statsError.value = true
+  } finally {
+    if (babyStore.selectedChildId === childId) statsLoading.value = false
+  }
+}
+
+async function loadWeakTopics() {
+  const childId = babyStore.selectedChildId
+  if (!childId) return
+
+  weakLoading.value = true
+  weakError.value = false
+  try {
+    const data = await getChildWeakTopics(childId)
+    if (babyStore.selectedChildId !== childId) return
+    weakTopics.value = data
+  } catch {
+    if (babyStore.selectedChildId !== childId) return
+    weakTopics.value = []
+    weakError.value = true
+  } finally {
+    if (babyStore.selectedChildId === childId) weakLoading.value = false
+  }
+}
+
+async function loadPracticeSessions() {
+  const childId = babyStore.selectedChildId
+  if (!childId) return
+
+  sessionsLoading.value = true
+  sessionsError.value = false
+  try {
+    const data = await getChildPracticeSessions(childId, 10, 0)
+    if (babyStore.selectedChildId !== childId) return
+    practiceSessions.value = data
+  } catch {
+    if (babyStore.selectedChildId !== childId) return
+    practiceSessions.value = []
+    sessionsError.value = true
+  } finally {
+    if (babyStore.selectedChildId === childId) sessionsLoading.value = false
+  }
+}
+
+function masteryLabel(level: string): string {
+  const key = `learning.${level}`
+  return t(key)
+}
+
+function masteryTagType(level: string): 'success' | 'warning' | 'primary' | 'default' {
+  if (level === 'mastered') return 'success'
+  if (level === 'learning') return 'warning'
+  if (level === 'review') return 'primary'
+  return 'default'
+}
+
+function topicDisplayName(row: ProgressResponse): string {
+  const topic = clusterMapTopicCache.value.get(row.topic_id)
+  if (!topic) return ''
+  return locale.value.startsWith('zh') && topic.name_zh ? topic.name_zh : topic.name ?? ''
+}
+
 // Shared progress rows from getChildMap — avoids duplicate fetch between DNA graph and cluster map
 const sharedProgressRows = ref<ProgressResponse[]>([])
 
@@ -711,6 +1041,12 @@ watch(expandedModules, (modules) => {
     castleLoaded = true
     loadCastle()
   }
+  if (modules.includes('progressOverview') && !progressOverviewLoaded) {
+    progressOverviewLoaded = true
+    loadProgressOverview()
+    loadWeakTopics()
+    loadPracticeSessions()
+  }
 })
 
 async function loadData() {
@@ -778,13 +1114,18 @@ async function refreshRecommendations() {
 
 async function onRefresh() {
   // Pull-to-refresh is the page's canonical recovery gesture — let it retry the
-  // castle too instead of leaving an errored module stuck.
+  // castle and progress overview too instead of leaving an errored module stuck.
   const castleExpanded = expandedModules.value.includes('castle')
   if (castleExpanded) castleLoaded = true
+  const progressExpanded = expandedModules.value.includes('progressOverview')
+  if (progressExpanded) progressOverviewLoaded = true
   await Promise.all([
     loadData(),
     loadChildDependentData(),
     castleExpanded ? loadCastle() : Promise.resolve(),
+    progressExpanded
+      ? Promise.all([loadProgressOverview(), loadWeakTopics(), loadPracticeSessions()])
+      : Promise.resolve(),
   ])
   refreshing.value = false
 }
@@ -801,6 +1142,17 @@ watch(() => babyStore.selectedChildId, (newId) => {
     if (expandedModules.value.includes('castle')) {
       castleLoaded = true
       loadCastle()
+    }
+    // Progress overview: reset and refetch if expanded
+    progressOverviewLoaded = false
+    learningStats.value = null
+    weakTopics.value = []
+    practiceSessions.value = []
+    if (expandedModules.value.includes('progressOverview')) {
+      progressOverviewLoaded = true
+      loadProgressOverview()
+      loadWeakTopics()
+      loadPracticeSessions()
     }
     loadChildDependentData()
   }
@@ -1200,5 +1552,190 @@ onActivated(async () => {
   font-size: 11px;
   color: var(--text-secondary);
   margin-top: 4px;
+}
+
+/* Progress Overview (Issue #245) */
+.progress-loading,
+.progress-error,
+.progress-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.progress-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-xp-section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--van-border-color);
+}
+
+.progress-level-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.progress-emoji {
+  font-size: 24px;
+}
+
+.progress-level-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.progress-meta-row {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 8px;
+}
+
+.progress-meta-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.progress-meta-item strong {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.progress-meta-item em {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: normal;
+}
+
+.progress-next-level {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.progress-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--van-border-color);
+}
+
+.progress-status-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--card-bg);
+}
+
+.progress-status-count {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.progress-status-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: 4px;
+}
+
+.progress-status-hint {
+  display: block;
+  font-size: 10px;
+  font-style: normal;
+  opacity: 0.7;
+}
+
+.progress-study-time {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--van-border-color);
+}
+
+.progress-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.progress-study-time-row {
+  display: flex;
+  gap: 24px;
+}
+
+.progress-study-time-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.progress-study-time-item strong {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.progress-study-time-item em {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: normal;
+}
+
+.progress-section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--van-border-color);
+}
+
+.progress-section:last-child {
+  border-bottom: none;
+}
+
+.progress-activity-item,
+.progress-weak-item,
+.progress-session-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--van-border-color);
+}
+
+.progress-activity-item:last-child,
+.progress-weak-item:last-child,
+.progress-session-item:last-child {
+  border-bottom: none;
+}
+
+.progress-activity-name,
+.progress-weak-name,
+.progress-session-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.progress-activity-meta,
+.progress-weak-meta,
+.progress-session-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.progress-activity-score,
+.progress-weak-accuracy {
+  font-weight: 600;
+  color: var(--van-warning-color);
 }
 </style>

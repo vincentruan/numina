@@ -14,6 +14,10 @@ export interface ChildLearningOverview {
   locked_count: number
   review_count: number
   total_study_minutes: number
+  cumulative_xp: number
+  level: number
+  level_name_zh: string
+  learning_streak_days: number
 }
 
 export interface CurriculumStandard {
@@ -450,5 +454,74 @@ export interface CastleIndex {
 
 export async function fetchChildCastle(childId: string): Promise<CastleIndex> {
   const res = await http.get(`/family/learning/children/${childId}/castle/index`)
+  return res.data
+}
+
+// --- Progress Overview (Parent View, Issue #245) ---
+
+export interface ParentChildLearningStats {
+  child_id: string
+  cumulative_xp: number
+  level: number
+  level_name_zh: string
+  level_name_en: string
+  level_emoji: string
+  next_level_threshold: number | null
+  next_level_name_zh: string | null
+  learning_streak_days: number
+  total_study_minutes: number
+  today_study_minutes: number
+  mastered_count: number
+  learning_count: number
+  available_count: number
+  review_count: number
+}
+
+export interface ParentWeakTopicItem {
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string | null
+  total_attempts: number
+  correct_attempts: number
+  accuracy: number
+  last_practice_at: string
+  mastery_level: string
+}
+
+export interface ParentPracticeSessionItem {
+  session_id: string
+  topic_id: string
+  topic_name: string
+  topic_name_zh: string | null
+  session_mode: string
+  total_score: number | null
+  completed_count: number
+  total_count: number
+  started_at: string
+  ended_at: string | null
+}
+
+export async function getChildLearningStats(
+  childId: string,
+): Promise<ParentChildLearningStats> {
+  const res = await http.get(`/family/learning/children/${childId}/learning-stats`)
+  return res.data
+}
+
+export async function getChildWeakTopics(
+  childId: string,
+): Promise<ParentWeakTopicItem[]> {
+  const res = await http.get(`/family/learning/children/${childId}/weak-topics`)
+  return res.data
+}
+
+export async function getChildPracticeSessions(
+  childId: string,
+  limit = 10,
+  offset = 0,
+): Promise<ParentPracticeSessionItem[]> {
+  const res = await http.get(`/family/learning/children/${childId}/practice-sessions`, {
+    params: { limit, offset },
+  })
   return res.data
 }
