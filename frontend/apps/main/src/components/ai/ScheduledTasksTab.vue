@@ -292,9 +292,17 @@ const form = reactive({
 
 // i18n dayLabels are Monday-first: ['周一',...,'周日'].
 // UI index 0=Monday ... 6=Sunday; cron uses 0/7=Sunday, 1-6=Monday-Saturday.
+// vue-i18n returns the raw key path for an array-valued message unless the
+// message is resolved as an object, so this yields [] and the weekly day
+// picker disappeared. Fall back to English labels rather than an empty list —
+// the cron value is numeric, only the button text suffers.
+const FALLBACK_DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
 const dayLabelsForCron = computed(() => {
   const labels = t('familyConfig.dayLabels', { returnObjects: true }) as unknown
-  return Array.isArray(labels) && labels.length >= 7 ? labels as string[] : []
+  return Array.isArray(labels) && labels.length >= 7
+    ? (labels as string[])
+    : FALLBACK_DAY_LABELS
 })
 
 const skillColumns = computed(() =>
