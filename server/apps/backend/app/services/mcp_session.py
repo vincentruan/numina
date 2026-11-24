@@ -508,22 +508,22 @@ class MCPSession:
                 if _scope_denial is None and "child_id" in meta.input_schema.get(
                     "properties", {}
                 ):
-                    if meta.child_scope == "child_optional" and (
-                        arguments.get("child_id") in (None, "")
+                    _requested_child = arguments.get("child_id")
+                    if (
+                        meta.child_scope == "child_optional"
+                        and _requested_child in (None, "")
                     ):
                         arguments = {**arguments, "child_id": str(user.id)}
-                    else:
-                        _requested_child = arguments.get("child_id")
-                        if _requested_child not in (None, ""):
-                            try:
-                                int(_requested_child)
-                            except (ValueError, TypeError):
-                                # Not an identity question — the handler's own
-                                # argument validation reports it as today.
-                                pass
-                            else:
-                                if str(_requested_child) != str(user.id):
-                                    _scope_denial = "child_id"
+                    elif _requested_child not in (None, ""):
+                        try:
+                            int(_requested_child)
+                        except (ValueError, TypeError):
+                            # Not an identity question — the handler's own
+                            # argument validation reports it as today.
+                            pass
+                        else:
+                            if str(_requested_child) != str(user.id):
+                                _scope_denial = "child_id"
 
                 if _scope_denial is not None:
                     logger.warning(
