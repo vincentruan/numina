@@ -222,7 +222,7 @@ describe('BabyLearningPage - Progress Overview', () => {
     expect(zhCN.learning.pendingReview).toBe('待审核')
     expect(zhCN.learning.review).not.toBe(zhCN.learning.pendingReview)
 
-    expect(enUS.learning.review).toBe('Needs Review')
+    expect(enUS.learning.review).toBe('Review')
     expect(enUS.learning.pendingReview).toBe('Pending Review')
     expect(enUS.learning.review).not.toBe(enUS.learning.pendingReview)
   })
@@ -286,5 +286,66 @@ describe('BabyLearningPage - Progress Overview', () => {
     expect(typeof mockWeakTopics[0].topic_id).toBe('string')
     expect(typeof mockSessions[0].session_id).toBe('string')
     expect(typeof mockSessions[0].topic_id).toBe('string')
+  })
+})
+
+// --- Shared-concept wording, locked against the child app's locale modules ---
+
+describe('Parent/child shared wording', () => {
+  // Keys that exist on both sides with the same shape, so they must match
+  // verbatim. totalMinutes/todayMinutes are excluded: the child app renders
+  // them as compound strings ("分钟（总计）") while the parent uses standalone
+  // labels.
+  const SHARED_KEYS = [
+    'studyTime',
+    'recentActivity',
+    'weakTopics',
+    'attempts',
+    'recentSessions',
+  ] as const
+
+  const STATUS_KEYS = ['mastered', 'learning', 'available', 'locked', 'review'] as const
+
+  it('zh-CN shared progress keys match the child app verbatim', async () => {
+    const child = (await import('@child-i18n/zh-CN')).default
+    for (const key of SHARED_KEYS) {
+      expect(
+        (zhCN.learning.progressOverview as Record<string, string>)[key],
+        `zh-CN ${key}`,
+      ).toBe(child.learning.progress[key])
+    }
+  })
+
+  it('en-US shared progress keys match the child app verbatim', async () => {
+    const child = (await import('@child-i18n/en-US')).default
+    for (const key of SHARED_KEYS) {
+      expect(
+        (enUS.learning.progressOverview as Record<string, string>)[key],
+        `en-US ${key}`,
+      ).toBe(child.learning.progress[key])
+    }
+  })
+
+  it('zh-CN status words match the child app verbatim', async () => {
+    const child = (await import('@child-i18n/zh-CN')).default
+    for (const key of STATUS_KEYS) {
+      expect((zhCN.learning as Record<string, string>)[key], `zh-CN ${key}`).toBe(
+        (child.learning.status as Record<string, string>)[key],
+      )
+    }
+  })
+
+  it('en-US status words match the child app verbatim', async () => {
+    const child = (await import('@child-i18n/en-US')).default
+    for (const key of STATUS_KEYS) {
+      expect((enUS.learning as Record<string, string>)[key], `en-US ${key}`).toBe(
+        (child.learning.status as Record<string, string>)[key],
+      )
+    }
+  })
+
+  it('review is never rendered as the pending-review wording', () => {
+    expect(zhCN.learning.review).not.toBe(zhCN.learning.pendingReview)
+    expect(enUS.learning.review).not.toBe(enUS.learning.pendingReview)
   })
 })

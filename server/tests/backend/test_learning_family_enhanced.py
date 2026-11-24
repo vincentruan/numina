@@ -895,3 +895,62 @@ class TestPracticeSessions:
             headers=child_auth_headers,
         )
         assert resp.status_code == 403
+
+
+# === U6: ID serialization contract across all three endpoints ===
+
+
+class TestIdSerializationContract:
+    """Every ID field on the three new endpoints is a JSON string."""
+
+    @pytest.mark.parametrize(
+        ("path_suffix", "id_fields"),
+        [
+            ("learning-stats", ["child_id"]),
+            ("weak-topics", ["topic_id"]),
+            ("practice-sessions", ["session_id", "topic_id"]),
+        ],
+    )
+    def test_ids_are_strings(
+        self,
+        db: Session,
+        parent_children_family,
+        weak_topics_setup,
+        practice_sessions_setup,
+        path_suffix,
+        id_fields,
+    ):
+        # Both fixtures share the same first child, so each endpoint has rows
+        # to serialize rather than returning an empty list.
+        child_id = parent_children_family["child_ids"][0]
+
+        # Give weak-topics at least one qualifying row.
+        from packages.db.models.learning.practice import PracticeAttempt
+
+        session_id = practice_sessions_setup["sessions"][0].id
+        for i in range(3):
+            db.add(
+                PracticeAttempt(
+                    session_id=session_id,
+                    question_id=8000 + i,
+                    child_id=child_id,
+                    topic_id=weak_topics_setup["topics"][0].id,
+                    user_answer_json="{}",
+                    is_correct=False,
+                    attempt_number=i + 1,
+                )
+            )
+        db.flush()
+
+        resp = parent_children_family["client"].get(
+            f"/api/v1/family/learning/children/{child_id}/{path_suffix}",
+            headers=parent_children_family["auth_headers"],
+        )
+        assert resp.status_code == 200
+
+        body = resp.json()["data"]
+        rows = body if isinstance(body, list) else [body]
+        assert rows, f"{path_suffix} returned no rows to check"
+        for row in rows:
+            for field in id_fields:
+                assert isinstance(row[field], str), f"{path_suffix}.{field} is not a str"
