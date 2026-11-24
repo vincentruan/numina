@@ -383,6 +383,34 @@ class TestChildSelfScopeGate:
 
         assert json.loads(result[0].text)["error"] == "permission_denied"
 
+    async def test_non_integer_session_id_is_denied(self):
+        """A non-numeric session_id is denied by the gate, not passed to the handler.
+
+        The gate's int() conversion catches ValueError/TypeError and sets
+        _session_id = None, which triggers _scope_denial = "session_id".
+        This is the session_id equivalent of test_non_numeric_child_id_is_a_handler_argument_error,
+        but the outcome differs: session_id denial is permission_denied (the gate answers),
+        while non-numeric child_id is invalid_arguments (the handler answers).
+        """
+        mock_db = MagicMock()
+        session = MCPSession("100", CHILD_A, "child")
+        args = {
+            "question_id": 1,
+            "child_id": str(CHILD_A),
+            "session_id": "not-a-number",
+            "step_number": 1,
+            "answer_text": "因为 2+3=5",
+        }
+
+        with _patch_child_call(mock_db):
+            result = await session.call_tool("submit_guided_answer", args)
+
+        body = json.loads(result[0].text)
+        assert body["error"] == "permission_denied"
+        assert body["retryable"] is False
+        # The gate answered before any handler ran, so no DB query happened.
+        mock_db.query.assert_not_called()
+
     async def test_own_session_reaches_the_handler(self):
         mock_db = MagicMock()
         # Gate sees the caller's own session; the handler then re-checks it.
@@ -468,6 +496,44 @@ class TestChildSelfScopeGate:
         # The handler ran (no permission error) and returned an empty children
         # list, proving the gate pinned the query to the caller rather than
         # letting it enumerate the whole family.
+        assert "children" in body
+        assert body["children"] == []
+
+    async def test_empty_string_child_id_is_pinned_to_caller(self):
+        """An empty-string child_id on a child_optional tool means 'me'.
+
+        The gate treats None and '' identically for child_optional: both resolve
+        to the caller's own id. This locks the contract that the correctness
+        reviewer noted was only tested with None.
+        """
+        from apps.backend.app.services import mcp_tool_registry as registry
+
+        meta = registry.get_tool("get_child_literacy_profile")
+        assert meta is not None
+        widened = registry.MCPToolMeta(
+            name=meta.name,
+            description=meta.description,
+            input_schema=meta.input_schema,
+            allowed_roles=meta.allowed_roles | {"child"},
+            requires_write=meta.requires_write,
+            child_scope=meta.child_scope,
+        )
+        mock_db = MagicMock()
+        mock_db.query.return_value.all.return_value = []
+        mock_db.query.return_value.filter.return_value.all.return_value = []
+        session = MCPSession("100", CHILD_A, "child")
+
+        with (
+            patch.dict(registry.TOOL_REGISTRY, {meta.name: widened}),
+            _patch_child_call(mock_db),
+        ):
+            result = await session.call_tool(
+                "get_child_literacy_profile", {"child_id": ""}
+            )
+
+        body = json.loads(result[0].text)
+        # The handler ran (no permission error) — the gate pinned the query to
+        # the caller rather than denying the empty-string value.
         assert "children" in body
         assert body["children"] == []
 
