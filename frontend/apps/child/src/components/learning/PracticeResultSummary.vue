@@ -27,6 +27,20 @@
       </div>
     </div>
 
+    <!-- Teach-Back CTA — first mastery, before castle CTA (Task 3) -->
+    <button
+      v-if="showTeachBackCta"
+      type="button"
+      class="btn-teach-back"
+      data-test="teach-back-cta"
+      @click="goToTeachBack"
+    >
+      <span class="btn-teach-back__icon">🎓</span>
+      <span class="btn-teach-back__text">
+        {{ t('learning.teach_back.result_cta') }}
+      </span>
+    </button>
+
     <!-- First mastery: castle CTA carrying ?new=<topicId> for the brick-drop (R5, F1) -->
     <button
       v-if="showCastleCta"
@@ -63,6 +77,10 @@ const props = defineProps<{
   topicId?: string
   /** True only when THIS session first pushed the topic to 'mastered'. */
   isFirstMastery?: boolean
+  /** Topic subject — needed for teach-back route query. */
+  topicSubject?: string
+  /** Topic age_group — needed for teach-back route query. */
+  topicAgeGroup?: string
 }>()
 
 defineEmits<{ again: []; back: [] }>()
@@ -73,6 +91,19 @@ const router = useRouter()
 const showCastleCta = computed(
   () => Boolean(props.isFirstMastery) && Boolean(props.topicId),
 )
+
+const showTeachBackCta = computed(
+  () => Boolean(props.isFirstMastery) && Boolean(props.topicId),
+)
+
+function goToTeachBack(): void {
+  if (!props.topicId) return
+  const subject = props.topicSubject || 'mathematics'
+  const ageGroup = props.topicAgeGroup || 'mid'
+  router.push(
+    `/learning/teach-back/${props.topicId}?subject=${subject}&ageGroup=${ageGroup}`,
+  )
+}
 
 function goToCastle(): void {
   if (!props.topicId) return
@@ -189,6 +220,30 @@ const hasRewards = computed(() =>
 .btn-primary {
   background: var(--color-primary);
   color: var(--color-canvas);
+}
+
+/* Teach-Back CTA — warm ochre border, between castle CTA and ordinary buttons */
+.btn-teach-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  margin-bottom: 10px;
+  border: 2px solid var(--color-brand-ochre, #e8b94a);
+  border-radius: 14px;
+  background: var(--color-surface-card);
+  color: var(--color-ink);
+  font-size: 16px;
+  font-weight: 600;
+  transition: transform 0.1s;
+}
+.btn-teach-back:active {
+  transform: scale(0.97);
+}
+.btn-teach-back__icon {
+  font-size: 22px;
 }
 
 /* Castle CTA — the primary action on first mastery (R5, F1) */

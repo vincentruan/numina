@@ -15,11 +15,10 @@
         <div v-if="error" class="error-msg">{{ error }}</div>
 
         <template v-else>
-          <!-- Page title -->
-          <h1 class="page-title">{{ t('learning.progress.title') }}</h1>
+          <!-- Page title — child-friendly wording -->
+          <h1 class="page-title">{{ t('learning.progress.childTitle') }}</h1>
 
-          <!-- Castle entry replaces the XP bar as the primary visual (R9).
-               XP level and streak stay visible below, as secondary detail. -->
+          <!-- Castle entry card — kept as primary visual -->
           <button
             type="button"
             class="castle-entry-card"
@@ -33,7 +32,52 @@
             </span>
           </button>
 
-          <!-- XP / Level / Streak — secondary position, still visible -->
+          <!-- Up next recommendation card -->
+          <div
+            v-if="nextRecommendation"
+            class="next-up-card"
+            data-test="next-up-card"
+            @click="goToTopic(nextRecommendation.topic_id)"
+          >
+            <div class="next-up-card__header">
+              <span class="next-up-card__icon" aria-hidden="true">🎯</span>
+              <span class="next-up-card__label">{{ t('learning.progress.nextUp') }}</span>
+            </div>
+            <p class="next-up-card__name">{{ nextRecommendation.topic_name }}</p>
+            <p v-if="nextRecommendation.reasons.length > 0" class="next-up-card__reason">
+              {{ formatReasons(nextRecommendation.reasons) }}
+            </p>
+            <button class="next-up-card__cta">
+              {{ t('learning.startLearning') }}
+            </button>
+          </div>
+
+          <!-- 7-day learning heatmap -->
+          <div class="streak-section" data-test="streak-section">
+            <h2 class="section-title">{{ t('learning.progress.streakTitle') }}</h2>
+            <div class="streak-dots">
+              <div
+                v-for="day in last7Days"
+                :key="day.date"
+                class="streak-dot"
+                :class="{
+                  'streak-dot--active': day.active,
+                  'streak-dot--today': day.isToday,
+                }"
+              >
+                <span class="streak-dot__day">{{ day.dayLabel }}</span>
+                <span v-if="day.active" class="streak-dot__fire" aria-hidden="true">🔥</span>
+              </div>
+            </div>
+            <p class="streak-summary">{{ streakSummary }}</p>
+          </div>
+
+          <!--
+            Sections below are commented out for child view — moved to parent view later.
+            Code kept intact, not deleted.
+          -->
+
+          <!--
           <div v-if="learningStats" class="xp-level-section xp-level-section--secondary">
             <div class="xp-level-header">
               <LevelBadge :emoji="learningStats.level_emoji" :name="locale === 'en-US' ? learningStats.level_name_en : learningStats.level_name_zh" />
@@ -48,7 +92,6 @@
             />
           </div>
 
-          <!-- Stats summary cards -->
           <div class="stats-grid">
             <div class="stat-card stat-card--mastered">
               <span class="stat-card__count">{{ masteredCount }}</span>
@@ -68,7 +111,6 @@
             </div>
           </div>
 
-          <!-- Study time -->
           <div class="study-section">
             <h2 class="section-title">{{ t('learning.progress.studyTime') }}</h2>
             <div class="study-stats">
@@ -83,7 +125,6 @@
             </div>
           </div>
 
-          <!-- Recent activity -->
           <div class="activity-section">
             <h2 class="section-title">{{ t('learning.progress.recentActivity') }}</h2>
             <div v-if="recentActivity.length === 0" class="activity-empty">
@@ -113,7 +154,6 @@
             </div>
           </div>
 
-          <!-- Weak topics card -->
           <div v-if="weakTopics.length > 0" class="weak-topics-section">
             <h2 class="section-title">{{ t('learning.progress.weakTopics') }}</h2>
             <div class="weak-topics-list">
@@ -139,7 +179,6 @@
             </div>
           </div>
 
-          <!-- Recent practice sessions -->
           <div v-if="recentSessions.length > 0" class="sessions-section">
             <h2 class="section-title">{{ t('learning.progress.recentSessions') }}</h2>
             <div class="sessions-list">
@@ -161,6 +200,7 @@
               </div>
             </div>
           </div>
+          -->
         </template>
       </van-pull-refresh>
     </template>
@@ -175,16 +215,14 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { useRecommendationPath } from '@/composables/useRecommendationPath'
 import { getMyLearningMap, getMyProgress, getMyLearningStats, getTopicsBatch, type ProgressResponse, type TopicResponse, type ChildProgressOverview, type LearningStatsResponse } from '@/api/learning'
-import { getWeakTopics, listPracticeSessions, type WeakTopicResponse, type SessionListItem } from '@/api/practice'
 import RoleShimmer from '@/components/RoleShimmer.vue'
-import XPProgressBar from '@/components/learning/XPProgressBar.vue'
-import LevelBadge from '@/components/learning/LevelBadge.vue'
-import LearningStreakBadge from '@/components/learning/LearningStreakBadge.vue'
 
 const { t, locale } = useI18n()
 const { topicDisplayName } = useLocalizedTopic()
 const { increment, decrement } = usePageLoading()
+const { allPathTopics, refresh: refreshRecommendations } = useRecommendationPath()
 
 const loading = ref(true)
 const refreshing = ref(false)
@@ -193,93 +231,76 @@ const progressList = ref<ProgressResponse[]>([])
 const topicMap = ref<Map<string, TopicResponse>>(new Map())
 const progressOverview = ref<ChildProgressOverview | null>(null)
 const learningStats = ref<LearningStatsResponse | null>(null)
-const weakTopics = ref<WeakTopicResponse[]>([])
-const recentSessions = ref<SessionListItem[]>([])
 const router = useRouter()
 
-// Computed stats
-const masteredCount = computed(() =>
-  progressList.value.filter((p) => p.mastery_level === 'mastered').length,
+// --- Up next recommendation ---
+const masteredIds = computed(() =>
+  new Set(progressList.value.filter(p => p.mastery_level === 'mastered').map(p => p.topic_id))
 )
 
-const learningCount = computed(() =>
-  progressList.value.filter((p) => p.mastery_level === 'learning').length,
-)
-
-const availableCount = computed(() =>
-  progressList.value.filter((p) => p.mastery_level === 'available').length,
-)
-
-const reviewCount = computed(() =>
-  progressList.value.filter((p) =>
-    p.mastery_level === 'mastered' &&
-    p.next_review_at &&
-    new Date(p.next_review_at) <= new Date()
-  ).length,
-)
-
-const totalStudyMinutes = computed(() => {
-  return progressOverview.value?.total_study_minutes ?? 0
+const nextRecommendation = computed(() => {
+  return allPathTopics.value.find(
+    rec => !masteredIds.value.has(rec.topic_id)
+  ) ?? null
 })
 
-const todayStudyMinutes = computed(() => {
-  return progressOverview.value?.today_study_minutes ?? 0
-})
+function formatReasons(reasons: readonly string[]): string {
+  return reasons.join(' · ')
+}
 
-// Recent activity: sort by last_practice_at descending, take top 10
-const recentActivity = computed(() => {
-  return [...progressList.value]
-    .filter((p) => p.last_practice_at)
-    .sort((a, b) => {
-      const dateA = new Date(a.last_practice_at!).getTime()
-      const dateB = new Date(b.last_practice_at!).getTime()
-      return dateB - dateA
+function goToTopic(topicId: string) {
+  router.push(`/learning/topic/${topicId}`)
+}
+
+// --- 7-day heatmap ---
+const last7Days = computed(() => {
+  const practiceDates = new Set<string>()
+  for (const p of progressList.value) {
+    if (p.last_practice_at) {
+      practiceDates.add(p.last_practice_at.slice(0, 10))
+    }
+  }
+  const days: Array<{
+    date: string
+    dayLabel: string
+    active: boolean
+    isToday: boolean
+  }> = []
+  const now = new Date()
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(d.getDate() - i)
+    const dateStr = d.toISOString().slice(0, 10)
+    days.push({
+      date: dateStr,
+      dayLabel: d.toLocaleDateString(locale.value, { weekday: 'short' }),
+      active: practiceDates.has(dateStr),
+      isToday: i === 0,
     })
-    .slice(0, 10)
+  }
+  return days
 })
 
-function getTopicName(topicId: string): string {
-  const topic = topicMap.value.get(topicId)
-  if (!topic) return topicId
-  return topicDisplayName(topic)
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString(locale.value, {
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
-function getWeakTopicDisplayName(item: { topic_name: string; topic_name_zh: string | null }): string {
-  return locale.value === 'en-US' ? item.topic_name : (item.topic_name_zh || item.topic_name)
-}
-
-function getSessionTopicName(session: { topic_name: string; topic_name_zh: string | null }): string {
-  return locale.value === 'en-US' ? session.topic_name : (session.topic_name_zh || session.topic_name)
-}
-
-function navigateToPractice(topicId: string) {
-  router.push(`/learning/practice/${topicId}`)
-}
+const streakSummary = computed(() => {
+  const activeDays = last7Days.value.filter(d => d.active).length
+  return t('learning.progress.streakSummary', { days: activeDays })
+})
 
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [progress, overview, stats, weak, sessions] = await Promise.all([
+    const [progress, overview, stats] = await Promise.all([
       getMyLearningMap(),
       getMyProgress(),
       getMyLearningStats(),
-      getWeakTopics(10, 3),
-      listPracticeSessions(10),
     ])
     progressList.value = progress
     progressOverview.value = overview
     learningStats.value = stats
-    weakTopics.value = weak
-    recentSessions.value = sessions
+
+    // Fetch recommendations for "up next" card
+    await refreshRecommendations()
 
     // Fetch topic details for display names — batch in chunks to avoid
     // URL length limits and single-point failures from Promise.all.
@@ -335,8 +356,7 @@ onMounted(async () => {
   margin: 0 0 20px;
 }
 
-/* XP/Level section */
-/* Castle entry card — primary visual on this page (R9) */
+/* Castle entry card */
 .castle-entry-card {
   display: flex;
   align-items: center;
@@ -372,34 +392,150 @@ onMounted(async () => {
   color: var(--color-muted);
 }
 
-.xp-level-section {
+/* Up next recommendation card */
+.next-up-card {
   margin-bottom: 20px;
+  padding: 16px;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.next-up-card:active {
+  transform: scale(0.98);
+}
+.next-up-card__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.next-up-card__icon {
+  font-size: 18px;
+  line-height: 1;
+}
+.next-up-card__label {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-body);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.next-up-card__name {
+  font-family: Inter, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-ink);
+  margin: 0 0 6px;
+}
+.next-up-card__reason {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-body);
+  margin: 0 0 14px;
+  line-height: 1.4;
+}
+.next-up-card__cta {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-brand-ochre, #e8b94a);
+  color: var(--color-ink);
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.1s;
+}
+.next-up-card__cta:active {
+  opacity: 0.85;
+}
+
+/* 7-day streak heatmap */
+.streak-section {
+  margin-bottom: 24px;
   padding: 16px;
   background: var(--color-surface-card);
   border-radius: var(--radius-lg);
 }
 
-/* XP is demoted to secondary weight now that the castle owns the main slot */
-.xp-level-section--secondary {
-  opacity: 0.85;
+.section-title {
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 12px;
 }
 
-.xp-level-header {
+.streak-dots {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
-/* Learning section on home */
-.learning-section {
-  margin: 12px 0;
-}
-
-.learning-header {
+.streak-dot {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 4px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.streak-dot__day {
+  font-family: Inter, sans-serif;
+  font-size: 11px;
+  color: var(--color-body);
+  text-transform: capitalize;
+}
+
+.streak-dot__day::after {
+  content: '';
+  display: block;
+  width: 28px;
+  height: 28px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--color-canvas);
+  border: 2px solid var(--color-muted);
+}
+
+.streak-dot--active .streak-dot__day::after {
+  background: var(--color-brand-ochre, #e8b94a);
+  border-color: var(--color-brand-ochre, #e8b94a);
+}
+
+.streak-dot--today .streak-dot__day::after {
+  border-width: 3px;
+  border-color: var(--color-ink);
+}
+
+.streak-dot--active.streak-dot--today .streak-dot__day::after {
+  border-color: var(--color-ink);
+}
+
+.streak-dot__fire {
+  position: absolute;
+  font-size: 14px;
+  line-height: 1;
+  margin-top: 22px;
+}
+
+.streak-dot {
+  position: relative;
+}
+
+.streak-summary {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+  text-align: center;
+  margin: 0;
 }
 
 .error-msg {
@@ -412,299 +548,12 @@ onMounted(async () => {
   font-size: 14px;
 }
 
-/* Stats grid */
-.stats-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 24px;
+/* Dark mode support */
+[data-theme="dark"] .next-up-card__cta {
+  color: var(--color-canvas);
 }
 
-.stat-card {
-  padding: 16px;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-card);
-  text-align: center;
-}
-
-.stat-card__count {
-  display: block;
-  font-family: Inter, sans-serif;
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.stat-card__label {
-  display: block;
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  margin-top: 4px;
-}
-
-.stat-card--mastered .stat-card__count {
-  color: var(--color-brand-ochre);
-}
-
-.stat-card--learning .stat-card__count {
-  color: var(--color-primary);
-}
-
-.stat-card--available .stat-card__count {
-  color: var(--color-body);
-}
-
-.stat-card--review .stat-card__count {
-  color: var(--color-brand-coral);
-}
-
-.stat-card--mastered .stat-card__label,
-.stat-card--learning .stat-card__label,
-.stat-card--available .stat-card__label,
-.stat-card--review .stat-card__label {
-  color: var(--color-body);
-}
-
-/* Study section */
-.study-section {
-  margin-bottom: 24px;
-  padding: 16px;
-  background: var(--color-surface-card);
-  border-radius: var(--radius-lg);
-}
-
-.section-title {
-  font-family: Inter, sans-serif;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-ink);
-  margin: 0 0 10px;
-}
-
-.study-stats {
-  display: flex;
-  gap: 24px;
-}
-
-.study-stat {
-  display: flex;
-  flex-direction: column;
-}
-
-.study-stat__value {
-  font-family: Inter, sans-serif;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--color-brand-ochre);
-}
-
-.study-stat__label {
-  font-family: Inter, sans-serif;
-  font-size: 12px;
-  color: var(--color-body);
-  margin-top: 2px;
-}
-
-/* Activity section */
-.activity-section {
-  margin-bottom: 24px;
-}
-
-.activity-empty {
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  color: var(--color-body);
-  text-align: center;
-  padding: 24px;
-  background: var(--color-surface-soft);
-  border-radius: var(--radius-md);
-}
-
-.activity-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.activity-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 14px;
-  background: var(--color-surface-card);
-  border-radius: var(--radius-md);
-}
-
-.activity-item__info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.activity-item__topic {
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.activity-item__status {
-  font-family: Inter, sans-serif;
-  font-size: 12px;
-  color: var(--color-body);
-}
-
-.activity-item__meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  color: var(--color-brand-ochre);
-  font-weight: 600;
-}
-
-.activity-item__date {
-  font-size: 11px;
-  color: var(--color-body);
-  font-weight: 400;
-}
-
-/* Weak topics section */
-.weak-topics-section {
-  margin-bottom: 24px;
-}
-
-.weak-topics-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.weak-topic-card {
-  padding: 12px 14px;
-  background: var(--color-surface-card);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-}
-
-.weak-topic-card__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.weak-topic-card__name {
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.weak-topic-card__accuracy {
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--color-brand-coral);
-  margin-left: 8px;
-}
-
-.weak-topic-card__footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.weak-topic-card__attempts {
-  font-family: Inter, sans-serif;
-  font-size: 12px;
-  color: var(--color-body);
-}
-
-.weak-topic-card__mastery {
-  font-family: Inter, sans-serif;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: var(--color-surface-soft);
-  color: var(--color-body);
-}
-
-.mastery--learning {
-  color: var(--color-primary);
-}
-
-.mastery--assessing {
-  color: var(--color-brand-ochre);
-}
-
-.mastery--mastered {
-  color: var(--color-brand-ochre);
-}
-
-.mastery--review {
-  color: var(--color-brand-coral);
-}
-
-/* Sessions section */
-.sessions-section {
-  margin-bottom: 24px;
-}
-
-.sessions-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.session-card {
-  padding: 12px 14px;
-  background: var(--color-surface-card);
-  border-radius: var(--radius-md);
-}
-
-.session-card__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.session-card__topic {
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.session-card__score {
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--color-brand-ochre);
-  margin-left: 8px;
-}
-
-.session-card__meta {
-  display: flex;
-  justify-content: space-between;
-  font-family: Inter, sans-serif;
-  font-size: 12px;
+[data-theme="dark"] .streak-dot__day {
   color: var(--color-body);
 }
 </style>
