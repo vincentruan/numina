@@ -10,7 +10,6 @@ vi.mock('@/api/learning', () => ({
   getMyLearningMap: vi.fn().mockResolvedValue([]),
   getMyProgress: vi.fn().mockResolvedValue([]),
   getMyLearningStats: vi.fn().mockResolvedValue(null),
-  getTopicsBatch: vi.fn().mockResolvedValue([]),
 }))
 
 const mockRouterPush = vi.fn()
@@ -101,7 +100,6 @@ describe('LearningProgressPage (U5)', () => {
 
   it('heatmap uses locale for day labels', async () => {
     const wrapper = await mountPage('en-US')
-    // The page renders day labels using locale — verify the locale is still wired
     const dayLabels = wrapper.findAll('.streak-dot__day')
     expect(dayLabels.length).toBe(7)
   })
@@ -118,11 +116,8 @@ describe('LearningProgressPage (U5)', () => {
   })
 
   it('does not contain commented-out panel markers in template', async () => {
-    // After cleanup, there should be no HTML comment blocks with the old section markers
     const wrapper = await mountPage()
     const html = wrapper.html()
-    // The commented-out sections should be gone — no residual HTML comments with
-    // section markers
     expect(html).not.toContain('xp-level-section')
     expect(html).not.toContain('stats-grid')
     expect(html).not.toContain('weak-topics-section')

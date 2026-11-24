@@ -2180,8 +2180,6 @@ export default {
       streakDays: '连续学习',
       loadFailed: '加载失败',
       retry: '重试',
-      total: '总计',
-      today: '今日',
     },
     parentReviewOnly: '当前为家长手动审核模式',
     aiReviewPaused: 'AI 自动审核已暂停',

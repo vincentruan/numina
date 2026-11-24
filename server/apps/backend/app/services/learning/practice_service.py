@@ -207,13 +207,20 @@ def get_session(db: Session, session_id: int) -> PracticeSession | None:
 
 
 def get_weak_topics(
-    db: Session, child_id: int, limit: int = 10, min_attempts: int = 3
+    db: Session,
+    child_id: int,
+    limit: int = 10,
+    min_attempts: int = 3,
+    max_accuracy: float | None = None,
 ) -> list[dict]:
     """Find topics where the child has low accuracy (sorted by accuracy ASC).
 
-    Only includes topics with >= min_attempts total attempts.
+    Only includes topics with >= min_attempts total attempts. When
+    ``max_accuracy`` is set, topics at or above that accuracy are excluded —
+    the parent view needs an upper bound so a barely-practised topic the child
+    happened to ace is not called "weak".
     """
-    rows = (
+    query = (
         db.query(
             PracticeAttempt.topic_id,
             sa_func.count(PracticeAttempt.id).label("total"),
@@ -225,87 +232,16 @@ def get_weak_topics(
         .filter(PracticeAttempt.child_id == child_id)
         .group_by(PracticeAttempt.topic_id)
         .having(sa_func.count(PracticeAttempt.id) >= min_attempts)
-        .all()
     )
-
-    results = []
-
-    # Batch-load topics and progress to avoid N+1
-    topic_ids = {row.topic_id for row in rows}
-    topics_by_id = {}
-    progress_by_topic = {}
-    if topic_ids:
-        for t in db.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all():
-            topics_by_id[t.id] = t
-        for p in (
-            db.query(LearningProgress)
-            .filter(LearningProgress.child_id == child_id, LearningProgress.topic_id.in_(topic_ids))
-            .all()
-        ):
-            progress_by_topic[p.topic_id] = p
-
-    for row in rows:
-        topic = topics_by_id.get(row.topic_id)
-        progress = progress_by_topic.get(row.topic_id)
-        correct = row.correct or 0
-        accuracy = correct / row.total if row.total > 0 else 0.0
-        results.append(
-            {
-                "topic_id": row.topic_id,
-                "topic_name": topic.name if topic else "",
-                "topic_name_zh": topic.name_zh if topic else None,
-                "total_attempts": row.total,
-                "correct_attempts": correct,
-                "accuracy": accuracy,
-                "last_practice_at": row.last_at,
-                "mastery_level": progress.mastery_level if progress else "available",
-            }
+    if max_accuracy is not None:
+        # Compared as integers (accuracy scaled by 1000) so a boundary value
+        # such as 0.6 is not decided by float rounding.
+        query = query.having(
+            sa_func.sum(case((PracticeAttempt.is_correct, 1), else_=0)) * 1000
+            < round(max_accuracy * 1000) * sa_func.count(PracticeAttempt.id)
         )
 
-    results.sort(key=lambda r: r["accuracy"])
-    return results[:limit]
-
-
-def get_weak_topics_for_parent(
-    db: Session,
-    child_id: int,
-    limit: int = 10,
-    min_attempts: int = 3,
-    max_accuracy: float = 0.6,
-) -> list[dict]:
-    """Find weak topics for parent view with accuracy threshold (U2).
-
-    Returns topics with:
-    - >= min_attempts total attempts
-    - accuracy < max_accuracy
-    - sorted by accuracy ascending
-    - limited to `limit` results
-
-    Uses integer arithmetic in HAVING clause to avoid floating point issues:
-    correct * denom < threshold * total
-    """
-    rows = (
-        db.query(
-            PracticeAttempt.topic_id,
-            sa_func.count(PracticeAttempt.id).label("total"),
-            sa_func.sum(case((PracticeAttempt.is_correct, 1), else_=0)).label(
-                "correct"
-            ),
-            sa_func.max(PracticeAttempt.created_at).label("last_at"),
-        )
-        .filter(PracticeAttempt.child_id == child_id)
-        .group_by(PracticeAttempt.topic_id)
-        .having(
-            sa_func.count(PracticeAttempt.id) >= min_attempts,
-            # Integer comparison: correct * 10 < threshold * 10 * total
-            # This avoids floating point precision issues
-            (
-                sa_func.sum(case((PracticeAttempt.is_correct, 1), else_=0)) * 10
-                < int(max_accuracy * 10) * sa_func.count(PracticeAttempt.id)
-            ),
-        )
-        .all()
-    )
+    rows = query.all()
 
     results = []
 

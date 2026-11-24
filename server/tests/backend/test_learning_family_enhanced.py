@@ -125,8 +125,6 @@ class TestChildSessionLog:
         assert resp.status_code in (400, 403, 404)
 
 
-# === U1: Learning Stats Endpoint (TDD — proof-first) ===
-
 
 @pytest.fixture
 def child_of_another_family(client, second_user_headers):
@@ -162,12 +160,12 @@ def child_auth_headers(client, parent_children_family):
 def learning_stats_topic(db: Session):
     """Create a topic for learning stats tests."""
     t = LearningTopic(
-        topic_key="u1_stats_topic",
+        topic_key="stats_topic",
         topic_type="CONCEPTUAL",
         subject="mathematics",
         domain="Test",
-        name="U1 Stats Topic",
-        name_zh="测试统计知识点",
+        name="Stats Topic",
+        name_zh="统计知识点",
         description="Test",
         age_group="mid",
         source_taxonomy="beijing",
@@ -351,7 +349,7 @@ class TestChildLearningStats:
         topics = []
         for level in ["mastered", "learning", "review"]:
             t = LearningTopic(
-                topic_key=f"u1_progress_{level}",
+                topic_key=f"progress_{level}",
                 topic_type="CONCEPTUAL",
                 subject="mathematics",
                 domain="Test",
@@ -389,8 +387,6 @@ class TestChildLearningStats:
         assert data["review_count"] >= 1
 
 
-# === U2: Weak Topics Endpoint (TDD — proof-first) ===
-
 
 @pytest.fixture
 def weak_topics_setup(db: Session, parent_children_family):
@@ -405,7 +401,7 @@ def weak_topics_setup(db: Session, parent_children_family):
     topics = []
     for key in ["weak_a", "weak_b", "weak_c"]:
         t = LearningTopic(
-            topic_key=f"u2_{key}",
+            topic_key=f"weak_{key}",
             topic_type="CONCEPTUAL",
             subject="mathematics",
             domain="Test",
@@ -577,7 +573,7 @@ class TestWeakTopics:
         topics = []
         for i in range(12):
             t = LearningTopic(
-                topic_key=f"u2_limit_{i}",
+                topic_key=f"limit_{i}",
                 topic_type="CONCEPTUAL",
                 subject="mathematics",
                 domain="Test",
@@ -695,8 +691,6 @@ class TestWeakTopics:
         assert isinstance(data[0]["topic_id"], str)
 
 
-# === U3: Practice Sessions Endpoint (TDD — proof-first) ===
-
 
 @pytest.fixture
 def practice_sessions_setup(db: Session, parent_children_family):
@@ -708,12 +702,12 @@ def practice_sessions_setup(db: Session, parent_children_family):
     child_id = parent_children_family["child_ids"][0]
 
     topic = LearningTopic(
-        topic_key="u3_session_topic",
+        topic_key="session_topic",
         topic_type="CONCEPTUAL",
         subject="mathematics",
         domain="Test",
-        name="U3 Session Topic",
-        name_zh="测试会话知识点",
+        name="Session Topic",
+        name_zh="会话知识点",
         description="Test",
         age_group="mid",
         source_taxonomy="beijing",
@@ -896,8 +890,6 @@ class TestPracticeSessions:
         )
         assert resp.status_code == 403
 
-
-# === U6: ID serialization contract across all three endpoints ===
 
 
 class TestIdSerializationContract:

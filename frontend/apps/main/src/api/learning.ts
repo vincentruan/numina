@@ -468,6 +468,7 @@ export interface ParentChildLearningStats {
   level_emoji: string
   next_level_threshold: number | null
   next_level_name_zh: string | null
+  next_level_name_en: string | null
   learning_streak_days: number
   total_study_minutes: number
   today_study_minutes: number

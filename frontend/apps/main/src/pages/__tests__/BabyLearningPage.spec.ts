@@ -12,7 +12,6 @@ import type {
   ProgressResponse,
 } from '@/api/learning'
 
-// Real locale modules — a missing/renamed progressOverview key must fail.
 function makeI18n(locale: 'zh-CN' | 'en-US' = 'zh-CN') {
   return createI18n({
     legacy: false,
@@ -181,8 +180,6 @@ describe('BabyLearningPage - Progress Overview', () => {
       'streakDays',
       'loadFailed',
       'retry',
-      'total',
-      'today',
     ]
     for (const key of keys) {
       expect((zhCN.learning.progressOverview as Record<string, string>)[key]).toBeDefined()
@@ -209,8 +206,6 @@ describe('BabyLearningPage - Progress Overview', () => {
       'streakDays',
       'loadFailed',
       'retry',
-      'total',
-      'today',
     ]
     for (const key of keys) {
       expect((enUS.learning.progressOverview as Record<string, string>)[key]).toBeDefined()
@@ -229,17 +224,9 @@ describe('BabyLearningPage - Progress Overview', () => {
 
   it('module defaults to collapsed', async () => {
     const wrapper = await mountPage()
-    // The page loads children and auto-selects first child
-    await flushPromises()
-    // progressOverview should not be in expandedModules initially
+      await flushPromises()
     const page = wrapper.vm as unknown as { expandedModules: string[] }
     expect(page.expandedModules).not.toContain('progressOverview')
-  })
-
-  it('has no progressOverview in initial expandedModules', () => {
-    // Direct assertion on component structure
-    const expected = ['recommendations', 'reviews']
-    expect(expected).not.toContain('progressOverview')
   })
 
   it('mock data has correct shape', () => {

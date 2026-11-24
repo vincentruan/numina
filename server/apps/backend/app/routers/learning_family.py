@@ -43,6 +43,7 @@ from apps.backend.app.services.learning import (
     assignment_service,
     castle_service,
     path_service,
+    practice_service,
     progress_service,
     stats_service,
 )
@@ -67,6 +68,22 @@ from packages.db.models.learning.stats import ChildLearningStats
 from packages.db.models.learning.topic import LearningTopic
 
 router = APIRouter(prefix="/family/learning", tags=["learning-family"])
+
+
+def _require_family_child(db: Session, child_id: int, user: User) -> User:
+    """Load a child that belongs to the caller's family, or raise 404.
+
+    The child row is returned so callers pass ``child.id`` to services —
+    never the parent's own ``user.id``, which would read the parent's data.
+    """
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+    return child
 
 
 @router.get("/children", response_model=list[ChildLearningOverview])
@@ -276,27 +293,13 @@ def get_child_learning_stats(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    """Get child's learning stats for parent view (U1)."""
-    # Verify child belongs to this family
-    child = (
-        db.query(User)
-        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
-        .first()
-    )
-    if not child:
-        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+    """Get child's learning stats for parent view."""
+    child = _require_family_child(db, child_id, user)
 
-    # Get or create stats (KTD3: after ownership check)
-    stats = stats_service.get_or_create_stats(db, child_id, user.family_id)
-
-    # Get level info
+    stats = stats_service.get_or_create_stats(db, child.id, user.family_id)
     level_info = stats_service.get_level_info(stats.level)
-
-    # Get progress counts
-    overview = progress_service.get_child_progress_overview(db, child_id)
-
-    # Get study minutes
-    minutes = progress_service.aggregate_study_minutes(db, child_id)
+    overview = progress_service.get_child_progress_overview(db, child.id)
+    minutes = progress_service.aggregate_study_minutes(db, child.id)
 
     return ParentChildLearningStats(
         child_id=child_id,
@@ -307,6 +310,7 @@ def get_child_learning_stats(
         level_emoji=level_info["emoji"],
         next_level_threshold=level_info["next_threshold"],
         next_level_name_zh=level_info["next_level_name_zh"],
+        next_level_name_en=level_info["next_level_name_en"],
         learning_streak_days=stats.learning_streak_days,
         total_study_minutes=minutes["total_study_minutes"],
         today_study_minutes=minutes["today_study_minutes"],
@@ -323,23 +327,12 @@ def get_child_weak_topics(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    """Get child's weak topics for parent view (U2)."""
-    from apps.backend.app.services.learning.practice_service import (
-        get_weak_topics_for_parent,
-    )
+    """Get child's weak topics for parent view."""
+    child = _require_family_child(db, child_id, user)
 
-    # Verify child belongs to this family
-    child = (
-        db.query(User)
-        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
-        .first()
-    )
-    if not child:
-        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
-
-    weak_topics = get_weak_topics_for_parent(
+    weak_topics = practice_service.get_weak_topics(
         db=db,
-        child_id=child_id,
+        child_id=child.id,
         limit=10,
         min_attempts=3,
         max_accuracy=0.6,
@@ -359,17 +352,8 @@ def get_child_practice_sessions(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    """Get child's recent practice sessions for parent view (U3)."""
-    from apps.backend.app.services.learning import practice_service
-
-    # Verify child belongs to this family
-    child = (
-        db.query(User)
-        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
-        .first()
-    )
-    if not child:
-        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+    """Get child's recent practice sessions for parent view."""
+    child = _require_family_child(db, child_id, user)
 
     sessions = practice_service.list_sessions(db, child.id, limit, offset)
 

@@ -389,8 +389,6 @@ class ChildProgressOverview(BaseModel):
 
 
 class ParentChildLearningStats(SnowflakeBase):
-    """Parent-facing learning stats for a child (U1)."""
-
     child_id: int
     cumulative_xp: int
     level: int
@@ -399,6 +397,7 @@ class ParentChildLearningStats(SnowflakeBase):
     level_emoji: str
     next_level_threshold: int | None
     next_level_name_zh: str | None
+    next_level_name_en: str | None
     learning_streak_days: int
     total_study_minutes: int
     today_study_minutes: int
@@ -409,8 +408,6 @@ class ParentChildLearningStats(SnowflakeBase):
 
 
 class ParentWeakTopicItem(SnowflakeBase):
-    """Weak topic for parent view (U2)."""
-
     topic_id: int
     topic_name: str
     topic_name_zh: str | None
@@ -422,8 +419,6 @@ class ParentWeakTopicItem(SnowflakeBase):
 
 
 class ParentPracticeSessionItem(SnowflakeBase):
-    """Practice session for parent view (U3)."""
-
     session_id: int
     topic_id: int
     topic_name: str

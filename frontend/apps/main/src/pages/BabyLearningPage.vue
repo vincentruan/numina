@@ -273,7 +273,7 @@
               </template>
             </van-collapse-item>
 
-            <!-- Module 7: Progress Overview (Issue #245) -->
+            <!-- Progress Overview -->
             <van-collapse-item name="progressOverview">
               <template #title>
                 <div class="collapse-title-row">
@@ -282,13 +282,12 @@
                 </div>
               </template>
 
-              <!-- Sub-block 1: XP / Level / Streak -->
               <div v-if="statsState === 'loading'" class="progress-loading">
                 <van-skeleton :rows="2" :round="true" />
               </div>
               <div v-else-if="statsState === 'error'" class="progress-error">
                 <span>{{ t('learning.progressOverview.loadFailed') }}</span>
-                <van-button size="mini" plain @click="loadProgressOverview">
+                <van-button size="mini" plain @click="statsResource.load">
                   {{ t('learning.progressOverview.retry') }}
                 </van-button>
               </div>
@@ -315,13 +314,12 @@
                   </div>
                   <div v-if="learningStats?.next_level_threshold != null" class="progress-next-level">
                     <span>{{ t('learning.progressOverview.nextLevel') }}：
-                      {{ learningStats.next_level_name_zh }}
+                      {{ locale.startsWith('zh') ? learningStats.next_level_name_zh : learningStats.next_level_name_en }}
                       （{{ learningStats.next_level_threshold }} {{ t('learning.progressOverview.xp') }}）
                     </span>
                   </div>
                 </div>
 
-                <!-- Sub-block 2: Four status cards -->
                 <div class="progress-status-grid">
                   <div class="progress-status-card progress-status-card--mastered">
                     <span class="progress-status-count">{{ learningStats?.mastered_count }}</span>
@@ -344,7 +342,6 @@
                   </div>
                 </div>
 
-                <!-- Sub-block 3: Study time -->
                 <div class="progress-study-time">
                   <div class="progress-section-title">{{ t('learning.progressOverview.studyTime') }}</div>
                   <div class="progress-study-time-row">
@@ -360,7 +357,7 @@
                 </div>
               </template>
 
-              <!-- Sub-block 4: Recent Activity (derived from sharedProgressRows) -->
+              <!-- Recent Activity -->
               <div class="progress-section">
                 <div class="progress-section-title">{{ t('learning.progressOverview.recentActivity') }}</div>
                 <div v-if="recentActivityState === 'loading'" class="progress-loading">
@@ -379,7 +376,7 @@
                     class="progress-activity-item"
                   >
                     <div class="progress-activity-name">
-                      {{ topicDisplayName(row) }}
+                      {{ activityTopicName(row) }}
                     </div>
                     <div class="progress-activity-meta">
                       <van-tag :type="masteryTagType(row.mastery_level)" size="medium">
@@ -396,7 +393,7 @@
                 </template>
               </div>
 
-              <!-- Sub-block 5: Weak Topics -->
+              <!-- Weak Topics -->
               <div class="progress-section">
                 <div class="progress-section-title">{{ t('learning.progressOverview.weakTopics') }}</div>
                 <div v-if="weakState === 'loading'" class="progress-loading">
@@ -404,7 +401,7 @@
                 </div>
                 <div v-else-if="weakState === 'error'" class="progress-error">
                   <span>{{ t('learning.progressOverview.loadFailed') }}</span>
-                  <van-button size="mini" plain @click="loadWeakTopics">
+                  <van-button size="mini" plain @click="weakResource.load">
                     {{ t('learning.progressOverview.retry') }}
                   </van-button>
                 </div>
@@ -430,7 +427,7 @@
                 </template>
               </div>
 
-              <!-- Sub-block 6: Recent Sessions -->
+              <!-- Recent Sessions -->
               <div class="progress-section">
                 <div class="progress-section-title">{{ t('learning.progressOverview.recentSessions') }}</div>
                 <div v-if="sessionsState === 'loading'" class="progress-loading">
@@ -438,7 +435,7 @@
                 </div>
                 <div v-else-if="sessionsState === 'error'" class="progress-error">
                   <span>{{ t('learning.progressOverview.loadFailed') }}</span>
-                  <van-button size="mini" plain @click="loadPracticeSessions">
+                  <van-button size="mini" plain @click="sessionsResource.load">
                     {{ t('learning.progressOverview.retry') }}
                   </van-button>
                 </div>
@@ -456,7 +453,7 @@
                     </div>
                     <div class="progress-session-meta">
                       <van-tag
-                        :type="sess.total_score != null && sess.total_score >= 0.8 ? 'success' : sess.total_score != null && sess.total_score >= 0.6 ? 'warning' : 'danger'"
+                        :type="sessionScoreTagType(sess.total_score)"
                         size="medium"
                       >
                         {{ sess.total_score != null ? Math.round(sess.total_score * 100) : '-' }}%
@@ -536,11 +533,13 @@
 <script setup lang="ts">
 defineOptions({ name: 'BabyLearning' })
 
-import { ref, computed, watch, onMounted, onActivated } from 'vue'
+import { ref, computed, watch, onMounted, onActivated, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { parseApiDate } from '@/utils/format'
+import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { useBabyStore } from '@/stores/baby'
 import {
   getLearningChildren,
@@ -578,10 +577,11 @@ import DnaGraph2D from '@/components/learning/DnaGraph2D.vue'
 import ParentClusterMap from '@/components/learning/ParentClusterMap.vue'
 import ParentKnowledgeCastle from '@/components/learning/ParentKnowledgeCastle.vue'
 
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
 const babyStore = useBabyStore()
+const { topicDisplayName: localizedTopicName } = useLocalizedTopic()
 
 const loading = ref(true)
 const refreshing = ref(false)
@@ -608,54 +608,81 @@ const castleState = computed<'loading' | 'error' | 'content'>(() => {
   return 'content'
 })
 
-// Progress Overview (Issue #245)
-const learningStats = ref<ParentChildLearningStats | null>(null)
-const statsLoading = ref(false)
-const statsError = ref(false)
-const weakTopics = ref<ParentWeakTopicItem[]>([])
-const weakLoading = ref(false)
-const weakError = ref(false)
-const practiceSessions = ref<ParentPracticeSessionItem[]>([])
-const sessionsLoading = ref(false)
-const sessionsError = ref(false)
+type LoadState = 'loading' | 'error' | 'content'
+
+// Progress rows from getChildMap, shared by the DNA graph, cluster map, and
+// recent-activity list.
+const sharedProgressRows = ref<ProgressResponse[]>([])
+const childMapFailed = ref(false)
+
+// Per-child resource loader: one data ref plus its own loading/error flags, so
+// a failing endpoint only affects its own sub-block. Responses that outlive a
+// child switch are discarded (rapid tab switching).
+function useChildResource<T>(fetcher: (childId: string) => Promise<T>, empty: T) {
+  const data = ref(empty) as Ref<T>
+  const loading = ref(false)
+  const error = ref(false)
+  const state = computed<LoadState>(() =>
+    loading.value ? 'loading' : error.value ? 'error' : 'content',
+  )
+
+  async function load(): Promise<void> {
+    const childId = babyStore.selectedChildId
+    if (!childId) return
+    loading.value = true
+    error.value = false
+    try {
+      const result = await fetcher(childId)
+      if (babyStore.selectedChildId !== childId) return
+      data.value = result
+    } catch {
+      if (babyStore.selectedChildId !== childId) return
+      data.value = empty
+      error.value = true
+    } finally {
+      if (babyStore.selectedChildId === childId) loading.value = false
+    }
+  }
+
+  function reset(): void {
+    data.value = empty
+    error.value = false
+  }
+
+  return { data, loading, error, state, load, reset }
+}
+
+const statsResource = useChildResource<ParentChildLearningStats | null>(
+  getChildLearningStats,
+  null,
+)
+const weakResource = useChildResource<ParentWeakTopicItem[]>(getChildWeakTopics, [])
+const sessionsResource = useChildResource<ParentPracticeSessionItem[]>(
+  (childId) => getChildPracticeSessions(childId, 10, 0),
+  [],
+)
+
+const learningStats = statsResource.data
+const statsState = statsResource.state
+const weakTopics = weakResource.data
+const weakState = weakResource.state
+const practiceSessions = sessionsResource.data
+const sessionsState = sessionsResource.state
 let progressOverviewLoaded = false
 
-const statsState = computed<'loading' | 'error' | 'content'>(() => {
-  if (statsLoading.value) return 'loading'
-  if (statsError.value) return 'error'
-  return 'content'
-})
-
-const weakState = computed<'loading' | 'error' | 'content'>(() => {
-  if (weakLoading.value) return 'loading'
-  if (weakError.value) return 'error'
-  return 'content'
-})
-
-const sessionsState = computed<'loading' | 'error' | 'content'>(() => {
-  if (sessionsLoading.value) return 'loading'
-  if (sessionsError.value) return 'error'
-  return 'content'
-})
-
-// Recent activity derived from sharedProgressRows (getChildMap)
-const recentActivityState = computed<'loading' | 'error' | 'content'>(() => {
+const recentActivityState = computed<LoadState>(() => {
   if (loading.value && sharedProgressRows.value.length === 0) return 'loading'
+  if (childMapFailed.value) return 'error'
   return 'content'
 })
 
-const recentActivityRows = computed(() => {
-  return sharedProgressRows.value
+const recentActivityRows = computed(() =>
+  sharedProgressRows.value
     .filter((r) => r.last_practice_at != null)
-    .sort((a, b) => {
-      const at = a.last_practice_at ?? ''
-      const bt = b.last_practice_at ?? ''
-      return bt.localeCompare(at)
-    })
-    .slice(0, 10)
-})
+    .sort((a, b) => (b.last_practice_at ?? '').localeCompare(a.last_practice_at ?? ''))
+    .slice(0, 10),
+)
 
-// Filter out in-progress sessions (ended_at is null)
 const visibleSessions = computed(() =>
   practiceSessions.value.filter((s) => s.ended_at != null),
 )
@@ -763,7 +790,7 @@ function outcomeLabel(outcome: string | null): string {
 }
 
 function formatSessionTime(isoString: string): string {
-  const date = new Date(isoString)
+  const date = parseApiDate(isoString)
   return date.toLocaleDateString(locale.value, {
     month: 'short',
     day: 'numeric',
@@ -883,66 +910,28 @@ async function loadCastle() {
   }
 }
 
-async function loadProgressOverview() {
-  const childId = babyStore.selectedChildId
-  if (!childId) return
-
-  statsLoading.value = true
-  statsError.value = false
-  try {
-    const data = await getChildLearningStats(childId)
-    if (babyStore.selectedChildId !== childId) return
-    learningStats.value = data
-  } catch {
-    if (babyStore.selectedChildId !== childId) return
-    learningStats.value = null
-    statsError.value = true
-  } finally {
-    if (babyStore.selectedChildId === childId) statsLoading.value = false
-  }
+// The three overview endpoints are independent, so they load in parallel and
+// each sub-block settles on its own state.
+function loadProgressOverview(): Promise<void[]> {
+  return Promise.all([statsResource.load(), weakResource.load(), sessionsResource.load()])
 }
 
-async function loadWeakTopics() {
-  const childId = babyStore.selectedChildId
-  if (!childId) return
-
-  weakLoading.value = true
-  weakError.value = false
-  try {
-    const data = await getChildWeakTopics(childId)
-    if (babyStore.selectedChildId !== childId) return
-    weakTopics.value = data
-  } catch {
-    if (babyStore.selectedChildId !== childId) return
-    weakTopics.value = []
-    weakError.value = true
-  } finally {
-    if (babyStore.selectedChildId === childId) weakLoading.value = false
-  }
-}
-
-async function loadPracticeSessions() {
-  const childId = babyStore.selectedChildId
-  if (!childId) return
-
-  sessionsLoading.value = true
-  sessionsError.value = false
-  try {
-    const data = await getChildPracticeSessions(childId, 10, 0)
-    if (babyStore.selectedChildId !== childId) return
-    practiceSessions.value = data
-  } catch {
-    if (babyStore.selectedChildId !== childId) return
-    practiceSessions.value = []
-    sessionsError.value = true
-  } finally {
-    if (babyStore.selectedChildId === childId) sessionsLoading.value = false
-  }
+function resetProgressOverview(): void {
+  statsResource.reset()
+  weakResource.reset()
+  sessionsResource.reset()
 }
 
 function masteryLabel(level: string): string {
   const key = `learning.${level}`
-  return t(key)
+  return te(key) ? t(key) : level
+}
+
+function sessionScoreTagType(score: number | null): 'success' | 'warning' | 'danger' {
+  if (score == null) return 'danger'
+  if (score >= 0.8) return 'success'
+  if (score >= 0.6) return 'warning'
+  return 'danger'
 }
 
 function masteryTagType(level: string): 'success' | 'warning' | 'primary' | 'default' {
@@ -952,14 +941,11 @@ function masteryTagType(level: string): 'success' | 'warning' | 'primary' | 'def
   return 'default'
 }
 
-function topicDisplayName(row: ProgressResponse): string {
+function activityTopicName(row: ProgressResponse): string {
   const topic = clusterMapTopicCache.value.get(row.topic_id)
-  if (!topic) return ''
-  return locale.value.startsWith('zh') && topic.name_zh ? topic.name_zh : topic.name ?? ''
+  return topic ? localizedTopicName(topic) : ''
 }
 
-// Shared progress rows from getChildMap — avoids duplicate fetch between DNA graph and cluster map
-const sharedProgressRows = ref<ProgressResponse[]>([])
 
 async function loadDnaGraph() {
   dnaGraphItems.value = sharedProgressRows.value as ProgressWithTopic[]
@@ -1007,10 +993,12 @@ async function loadChildDependentData() {
   const childId = babyStore.selectedChildId
   // Fetch progress rows once — shared between DNA graph and cluster map
   if (childId) {
+    childMapFailed.value = false
     try {
       sharedProgressRows.value = await getChildMap(childId)
     } catch {
       sharedProgressRows.value = []
+      childMapFailed.value = true
     }
   }
   dnaGraphLoading.value = true
@@ -1044,8 +1032,6 @@ watch(expandedModules, (modules) => {
   if (modules.includes('progressOverview') && !progressOverviewLoaded) {
     progressOverviewLoaded = true
     loadProgressOverview()
-    loadWeakTopics()
-    loadPracticeSessions()
   }
 })
 
@@ -1113,8 +1099,7 @@ async function refreshRecommendations() {
 }
 
 async function onRefresh() {
-  // Pull-to-refresh is the page's canonical recovery gesture — let it retry the
-  // castle and progress overview too instead of leaving an errored module stuck.
+  // Pull-to-refresh retries every expanded module, not just the page data.
   const castleExpanded = expandedModules.value.includes('castle')
   if (castleExpanded) castleLoaded = true
   const progressExpanded = expandedModules.value.includes('progressOverview')
@@ -1124,7 +1109,7 @@ async function onRefresh() {
     loadChildDependentData(),
     castleExpanded ? loadCastle() : Promise.resolve(),
     progressExpanded
-      ? Promise.all([loadProgressOverview(), loadWeakTopics(), loadPracticeSessions()])
+      ? loadProgressOverview()
       : Promise.resolve(),
   ])
   refreshing.value = false
@@ -1143,16 +1128,11 @@ watch(() => babyStore.selectedChildId, (newId) => {
       castleLoaded = true
       loadCastle()
     }
-    // Progress overview: reset and refetch if expanded
     progressOverviewLoaded = false
-    learningStats.value = null
-    weakTopics.value = []
-    practiceSessions.value = []
+    resetProgressOverview()
     if (expandedModules.value.includes('progressOverview')) {
       progressOverviewLoaded = true
       loadProgressOverview()
-      loadWeakTopics()
-      loadPracticeSessions()
     }
     loadChildDependentData()
   }
@@ -1181,7 +1161,13 @@ onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
   increment()
   try {
-    await Promise.all([loadData(), loadChildDependentData()])
+    await Promise.all([
+      loadData(),
+      loadChildDependentData(),
+      expandedModules.value.includes('progressOverview')
+        ? loadProgressOverview()
+        : Promise.resolve(),
+    ])
   } finally {
     decrement()
   }

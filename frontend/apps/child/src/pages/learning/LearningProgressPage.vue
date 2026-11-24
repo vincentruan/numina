@@ -85,7 +85,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useRecommendationPath } from '@/composables/useRecommendationPath'
-import { getMyLearningMap, getTopicsBatch, type ProgressResponse, type TopicResponse } from '@/api/learning'
+import { getMyLearningMap, type ProgressResponse } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 
 const { t, locale } = useI18n()
@@ -96,7 +96,6 @@ const loading = ref(true)
 const refreshing = ref(false)
 const error = ref('')
 const progressList = ref<ProgressResponse[]>([])
-const topicMap = ref<Map<string, TopicResponse>>(new Map())
 const router = useRouter()
 
 // --- Up next recommendation ---
@@ -159,26 +158,7 @@ async function load() {
     const progress = await getMyLearningMap()
     progressList.value = progress
 
-    // Fetch recommendations for "up next" card
     await refreshRecommendations()
-
-    // Fetch topic details for display names — batch in chunks to avoid
-    // URL length limits and single-point failures from Promise.all.
-    const uniqueTopicIds = [...new Set(progress.map((p) => p.topic_id))]
-    const CHUNK = 50
-    const newMap = new Map<string, TopicResponse>()
-    for (let i = 0; i < uniqueTopicIds.length; i += CHUNK) {
-      const chunk = uniqueTopicIds.slice(i, i + CHUNK)
-      try {
-        const topics = await getTopicsBatch(chunk)
-        for (const topic of topics) {
-          newMap.set(topic.id, topic)
-        }
-      } catch {
-        // Individual chunk failure should not break the entire map.
-      }
-    }
-    topicMap.value = newMap
   } catch {
     error.value = t('toast.loadFailed')
   } finally {
