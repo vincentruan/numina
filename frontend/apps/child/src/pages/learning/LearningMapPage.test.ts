@@ -1,8 +1,17 @@
+/// <reference types="node" />
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import zhCN from '@/i18n/locales/zh-CN'
 import enUS from '@/i18n/locales/en-US'
+import pageSource from './LearningMapPage.vue?raw'
+import layoutSource from '../../layouts/ChildLayout.vue?raw'
+
+// vitest runs ESM, so resolve the colocated source paths from this module.
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // --- Mocks ---
 
@@ -424,5 +433,100 @@ describe('LearningMapPage — topic index fetch failure surfaces (M-1)', () => {
     const wrapper = mountPage()
     await flushPromises()
     expect(wrapper.findComponent({ name: 'KnowledgeOcean' }).exists()).toBe(false)
+  })
+})
+
+// --- Subject tab counts (#246 A / KTD2) ---
+
+describe('LearningMapPage — subject tab counts match the islands (#246)', () => {
+  beforeEach(() => {
+    mockGetTopicIndex.mockImplementation(async () => [
+      { id: 't1', subject: 'mathematics', domain: 'Addition', name: 'Add', name_zh: '加', age_group: 'mid' },
+      { id: 't2', subject: 'mathematics', domain: 'Addition', name: 'Add more', name_zh: '再加', age_group: 'mid' },
+      { id: 't3', subject: 'mathematics', domain: 'Addition', name: 'Add again', name_zh: '又加', age_group: 'mid' },
+      { id: 't4', subject: 'science', domain: 'Forces', name: 'Push', name_zh: '推', age_group: 'mid' },
+      { id: 't5', subject: 'biology', domain: 'Cells', name: 'Cell', name_zh: '细胞', age_group: 'mid' },
+    ])
+  })
+
+  it('shows the topic-index total, not the progress-row count, and renders zero', async () => {
+    // mathematics: 3 progress rows of 3 index rows; biology: 0 progress of 1.
+    rows.push(
+      { topic_id: 't1', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid' },
+      { topic_id: 't2', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid' },
+      { topic_id: 't3', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid' },
+    )
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const tabs = wrapper.findAll('.subject-tab')
+    const badgeFor = (subjectLabelFragment: string) => {
+      const tab = tabs.find((t) => t.find('.subject-tab__label').text().includes(subjectLabelFragment))
+      return tab?.find('.subject-tab__badge')
+    }
+    // tab count == topicCount passed to the ocean for the same subject
+    const ocean = wrapper.findComponent({ name: 'KnowledgeOcean' })
+    const props = ocean.props() as unknown as { subjects: Array<{ id: string; topicCount: number }> }
+    const mathIsland = props.subjects.find((s) => s.id === 'mathematics')!
+    expect(mathIsland.topicCount).toBe(3)
+    expect(badgeFor('数学')?.text()).toBe('3')
+    // A subject with index rows but no progress still gets a tab, showing 1.
+    expect(badgeFor('生物')?.text()).toBe('1')
+  })
+
+  it('skips index rows with an empty subject', async () => {
+    mockGetTopicIndex.mockImplementation(async () => [
+      { id: 't1', subject: 'mathematics', domain: 'Addition', name: 'Add', name_zh: '加', age_group: 'mid' },
+      { id: 't9', subject: '', domain: 'Orphan', name: 'Orphan', name_zh: '孤儿', age_group: 'mid' },
+    ])
+    rows.push({
+      topic_id: 't1', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid',
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const labels = wrapper.findAll('.subject-tab__label').map((l) => l.text())
+    expect(labels).toHaveLength(1)
+  })
+})
+
+// --- Layout contract (#246 B / C / D) ---
+
+describe('LearningMapPage — layout contract (#246)', () => {
+  beforeEach(() => {
+    mockGetTopicIndex.mockImplementation(async () => [
+      { id: 't1', subject: 'mathematics', domain: 'Addition', name: 'Add', name_zh: '加', age_group: 'mid' },
+    ])
+    rows.push({
+      topic_id: 't1', mastery_level: 'available', next_review_at: null, subject: 'mathematics', domain: 'Addition', age_group: 'mid',
+    })
+  })
+
+  it('reserves TabBar clearance with --child-tabbar-height, not Vant\'s private variable', () => {
+    // R6: page uses 100dvh, not 100vh
+    expect(pageSource).toContain('100dvh')
+    expect(pageSource).not.toMatch(/min-height:\s*100vh\s*[;}]/)
+    // R8: padding-bottom reserves the TabBar band using the child-owned token
+    expect(pageSource).toContain('--child-tabbar-height')
+    expect(pageSource).toContain('env(safe-area-inset-bottom)')
+  })
+
+  it('clay.css defines the child-owned TabBar token', () => {
+    // ?raw doesn't work for .css in vitest (Vite injects CSS as stylesheets),
+    // so read the file directly.
+    const clay = readFileSync(resolve(__dirname, '../../assets/clay.css'), 'utf8')
+    expect(clay).toMatch(/--child-tabbar-height:\s*50px/)
+  })
+
+  it('no in-app source still references Vant\'s private tabbar height variable', () => {
+    // R7: --van-tabbar-height is declared nowhere in the repo, so the existing
+    // calc() relied on a Vant internal. Every in-app reference must use the
+    // child-owned token. The only allowed mention is the explanatory comment
+    // in clay.css.
+    const clay = readFileSync(resolve(__dirname, '../../assets/clay.css'), 'utf8')
+    const clayNoComment = clay.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(pageSource).not.toContain('--van-tabbar-height')
+    expect(layoutSource).not.toContain('--van-tabbar-height')
+    expect(clayNoComment).not.toContain('--van-tabbar-height')
   })
 })

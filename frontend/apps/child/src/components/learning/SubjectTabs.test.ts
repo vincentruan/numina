@@ -1,0 +1,64 @@
+import { describe, it, expect } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import zhCN from '@/i18n/locales/zh-CN'
+import enUS from '@/i18n/locales/en-US'
+import SubjectTabs from './SubjectTabs.vue'
+import subjectTabsSource from './SubjectTabs.vue?raw'
+
+function mountTabs(tabs: Array<{ subject: string; count: number }>, selected = tabs[0]?.subject ?? '') {
+  const i18n = createI18n({
+    legacy: false,
+    locale: 'zh-CN',
+    messages: { 'zh-CN': zhCN, 'en-US': enUS },
+  })
+  return mount(SubjectTabs, {
+    props: { modelValue: selected, tabs },
+    global: { plugins: [i18n] },
+  })
+}
+
+describe('SubjectTabs — badge (#246 A)', () => {
+  it.each([0, 9, 99, 358, 1234])('renders the badge for count %i on exactly one line', (count) => {
+    const wrapper = mountTabs([{ subject: 'biology', count }])
+    const badges = wrapper.findAll('.subject-tab__badge')
+    // R1/R3: zero is a real count — the badge must render, not be suppressed.
+    expect(badges).toHaveLength(1)
+    expect(badges[0].text()).toBe(String(count))
+  })
+
+  it('renders a badge for every tab, including a zero-progress subject', () => {
+    const wrapper = mountTabs([
+      { subject: 'mathematics', count: 0 },
+      { subject: 'biology', count: 358 },
+    ])
+    const texts = wrapper.findAll('.subject-tab__badge').map((b) => b.text())
+    expect(texts).toEqual(['0', '358'])
+  })
+
+  it('carries no inline sizing or transform on the badge', () => {
+    // R1: sizing must come from the stylesheet (content-sized), never from an
+    // inline height/transform that would re-pin the capsule. happy-dom has no
+    // layout engine, so this asserts the rendered contract, not pixels.
+    const wrapper = mountTabs([{ subject: 'biology', count: 358 }])
+    const badge = wrapper.find('.subject-tab__badge')
+    expect(badge.attributes('style')).toBeUndefined()
+  })
+
+  it('badge stylesheet declares no fixed height (regression guard)', () => {
+    // R1: a reintroduced `height: 20px` or `border-radius: 10px` would silently
+    // squash multi-digit counts again. Assert the scoped style block stays
+    // free of those fixed-size rules. happy-dom has no layout engine, so the
+    // inline-style test above covers runtime regressions; this one covers the
+    // stylesheet itself.
+    const styleMatch = subjectTabsSource.match(/<style[^>]*>([\s\S]*?)<\/style>/)
+    expect(styleMatch).not.toBeNull()
+    const css = styleMatch![1]
+    const badgeBlock = css.match(/\.subject-tab__badge\s*\{([^}]*)\}/)
+    expect(badgeBlock).not.toBeNull()
+    expect(badgeBlock![1]).not.toMatch(/(?:^|[^a-z-])height:\s*\d+px/)
+    expect(badgeBlock![1]).not.toMatch(/border-radius:\s*10px/)
+    expect(badgeBlock![1]).toMatch(/min-height:/)
+    expect(badgeBlock![1]).toMatch(/border-radius:\s*var\(--radius-pill\)/)
+  })
+})
