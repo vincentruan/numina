@@ -6,6 +6,8 @@ import 'virtual:svg-icons-register'
 import './assets/clay.css'
 // SW registration — PWA service worker
 import './register-sw'
+// Bundle Iconify icons at build time (CSP blocks the runtime API in prod)
+import './icons/register-icons'
 import App from './App.vue'
 import router from './router'
 import i18n from './i18n'

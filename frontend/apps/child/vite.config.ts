@@ -5,13 +5,18 @@ import Components from 'unplugin-vue-components/vite'
 import { VantResolver } from '@vant/auto-import-resolver'
 import { createSvgIconsPlugin } from 'vite-plugin-svg-icons-ng'
 import { VitePWA } from 'vite-plugin-pwa'
+import { numinaIcons } from './vite-plugin-numina-icons'
 
 export default defineConfig({
   base: '/child/',
   plugins: [
+    numinaIcons(),
     vue(),
     Components({
-      resolvers: [VantResolver()]
+      // importStyle: false — main.ts already loads the full Vant stylesheet.
+      // Leaving it on injects every component's CSS a second time, after
+      // clay.css, which silently wins the cascade over our dark tokens.
+      resolvers: [VantResolver({ importStyle: false })]
     }),
     createSvgIconsPlugin({
       iconDirs: [path.resolve(import.meta.dirname, 'src/icons/svg')],
