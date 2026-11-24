@@ -71,136 +71,6 @@
             </div>
             <p class="streak-summary">{{ streakSummary }}</p>
           </div>
-
-          <!--
-            Sections below are commented out for child view — moved to parent view later.
-            Code kept intact, not deleted.
-          -->
-
-          <!--
-          <div v-if="learningStats" class="xp-level-section xp-level-section--secondary">
-            <div class="xp-level-header">
-              <LevelBadge :emoji="learningStats.level_emoji" :name="locale === 'en-US' ? learningStats.level_name_en : learningStats.level_name_zh" />
-              <LearningStreakBadge :days="learningStats.learning_streak_days" />
-            </div>
-            <XPProgressBar
-              :current-xp="learningStats.cumulative_xp"
-              :level="learningStats.level"
-              :level-name="locale === 'en-US' ? learningStats.level_name_en : learningStats.level_name_zh"
-              :emoji="learningStats.level_emoji"
-              :next-threshold="learningStats.next_level_threshold"
-            />
-          </div>
-
-          <div class="stats-grid">
-            <div class="stat-card stat-card--mastered">
-              <span class="stat-card__count">{{ masteredCount }}</span>
-              <span class="stat-card__label">{{ t('learning.status.mastered') }}</span>
-            </div>
-            <div class="stat-card stat-card--learning">
-              <span class="stat-card__count">{{ learningCount }}</span>
-              <span class="stat-card__label">{{ t('learning.status.learning') }}</span>
-            </div>
-            <div class="stat-card stat-card--available">
-              <span class="stat-card__count">{{ availableCount }}</span>
-              <span class="stat-card__label">{{ t('learning.status.available') }}</span>
-            </div>
-            <div class="stat-card stat-card--review">
-              <span class="stat-card__count">{{ reviewCount }}</span>
-              <span class="stat-card__label">{{ t('learning.status.review') }}</span>
-            </div>
-          </div>
-
-          <div class="study-section">
-            <h2 class="section-title">{{ t('learning.progress.studyTime') }}</h2>
-            <div class="study-stats">
-              <div class="study-stat">
-                <span class="study-stat__value">{{ totalStudyMinutes }}</span>
-                <span class="study-stat__label">{{ t('learning.progress.totalMinutes') }}</span>
-              </div>
-              <div class="study-stat">
-                <span class="study-stat__value">{{ todayStudyMinutes }}</span>
-                <span class="study-stat__label">{{ t('learning.progress.todayMinutes') }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="activity-section">
-            <h2 class="section-title">{{ t('learning.progress.recentActivity') }}</h2>
-            <div v-if="recentActivity.length === 0" class="activity-empty">
-              {{ t('learning.progress.noActivity') }}
-            </div>
-            <div v-else class="activity-list">
-              <div
-                v-for="item in recentActivity"
-                :key="item.id"
-                class="activity-item"
-              >
-                <div class="activity-item__info">
-                  <span class="activity-item__topic">{{ getTopicName(item.topic_id) }}</span>
-                  <span class="activity-item__status">
-                    {{ t(`learning.status.${item.mastery_level}`) }}
-                  </span>
-                </div>
-                <div class="activity-item__meta">
-                  <span v-if="item.mastery_score != null">
-                    {{ Math.round(item.mastery_score * 100) }}%
-                  </span>
-                  <span v-if="item.last_practice_at" class="activity-item__date">
-                    {{ formatDate(item.last_practice_at) }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="weakTopics.length > 0" class="weak-topics-section">
-            <h2 class="section-title">{{ t('learning.progress.weakTopics') }}</h2>
-            <div class="weak-topics-list">
-              <div
-                v-for="topic in weakTopics"
-                :key="topic.topic_id"
-                class="weak-topic-card"
-                @click="navigateToPractice(topic.topic_id)"
-              >
-                <div class="weak-topic-card__header">
-                  <span class="weak-topic-card__name">{{ getWeakTopicDisplayName(topic) }}</span>
-                  <span class="weak-topic-card__accuracy">{{ Math.round(topic.accuracy * 100) }}%</span>
-                </div>
-                <div class="weak-topic-card__footer">
-                  <span class="weak-topic-card__attempts">
-                    {{ topic.total_attempts }} {{ t('learning.progress.attempts') }}
-                  </span>
-                  <span :class="['weak-topic-card__mastery', `mastery--${topic.mastery_level}`]">
-                    {{ t(`learning.status.${topic.mastery_level}`) }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="recentSessions.length > 0" class="sessions-section">
-            <h2 class="section-title">{{ t('learning.progress.recentSessions') }}</h2>
-            <div class="sessions-list">
-              <div
-                v-for="session in recentSessions"
-                :key="session.id"
-                class="session-card"
-              >
-                <div class="session-card__header">
-                  <span class="session-card__topic">{{ getSessionTopicName(session) }}</span>
-                  <span v-if="session.total_score != null" class="session-card__score">
-                    {{ Math.round(session.total_score * 100) }}%
-                  </span>
-                </div>
-                <div class="session-card__meta">
-                  <span>{{ session.completed_count }}/{{ session.total_count }}</span>
-                  <span>{{ formatDate(session.started_at) }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          -->
         </template>
       </van-pull-refresh>
     </template>
@@ -213,14 +83,12 @@ defineOptions({ name: 'LearningProgress' })
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useRecommendationPath } from '@/composables/useRecommendationPath'
-import { getMyLearningMap, getMyProgress, getMyLearningStats, getTopicsBatch, type ProgressResponse, type TopicResponse, type ChildProgressOverview, type LearningStatsResponse } from '@/api/learning'
+import { getMyLearningMap, getTopicsBatch, type ProgressResponse, type TopicResponse } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 
 const { t, locale } = useI18n()
-const { topicDisplayName } = useLocalizedTopic()
 const { increment, decrement } = usePageLoading()
 const { allPathTopics, refresh: refreshRecommendations } = useRecommendationPath()
 
@@ -229,8 +97,6 @@ const refreshing = ref(false)
 const error = ref('')
 const progressList = ref<ProgressResponse[]>([])
 const topicMap = ref<Map<string, TopicResponse>>(new Map())
-const progressOverview = ref<ChildProgressOverview | null>(null)
-const learningStats = ref<LearningStatsResponse | null>(null)
 const router = useRouter()
 
 // --- Up next recommendation ---
@@ -290,14 +156,8 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [progress, overview, stats] = await Promise.all([
-      getMyLearningMap(),
-      getMyProgress(),
-      getMyLearningStats(),
-    ])
+    const progress = await getMyLearningMap()
     progressList.value = progress
-    progressOverview.value = overview
-    learningStats.value = stats
 
     // Fetch recommendations for "up next" card
     await refreshRecommendations()
