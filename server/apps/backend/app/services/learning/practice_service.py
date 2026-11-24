@@ -206,14 +206,41 @@ def get_session(db: Session, session_id: int) -> PracticeSession | None:
 # --- Phase 5: Weak points + history ---
 
 
+# Parent-view definition of "weak": at most 10 topics, at least 3 attempts,
+# accuracy strictly below 0.6. Kept in the service so the router has no magic
+# numbers and the child-facing endpoint keeps its own (no upper bound).
+PARENT_WEAK_TOPIC_POLICY: dict = {
+    "limit": 10,
+    "min_attempts": 3,
+    "max_accuracy": 0.6,
+}
+
+
 def get_weak_topics(
-    db: Session, child_id: int, limit: int = 10, min_attempts: int = 3
+    db: Session,
+    child_id: int,
+    limit: int = 10,
+    min_attempts: int = 3,
+    max_accuracy: float | None = None,
 ) -> list[dict]:
     """Find topics where the child has low accuracy (sorted by accuracy ASC).
 
-    Only includes topics with >= min_attempts total attempts.
+    Args:
+        db: Active database session.
+        child_id: Child whose attempts to aggregate.
+        limit: Maximum topics returned (applied after sort).
+        min_attempts: Topics with fewer attempts are excluded.
+        max_accuracy: When set, topics at or above this accuracy are excluded;
+            compared as scaled integers to avoid float rounding at the
+            boundary. None disables the upper bound.
+
+    Returns:
+        List of dicts with topic_id, topic_name, topic_name_zh, total_attempts,
+        correct_attempts, accuracy (float), last_practice_at (datetime), and
+        mastery_level (from LearningProgress when present, else "available").
+        Sorted ascending by accuracy and sliced to ``limit``.
     """
-    rows = (
+    query = (
         db.query(
             PracticeAttempt.topic_id,
             sa_func.count(PracticeAttempt.id).label("total"),
@@ -225,8 +252,16 @@ def get_weak_topics(
         .filter(PracticeAttempt.child_id == child_id)
         .group_by(PracticeAttempt.topic_id)
         .having(sa_func.count(PracticeAttempt.id) >= min_attempts)
-        .all()
     )
+    if max_accuracy is not None:
+        # Compared as integers (accuracy scaled by 1000) so a boundary value
+        # such as 0.6 is not decided by float rounding.
+        query = query.having(
+            sa_func.sum(case((PracticeAttempt.is_correct, 1), else_=0)) * 1000
+            < round(max_accuracy * 1000) * sa_func.count(PracticeAttempt.id)
+        )
+
+    rows = query.all()
 
     results = []
 

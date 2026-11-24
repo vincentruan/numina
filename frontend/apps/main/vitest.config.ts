@@ -31,6 +31,7 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '@numina/math': fileURLToPath(new URL('../../packages/math/src/index.ts', import.meta.url)),
+      '@child-i18n': fileURLToPath(new URL('../child/src/i18n/locales', import.meta.url)),
     },
   },
 })

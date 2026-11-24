@@ -23,6 +23,9 @@ from apps.backend.app.schemas.learning import (
     ChildLearningOverview,
     ChildSessionLogResponse,
     ClusterResponse,
+    ParentChildLearningStats,
+    ParentPracticeSessionItem,
+    ParentWeakTopicItem,
     PathCreate,
     PathResponse,
     ProgressResponse,
@@ -40,6 +43,7 @@ from apps.backend.app.services.learning import (
     assignment_service,
     castle_service,
     path_service,
+    practice_service,
     progress_service,
     stats_service,
 )
@@ -64,6 +68,22 @@ from packages.db.models.learning.stats import ChildLearningStats
 from packages.db.models.learning.topic import LearningTopic
 
 router = APIRouter(prefix="/family/learning", tags=["learning-family"])
+
+
+def _require_family_child(db: Session, child_id: int, user: User) -> User:
+    """Load a child that belongs to the caller's family, or raise 404.
+
+    The child row is returned so callers pass ``child.id`` to services —
+    never the parent's own ``user.id``, which would read the parent's data.
+    """
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+    return child
 
 
 @router.get("/children", response_model=list[ChildLearningOverview])
@@ -260,6 +280,114 @@ def get_child_sessions(
                 session_type=s.session_type,
                 score=s.score,
                 duration_seconds=s.duration_seconds,
+                started_at=s.started_at,
+                ended_at=s.ended_at,
+            )
+        )
+    return result
+
+
+@router.get("/children/{child_id}/learning-stats", response_model=ParentChildLearningStats)
+def get_child_learning_stats(
+    child_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get child's learning stats for parent view."""
+    child = _require_family_child(db, child_id, user)
+
+    # Read-only path: list_children already handles a missing stats row with
+    # sensible defaults, and get_or_create_stats would INSERT+commit as a side
+    # effect of a GET — keep the write path reserved for XP awards.
+    stats = (
+        db.query(ChildLearningStats)
+        .filter(ChildLearningStats.child_id == child.id)
+        .first()
+    )
+    level = stats.level if stats else 1
+    level_info = stats_service.get_level_info(level)
+    overview = progress_service.get_child_progress_overview(db, child.id)
+    minutes = progress_service.aggregate_study_minutes(db, child.id)
+
+    return ParentChildLearningStats(
+        child_id=child.id,
+        cumulative_xp=stats.cumulative_xp if stats else 0,
+        level=level,
+        level_name_zh=level_info["name_zh"],
+        level_name_en=level_info["name_en"],
+        level_emoji=level_info["emoji"],
+        next_level_threshold=level_info["next_threshold"],
+        next_level_name_zh=level_info["next_level_name_zh"],
+        next_level_name_en=level_info["next_level_name_en"],
+        learning_streak_days=stats.learning_streak_days if stats else 0,
+        total_study_minutes=minutes["total_study_minutes"],
+        today_study_minutes=minutes["today_study_minutes"],
+        mastered_count=overview["mastered"],
+        learning_count=overview["learning"],
+        available_count=overview["available"],
+        review_count=overview["review"],
+    )
+
+
+@router.get("/children/{child_id}/weak-topics", response_model=list[ParentWeakTopicItem])
+def get_child_weak_topics(
+    child_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get child's weak topics for parent view."""
+    child = _require_family_child(db, child_id, user)
+
+    weak_topics = practice_service.get_weak_topics(
+        db=db,
+        child_id=child.id,
+        **practice_service.PARENT_WEAK_TOPIC_POLICY,
+    )
+
+    return [ParentWeakTopicItem(**wt) for wt in weak_topics]
+
+
+@router.get(
+    "/children/{child_id}/practice-sessions",
+    response_model=list[ParentPracticeSessionItem],
+)
+def get_child_practice_sessions(
+    child_id: int,
+    limit: int = Query(10, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get child's recent practice sessions for parent view."""
+    child = _require_family_child(db, child_id, user)
+
+    sessions = practice_service.list_sessions(db, child.id, limit, offset)
+
+    # Batch-fetch topic names (no taxonomy filter — records describe what the
+    # child actually practiced, and filtering by parent language would blank
+    # the name out).
+    topic_ids = list({s.topic_id for s in sessions})
+    topics = (
+        db.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all()
+        if topic_ids
+        else []
+    )
+    topic_map = {t.id: t for t in topics}
+
+    result = []
+    for s in sessions:
+        topic = topic_map.get(s.topic_id)
+        question_ids = json.loads(s.question_ids_json) if s.question_ids_json else []
+        result.append(
+            ParentPracticeSessionItem(
+                session_id=s.id,
+                topic_id=s.topic_id,
+                topic_name=topic.name if topic else "",
+                topic_name_zh=topic.name_zh if topic else None,
+                session_mode=s.session_mode,
+                total_score=s.total_score,
+                completed_count=s.completed_count,
+                total_count=len(question_ids),
                 started_at=s.started_at,
                 ended_at=s.ended_at,
             )

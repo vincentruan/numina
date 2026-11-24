@@ -388,6 +388,49 @@ class ChildProgressOverview(BaseModel):
     today_study_minutes: int = 0
 
 
+class ParentChildLearningStats(SnowflakeBase):
+    child_id: int
+    cumulative_xp: int
+    level: int
+    level_name_zh: str
+    level_name_en: str
+    level_emoji: str
+    next_level_threshold: int | None
+    next_level_name_zh: str | None
+    next_level_name_en: str | None
+    learning_streak_days: int
+    total_study_minutes: int
+    today_study_minutes: int
+    mastered_count: int
+    learning_count: int
+    available_count: int
+    review_count: int
+
+
+class ParentWeakTopicItem(SnowflakeBase):
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    total_attempts: int
+    correct_attempts: int
+    accuracy: float
+    last_practice_at: datetime
+    mastery_level: str
+
+
+class ParentPracticeSessionItem(SnowflakeBase):
+    session_id: int
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    session_mode: str
+    total_score: float | None
+    completed_count: int
+    total_count: int
+    started_at: datetime
+    ended_at: datetime | None
+
+
 # --- Learning Path ---
 
 
