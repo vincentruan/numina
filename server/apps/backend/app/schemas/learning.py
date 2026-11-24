@@ -408,6 +408,34 @@ class ParentChildLearningStats(SnowflakeBase):
     review_count: int
 
 
+class ParentWeakTopicItem(SnowflakeBase):
+    """Weak topic for parent view (U2)."""
+
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    total_attempts: int
+    correct_attempts: int
+    accuracy: float
+    last_practice_at: datetime
+    mastery_level: str
+
+
+class ParentPracticeSessionItem(SnowflakeBase):
+    """Practice session for parent view (U3)."""
+
+    session_id: int
+    topic_id: int
+    topic_name: str
+    topic_name_zh: str | None
+    session_mode: str
+    total_score: float | None
+    completed_count: int
+    total_count: int
+    started_at: datetime
+    ended_at: datetime | None
+
+
 # --- Learning Path ---
 
 

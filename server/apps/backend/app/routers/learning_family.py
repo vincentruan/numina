@@ -24,6 +24,8 @@ from apps.backend.app.schemas.learning import (
     ChildSessionLogResponse,
     ClusterResponse,
     ParentChildLearningStats,
+    ParentPracticeSessionItem,
+    ParentWeakTopicItem,
     PathCreate,
     PathResponse,
     ProgressResponse,
@@ -313,6 +315,94 @@ def get_child_learning_stats(
         available_count=overview["available"],
         review_count=overview["review"],
     )
+
+
+@router.get("/children/{child_id}/weak-topics", response_model=list[ParentWeakTopicItem])
+def get_child_weak_topics(
+    child_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get child's weak topics for parent view (U2)."""
+    from apps.backend.app.services.learning.practice_service import (
+        get_weak_topics_for_parent,
+    )
+
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    weak_topics = get_weak_topics_for_parent(
+        db=db,
+        child_id=child_id,
+        limit=10,
+        min_attempts=3,
+        max_accuracy=0.6,
+    )
+
+    return [ParentWeakTopicItem(**wt) for wt in weak_topics]
+
+
+@router.get(
+    "/children/{child_id}/practice-sessions",
+    response_model=list[ParentPracticeSessionItem],
+)
+def get_child_practice_sessions(
+    child_id: int,
+    limit: int = Query(10, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get child's recent practice sessions for parent view (U3)."""
+    from apps.backend.app.services.learning import practice_service
+
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    sessions = practice_service.list_sessions(db, child.id, limit, offset)
+
+    # Batch-fetch topic names (no taxonomy filter — records describe what the
+    # child actually practiced, and filtering by parent language would blank
+    # the name out).
+    topic_ids = list({s.topic_id for s in sessions})
+    topics = (
+        db.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all()
+        if topic_ids
+        else []
+    )
+    topic_map = {t.id: t for t in topics}
+
+    result = []
+    for s in sessions:
+        topic = topic_map.get(s.topic_id)
+        question_ids = json.loads(s.question_ids_json) if s.question_ids_json else []
+        result.append(
+            ParentPracticeSessionItem(
+                session_id=s.id,
+                topic_id=s.topic_id,
+                topic_name=topic.name if topic else "",
+                topic_name_zh=topic.name_zh if topic else None,
+                session_mode=s.session_mode,
+                total_score=s.total_score,
+                completed_count=s.completed_count,
+                total_count=len(question_ids),
+                started_at=s.started_at,
+                ended_at=s.ended_at,
+            )
+        )
+    return result
 
 
 @router.get("/children/{child_id}/recommendations", response_model=RecommendationPathResponse)
