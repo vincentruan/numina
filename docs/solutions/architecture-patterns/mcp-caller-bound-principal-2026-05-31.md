@@ -23,8 +23,9 @@ Bind the real caller identity at SSE handshake time and freeze it in `MCPSession
 4. `list_tools()` filters by `caller_role ∈ allowed_roles` from `mcp_tool_registry`
 5. `call_tool()` re-checks role before execution (defense in depth)
 6. `permission_denied` response has `retryable: false` — classified as permanent_auth error
-7. Child role is rejected at handshake (fail-fast), never enters MCP
+7. Child role is rejected at handshake *today*, but the registry already grants six tools to children (get_guided_question, submit_guided_answer, get_knowledge_bridge, select_adaptive_question, generate_hint, get_teacher_persona), and `call_tool()` enforces self-scope for them
 8. `mcp_session.py` and `mcp_tool_registry.py` must never import HTTP libraries (zero outbound)
+9. **Child self-scope** — A child caller's `child_id` must equal their own id, and their `session_id` must name a session they own. Enforced once at the `call_tool()` boundary before any handler runs, using each tool's declared `child_scope` field. `validate_registry()` fails at startup if a child-open tool declares `none` or `session_unscoped` while carrying a `child_id` or `session_id` property. Parents and external tokens keep querying any child in the family unchanged.
 
 ## Recommended Patterns
 
