@@ -460,6 +460,105 @@ class MCPSession:
                     )
                 ]
 
+            # ------------------------------------------------------------------
+            # Child self-scope: a child may only address their own data.
+            #
+            # The handlers below each validate that a child_id belongs to the
+            # caller's family, which is not the same as belonging to the
+            # caller. The rule is enforced here, once, from the tool's declared
+            # child_scope, so a handler addition cannot quietly reopen it and
+            # parents keep querying any child in the family.
+            # ------------------------------------------------------------------
+            if user.role == "child" and meta.child_scope in (
+                "child",
+                "child_optional",
+                "session",
+                "session_child",
+            ):
+                _scope_denial: str | None = None
+
+                # A session_id must name a session this child owns. A missing
+                # session is denied the same way, so the gate never reveals
+                # whether a sibling's session exists.
+                if "session_id" in arguments and meta.child_scope in (
+                    "session",
+                    "session_child",
+                ):
+                    from packages.db.models.learning.session import LearningSession
+
+                    try:
+                        _session_id = int(arguments["session_id"])
+                    except (ValueError, TypeError):
+                        _session_id = None
+                    if _session_id is None:
+                        _scope_denial = "session_id"
+                    else:
+                        _owned = (
+                            db.query(LearningSession.id)
+                            .filter(
+                                LearningSession.id == _session_id,
+                                LearningSession.child_id == user.id,
+                            )
+                            .first()
+                        )
+                        if not _owned:
+                            _scope_denial = "session_id"
+
+                # A child_optional tool with no child_id means "me".
+                if _scope_denial is None and "child_id" in meta.input_schema.get(
+                    "properties", {}
+                ):
+                    if meta.child_scope == "child_optional" and (
+                        arguments.get("child_id") in (None, "")
+                    ):
+                        arguments = {**arguments, "child_id": str(user.id)}
+                    else:
+                        _requested_child = arguments.get("child_id")
+                        if _requested_child not in (None, ""):
+                            try:
+                                int(_requested_child)
+                            except (ValueError, TypeError):
+                                # Not an identity question — the handler's own
+                                # argument validation reports it as today.
+                                pass
+                            else:
+                                if str(_requested_child) != str(user.id):
+                                    _scope_denial = "child_id"
+
+                if _scope_denial is not None:
+                    logger.warning(
+                        "[mcp_session] permission_denied family=%s caller_user_id=%s "
+                        "caller_role=%s tool=%s (%s_not_self)",
+                        self._family_id,
+                        self._caller_user_id,
+                        user.role,
+                        name,
+                        _scope_denial,
+                    )
+                    if self._audit_callback is not None:
+                        with contextlib.suppress(Exception):
+                            self._audit_callback(
+                                event_type="tool_call",
+                                tool_name=name,
+                                status="permission_denied",
+                                duration_ms=round((time.perf_counter() - _t0) * 1000),
+                                args_digest=arguments,
+                                error_code="child_scope_violation",
+                            )
+                    return [
+                        TextContent(
+                            type="text",
+                            text=json.dumps(
+                                {
+                                    "error": "permission_denied",
+                                    "retryable": False,
+                                    "reason": "只能访问自己的学习数据",
+                                },
+                                ensure_ascii=False,
+                            ),
+                        )
+                    ]
+
             try:
                 if name == "get_family_overview":
                     data: Any = dashboard_service.get_overview(db, user)
