@@ -124,6 +124,7 @@ class TestValidateRegistry:
             input_schema={"type": "object", "properties": {}, "required": []},
             allowed_roles=frozenset(),
             requires_write=False,
+            child_scope="none",
         )
         with (
             patch.dict(TOOL_REGISTRY, {"broken_tool": broken}),
@@ -138,6 +139,7 @@ class TestValidateRegistry:
             input_schema={"type": "object", "properties": {}, "required": []},
             allowed_roles=frozenset({"admin"}),
             requires_write=False,
+            child_scope="none",
         )
         with (
             patch.dict(TOOL_REGISTRY, {"broken_tool": broken}),
@@ -161,3 +163,136 @@ def test_literacy_tools_registered():
     assert data_tool is not None
     assert data_tool.requires_write is False
     assert "child_id" in data_tool.input_schema["properties"]
+
+
+# ---------------------------------------------------------------------------
+# child_scope declaration
+# ---------------------------------------------------------------------------
+
+
+class TestChildScopeDeclaration:
+    """Every tool declares which per-child handle it takes, and the
+    declaration must agree with its input_schema."""
+
+    def test_every_tool_declares_a_valid_child_scope(self):
+        from apps.backend.app.services.mcp_tool_registry import VALID_CHILD_SCOPES
+
+        for name, meta in TOOL_REGISTRY.items():
+            assert meta.child_scope in VALID_CHILD_SCOPES, (
+                f"{name} declares unknown child_scope {meta.child_scope!r}"
+            )
+
+    def test_child_scope_matches_schema_handles(self):
+        expected_handles = {
+            "none": (False, False),
+            "child": (True, False),
+            "child_optional": (True, False),
+            "session": (False, True),
+            "session_child": (True, True),
+            "session_unscoped": (False, True),
+        }
+        for name, meta in TOOL_REGISTRY.items():
+            props = meta.input_schema.get("properties", {})
+            actual = ("child_id" in props, "session_id" in props)
+            assert expected_handles[meta.child_scope] == actual, (
+                f"{name}: child_scope={meta.child_scope!r} implies handles "
+                f"{expected_handles[meta.child_scope]} but schema has child_id/session_id={actual}"
+            )
+
+    def test_child_open_tools_are_self_scoped(self):
+        """A tool a child may call must gate its child_id / session_id."""
+        for name, meta in TOOL_REGISTRY.items():
+            if "child" not in meta.allowed_roles:
+                continue
+            props = meta.input_schema.get("properties", {})
+            if "child_id" in props or "session_id" in props:
+                assert meta.child_scope != "none", f"{name} is child-open but declares none"
+                assert meta.child_scope != "session_unscoped", (
+                    f"{name} is child-open but leaves its session unscoped"
+                )
+
+    def test_child_open_tool_without_handle_may_declare_none(self):
+        """The branch no real tool exercises: a child-open tool carrying no
+        per-child handle is legitimately `none`."""
+        synthetic = MCPToolMeta(
+            name="synthetic_child_open",
+            description="test",
+            input_schema={"type": "object", "properties": {}, "required": []},
+            allowed_roles=frozenset({"child"}),
+            requires_write=False,
+            child_scope="none",
+        )
+        with patch.dict(TOOL_REGISTRY, {"synthetic_child_open": synthetic}):
+            validate_registry()
+
+    def test_validate_registry_rejects_child_id_tool_declared_none(self):
+        broken = MCPToolMeta(
+            name="broken_tool",
+            description="test",
+            input_schema={
+                "type": "object",
+                "properties": {"child_id": {"type": "integer"}},
+                "required": [],
+            },
+            allowed_roles=frozenset({"owner"}),
+            requires_write=False,
+            child_scope="none",
+        )
+        with (
+            patch.dict(TOOL_REGISTRY, {"broken_tool": broken}),
+            pytest.raises(RuntimeError, match="child_scope"),
+        ):
+            validate_registry()
+
+    def test_validate_registry_rejects_child_scope_without_child_id(self):
+        broken = MCPToolMeta(
+            name="broken_tool",
+            description="test",
+            input_schema={"type": "object", "properties": {}, "required": []},
+            allowed_roles=frozenset({"owner"}),
+            requires_write=False,
+            child_scope="child",
+        )
+        with (
+            patch.dict(TOOL_REGISTRY, {"broken_tool": broken}),
+            pytest.raises(RuntimeError, match="child_scope"),
+        ):
+            validate_registry()
+
+    def test_validate_registry_rejects_session_scope_without_session_id(self):
+        broken = MCPToolMeta(
+            name="broken_tool",
+            description="test",
+            input_schema={
+                "type": "object",
+                "properties": {"child_id": {"type": "integer"}},
+                "required": [],
+            },
+            allowed_roles=frozenset({"owner"}),
+            requires_write=False,
+            child_scope="session_child",
+        )
+        with (
+            patch.dict(TOOL_REGISTRY, {"broken_tool": broken}),
+            pytest.raises(RuntimeError, match="child_scope"),
+        ):
+            validate_registry()
+
+    def test_validate_registry_rejects_child_open_session_unscoped(self):
+        broken = MCPToolMeta(
+            name="broken_tool",
+            description="test",
+            input_schema={
+                "type": "object",
+                "properties": {"session_id": {"type": "integer"}},
+                "required": [],
+            },
+            allowed_roles=frozenset({"child"}),
+            requires_write=False,
+            child_scope="session_unscoped",
+        )
+        with (
+            patch.dict(TOOL_REGISTRY, {"broken_tool": broken}),
+            pytest.raises(RuntimeError, match="child_scope"),
+        ):
+            validate_registry()
