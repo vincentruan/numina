@@ -316,6 +316,10 @@
 
 /* ── Vant dark mode overrides ── */
 [data-theme="dark"] {
+  /* Plain van-tag paints --van-tag-plain-background (default #fff) on a
+     dark card; match the card surface instead. */
+  --van-tag-plain-background: var(--color-surface-card);
+  --van-background-3: #152828;
   --van-tabbar-background: #0f2020;
   --van-tabbar-item-text-color: #8a8a80;
   --van-tabbar-item-active-color: #d4a83a;
