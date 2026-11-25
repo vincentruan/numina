@@ -12,84 +12,189 @@
     @continue="onContinue"
     @request-tutor="emit('requestTutor')"
   >
-    <!-- Sequence slots — tap placed items or empty slots -->
-    <div class="challenge-sequence">
+    <!-- Drag-to-reorder sequence slots -->
+    <div ref="sequenceRef" class="challenge-sequence">
       <div
-        v-for="(_, idx) in config.correctOrder"
+        v-for="(objId, idx) in sequence"
         :key="idx"
         class="challenge-slot"
         :class="{
-          'challenge-slot--filled': sequence[idx] !== null,
-          'challenge-slot--active': selectedObjectId !== null && sequence[idx] === null,
+          'challenge-slot--filled': objId !== null,
+          'challenge-slot--dragging': dragState.fromIndex === idx,
+          'challenge-slot--drop-target': dragState.fromIndex !== null && dragState.fromIndex !== idx && hoverIndex === idx,
         }"
-        @click="handleSlotClick(idx)"
+        @pointerdown.stop="startDrag($event, idx)"
       >
-        <span v-if="sequence[idx] !== null" class="challenge-slot__icon">
-          {{ getObjectIcon(sequence[idx]!) }}
+        <span v-if="objId !== null" class="challenge-slot__icon">
+          {{ getObjectIcon(objId) }}
         </span>
         <span v-else class="challenge-slot__placeholder">{{ idx + 1 }}</span>
       </div>
     </div>
 
-    <!-- Object pool — remaining items to place -->
+    <!-- Object pool — remaining items (draggable) -->
     <div class="challenge-pool">
-      <button
+      <div
         v-for="obj in remainingObjects"
         :key="obj.id"
         class="challenge-object"
-        :class="{ 'challenge-object--selected': selectedObjectId === obj.id }"
-        @click="selectObject(obj.id)"
+        :class="{ 'challenge-object--dragging': poolDragState.objectId === obj.id }"
+        :style="poolDragState.objectId === obj.id ? poolDragStyle : {}"
+        @pointerdown.stop="startPoolDrag($event, obj.id)"
       >
         <span v-if="obj.icon" class="challenge-object__icon">{{ obj.icon }}</span>
         <span class="challenge-object__label">{{ localizedLabel(obj.label, obj.labelZh) }}</span>
-      </button>
+      </div>
     </div>
   </ChallengeShell>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { OrderChallenge, ChallengeVerdict } from '@/types/learning-challenge'
 import ChallengeShell from './ChallengeShell.vue'
+import { playClickPop, playSuccessChime, playErrorDescend, resumeAudio } from '@/audio/sfx'
 
 defineOptions({ name: 'OrderChallenge' })
 
-const props = defineProps<{
-  config: OrderChallenge
-}>()
-
-const emit = defineEmits<{
-  complete: []
-  requestTutor: []
-}>()
-
+const props = defineProps<{ config: OrderChallenge }>()
+const emit = defineEmits<{ complete: []; requestTutor: [] }>()
 const { t, locale } = useI18n()
 
-// ── Interaction state ──
+// ── Refs ──
+const sequenceRef = ref<HTMLElement | null>(null)
 
-const selectedObjectId = ref<string | null>(null)
-/** Slot index → object id (null = empty). */
-const sequence = reactive<(string | null)[]>(
-  props.config.correctOrder.map(() => null),
-)
+// ── Interaction state ──
+const sequence = reactive<(string | null)[]>(props.config.correctOrder.map(() => null))
 const completed = ref(false)
 const feedbackMessage = ref('')
 const feedbackVerdict = ref<ChallengeVerdict | null>(null)
 const attemptCount = ref(0)
+const hoverIndex = ref<number | null>(null)
 
-// ── Session persistence (AE5) ──
+// ── Drag state (reorder within sequence) ──
+interface DragState {
+  fromIndex: number | null
+  startX: number
+  startY: number
+  currentX: number
+  currentY: number
+}
+const dragState = reactive<DragState>({ fromIndex: null, startX: 0, startY: 0, currentX: 0, currentY: 0 })
 
-const STORAGE_KEY = `numina:challenge:${props.config.id}`
+// ── Pool drag state (drag from pool to slot) ──
+interface PoolDragState {
+  objectId: string | null
+  startX: number
+  startY: number
+  currentX: number
+  currentY: number
+}
+const poolDragState = reactive<PoolDragState>({ objectId: null, startX: 0, startY: 0, currentX: 0, currentY: 0 })
+const poolDragStyle = computed(() => {
+  if (!poolDragState.objectId) return {}
+  const dx = poolDragState.currentX - poolDragState.startX
+  const dy = poolDragState.currentY - poolDragState.startY
+  return { transform: `translate(${dx}px, ${dy}px) scale(1.08)`, zIndex: 100, position: 'relative' as const, touchAction: 'none' as const }
+})
 
-interface PersistedState {
-  sequence: (string | null)[]
-  attemptCount: number
-  completed: boolean
-  feedbackMessage: string
-  feedbackVerdict: ChallengeVerdict | null
+// ── Reorder drag ──
+function startDrag(e: PointerEvent, idx: number) {
+  if (completed.value || sequence[idx] === null) return
+  resumeAudio()
+  const el = e.currentTarget as HTMLElement
+  el.setPointerCapture?.(e.pointerId)
+  dragState.fromIndex = idx
+  dragState.startX = e.clientX
+  dragState.startY = e.clientY
+  dragState.currentX = e.clientX
+  dragState.currentY = e.clientY
+  playClickPop()
 }
 
+function startPoolDrag(e: PointerEvent, objId: string) {
+  if (completed.value) return
+  resumeAudio()
+  const el = e.currentTarget as HTMLElement
+  el.setPointerCapture?.(e.pointerId)
+  poolDragState.objectId = objId
+  poolDragState.startX = e.clientX
+  poolDragState.startY = e.clientY
+  poolDragState.currentX = e.clientX
+  poolDragState.currentY = e.clientY
+  playClickPop()
+}
+
+function onPointerMove(e: PointerEvent) {
+  if (dragState.fromIndex !== null) {
+    dragState.currentX = e.clientX
+    dragState.currentY = e.clientY
+    // Detect which slot we're hovering
+    const slots = sequenceRef.value?.querySelectorAll('.challenge-slot')
+    if (slots) {
+      hoverIndex.value = null
+      slots.forEach((slot, i) => {
+        const rect = slot.getBoundingClientRect()
+        if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+          hoverIndex.value = i
+        }
+      })
+    }
+  }
+  if (poolDragState.objectId) {
+    poolDragState.currentX = e.clientX
+    poolDragState.currentY = e.clientY
+  }
+}
+
+function onPointerUp(e: PointerEvent) {
+  // Handle reorder drop
+  if (dragState.fromIndex !== null) {
+    if (hoverIndex.value !== null && hoverIndex.value !== dragState.fromIndex && sequence[hoverIndex.value] === null) {
+      // Move to empty slot
+      sequence[hoverIndex.value] = sequence[dragState.fromIndex]
+      sequence[dragState.fromIndex] = null
+      playClickPop()
+    } else if (hoverIndex.value !== null && hoverIndex.value !== dragState.fromIndex) {
+      // Swap with occupied slot
+      const temp = sequence[hoverIndex.value]
+      sequence[hoverIndex.value] = sequence[dragState.fromIndex]
+      sequence[dragState.fromIndex] = temp
+      playClickPop()
+    }
+    dragState.fromIndex = null
+    hoverIndex.value = null
+  }
+  // Handle pool drag drop
+  if (poolDragState.objectId) {
+    const slots = sequenceRef.value?.querySelectorAll('.challenge-slot')
+    if (slots) {
+      for (let i = 0; i < slots.length; i++) {
+        const rect = slots[i].getBoundingClientRect()
+        if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom && sequence[i] === null) {
+          sequence[i] = poolDragState.objectId
+          playClickPop()
+          break
+        }
+      }
+    }
+    poolDragState.objectId = null
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerUp)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', onPointerUp)
+})
+
+// ── Session persistence ──
+const STORAGE_KEY = `numina:challenge:${props.config.id}`
+interface PersistedState { sequence: (string | null)[]; attemptCount: number; completed: boolean; feedbackMessage: string; feedbackVerdict: ChallengeVerdict | null }
 function restoreState() {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY)
@@ -98,150 +203,58 @@ function restoreState() {
     const savedSeq = saved.sequence ?? []
     for (let i = 0; i < props.config.correctOrder.length; i++) {
       const objId = savedSeq[i] ?? null
-      // Only restore if the object still exists in the config
       sequence[i] = objId && props.config.objects.some((o) => o.id === objId) ? objId : null
     }
     attemptCount.value = saved.attemptCount ?? 0
     completed.value = saved.completed ?? false
     feedbackMessage.value = saved.feedbackMessage ?? ''
     feedbackVerdict.value = saved.feedbackVerdict ?? null
-  } catch {
-    // Storage unavailable
-  }
+  } catch { /* ignore */ }
 }
-
-function clearState() {
-  try {
-    sessionStorage.removeItem(STORAGE_KEY)
-  } catch {
-    // Storage unavailable
-  }
-}
-
+function clearState() { try { sessionStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ } }
 restoreState()
-
-watch(
-  [sequence, attemptCount, completed, feedbackMessage, feedbackVerdict],
-  () => {
-    try {
-      const state: PersistedState = {
-        sequence: [...sequence],
-        attemptCount: attemptCount.value,
-        completed: completed.value,
-        feedbackMessage: feedbackMessage.value,
-        feedbackVerdict: feedbackVerdict.value,
-      }
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-    } catch {
-      // Storage unavailable
-    }
-  },
-  { deep: true },
-)
+watch([sequence, attemptCount, completed, feedbackMessage, feedbackVerdict], () => {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ sequence: [...sequence], attemptCount: attemptCount.value, completed: completed.value, feedbackMessage: feedbackMessage.value, feedbackVerdict: feedbackVerdict.value }))
+  } catch { /* ignore */ }
+}, { deep: true })
 
 // ── Computed ──
-
 const isZh = computed(() => locale.value.startsWith('zh'))
-
-/** Objects not yet placed in any slot. */
 const placedIds = computed(() => new Set(sequence.filter((id): id is string => id !== null)))
-
-const remainingObjects = computed(() =>
-  props.config.objects.filter((o) => !placedIds.value.has(o.id)),
-)
-
+const remainingObjects = computed(() => props.config.objects.filter((o) => !placedIds.value.has(o.id)))
 const hasAnyPlacement = computed(() => placedIds.value.size > 0)
+const statusText = computed(() => t('learning.challenge.placedCount', { placed: placedIds.value.size, total: props.config.objects.length }))
+const showTutorSuggestion = computed(() => attemptCount.value >= 2 && !completed.value)
+const allowEarlyContinue = computed(() => attemptCount.value >= 2 && !completed.value)
 
-const statusText = computed(() =>
-  t('learning.challenge.placedCount', {
-    placed: placedIds.value.size,
-    total: props.config.objects.length,
-  }),
-)
-
-const showTutorSuggestion = computed(() =>
-  attemptCount.value >= 2 && !completed.value,
-)
-
-/** KTD2: after two retries the child may continue without a correct verdict. */
-const allowEarlyContinue = computed(() =>
-  attemptCount.value >= 2 && !completed.value,
-)
-
-// ── Interaction methods ──
-
-function localizedLabel(en: string, zh?: string): string {
-  if (isZh.value && zh) return zh
-  return en
-}
-
-function getObjectIcon(objId: string): string {
-  const obj = props.config.objects.find((o) => o.id === objId)
-  return obj?.icon ?? '●'
-}
-
-function selectObject(objId: string) {
-  if (completed.value) return
-  selectedObjectId.value = selectedObjectId.value === objId ? null : objId
-}
-
-/** Tap a slot: if empty + object selected → place it; if filled → return to pool. */
-function handleSlotClick(idx: number) {
-  if (completed.value) return
-
-  if (sequence[idx] !== null) {
-    // Slot is filled — return the object to the pool
-    sequence[idx] = null
-    return
-  }
-
-  if (selectedObjectId.value) {
-    // Place the selected object in this slot
-    sequence[idx] = selectedObjectId.value
-    selectedObjectId.value = null
-  }
-}
-
-function onContinue() {
-  clearState()
-  emit('complete')
-}
-
+// ── Methods ──
+function localizedLabel(en: string, zh?: string): string { return isZh.value && zh ? zh : en }
+function getObjectIcon(objId: string): string { return props.config.objects.find((o) => o.id === objId)?.icon ?? '●' }
+function onContinue() { clearState(); emit('complete') }
 function checkAnswer() {
   attemptCount.value++
   const result = evaluateOrder()
   feedbackVerdict.value = result.isCorrect ? 'correct' : 'wrong'
   if (result.isCorrect) {
     completed.value = true
-    feedbackMessage.value = isZh.value
-      ? props.config.discoveryMessageZh
-      : props.config.discoveryMessage
+    feedbackMessage.value = isZh.value ? props.config.discoveryMessageZh : props.config.discoveryMessage
+    playSuccessChime()
   } else {
     feedbackMessage.value = result.hint
+    playErrorDescend()
   }
 }
-
-/** Check if the current sequence matches the correct order. */
 function evaluateOrder(): { isCorrect: boolean; hint: string } {
-  // All slots must be filled
-  const allFilled = sequence.every((id) => id !== null)
-  if (!allFilled) {
-    return { isCorrect: false, hint: t('learning.challenge.hintOrderIncomplete') }
-  }
-
-  // Check each position
+  if (!sequence.every((id) => id !== null)) return { isCorrect: false, hint: t('learning.challenge.hintOrderIncomplete') }
   for (let i = 0; i < props.config.correctOrder.length; i++) {
-    if (sequence[i] !== props.config.correctOrder[i]) {
-      return { isCorrect: false, hint: t('learning.challenge.hintOrderWrong') }
-    }
+    if (sequence[i] !== props.config.correctOrder[i]) return { isCorrect: false, hint: t('learning.challenge.hintOrderWrong') }
   }
-
   return { isCorrect: true, hint: '' }
 }
 </script>
 
 <style scoped>
-/* Sequence slots */
 .challenge-sequence {
   display: flex;
   flex-wrap: wrap;
@@ -253,7 +266,6 @@ function evaluateOrder(): { isCorrect: boolean; hint: string } {
   border-radius: var(--radius-lg);
   border: 1px dashed var(--color-hairline);
 }
-
 .challenge-slot {
   width: 64px;
   height: 64px;
@@ -262,35 +274,17 @@ function evaluateOrder(): { isCorrect: boolean; hint: string } {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  cursor: grab;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
   position: relative;
+  touch-action: none;
+  user-select: none;
 }
-
-.challenge-slot--filled {
-  border-style: solid;
-  border-color: var(--color-brand-mint);
-  background: rgba(var(--color-brand-mint-rgb), 0.08);
-}
-
-.challenge-slot--active {
-  border-color: var(--color-brand-ochre);
-  background: rgba(var(--color-brand-ochre-rgb), 0.08);
-}
-
-.challenge-slot__icon {
-  font-size: 28px;
-  line-height: 1;
-}
-
-.challenge-slot__placeholder {
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-muted);
-}
-
-/* Object pool */
+.challenge-slot--filled { border-style: solid; border-color: var(--color-brand-mint); background: rgba(var(--color-brand-mint-rgb), 0.08); }
+.challenge-slot--dragging { opacity: 0.4; }
+.challenge-slot--drop-target { border-color: var(--color-brand-ochre); background: rgba(var(--color-brand-ochre-rgb), 0.08); transform: scale(1.05); }
+.challenge-slot__icon { font-size: 28px; line-height: 1; }
+.challenge-slot__placeholder { font-family: Inter, sans-serif; font-size: 14px; font-weight: 600; color: var(--color-muted); }
 .challenge-pool {
   display: flex;
   flex-wrap: wrap;
@@ -302,53 +296,26 @@ function evaluateOrder(): { isCorrect: boolean; hint: string } {
   border-radius: var(--radius-lg);
   border: 1px dashed var(--color-hairline);
 }
-
 .challenge-object {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  min-width: 52px;
-  min-height: 52px;
+  min-width: 56px;
+  min-height: 56px;
   padding: 8px;
   border: 2px solid var(--color-hairline);
   border-radius: var(--radius-md);
   background: var(--challenge-object-bg);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  cursor: grab;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  touch-action: none;
+  user-select: none;
 }
-
-.challenge-object:active {
-  transform: scale(0.95);
-}
-
-.challenge-object--selected {
-  border-color: var(--color-brand-ochre);
-  background: var(--challenge-object-active);
-  box-shadow: 0 0 0 2px rgba(var(--color-brand-ochre-rgb), 0.25);
-}
-
-.challenge-object__icon {
-  font-size: 24px;
-  line-height: 1;
-}
-
-.challenge-object__label {
-  font-family: Inter, sans-serif;
-  font-size: 11px;
-  color: var(--color-body);
-  text-align: center;
-  max-width: 60px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Reduced motion */
+.challenge-object--dragging { border-color: var(--color-brand-ochre); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); cursor: grabbing; }
+.challenge-object__icon { font-size: 24px; line-height: 1; }
+.challenge-object__label { font-family: Inter, sans-serif; font-size: 11px; color: var(--color-body); text-align: center; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) {
-  .challenge-slot,
-  .challenge-object {
-    transition: none;
-  }
+  .challenge-slot, .challenge-object { transition: none; }
 }
 </style>

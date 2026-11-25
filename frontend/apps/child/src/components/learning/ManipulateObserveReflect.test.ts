@@ -226,17 +226,20 @@ describe('ManipulateObserveReflect (U5)', () => {
   })
 
   it('classify challenge evaluates correctly', async () => {
-    const wrapper = mountChallenge(makeClassifyConfig())
-    const zones = wrapper.findAll('.challenge-zone')
-    // Dog (a1) → Pets: click first object, then first zone
-    await wrapper.findAll('.challenge-object')[0].trigger('click')
-    await zones[0].trigger('click')
-    // Cat (a2) → Pets: first remaining object is now Cat
-    await wrapper.findAll('.challenge-object')[0].trigger('click')
-    await zones[0].trigger('click')
-    // Fish (a3) → Other: last remaining object
-    await wrapper.findAll('.challenge-object')[0].trigger('click')
-    await zones[1].trigger('click')
+    const config = makeClassifyConfig()
+    // Pre-set correct placements via sessionStorage (classify uses drag, not click)
+    sessionStorage.setItem(
+      `numina:challenge:${config.id}`,
+      JSON.stringify({
+        placements: { z1: ['a1', 'a2'], z2: ['a3'] },
+        attemptCount: 0,
+        completed: false,
+        feedbackMessage: '',
+        feedbackVerdict: null,
+      }),
+    )
+    const wrapper = mountChallenge(config)
+    await nextTick()
     await wrapper.find('.challenge-check-btn').trigger('click')
     expect(wrapper.find('.challenge-feedback__message--correct').exists()).toBe(true)
   })
