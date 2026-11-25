@@ -219,10 +219,19 @@ function buildScene() {
 /** Build/rebuild tray + placed weight meshes. */
 function buildWeightMeshes() {
   if (!scene || !beamGroup) return
-  // Clear old
-  trayObjects.forEach((m) => { scene!.remove(m); m.geometry.dispose() })
+  // Clear old tray objects
+  trayObjects.forEach((m) => { scene!.remove(m); m.geometry.dispose(); (m.material as MeshStandardMaterial).dispose() })
   trayObjects.length = 0
-  weightMeshes.forEach((m) => { m.geometry.dispose() })
+  // Clear old placed meshes from beamGroup
+  const toRemove: Mesh[] = []
+  beamGroup.children.forEach((child) => {
+    if (child instanceof Mesh && child.userData.objId) toRemove.push(child)
+  })
+  toRemove.forEach((m) => {
+    beamGroup!.remove(m)
+    m.geometry.dispose()
+    ;(m.material as MeshStandardMaterial).dispose()
+  })
   weightMeshes.clear()
 
   // Tray (available) objects

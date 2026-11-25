@@ -75,13 +75,15 @@ let mouse: THREE.Vector2 | null = null
 let dragging: ObjectState | null = null
 let dragPlane: THREE.Plane | null = null
 let dragOffset: THREE.Vector3 | null = null
+let pointerId: number | null = null
 const objectStates = new Map<string, ObjectState>()
 const zoneStates = new Map<string, ZoneState>()
 const placements = ref(new Map<string, string>()) // objectId -> zoneId
 let animationId: number | null = null
 let lastTime = 0
 let paused = false
-const STORAGE_KEY = `distribute-challenge-${props.config.id}`
+const STORAGE_KEY = `numina:challenge:${props.config.id}`
+const snapTimelines: ReturnType<typeof createChildTimeline>[] = []
 
 function loadState(): void {
   try {
@@ -202,7 +204,8 @@ function snapToZone(objState: ObjectState, zoneState: ZoneState, animate: boolea
 
   if (animate && !reducedMotion.value) {
     const timeline = createChildTimeline()
-    timeline.add(objState.mesh.position, { x: target.x, y: target.y, z: target.z, duration: 400, easing: easeOutElastic })
+    timeline.add(objState.mesh.position, { x: target.x, y: target.y, z: target.z, duration: 400, ease: easeOutElastic })
+    snapTimelines.push(timeline)
   } else {
     objState.mesh.position.copy(target)
   }
@@ -239,6 +242,7 @@ function onPointerDown(e: PointerEvent): void {
     const objState = objectStates.get(hit.userData.objectId as string)
     if (objState) {
       dragging = objState
+      pointerId = e.pointerId
       if (objState.zoneId) {
         zoneStates.get(objState.zoneId)?.objectIds.delete(objState.id)
         placements.value.delete(objState.id)
@@ -249,6 +253,7 @@ function onPointerDown(e: PointerEvent): void {
       const intersection = new THREE.Vector3()
       raycaster.ray.intersectPlane(dragPlane!, intersection)
       dragOffset!.copy(objState.mesh.position).sub(intersection)
+      pointerId = e.pointerId
       renderer.domElement.setPointerCapture(e.pointerId)
       tryVibrate(10)
     }
@@ -296,7 +301,10 @@ function onPointerUp(): void {
   for (const zoneState of zoneStates.values()) {
     (zoneState.mesh.material as THREE.MeshStandardMaterial).opacity = 0.3
   }
-  renderer?.domElement.releasePointerCapture(0)
+  if (pointerId !== null) {
+    renderer?.domElement.releasePointerCapture(pointerId)
+    pointerId = null
+  }
 }
 
 function checkAnswer(): void {
@@ -311,11 +319,11 @@ function checkAnswer(): void {
     if (containerRef.value) triggerSuccessFeedback(containerRef.value)
   } else if (diff <= 1) {
     feedbackVerdict.value = 'close'
-    feedbackMessage.value = isZh.value ? '很接近！再调整一下' : 'So close! Try adjusting a bit'
+    feedbackMessage.value = t('learning.challenge.verdictClose')
     if (containerRef.value) triggerErrorFeedback(containerRef.value)
   } else {
     feedbackVerdict.value = 'wrong'
-    feedbackMessage.value = isZh.value ? '再试试看' : 'Try again'
+    feedbackMessage.value = t('learning.challenge.hintGeneric')
     if (containerRef.value) triggerErrorFeedback(containerRef.value)
   }
 }
@@ -356,12 +364,25 @@ function onResize(): void {
   camera.updateProjectionMatrix()
 }
 
+function startLoop(): void {
+  paused = false
+  lastTime = 0
+  if (animationId === null) animationId = requestAnimationFrame(animate)
+}
+
+function stopLoop(): void {
+  paused = true
+  if (animationId !== null) {
+    cancelAnimationFrame(animationId)
+    animationId = null
+  }
+}
+
 function onVisibilityChange(): void {
   if (document.hidden) {
-    paused = true
+    stopLoop()
   } else {
-    paused = false
-    lastTime = 0
+    startLoop()
   }
 }
 
@@ -383,7 +404,9 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  if (animationId !== null) cancelAnimationFrame(animationId)
+  stopLoop()
+  snapTimelines.forEach((tl) => tl.revert())
+  snapTimelines.length = 0
   if (renderer) {
     renderer.domElement.removeEventListener('pointerdown', onPointerDown)
     renderer.domElement.removeEventListener('pointermove', onPointerMove)
@@ -402,13 +425,11 @@ onBeforeUnmount(() => {
 })
 
 onActivated(() => {
-  paused = false
-  lastTime = 0
-  if (animationId === null) animationId = requestAnimationFrame(animate)
+  startLoop()
 })
 
 onDeactivated(() => {
-  paused = true
+  stopLoop()
 })
 </script>
 

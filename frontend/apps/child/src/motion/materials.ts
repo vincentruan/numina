@@ -64,5 +64,18 @@ export function clayColor(token: string): Color {
 
 /** Clear the color cache — call after theme changes or dark mode toggle. */
 export function invalidateCache(): void {
+  // Dispose cached Color objects to free references
+  cache.forEach((color) => { color.set(0x000000) })
   cache.clear()
 }
+
+/**
+ * Watch for dark mode toggle and invalidate the color cache.
+ * Call once at module load — sets up a MutationObserver on <html>.
+ */
+function watchThemeChanges(): void {
+  if (typeof MutationObserver === 'undefined' || typeof document === 'undefined') return
+  const observer = new MutationObserver(() => { invalidateCache() })
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+}
+watchThemeChanges()

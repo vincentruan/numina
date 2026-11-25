@@ -20,6 +20,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as THREE from 'three'
+import RAPIER from '@dimforge/rapier3d-compat'
 import type { PuzzleChallenge, ChallengeVerdict, ChallengeObject } from '@/types/learning-challenge'
 import ChallengeShell from './ChallengeShell.vue'
 import { createChildTimeline, tickDriver } from '@/motion/animeDriver'
@@ -45,7 +46,7 @@ const feedbackVerdict = ref<ChallengeVerdict | null>(null)
 const attemptCount = ref(0)
 const hasAnyPlacement = ref(false)
 const reducedMotion = useReducedMotion()
-const SESSION_KEY = `puzzle-session-${props.config.id}`
+const SESSION_KEY = `numina:challenge:${props.config.id}`
 interface PieceState {
   id: string
   object: ChallengeObject
@@ -70,6 +71,7 @@ let raycaster: THREE.Raycaster | null = null
 let mouse: THREE.Vector2 | null = null
 let timeline: ReturnType<typeof createChildTimeline> | null = null
 let animationFrameId: number | null = null
+let lastFrameTime = 0
 let isDragging = false
 let draggedPiece: PieceState | null = null
 let dragPlane: THREE.Plane | null = null
@@ -83,7 +85,10 @@ const statusText = computed(() => {
   return t('learning.challenge.placedCount', { placed, total: props.config.slots.length })
 })
 function loadSessionState(): Record<string, string | null> {
-  try { return sessionStorage.getItem(SESSION_KEY) ? JSON.parse(sessionStorage.getItem(SESSION_KEY)!) : {} }
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY)
+    return raw ? JSON.parse(raw) : {}
+  }
   catch { return {} }
 }
 
@@ -244,7 +249,7 @@ function onPointerDown(event: PointerEvent): void {
         piece.slotId = null
       }
 
-      piece.body.body.setBodyType(0, true)
+      piece.body.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true)
       piece.body.body.setAngvel({ x: 0, y: 0, z: 0 }, true)
       piece.body.body.setLinvel({ x: 0, y: 0, z: 0 }, true)
 
@@ -307,11 +312,11 @@ function onPointerUp(): void {
     }
 
     piece.body.body.setTranslation({ x: targetPos.x, y: 0.2, z: targetPos.z }, true)
-    piece.body.body.setBodyType(1, true)
+    piece.body.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true)
     playClickPop()
     hasAnyPlacement.value = true
   } else {
-    piece.body.body.setBodyType(0, true)
+    piece.body.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true)
     piece.mesh.position.copy(piece.trayPosition)
     piece.body.body.setTranslation(
       { x: piece.trayPosition.x, y: piece.trayPosition.y, z: piece.trayPosition.z },
@@ -365,7 +370,7 @@ function onContinue(): void {
       { x: piece.trayPosition.x, y: piece.trayPosition.y, z: piece.trayPosition.z },
       true
     )
-    piece.body.body.setBodyType(0, true)
+    piece.body.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true)
   })
 
   slots.forEach(slot => { slot.occupiedBy = null })
@@ -373,11 +378,13 @@ function onContinue(): void {
   try { sessionStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
   emit('complete')
 }
-function animate(): void {
+function animate(now: number): void {
   if (!renderer || !scene || !camera) return
   animationFrameId = requestAnimationFrame(animate)
+  const dt = lastFrameTime ? (now - lastFrameTime) / 1000 : 0
+  lastFrameTime = now
   tickDriver(performance.now())
-  stepPhysics(1 / 60)
+  stepPhysics(dt, getWorld())
   renderer.render(scene, camera)
 }
 function onResize(): void {
@@ -394,7 +401,11 @@ function onVisibilityChange(): void {
       cancelAnimationFrame(animationFrameId)
       animationFrameId = null
     }
-  } else if (animationFrameId === null) animate()
+    lastFrameTime = 0
+  } else if (animationFrameId === null) {
+    lastFrameTime = 0
+    animate(performance.now())
+  }
 }
 onMounted(async () => {
   await initRapier()
@@ -405,7 +416,7 @@ onMounted(async () => {
     renderer.domElement.addEventListener('pointerup', onPointerUp)
     window.addEventListener('resize', onResize)
     document.addEventListener('visibilitychange', onVisibilityChange)
-    animate()
+    animationFrameId = requestAnimationFrame(animate)
   }
 })
 onBeforeUnmount(() => {
@@ -432,7 +443,10 @@ onBeforeUnmount(() => {
   slots.length = 0
 })
 onActivated(() => {
-  if (animationFrameId === null) animate()
+  if (animationFrameId === null) {
+    lastFrameTime = 0
+    animate(performance.now())
+  }
 })
 onDeactivated(() => {
   if (animationFrameId !== null) { cancelAnimationFrame(animationFrameId); animationFrameId = null }
