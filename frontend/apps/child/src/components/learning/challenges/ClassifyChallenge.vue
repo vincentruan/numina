@@ -342,7 +342,7 @@ function evaluateClassify(): { isCorrect: boolean; hint: string } {
 }
 .challenge-zone__label { font-family: Inter, sans-serif; font-size: 13px; font-weight: 600; color: var(--color-ink); }
 .challenge-zone__items { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
-.challenge-zone__placed { font-size: 20px; cursor: pointer; min-width: 28px; min-height: 28px; display: flex; align-items: center; justify-content: center; }
+.challenge-zone__placed { font-size: 20px; cursor: pointer; min-width: 56px; min-height: 56px; display: flex; align-items: center; justify-content: center; }
 .challenge-zone__count { font-family: Inter, sans-serif; font-size: 12px; color: var(--color-muted); }
 @keyframes classify-snap {
   0% { transform: scale(1.15); }

@@ -226,6 +226,26 @@ function initializeScene(): void {
   timeline = createChildTimeline()
   hasAnyPlacement.value = pieces.some(p => p.slotId !== null)
 }
+
+/** R12: expanded hit radius — find closest piece within 28px screen distance. */
+function findClosestByScreenDistance(ndcX: number, ndcY: number, maxPx = 28): THREE.Object3D | null {
+  if (!camera || !renderer) return null
+  const rect = renderer.domElement.getBoundingClientRect()
+  const cx = (ndcX * 0.5 + 0.5) * rect.width
+  const cy = (-ndcY * 0.5 + 0.5) * rect.height
+  let best: THREE.Object3D | null = null
+  let bestPx = maxPx
+  const v = new THREE.Vector3()
+  for (const piece of pieces) {
+    v.copy(piece.mesh.position).project(camera)
+    const sx = (v.x * 0.5 + 0.5) * rect.width
+    const sy = (-v.y * 0.5 + 0.5) * rect.height
+    const px = Math.sqrt((sx - cx) ** 2 + (sy - cy) ** 2)
+    if (px < bestPx) { bestPx = px; best = piece.mesh }
+  }
+  return best
+}
+
 function onPointerDown(event: PointerEvent): void {
   if (!renderer || !camera || !raycaster || !mouse || !dragPlane || !dragOffset) return
   resumeAudio()
@@ -234,7 +254,12 @@ function onPointerDown(event: PointerEvent): void {
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
 
   raycaster.setFromCamera(mouse, camera)
-  const intersects = raycaster.intersectObjects(pieces.map(p => p.mesh))
+  let intersects = raycaster.intersectObjects(pieces.map(p => p.mesh))
+  // R12: expanded hit radius fallback — 28px screen distance
+  if (intersects.length === 0) {
+    const prox = findClosestByScreenDistance(mouse.x, mouse.y)
+    if (prox) intersects = [{ object: prox, distance: 0 } as any]
+  }
 
   if (intersects.length > 0) {
     const hitMesh = intersects[0].object as THREE.Mesh

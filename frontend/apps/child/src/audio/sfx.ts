@@ -27,6 +27,7 @@ function getContext(): AudioContext | null {
   if (typeof window === 'undefined') return null
   if (!audioCtx) {
     try {
+      // webkitAudioContext: Safari ≤14 prefixed fallback
       const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
       audioCtx = new Ctor()
     } catch {

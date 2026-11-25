@@ -7,6 +7,7 @@
 import type { Component } from 'vue'
 import type { ChallengeType } from '@/types/learning-challenge'
 import { resolveChallengeComponent } from './index'
+import { useReducedMotion } from '@/composables/useReducedMotion'
 
 /** Rendering backend classification for each challenge type. */
 export type ChallengeRenderingBackend = 'physics-3d' | 'enhanced-2d' | 'native-2d'
@@ -67,11 +68,18 @@ export async function loadChallengeComponent(type: string): Promise<Component | 
   const backend = resolveChallengeBackend(type as ChallengeType)
 
   if (backend === 'physics-3d') {
+    // R5: prefers-reduced-motion → skip 3D, use 2D fallback
+    const reducedMotion = useReducedMotion()
+    if (reducedMotion.value) {
+      return resolveChallengeComponent(type)
+    }
     try {
       return await loadPhysics3DComponent(type)
     } catch {
       // Dynamic import failed — fall back to 2D implementation
-      console.warn(`[challengeRouter] 3D load failed for "${type}", falling back to 2D`)
+      if (import.meta.env.DEV) {
+        console.warn(`[challengeRouter] 3D load failed for "${type}", falling back to 2D`)
+      }
       return resolveChallengeComponent(type)
     }
   }

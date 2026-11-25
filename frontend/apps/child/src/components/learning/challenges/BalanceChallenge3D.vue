@@ -298,11 +298,36 @@ function getNDC(e: PointerEvent): Vector2 {
   return new Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
 }
 
+/** R12: expanded hit radius — find closest tray object within 28px screen distance. */
+function findClosestByScreenDistance(ndc: Vector2, maxPx = 28): Mesh | null {
+  if (!camera || !canvasEl.value) return null
+  const rect = canvasEl.value.getBoundingClientRect()
+  const cx = (ndc.x * 0.5 + 0.5) * rect.width
+  const cy = (-ndc.y * 0.5 + 0.5) * rect.height
+  let best: Mesh | null = null
+  let bestPx = maxPx
+  const v = new Vector3()
+  for (const mesh of trayObjects) {
+    v.copy(mesh.position).project(camera)
+    const sx = (v.x * 0.5 + 0.5) * rect.width
+    const sy = (-v.y * 0.5 + 0.5) * rect.height
+    const px = Math.sqrt((sx - cx) ** 2 + (sy - cy) ** 2)
+    if (px < bestPx) { bestPx = px; best = mesh }
+  }
+  return best
+}
+
 function onPointerDown(e: PointerEvent) {
   if (completed.value || !canvasEl.value) return
   resumeAudio()
-  raycaster.setFromCamera(getNDC(e), camera!)
-  const hits = raycaster.intersectObjects(trayObjects, false)
+  const ndc = getNDC(e)
+  raycaster.setFromCamera(ndc, camera!)
+  let hits = raycaster.intersectObjects(trayObjects, false)
+  // R12: expanded hit radius fallback — 28px screen distance
+  if (hits.length === 0) {
+    const prox = findClosestByScreenDistance(ndc)
+    if (prox) hits = [{ object: prox, distance: 0 } as any]
+  }
   if (hits.length > 0) {
     const mesh = hits[0].object as Mesh
     isDragging = true
@@ -338,12 +363,12 @@ function onPointerUp() {
       const slotY = PAN_Y - BEAM_Y + mesh.userData.radius
 
       // Animate snap then reparent to beam
-      const from = { x: mesh.position.x, y: mesh.position.y }
-      childTimeline.add(from, {
-        x: slotX, y: slotY, duration: reducedMotion.value ? 0 : 300, ease: easeOutElastic,
+      const targetPos = new Vector3(slotX, slotY, 0)
+      childTimeline.add(mesh.position, {
+        x: slotX, y: slotY, z: 0, duration: reducedMotion.value ? 0 : 300, ease: easeOutElastic,
       })
       scene!.remove(mesh)
-      mesh.position.set(slotX, slotY, 0)
+      mesh.position.copy(targetPos)
       beamGroup!.add(mesh)
 
       rightPlacements[emptyIdx] = draggingObjId
@@ -359,9 +384,8 @@ function animateBackToTray(mesh: Mesh) {
   const availIdx = available.findIndex((o) => o.id === mesh.userData.objId)
   const startX = -((available.length - 1) * TRAY_SPACING) / 2
   const targetX = availIdx >= 0 ? startX + availIdx * TRAY_SPACING : mesh.position.x
-  const from = { x: mesh.position.x, y: mesh.position.y }
-  childTimeline.add(from, {
-    x: targetX, y: TRAY_Y, duration: reducedMotion.value ? 0 : 400, ease: easeOutQuad,
+  childTimeline.add(mesh.position, {
+    x: targetX, y: TRAY_Y, z: 0, duration: reducedMotion.value ? 0 : 400, ease: easeOutQuad,
   })
   ;(mesh.material as MeshStandardMaterial).color.copy(clayColor('brand-peach'))
   mesh.scale.setScalar(1)
@@ -386,13 +410,9 @@ function checkAnswer() {
     completed.value = true
     feedbackMessage.value = isZh.value ? props.config.discoveryMessageZh : props.config.discoveryMessage
     if (containerEl.value) triggerSuccessFeedback(containerEl.value)
-    // Animate beam to balanced
-    if (beamGroup) {
-      const from = { rot: beamGroup.rotation.z }
-      childTimeline.add(from, {
-        rot: 0, duration: reducedMotion.value ? 0 : 500, ease: easeOutElastic,
-        onUpdate: () => { beamGroup!.rotation.z = from.rot },
-      })
+    // Animate beam to balanced — instant target set, render loop smooths via lerp
+    if (beamGroup && reducedMotion.value) {
+      // reducedMotion: lerp will snap in one frame (alpha=1)
     }
   } else {
     feedbackMessage.value = result.hint

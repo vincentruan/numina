@@ -227,6 +227,25 @@ function returnToTray(objState: ObjectState): void {
   objState.mesh.position.copy(target)
 }
 
+/** R12: expanded hit radius — find closest object within 28px screen distance. */
+function findClosestByScreenDistance(ndcX: number, ndcY: number, maxPx = 28): THREE.Object3D | null {
+  if (!camera || !renderer) return null
+  const rect = renderer.domElement.getBoundingClientRect()
+  const cx = (ndcX * 0.5 + 0.5) * rect.width
+  const cy = (-ndcY * 0.5 + 0.5) * rect.height
+  let best: THREE.Object3D | null = null
+  let bestPx = maxPx
+  const v = new THREE.Vector3()
+  for (const objState of objectStates.values()) {
+    v.copy(objState.mesh.position).project(camera)
+    const sx = (v.x * 0.5 + 0.5) * rect.width
+    const sy = (-v.y * 0.5 + 0.5) * rect.height
+    const px = Math.sqrt((sx - cx) ** 2 + (sy - cy) ** 2)
+    if (px < bestPx) { bestPx = px; best = objState.mesh }
+  }
+  return best
+}
+
 function onPointerDown(e: PointerEvent): void {
   if (paused || !renderer || !camera || !raycaster || !mouse) return
   resumeAudio()
@@ -236,7 +255,12 @@ function onPointerDown(e: PointerEvent): void {
   mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
   raycaster.setFromCamera(mouse, camera)
 
-  const intersects = raycaster.intersectObjects(Array.from(objectStates.values()).map(o => o.mesh))
+  let intersects = raycaster.intersectObjects(Array.from(objectStates.values()).map(o => o.mesh))
+  // R12: expanded hit radius fallback — 28px screen distance
+  if (intersects.length === 0) {
+    const prox = findClosestByScreenDistance(mouse.x, mouse.y)
+    if (prox) intersects = [{ object: prox, distance: 0 } as any]
+  }
   if (intersects.length > 0) {
     const hit = intersects[0].object as THREE.Mesh
     const objState = objectStates.get(hit.userData.objectId as string)
