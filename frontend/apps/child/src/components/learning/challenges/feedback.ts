@@ -7,7 +7,6 @@
  * No red X, no score deduction, no page jump.
  */
 import { tryVibrate } from '@/composables/useHaptic'
-import { useReducedMotion } from '@/composables/useReducedMotion'
 import { playSuccessChime, playErrorDescend } from '@/audio/sfx'
 
 /** CSS class for the warm shake animation (injected once). */
@@ -40,6 +39,12 @@ function injectStyles(): void {
   stylesInjected = true
 }
 
+/** Check prefers-reduced-motion directly — avoids calling composable outside setup. */
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
 /**
  * Trigger warm error feedback on an element.
  * Applies a gentle shake + plays descending tone + optional haptic.
@@ -47,10 +52,9 @@ function injectStyles(): void {
  */
 export function triggerErrorFeedback(element: HTMLElement): void {
   injectStyles()
-  const reducedMotion = useReducedMotion()
 
   // Visual shake (skipped if reduced motion)
-  if (!reducedMotion.value) {
+  if (!prefersReducedMotion()) {
     element.classList.add(SHAKE_CLASS)
     element.addEventListener('animationend', () => {
       element.classList.remove(SHAKE_CLASS)
@@ -71,10 +75,9 @@ export function triggerErrorFeedback(element: HTMLElement): void {
  */
 export function triggerSuccessFeedback(element: HTMLElement): void {
   injectStyles()
-  const reducedMotion = useReducedMotion()
 
   // Visual bounce (skipped if reduced motion)
-  if (!reducedMotion.value) {
+  if (!prefersReducedMotion()) {
     element.classList.add(BOUNCE_CLASS)
     element.addEventListener('animationend', () => {
       element.classList.remove(BOUNCE_CLASS)

@@ -80,7 +80,8 @@ import { useI18n } from 'vue-i18n'
 import type { ChallengeJudgement, ConnectChallenge } from '@/types/learning-challenge'
 import ChallengeShell from './ChallengeShell.vue'
 import { useChallengeState } from './useChallengeState'
-import { playClickPop, playSuccessChime, playErrorDescend, resumeAudio } from '@/audio/sfx'
+import { playClickPop, resumeAudio } from '@/audio/sfx'
+import { triggerSuccessFeedback, triggerErrorFeedback } from './feedback'
 
 defineOptions({ name: 'ConnectChallenge' })
 
@@ -141,6 +142,7 @@ const connectionLines = computed<ConnLine[]>(() => {
       x2: rr.left - boardRect.left,
       y2: rr.top + rr.height / 2 - boardRect.top,
       correct: props.config.correctPairs[leftId] === rightId,
+      wrong: props.config.correctPairs[leftId] !== rightId,
     })
   }
   return lines
@@ -195,12 +197,12 @@ function onPointerUp(e: PointerEvent) {
     if (existing) delete state.pairs[existing[0]]
     // Create new pair
     state.pairs[leftId] = rightId
-    // Check if correct
+    // Check if correct - use feedback helpers for consistent warm feedback
     const isCorrect = props.config.correctPairs[leftId] === rightId
     if (isCorrect) {
-      playSuccessChime()
+      playClickPop() // subtle placement sound
     } else {
-      playErrorDescend()
+      playClickPop() // subtle placement sound, error feedback comes from checkAnswer
     }
   }
   dragState.active = false
@@ -243,8 +245,8 @@ function checkAnswer() {
   const judgement = judgeConnect(state.pairs, props.config)
   const success = isZh.value ? props.config.discoveryMessageZh : props.config.discoveryMessage
   applyJudgement(judgement, success)
-  if (judgement.verdict === 'correct') playSuccessChime()
-  else playErrorDescend()
+  // Audio is handled by triggerSuccessFeedback/triggerErrorFeedback in ChallengeShell
+  // No direct playSuccessChime/playErrorDescend calls here to avoid double audio
 }
 
 function onContinue() { clearState(); emit('complete') }

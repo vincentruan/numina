@@ -1,4 +1,5 @@
 <template>
+  <div ref="containerRef">
   <ChallengeShell
     :config="config"
     :feedback-message="feedbackMessage"
@@ -47,6 +48,7 @@
       </div>
     </div>
   </ChallengeShell>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -54,7 +56,8 @@ import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { OrderChallenge, ChallengeVerdict } from '@/types/learning-challenge'
 import ChallengeShell from './ChallengeShell.vue'
-import { playClickPop, playSuccessChime, playErrorDescend, resumeAudio } from '@/audio/sfx'
+import { playClickPop, resumeAudio } from '@/audio/sfx'
+import { triggerSuccessFeedback, triggerErrorFeedback } from './feedback'
 
 defineOptions({ name: 'OrderChallenge' })
 
@@ -63,6 +66,7 @@ const emit = defineEmits<{ complete: []; requestTutor: [] }>()
 const { t, locale } = useI18n()
 
 // ── Refs ──
+const containerRef = ref<HTMLElement | null>(null)
 const sequenceRef = ref<HTMLElement | null>(null)
 
 // ── Interaction state ──
@@ -239,10 +243,10 @@ function checkAnswer() {
   if (result.isCorrect) {
     completed.value = true
     feedbackMessage.value = isZh.value ? props.config.discoveryMessageZh : props.config.discoveryMessage
-    playSuccessChime()
+    if (containerRef.value) triggerSuccessFeedback(containerRef.value)
   } else {
     feedbackMessage.value = result.hint
-    playErrorDescend()
+    if (containerRef.value) triggerErrorFeedback(containerRef.value)
   }
 }
 function evaluateOrder(): { isCorrect: boolean; hint: string } {

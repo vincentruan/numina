@@ -36,11 +36,11 @@ const TOKEN_MAP: Record<string, string> = {
 
 /**
  * Resolve a clay.css token to a three.js Color.
- * Returns a cached instance — callers must not mutate it.
+ * Returns a cloned copy to prevent accidental mutation of cached values.
  */
 export function clayColor(token: string): Color {
   const cached = cache.get(token)
-  if (cached) return cached
+  if (cached) return cached.clone()
 
   const cssVar = TOKEN_MAP[token]
   if (!cssVar) {
@@ -59,13 +59,14 @@ export function clayColor(token: string): Color {
 
   const color = new Color(value)
   cache.set(token, color)
-  return color
+  return color.clone()
 }
 
 /** Clear the color cache — call after theme changes or dark mode toggle. */
 export function invalidateCache(): void {
-  // Dispose cached Color objects to free references
-  cache.forEach((color) => { color.set(0x000000) })
+  // Just clear the map — don't mutate cached Color objects as they may be
+  // referenced by live Three.js materials/scenes. Mutating them would cause
+  // visible corruption (flash to black) during theme transitions.
   cache.clear()
 }
 

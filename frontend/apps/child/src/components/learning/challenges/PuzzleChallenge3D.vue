@@ -309,10 +309,14 @@ function onPointerUp(): void {
   let closestSlot: SlotState | undefined
   let minDist = Infinity
 
+  // Use horizontal distance only for snap detection — piece is held at y=1.5 during drag
+  // but slots are at y=0.1, so 3D distance would always exceed threshold
   for (const slot of slots) {
-    const dist = piecePos.distanceTo(slot.position)
-    if (dist < minDist) {
-      minDist = dist
+    const dx = piecePos.x - slot.position.x
+    const dz = piecePos.z - slot.position.z
+    const horizontalDist = Math.sqrt(dx * dx + dz * dz)
+    if (horizontalDist < minDist) {
+      minDist = horizontalDist
       closestSlot = slot
     }
   }
@@ -372,14 +376,14 @@ function checkAnswer(): void {
   feedbackVerdict.value = verdict
   if (verdict === 'correct') {
     completed.value = true
-    feedbackMessage.value = t('learning.challenge.correct')
+    feedbackMessage.value = props.config.discoveryMessage || t('learning.challenge.verdictCorrect')
     if (containerRef.value) triggerSuccessFeedback(containerRef.value)
     try { sessionStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
   } else if (verdict === 'close') {
-    feedbackMessage.value = t('learning.challenge.almost')
+    feedbackMessage.value = t('learning.challenge.verdictClose')
     if (containerRef.value) triggerErrorFeedback(containerRef.value)
   } else {
-    feedbackMessage.value = t('learning.challenge.tryAgain')
+    feedbackMessage.value = t('learning.challenge.hintGeneric')
     if (containerRef.value) triggerErrorFeedback(containerRef.value)
   }
 }
@@ -410,6 +414,15 @@ function animate(now: number): void {
   lastFrameTime = now
   tickDriver(performance.now())
   stepPhysics(dt, getWorld())
+  // Sync mesh positions from physics simulation for non-dragged pieces
+  if (!isDragging) {
+    for (const piece of pieces) {
+      if (piece !== draggedPiece && piece.body.body.bodyType() === RAPIER.RigidBodyType.Dynamic) {
+        const pos = piece.body.body.translation()
+        piece.mesh.position.set(pos.x, pos.y, pos.z)
+      }
+    }
+  }
   renderer.render(scene, camera)
 }
 function onResize(): void {

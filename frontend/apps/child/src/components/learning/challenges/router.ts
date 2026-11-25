@@ -7,7 +7,6 @@
 import type { Component } from 'vue'
 import type { ChallengeType } from '@/types/learning-challenge'
 import { resolveChallengeComponent } from './index'
-import { useReducedMotion } from '@/composables/useReducedMotion'
 
 /** Rendering backend classification for each challenge type. */
 export type ChallengeRenderingBackend = 'physics-3d' | 'enhanced-2d' | 'native-2d'
@@ -57,6 +56,12 @@ async function loadPhysics3DComponent(type: string): Promise<Component> {
   }
 }
 
+/** Check prefers-reduced-motion directly — avoids calling composable outside setup. */
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
 /**
  * Load the challenge component for a given type.
  * - physics-3d: dynamically imports the 3D component (lazy loads three.js + rapier)
@@ -69,8 +74,7 @@ export async function loadChallengeComponent(type: string): Promise<Component | 
 
   if (backend === 'physics-3d') {
     // R5: prefers-reduced-motion → skip 3D, use 2D fallback
-    const reducedMotion = useReducedMotion()
-    if (reducedMotion.value) {
+    if (prefersReducedMotion()) {
       return resolveChallengeComponent(type)
     }
     try {

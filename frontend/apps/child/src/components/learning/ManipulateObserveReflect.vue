@@ -1,5 +1,5 @@
 <template>
-  <div v-if="loading" class="challenge-loading" aria-busy="true" />
+  <div v-if="loading" class="challenge-loading" role="status" aria-busy="true" aria-label="Loading activity" />
   <component
     :is="challengeComponent"
     v-else-if="challengeComponent"
@@ -10,7 +10,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import type { Component } from 'vue'
 import type { ChallengeConfig } from '@/types/learning-challenge'
 import { loadChallengeComponent, isPhysics3D } from './challenges/router'
@@ -36,6 +36,7 @@ const reducedMotion = useReducedMotion()
 const componentCache = new Map<string, Component>()
 
 let loadToken = 0
+let pendingTimeout: ReturnType<typeof setTimeout> | undefined
 
 async function loadComponent() {
   const type = props.config.type
@@ -50,8 +51,9 @@ async function loadComponent() {
   loading.value = true
 
   // 5-second timeout: fall back to 2D silently
-  const timeoutId = setTimeout(() => {
+  pendingTimeout = setTimeout(() => {
     if (token === loadToken && loading.value) {
+      ++loadToken // poison any late-arriving 3D response
       loading.value = false
       challengeComponent.value = resolveChallengeComponent(type) ?? null
     }
@@ -59,12 +61,19 @@ async function loadComponent() {
 
   try {
     const comp = await loadChallengeComponent(type)
-    clearTimeout(timeoutId)
+    clearTimeout(pendingTimeout)
     if (token !== loadToken) return // stale — a newer load superseded this one
     challengeComponent.value = comp
     if (comp) componentCache.set(type, comp)
+  } catch {
+    // Unexpected error — fall back to 2D gracefully (R5)
+    clearTimeout(pendingTimeout)
+    if (token === loadToken) {
+      challengeComponent.value = resolveChallengeComponent(type) ?? null
+      loading.value = false
+    }
   } finally {
-    clearTimeout(timeoutId)
+    clearTimeout(pendingTimeout)
     if (token === loadToken) loading.value = false
   }
 }
@@ -77,9 +86,15 @@ watch(() => props.config.type, () => { loadComponent() })
 
 // Watch for prefers-reduced-motion toggle
 watch(reducedMotion, () => {
-  if (reducedMotion.value && isPhysics3D(props.config.type as any)) {
+  if (isPhysics3D(props.config.type)) {
     componentCache.delete(props.config.type)
     loadComponent()
   }
+})
+
+// Cleanup pending async operations on unmount (R4 lifecycle)
+onBeforeUnmount(() => {
+  ++loadToken // invalidate any pending async loads
+  if (pendingTimeout) clearTimeout(pendingTimeout)
 })
 </script>

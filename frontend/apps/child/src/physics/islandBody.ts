@@ -78,9 +78,16 @@ export function createDynamicObject(
   if (params.ccd !== false) body.enableCcd(true)
   body.setLinearDamping(params.linearDamping ?? 0.5)
 
-  const colliderDesc = RAPIER.ColliderDesc.ball(params.radius)
+  // Compute density from desired mass: density = mass / volume
+  // For a ball collider: volume = (4/3) * π * r³
+  const mass = params.mass ?? 1
+  const radius = params.radius
+  const volume = (4 / 3) * Math.PI * radius ** 3
+  const density = mass / volume
+
+  const colliderDesc = RAPIER.ColliderDesc.ball(radius)
     .setRestitution(params.restitution ?? 0.3)
-    .setDensity(params.mass ?? 1)
+    .setDensity(density)
 
   const collider = world.createCollider(colliderDesc, body)
 

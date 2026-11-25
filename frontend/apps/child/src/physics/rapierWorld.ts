@@ -86,6 +86,20 @@ function getStateForWorld(world: World): PhysicsState | null {
 export function trackBody(world: World, body: RigidBody): void {
   const state = getStateForWorld(world)
   if (state) state.bodies.add(body)
+  else console.warn('[rapierWorld] trackBody called with unrecognized world')
+}
+
+/** Remove a body from tracking and from the world. Call on component unmount. */
+export function removeBody(world: World, body: RigidBody): void {
+  const state = getStateForWorld(world)
+  if (state) {
+    state.bodies.delete(body)
+    try {
+      world.removeRigidBody(body)
+    } catch {
+      // Body may already be removed if world.free() was called
+    }
+  }
 }
 
 /**
@@ -135,10 +149,14 @@ export function syncMeshesFromBodies(
 
 /**
  * Destroy the default world and free WASM memory.
- * Subsequent getWorld() calls require initRapier() again.
+ * The RAPIER WASM module stays initialized; call getWorld() to recreate.
  */
 export function destroyWorld(): void {
   if (defaultState) {
+    // Remove all tracked bodies first
+    for (const body of defaultState.bodies) {
+      try { defaultState.world.removeRigidBody(body) } catch { /* ignore */ }
+    }
     defaultState.bodies.clear()
     defaultState.world.free()
     defaultState = null

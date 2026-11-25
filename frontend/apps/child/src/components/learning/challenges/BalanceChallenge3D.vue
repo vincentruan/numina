@@ -362,18 +362,11 @@ function onPointerUp() {
       const slotX = PAN_OFFSET_X + (emptyIdx - (props.config.rightSlots - 1) / 2) * 0.6
       const slotY = PAN_Y - BEAM_Y + mesh.userData.radius
 
-      // Animate snap then reparent to beam
-      const targetPos = new Vector3(slotX, slotY, 0)
-      childTimeline.add(mesh.position, {
-        x: slotX, y: slotY, z: 0, duration: reducedMotion.value ? 0 : 300, ease: easeOutElastic,
-      })
-      scene!.remove(mesh)
-      mesh.position.copy(targetPos)
-      beamGroup!.add(mesh)
-
+      // Update placement state first, then rebuild meshes
       rightPlacements[emptyIdx] = draggingObjId
       playDropThunk()
-      buildWeightMeshes() // rebuild tray to reflect placement
+      // buildWeightMeshes will place the mesh at the correct slot position
+      buildWeightMeshes()
     } else { animateBackToTray(mesh) }
   } else { animateBackToTray(mesh) }
   resetDrag()

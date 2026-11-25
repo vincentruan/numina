@@ -313,15 +313,22 @@ function onPointerUp(): void {
   let dropped = false
   for (const zoneState of zoneStates.values()) {
     if (objState.mesh.position.distanceTo(zoneState.center) < 1.5) {
+      // Keep body as Kinematic during snap animation to prevent physics from overriding
       snapToZone(objState, zoneState, true)
       playDropThunk()
       dropped = true
+      // Switch to Dynamic after animation completes (or immediately if reduced motion)
+      setTimeout(() => {
+        objState.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true)
+      }, reducedMotion.value ? 0 : 450)
       break
     }
   }
-  if (!dropped) returnToTray(objState)
+  if (!dropped) {
+    returnToTray(objState)
+    objState.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true)
+  }
 
-  objState.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true)
   for (const zoneState of zoneStates.values()) {
     (zoneState.mesh.material as THREE.MeshStandardMaterial).opacity = 0.3
   }

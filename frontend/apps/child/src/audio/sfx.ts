@@ -25,7 +25,7 @@ muted = detectSystemSilent()
 /** Get or create the AudioContext (lazy, on first user gesture). */
 function getContext(): AudioContext | null {
   if (typeof window === 'undefined') return null
-  if (!audioCtx) {
+  if (!audioCtx || audioCtx.state === 'closed') {
     try {
       // webkitAudioContext: Safari ≤14 prefixed fallback
       const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
@@ -44,6 +44,8 @@ function getContext(): AudioContext | null {
 /** Resume audio context — call from first user gesture handler. */
 export function resumeAudio(): void {
   getContext()
+  // First user gesture confirms audio is allowed — clear any iOS default mute
+  muted = false
 }
 
 /** Toggle mute state. Returns new muted value. */
@@ -62,11 +64,15 @@ export function setMuted(value: boolean): void {
   muted = value
 }
 
-/**
- * Play a short percussive pop — button clicks, object placement.
- * Frequency: 600Hz → 200Hz sweep, 80ms duration.
- */
-export function playClickPop(): void {
+/** Shared tone player — reduces boilerplate across play functions. */
+function playTone(opts: {
+  freqStart: number
+  freqEnd: number
+  type: OscillatorType
+  duration: number
+  peakGain: number
+  delay?: number
+}): void {
   if (muted) return
   const ctx = getContext()
   if (!ctx) return
@@ -76,14 +82,25 @@ export function playClickPop(): void {
   osc.connect(gain)
   gain.connect(ctx.destination)
 
-  const now = ctx.currentTime
-  osc.frequency.setValueAtTime(600, now)
-  osc.frequency.exponentialRampToValueAtTime(200, now + 0.08)
-  gain.gain.setValueAtTime(0.3, now)
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
+  const start = ctx.currentTime + (opts.delay ?? 0)
+  const end = start + opts.duration
 
-  osc.start(now)
-  osc.stop(now + 0.08)
+  osc.frequency.setValueAtTime(opts.freqStart, start)
+  osc.frequency.exponentialRampToValueAtTime(opts.freqEnd, end)
+  osc.type = opts.type
+  gain.gain.setValueAtTime(opts.peakGain, start)
+  gain.gain.exponentialRampToValueAtTime(0.001, end)
+
+  osc.start(start)
+  osc.stop(end)
+}
+
+/**
+ * Play a short percussive pop — button clicks, object placement.
+ * Frequency: 600Hz → 200Hz sweep, 80ms duration.
+ */
+export function playClickPop(): void {
+  playTone({ freqStart: 600, freqEnd: 200, type: 'sine', duration: 0.08, peakGain: 0.3 })
 }
 
 /**
@@ -91,27 +108,10 @@ export function playClickPop(): void {
  * Notes: C5 → E5 → G5, 120ms each, total ~360ms.
  */
 export function playSuccessChime(): void {
-  if (muted) return
-  const ctx = getContext()
-  if (!ctx) return
-
   const notes = [523.25, 659.25, 783.99] // C5, E5, G5
   const noteDur = 0.12
-
   notes.forEach((freq, i) => {
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-
-    const start = ctx.currentTime + i * noteDur
-    osc.frequency.setValueAtTime(freq, start)
-    osc.type = 'sine'
-    gain.gain.setValueAtTime(0.25, start)
-    gain.gain.exponentialRampToValueAtTime(0.001, start + noteDur)
-
-    osc.start(start)
-    osc.stop(start + noteDur)
+    playTone({ freqStart: freq, freqEnd: freq, type: 'sine', duration: noteDur, peakGain: 0.25, delay: i * noteDur })
   })
 }
 
@@ -120,24 +120,7 @@ export function playSuccessChime(): void {
  * Frequency: 400Hz → 250Hz, 200ms, sine wave.
  */
 export function playErrorDescend(): void {
-  if (muted) return
-  const ctx = getContext()
-  if (!ctx) return
-
-  const osc = ctx.createOscillator()
-  const gain = ctx.createGain()
-  osc.connect(gain)
-  gain.connect(ctx.destination)
-
-  const now = ctx.currentTime
-  osc.frequency.setValueAtTime(400, now)
-  osc.frequency.exponentialRampToValueAtTime(250, now + 0.2)
-  osc.type = 'sine'
-  gain.gain.setValueAtTime(0.2, now)
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2)
-
-  osc.start(now)
-  osc.stop(now + 0.2)
+  playTone({ freqStart: 400, freqEnd: 250, type: 'sine', duration: 0.2, peakGain: 0.2 })
 }
 
 /**
@@ -145,24 +128,7 @@ export function playErrorDescend(): void {
  * Low frequency bump: 150Hz → 60Hz, 100ms.
  */
 export function playDropThunk(): void {
-  if (muted) return
-  const ctx = getContext()
-  if (!ctx) return
-
-  const osc = ctx.createOscillator()
-  const gain = ctx.createGain()
-  osc.connect(gain)
-  gain.connect(ctx.destination)
-
-  const now = ctx.currentTime
-  osc.frequency.setValueAtTime(150, now)
-  osc.frequency.exponentialRampToValueAtTime(60, now + 0.1)
-  osc.type = 'triangle'
-  gain.gain.setValueAtTime(0.35, now)
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1)
-
-  osc.start(now)
-  osc.stop(now + 0.1)
+  playTone({ freqStart: 150, freqEnd: 60, type: 'triangle', duration: 0.1, peakGain: 0.35 })
 }
 
 /** Reset audio state — for tests only. */

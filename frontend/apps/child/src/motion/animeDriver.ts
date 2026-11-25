@@ -10,6 +10,7 @@
 import { createTimeline, type Timeline, type TimelinePosition } from 'animejs'
 
 let rootTimeline: Timeline | null = null
+const childTimelines = new Set<Timeline>()
 
 /** Get or lazily create the root timeline (autoplay disabled). */
 function getRoot(): Timeline {
@@ -38,6 +39,7 @@ export function createChildTimeline(): Timeline {
   const root = getRoot()
   const child = createTimeline({ autoplay: false })
   root.sync(child, 0 as TimelinePosition)
+  childTimelines.add(child)
   return child
 }
 
@@ -46,6 +48,10 @@ export function createChildTimeline(): Timeline {
  * Called on full teardown (e.g., module unmount, WebGL context loss).
  */
 export function revertAll(): void {
+  for (const child of childTimelines) {
+    child.revert()
+  }
+  childTimelines.clear()
   if (rootTimeline) {
     rootTimeline.pause()
     rootTimeline = null
