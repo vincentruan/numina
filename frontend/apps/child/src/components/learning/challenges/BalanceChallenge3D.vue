@@ -330,7 +330,7 @@ function onPointerUp() {
 
       // Animate snap then reparent to beam
       const from = { x: mesh.position.x, y: mesh.position.y }
-      childTimeline.add({ targets: from }, {
+      childTimeline.add(from, {
         x: slotX, y: slotY, duration: reducedMotion.value ? 0 : 300, ease: easeOutElastic,
       })
       scene!.remove(mesh)
@@ -351,7 +351,7 @@ function animateBackToTray(mesh: Mesh) {
   const startX = -((available.length - 1) * TRAY_SPACING) / 2
   const targetX = availIdx >= 0 ? startX + availIdx * TRAY_SPACING : mesh.position.x
   const from = { x: mesh.position.x, y: mesh.position.y }
-  childTimeline.add({ targets: from }, {
+  childTimeline.add(from, {
     x: targetX, y: TRAY_Y, duration: reducedMotion.value ? 0 : 400, ease: easeOutQuad,
   })
   ;(mesh.material as MeshStandardMaterial).color.copy(clayColor('brand-peach'))
@@ -380,9 +380,9 @@ function checkAnswer() {
     // Animate beam to balanced
     if (beamGroup) {
       const from = { rot: beamGroup.rotation.z }
-      childTimeline.add({ targets: from }, {
+      childTimeline.add(from, {
         rot: 0, duration: reducedMotion.value ? 0 : 500, ease: easeOutElastic,
-        update: () => { beamGroup!.rotation.z = from.rot },
+        onUpdate: () => { beamGroup!.rotation.z = from.rot },
       })
     }
   } else {

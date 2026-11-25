@@ -435,10 +435,7 @@ onActivated(() => {
   if (animationFrameId === null) animate()
 })
 onDeactivated(() => {
-  if (animationFrameId !== null) {
-    cancelAnimationFrame(animationFrameId)
-    animationFrameId = null
-  }
+  if (animationFrameId !== null) { cancelAnimationFrame(animationFrameId); animationFrameId = null }
 })
 </script>
 
