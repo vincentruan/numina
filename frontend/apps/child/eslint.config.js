@@ -25,11 +25,15 @@ export default tseslint.config(
     rules: {
       'vue/multi-word-component-names': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      // Prevent cross-app imports from adult frontend
+      // Prevent cross-app imports from adult frontend + direct animejs usage in components
       'no-restricted-imports': ['error', {
         patterns: [{
           group: ['**/apps/main/src/**'],
           message: 'Cross-app imports are not allowed. Use @numina/* shared packages instead.',
+        }],
+        paths: [{
+          name: 'animejs',
+          message: 'Use @/motion/animeDriver instead of importing animejs directly.',
         }],
       }],
     },

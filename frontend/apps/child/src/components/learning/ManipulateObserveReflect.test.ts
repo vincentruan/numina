@@ -1,11 +1,22 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { nextTick } from 'vue'
 import zhCN from '@/i18n/locales/zh-CN'
 import enUS from '@/i18n/locales/en-US'
 import type { DistributeChallenge, ClassifyChallenge, ChallengeConfig } from '@/types/learning-challenge'
 import ManipulateObserveReflect from './ManipulateObserveReflect.vue'
+
+// Mock the router to avoid loading 3D components (which require WebGL and can't render in jsdom).
+// physics-3d types fall back to their 2D equivalents for testing.
+vi.mock('./challenges/router', async () => {
+  const actual = await vi.importActual('./challenges/router') as Record<string, unknown>
+  const { resolveChallengeComponent } = await import('./challenges')
+  return {
+    ...actual,
+    loadChallengeComponent: (type: string) => Promise.resolve(resolveChallengeComponent(type)),
+  }
+})
 
 function makeDistributeConfig(overrides: Partial<DistributeChallenge> = {}): DistributeChallenge {
   return {
@@ -56,16 +67,20 @@ function makeClassifyConfig(): ClassifyChallenge {
   }
 }
 
-function mountChallenge(config: ChallengeConfig = makeDistributeConfig()) {
+async function mountChallenge(config: ChallengeConfig = makeDistributeConfig()) {
   const i18n = createI18n({
     legacy: false,
     locale: 'en-US',
     messages: { 'en-US': enUS, 'zh-CN': zhCN },
   })
-  return mount(ManipulateObserveReflect, {
+  const wrapper = mount(ManipulateObserveReflect, {
     props: { config },
     global: { plugins: [i18n] },
   })
+  // Wait for onMounted async load → flush microtasks → Vue reactivity update
+  await flushPromises()
+  await flushPromises()
+  return wrapper
 }
 
 describe('ManipulateObserveReflect (U5)', () => {
@@ -73,28 +88,28 @@ describe('ManipulateObserveReflect (U5)', () => {
     sessionStorage.clear()
   })
 
-  it('renders scenario text and object pool from config', () => {
-    const wrapper = mountChallenge()
+  it('renders scenario text and object pool from config', async () => {
+    const wrapper = await mountChallenge()
     expect(wrapper.find('.challenge-scenario__text').text()).toContain('Share 4 cookies')
     expect(wrapper.findAll('.challenge-object')).toHaveLength(4)
   })
 
-  it('renders zone areas', () => {
-    const wrapper = mountChallenge()
+  it('renders zone areas', async () => {
+    const wrapper = await mountChallenge()
     const zones = wrapper.findAll('.challenge-zone')
     expect(zones).toHaveLength(2)
     expect(zones[0].text()).toContain('Friend A')
   })
 
   it('tap object selects it (highlighted state)', async () => {
-    const wrapper = mountChallenge()
+    const wrapper = await mountChallenge()
     const objects = wrapper.findAll('.challenge-object')
     await objects[0].trigger('click')
     expect(objects[0].classes()).toContain('challenge-object--selected')
   })
 
   it('tap same object again deselects it', async () => {
-    const wrapper = mountChallenge()
+    const wrapper = await mountChallenge()
     const obj = wrapper.findAll('.challenge-object')[0]
     await obj.trigger('click')
     expect(obj.classes()).toContain('challenge-object--selected')
@@ -103,7 +118,7 @@ describe('ManipulateObserveReflect (U5)', () => {
   })
 
   it('tap zone with selected object moves it to zone', async () => {
-    const wrapper = mountChallenge()
+    const wrapper = await mountChallenge()
     // Select first object
     await wrapper.findAll('.challenge-object')[0].trigger('click')
     // Tap zone
@@ -115,7 +130,7 @@ describe('ManipulateObserveReflect (U5)', () => {
   })
 
   it('tap placed object returns it to pool', async () => {
-    const wrapper = mountChallenge()
+    const wrapper = await mountChallenge()
     // Place an object
     await wrapper.findAll('.challenge-object')[0].trigger('click')
     await wrapper.findAll('.challenge-zone')[0].trigger('click')
@@ -129,7 +144,7 @@ describe('ManipulateObserveReflect (U5)', () => {
     // Regression: placeInZone pushed the selected object unconditionally, so a
     // retained selection could put the same object into a second zone and
     // inflate the "placed N / total" counter past the object count.
-    const wrapper = mountChallenge()
+    const wrapper = await mountChallenge()
     await wrapper.findAll('.challenge-object')[0].trigger('click')
     await wrapper.findAll('.challenge-zone')[0].trigger('click')
     // Re-place the already-placed object: return it, then select the same id
@@ -144,7 +159,7 @@ describe('ManipulateObserveReflect (U5)', () => {
   })
 
   it('correct distribution → discovery message shown', async () => {
-    const wrapper = mountChallenge()
+    const wrapper = await mountChallenge()
     // Place 2 cookies in zone 1, 2 in zone 2
     for (let i = 0; i < 2; i++) {
       await wrapper.findAll('.challenge-object')[0].trigger('click')
@@ -161,7 +176,7 @@ describe('ManipulateObserveReflect (U5)', () => {
   })
 
   it('incorrect distribution → hint shown, retry allowed', async () => {
-    const wrapper = mountChallenge()
+    const wrapper = await mountChallenge()
     // Place all 4 in zone 1 (wrong)
     for (let i = 0; i < 4; i++) {
       await wrapper.findAll('.challenge-object')[0].trigger('click')
@@ -173,13 +188,13 @@ describe('ManipulateObserveReflect (U5)', () => {
     expect(wrapper.find('.challenge-check-btn').exists()).toBe(true)
   })
 
-  it('check button disabled when no objects placed', () => {
-    const wrapper = mountChallenge()
+  it('check button disabled when no objects placed', async () => {
+    const wrapper = await mountChallenge()
     expect(wrapper.find('.challenge-check-btn').attributes('disabled')).toBeDefined()
   })
 
-  it('all interactive elements use semantic <button> for accessibility', () => {
-    const wrapper = mountChallenge()
+  it('all interactive elements use semantic <button> for accessibility', async () => {
+    const wrapper = await mountChallenge()
     // Challenge objects are <button> elements — ensures keyboard/screen-reader access
     const objects = wrapper.findAll('.challenge-object')
     expect(objects[0].element.tagName).toBe('BUTTON')
@@ -187,15 +202,15 @@ describe('ManipulateObserveReflect (U5)', () => {
     expect(wrapper.find('.challenge-check-btn').element.tagName).toBe('BUTTON')
   })
 
-  it('renders nothing when config has no objects', () => {
-    const wrapper = mountChallenge(makeDistributeConfig({ objects: [] }))
+  it('renders nothing when config has no objects', async () => {
+    const wrapper = await mountChallenge(makeDistributeConfig({ objects: [] }))
     // Should still render (empty pool)
     expect(wrapper.find('.manipulate-challenge').exists()).toBe(true)
     expect(wrapper.findAll('.challenge-object')).toHaveLength(0)
   })
 
   it('shows continue button after correct answer', async () => {
-    const wrapper = mountChallenge()
+    const wrapper = await mountChallenge()
     // Place 2+2 (correct)
     for (let i = 0; i < 2; i++) {
       await wrapper.findAll('.challenge-object')[0].trigger('click')
@@ -211,7 +226,7 @@ describe('ManipulateObserveReflect (U5)', () => {
   })
 
   it('emits complete when continue is clicked after success', async () => {
-    const wrapper = mountChallenge()
+    const wrapper = await mountChallenge()
     for (let i = 0; i < 2; i++) {
       await wrapper.findAll('.challenge-object')[0].trigger('click')
       await wrapper.findAll('.challenge-zone')[0].trigger('click')
@@ -226,23 +241,26 @@ describe('ManipulateObserveReflect (U5)', () => {
   })
 
   it('classify challenge evaluates correctly', async () => {
-    const wrapper = mountChallenge(makeClassifyConfig())
-    const zones = wrapper.findAll('.challenge-zone')
-    // Dog (a1) → Pets: click first object, then first zone
-    await wrapper.findAll('.challenge-object')[0].trigger('click')
-    await zones[0].trigger('click')
-    // Cat (a2) → Pets: first remaining object is now Cat
-    await wrapper.findAll('.challenge-object')[0].trigger('click')
-    await zones[0].trigger('click')
-    // Fish (a3) → Other: last remaining object
-    await wrapper.findAll('.challenge-object')[0].trigger('click')
-    await zones[1].trigger('click')
+    const config = makeClassifyConfig()
+    // Pre-set correct placements via sessionStorage (classify uses drag, not click)
+    sessionStorage.setItem(
+      `numina:challenge:${config.id}`,
+      JSON.stringify({
+        placements: { z1: ['a1', 'a2'], z2: ['a3'] },
+        attemptCount: 0,
+        completed: false,
+        feedbackMessage: '',
+        feedbackVerdict: null,
+      }),
+    )
+    const wrapper = await mountChallenge(config)
+    await nextTick()
     await wrapper.find('.challenge-check-btn').trigger('click')
     expect(wrapper.find('.challenge-feedback__message--correct').exists()).toBe(true)
   })
 
   it('blocks interaction after challenge is completed', async () => {
-    const wrapper = mountChallenge()
+    const wrapper = await mountChallenge()
     // Complete the challenge (2+2 equal distribution)
     for (let i = 0; i < 2; i++) {
       await wrapper.findAll('.challenge-object')[0].trigger('click')
@@ -270,6 +288,8 @@ describe('ManipulateObserveReflect (U5)', () => {
       props: { config },
       global: { plugins: [i18n] },
     })
+    await flushPromises()
+    await flushPromises()
     // Chinese scenario text
     expect(wrapper.find('.challenge-scenario__text').text()).toContain('公平分给')
     // Complete challenge and check Chinese discovery message
@@ -286,7 +306,7 @@ describe('ManipulateObserveReflect (U5)', () => {
   })
 
   it('shows AI tutor suggestion button after 2 failed attempts', async () => {
-    const wrapper = mountChallenge()
+    const wrapper = await mountChallenge()
     // Fail twice (all in zone 1 = unequal)
     for (let attempt = 0; attempt < 2; attempt++) {
       for (let i = 0; i < 4; i++) {
@@ -307,7 +327,7 @@ describe('ManipulateObserveReflect (U5)', () => {
 
   it('restores placements and attempts from sessionStorage on remount (AE5)', async () => {
     const config = makeDistributeConfig()
-    const first = mountChallenge(config)
+    const first = await mountChallenge(config)
     // Place 2 cookies in zone 1 and fail once
     for (let i = 0; i < 2; i++) {
       await first.findAll('.challenge-object')[0].trigger('click')
@@ -317,7 +337,7 @@ describe('ManipulateObserveReflect (U5)', () => {
     await nextTick()
 
     // Simulate the child leaving and returning: fresh mount, same config
-    const second = mountChallenge(config)
+    const second = await mountChallenge(config)
     // 2 objects remain placed in zone 1, pool is back down to 2
     expect(second.findAll('.challenge-zone__placed')).toHaveLength(2)
     expect(second.findAll('.challenge-object')).toHaveLength(2)
@@ -327,7 +347,7 @@ describe('ManipulateObserveReflect (U5)', () => {
 
   it('clears persisted state after continuing past the challenge', async () => {
     const config = makeDistributeConfig()
-    const wrapper = mountChallenge(config)
+    const wrapper = await mountChallenge(config)
     for (let i = 0; i < 2; i++) {
       await wrapper.findAll('.challenge-object')[0].trigger('click')
       await wrapper.findAll('.challenge-zone')[0].trigger('click')

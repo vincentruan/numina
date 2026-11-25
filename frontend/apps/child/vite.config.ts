@@ -44,10 +44,28 @@ export default defineConfig({
       },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,svg,png,woff2}'],
+        globIgnores: ['**/three-runtime-**', '**/rapier-runtime-**', '**/motion-runtime-**'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MiB — exceeds default 2 MiB
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('node_modules/three/') || id.includes('node_modules/@types/three/')) {
+            return 'three-runtime'
+          }
+          if (id.includes('node_modules/@dimforge/rapier3d-compat/')) {
+            return 'rapier-runtime'
+          }
+          if (id.includes('node_modules/animejs/')) {
+            return 'motion-runtime'
+          }
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src')

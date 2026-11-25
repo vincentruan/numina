@@ -87,6 +87,12 @@ export interface DistributeChallenge extends ChallengeBase {
   type: 'distribute'
   objects: ChallengeObject[]
   zones: ChallengeZone[]
+  /**
+   * Optional 3D positions and dimensions for each zone (keyed by zone id).
+   * Used by physics-3d renderer; 2D renderer ignores this field.
+   * When absent, the 3D renderer uses a computed circular layout fallback.
+   */
+  zonePositions?: Record<string, { x: number; y: number; width: number; height: number }>
 }
 
 /** Sort items into categories. */
@@ -139,6 +145,12 @@ export interface PuzzleChallenge extends ChallengeBase {
   objects: ChallengeObject[]
   /** Maps slot id → the object id that belongs there. */
   correctPlacement: Record<string, string>
+  /**
+   * Optional 3D positions for each slot (keyed by slot id).
+   * Used by physics-3d renderer; 2D renderer ignores this field.
+   * When absent, the 3D renderer uses a computed grid layout fallback.
+   */
+  slotPositions?: Record<string, { x: number; y: number }>
 }
 
 /** Estimate a quantity using tap-step input (number sense, magnitude). */
