@@ -41,7 +41,8 @@ beforeEach(async () => {
     KnowledgeOcean3D = module.default
     componentLoaded = true
   }
-  gate.controllerImportSpy.mockClear()
+  // Do NOT clear here: a static controller import in the component would
+  // have been evaluated by the dynamic import above and must stay visible.
 })
 
 afterEach(() => {
