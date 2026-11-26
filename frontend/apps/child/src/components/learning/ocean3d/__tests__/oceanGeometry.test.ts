@@ -44,7 +44,7 @@ function makeDomain(
 }
 
 describe('layoutOceanNodes', () => {
-  it('maps normalized layout to world X/Z with 15% margin and no overlap', () => {
+  it('maps normalized layout to world X/Z with 15% margin and upstream separation', () => {
     const subjects = Array.from({ length: 8 }, (_, i) =>
       makeSubject(`s${i}`, { topicCount: i + 1 }),
     )

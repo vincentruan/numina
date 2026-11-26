@@ -109,7 +109,10 @@ function buildIsland(node: OceanIslandNode): Group {
   group.userData = { islandId: node.id, type: 'island' }
 
   const radius = node.worldRadius
-  const color = resolveThemeColor(node.terrain)
+  // CONTINENT_THEMES is keyed by subject id (e.g. `mathematics`), while
+  // `terrain` is only a CSS hook (e.g. `math`). Passing terrain here returns
+  // the gray fallback color for every real subject except `science`.
+  const color = resolveThemeColor(node.id)
   const bodyMaterial = new MeshStandardMaterial({
     color,
     roughness: 0.85,

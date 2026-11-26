@@ -87,7 +87,7 @@ describe('buildOceanScene (L0)', () => {
     disposeOceanScene(scene)
   })
 
-  it('uses resolved theme colors and a valid material color', () => {
+  it('uses the subject id (not terrain) for resolved theme colors', () => {
     const [node] = layoutOceanNodes([subjects[0]])
     const scene = buildOceanScene([node])
     const islandMesh = (scene.pickTargets[0] as Group).children.find(
@@ -96,9 +96,52 @@ describe('buildOceanScene (L0)', () => {
     const material = islandMesh.material as unknown as {
       color: { getHexString(): string }
     }
-    // Builder resolves colors via scene3d/resolveThemeColor(subject.terrain).
-    expect(material.color.getHexString()).toBe('abcdef')
+    // Mocked resolver returns #123456 for the subject id 'math'. The terrain
+    // family is 'logic'; resolving that would return #abcdef instead.
+    expect(material.color.getHexString()).toBe('123456')
     disposeOceanScene(scene)
+  })
+
+  it('resolves a real subject color without mocking resolveThemeColor', async () => {
+    vi.stubGlobal('getComputedStyle', () => ({
+      getPropertyValue: (name: string) =>
+        name === '--color-brand-ochre' ? '#e8b94a' : '',
+    }))
+    vi.doUnmock('@/components/learning/scene3d/resolveThemeColor')
+    vi.resetModules()
+
+    try {
+      const { buildOceanScene: buildWithRealTheme } =
+        await import('../OceanSceneBuilder')
+      const scene = buildWithRealTheme([
+        {
+          id: 'mathematics',
+          terrain: 'math',
+          displayName: 'Mathematics',
+          icon: '📐',
+          x: 0,
+          z: 0,
+          worldRadius: 0.7,
+          masteryRatio: 0,
+        },
+      ])
+      const islandMesh = (scene.pickTargets[0] as Group).children.find(
+        (child) => child instanceof Mesh && child.userData.type === 'island',
+      ) as Mesh
+      const material = islandMesh.material as unknown as {
+        color: { getHexString(): string }
+      }
+      // mathematics.terrain is 'math' (no CONTINENT_THEMES entry); gray would
+      // mean the builder resolved the terrain instead of the subject id.
+      expect(material.color.getHexString()).toBe('e8b94a')
+      disposeOceanScene(scene)
+    } finally {
+      vi.unstubAllGlobals()
+      vi.doMock('@/components/learning/scene3d/resolveThemeColor', () => ({
+        resolveThemeColor: (subject: string) =>
+          subject === 'math' ? '#123456' : '#abcdef',
+      }))
+    }
   })
 
   it('maps mastery to fog opacity and depthWrite false', () => {
