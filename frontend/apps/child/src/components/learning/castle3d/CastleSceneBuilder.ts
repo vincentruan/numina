@@ -18,36 +18,13 @@ import {
   Box3,
   type Material,
 } from 'three'
-import type { CastleIndex, CastleTower, CastleFloor, CastleWindow } from '@/api/learning'
-import { CONTINENT_THEMES } from '@/data/continentThemes'
-
-/**
- * Resolve a CONTINENT_THEMES color to something three.js can parse.
- *
- * Theme colors are CSS variables (`var(--color-brand-ochre)`) so the 2D views
- * can follow theme changes. three.js cannot parse those — passing one straight
- * to MeshStandardMaterial yields a black tower. Resolve through the live
- * stylesheet at build time.
- */
-function resolveThemeColor(subject: string): string {
-  const theme = CONTINENT_THEMES[subject]
-  const raw = theme?.color
-  if (!raw) return '#808080'
-
-  const varMatch = /^var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+))?\)$/.exec(raw.trim())
-  if (!varMatch) return raw // Already a literal color
-
-  const [, cssVar, fallback] = varMatch
-
-  if (typeof document !== 'undefined') {
-    const value = getComputedStyle(document.documentElement)
-      .getPropertyValue(cssVar)
-      .trim()
-    if (value) return value
-  }
-
-  return fallback?.trim() || '#808080'
-}
+import type {
+  CastleIndex,
+  CastleTower,
+  CastleFloor,
+  CastleWindow,
+} from '@/api/learning'
+import { resolveThemeColor } from '../scene3d/resolveThemeColor'
 
 /** Max bricks per floor to avoid rendering too many objects. */
 const MAX_BRICKS_PER_FLOOR = 8
@@ -96,8 +73,14 @@ export function buildCastleScene(castle: CastleIndex): CastleScene {
     towers.set(tower.subject, towerGroup)
 
     // Build windows for this tower
-    const towerWindows = castle.windows.filter((w) => w.subject === tower.subject)
-    const windowMeshes = buildWindows(towerWindows, towerGroup, tower.floors.length)
+    const towerWindows = castle.windows.filter(
+      (w) => w.subject === tower.subject,
+    )
+    const windowMeshes = buildWindows(
+      towerWindows,
+      towerGroup,
+      tower.floors.length,
+    )
     windows.push(...windowMeshes)
     windowMeshes.forEach((mesh) => {
       windowSubjects.set(mesh, tower.subject)
@@ -165,7 +148,10 @@ export function buildFloor(floor: CastleFloor, index: number): Group {
  */
 export function buildBrick(x: number, z: number, y: number = 0): Mesh {
   const geometry = new BoxGeometry(BRICK_SIZE.x, BRICK_SIZE.y, BRICK_SIZE.z)
-  const material = new MeshStandardMaterial({ color: 0xd4a574, roughness: 0.8 }) // Warm brick color
+  const material = new MeshStandardMaterial({
+    color: 0xd4a574,
+    roughness: 0.8,
+  }) // Warm brick color
   const mesh = new Mesh(geometry, material)
   mesh.position.set(x, y, z)
   mesh.userData = { type: 'brick' }
@@ -214,7 +200,8 @@ export function buildWindows(
  */
 export function calcBrickCount(floor: CastleFloor): number {
   if (floor.total_count === 0) return 0
-  const ratio = (floor.mastered_count + floor.learning_count) / floor.total_count
+  const ratio =
+    (floor.mastered_count + floor.learning_count) / floor.total_count
   return ratio === 0 ? 0 : Math.max(1, Math.round(ratio * MAX_BRICKS_PER_FLOOR))
 }
 
@@ -222,11 +209,7 @@ export function calcBrickCount(floor: CastleFloor): number {
  * Get tower center position in 3D space.
  */
 export function getTowerCenter(towerGroup: Group): Vector3 {
-  return new Vector3(
-    towerGroup.position.x,
-    0,
-    towerGroup.position.z,
-  )
+  return new Vector3(towerGroup.position.x, 0, towerGroup.position.z)
 }
 
 /**
@@ -234,7 +217,10 @@ export function getTowerCenter(towerGroup: Group): Vector3 {
  * Used to frame the camera so tall towers are never clipped and short castles
  * are never a speck.
  */
-export function getCastleBounds(scene: CastleScene): { center: Vector3; size: Vector3 } {
+export function getCastleBounds(scene: CastleScene): {
+  center: Vector3
+  size: Vector3
+} {
   const box = new Box3().setFromObject(scene.root)
   const center = box.getCenter(new Vector3())
   const size = box.getSize(new Vector3())
