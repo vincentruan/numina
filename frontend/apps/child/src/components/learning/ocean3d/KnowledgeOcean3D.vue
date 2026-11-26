@@ -131,6 +131,7 @@ let pendingPick: { x: number; y: number; kind: 'preview' | 'select' } | null =
 let pinchStart = 0
 let pinchedOut = false
 let pinchedIn = false
+let pinchResetTimer: ReturnType<typeof setTimeout> | null = null
 
 /** Find the group carrying island/domain metadata from any child mesh. */
 function pickMetadata(object: Object3D | null): Record<string, unknown> | null {
@@ -274,8 +275,10 @@ function onTouchMove(event: TouchEvent): void {
 function onTouchEnd(): void {
   if (!pinchedOut && !pinchedIn) return
   pinchStart = 0
+  if (pinchResetTimer !== null) clearTimeout(pinchResetTimer)
   // Keep the gesture flag through the synthetic pointerup that follows.
-  setTimeout(() => {
+  pinchResetTimer = setTimeout(() => {
+    pinchResetTimer = null
     pinchedOut = false
     pinchedIn = false
   }, 0)
@@ -309,16 +312,32 @@ function onVisibilityChange(): void {
   handle.setDocumentVisibilityPaused(document.hidden)
 }
 
-/** Rebuild just the ocean tiles (scene graph stays mounted). */
+/** Add or remove the existing ocean group and label sprites for the current view mode. */
+function syncOceanVisibility(): void {
+  if (!scene || !oceanScene || !labels) return
+  if (viewMode.value === 'topic') {
+    if (oceanScene.root.parent === scene) scene.remove(oceanScene.root)
+    for (const sprite of labels.sprites) {
+      if (sprite.parent === scene) scene.remove(sprite)
+    }
+    return
+  }
+  if (oceanScene.root.parent !== scene) scene.add(oceanScene.root)
+  for (const sprite of labels.sprites) {
+    if (sprite.parent !== scene) scene.add(sprite)
+  }
+}
+
+/** Rebuild the ocean tiles only when the level or source data changes. */
 function rebuildOceanScene(): void {
   if (!scene || !THREE) return
-  if (oceanScene) {
-    scene.remove(oceanScene.root)
+  if (scene && oceanScene) {
+    if (oceanScene.root.parent === scene) scene.remove(oceanScene.root)
     oceanScene.dispose()
     oceanScene = null
   }
   if (labels) {
-    scene.remove(...labels.sprites)
+    if (scene) scene.remove(...labels.sprites)
     labels.dispose()
     labels = null
   }
@@ -328,7 +347,6 @@ function rebuildOceanScene(): void {
     domainMode: sceneLevel.value === 'domain',
     reducedMotion: reducedMotion.value,
   })
-  scene.add(oceanScene.root)
   const labelNodes = nodes.map((node) => ({
     ...node,
     icon: 'icon' in node ? node.icon : '🧭',
@@ -336,12 +354,9 @@ function rebuildOceanScene(): void {
   labels = createOceanLabels(THREE, labelNodes, {
     reducedMotion: reducedMotion.value,
   })
-  if (viewMode.value === 'topic') {
-    scene.remove(oceanScene.root)
-    for (const sprite of labels.sprites) scene.remove(sprite)
-  } else {
-    scene.add(...labels.sprites)
-  }
+  // Topic mode only hides the ocean; the group and sprites are re-added as-is
+  // when the 2D constellation is closed.
+  syncOceanVisibility()
 }
 
 function markFailed(): void {
@@ -420,10 +435,16 @@ onMounted(() => {
   document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
-/** Keep the ocean scene graph in sync with the level and topic overlays. */
-watch([sceneLevel, viewMode, () => props.subjects, () => props.domains], () => {
+/** Rebuild tiles only when the level or data changes. */
+watch([sceneLevel, () => props.subjects, () => props.domains], () => {
   if (!lifecycleMounted || contextLost) return
   rebuildOceanScene()
+})
+
+/** Topic mode toggles visibility of the existing ocean group — no rebuild. */
+watch(viewMode, () => {
+  if (!lifecycleMounted || contextLost) return
+  syncOceanVisibility()
 })
 
 onActivated(() => {
@@ -436,6 +457,10 @@ onDeactivated(() => {
 
 onBeforeUnmount(() => {
   disposed = true
+  if (pinchResetTimer !== null) {
+    clearTimeout(pinchResetTimer)
+    pinchResetTimer = null
+  }
   handle.destroy()
   lifecycleMounted = false
   document.removeEventListener('visibilitychange', onVisibilityChange)

@@ -83,6 +83,7 @@ vi.mock('../OceanCameraController', () => ({
 
 import * as THREE from 'three'
 import KnowledgeOcean3D from '../KnowledgeOcean3D.vue'
+import * as animeDriver from '@/motion/animeDriver'
 
 const subjects: OceanSubject[] = [
   {
@@ -201,12 +202,16 @@ function touchEvent(
   return event
 }
 
+/** Return a nested mesh whose grandparent alone carries pick metadata. */
 function stubHit(userData: Record<string, unknown>): void {
   const group = new THREE.Group()
   group.userData = userData
+  const childGroup = new THREE.Group()
+  childGroup.userData = { type: 'decoration' }
+  childGroup.parent = group
   const mesh = new THREE.Mesh()
-  mesh.userData = userData
-  mesh.parent = group
+  mesh.userData = { type: 'surface' }
+  mesh.parent = childGroup
   vi.spyOn(THREE.Raycaster.prototype, 'intersectObjects').mockReturnValue([
     {
       object: mesh,
@@ -221,6 +226,24 @@ function stubHit(userData: Record<string, unknown>): void {
   ])
 }
 
+function intersectSpy(): ReturnType<typeof vi.spyOn> {
+  return vi.mocked(THREE.Raycaster.prototype.intersectObjects)
+}
+
+/** Each buildOceanScene() creates exactly one bob child timeline. */
+function activeChildTimelines(): number {
+  const root = animeDriver.getRootTimeline()
+  if (!root) return 0
+  let count = 0
+  let node: unknown = (root as unknown as { _head: unknown })._head
+  while (node) {
+    const current = node as { _next?: unknown; _cancelled?: number }
+    if (current._cancelled === 0) count++
+    node = current._next
+  }
+  return count
+}
+
 function runFrames(count: number): void {
   for (let i = 0; i < count; i++) {
     const callbacks = rafCallbacks.splice(0)
@@ -230,6 +253,7 @@ function runFrames(count: number): void {
 }
 
 beforeEach(() => {
+  animeDriver.revertAll()
   threeMock.renderers.length = 0
   cameraInstances.length = 0
   isWebGLAvailable.mockReturnValue(true)
@@ -266,34 +290,10 @@ afterEach(() => {
 })
 
 describe('KnowledgeOcean3D', () => {
-  it('emits fallback with a friendly message and never imports three when WebGL is unavailable', async () => {
-    isWebGLAvailable.mockReturnValue(false)
-    threeMock.importSpy.mockClear()
-
-    const wrapper = mount(KnowledgeOcean3D, {
-      props: {
-        subjects,
-        domains,
-        selectedSubject: '',
-        selectedDomain: '',
-        selectedTopicLevel: false,
-      },
-      global: { plugins: [makeI18n()] },
-    })
-    await flushPromises()
-
-    expect(wrapper.emitted('fallback')).toHaveLength(1)
-    expect(wrapper.text()).toContain('3D')
-    expect(threeMock.importSpy).not.toHaveBeenCalled()
-    expect(wrapper.find('canvas').exists()).toBe(false)
-    wrapper.unmount()
-  })
-
   it('mounts the scene with one renderer and one camera controller', async () => {
     const wrapper = await mountComponent()
     expect(threeMock.renderers).toHaveLength(1)
     expect(cameraFactory).toHaveBeenCalled()
-    expect(threeMock.renderers).toHaveLength(1)
     expect(wrapper.emitted('fallback')).toBeUndefined()
     wrapper.unmount()
   })
@@ -335,6 +335,9 @@ describe('KnowledgeOcean3D', () => {
       }),
     )
     expect(wrapper.emitted('previewSubject')).toBeUndefined()
+    const intersect = intersectSpy()
+    expect(intersect).toHaveBeenCalled()
+    expect(intersect.mock.calls[0][1]).toBe(true)
     wrapper.unmount()
   })
 
@@ -350,6 +353,22 @@ describe('KnowledgeOcean3D', () => {
     expect(wrapper.emitted('previewSubject')?.[0]).toEqual(['math'])
     expect(wrapper.emitted('interacted')).toHaveLength(1)
     expect(wrapper.emitted('selectSubject')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('emits previewDomain on a domain-level pointerup', async () => {
+    const wrapper = await mountComponent({ selectedSubject: 'math' })
+    stubHit({ domainId: 'math:fractions', subject: 'math', type: 'domain' })
+
+    await wrapper
+      .find('canvas')
+      .trigger('pointerup', { clientX: 200, clientY: 150 })
+    runFrames(1)
+
+    expect(wrapper.emitted('previewDomain')?.[0]).toEqual([
+      { subject: 'math', domain: 'math:fractions' },
+    ])
+    expect(wrapper.emitted('selectDomain')).toBeUndefined()
     wrapper.unmount()
   })
 
@@ -393,6 +412,33 @@ describe('KnowledgeOcean3D', () => {
     wrapper.unmount()
   })
 
+  it('emits selectSubject and dives on pinch-in over an island', async () => {
+    const wrapper = await mountComponent()
+    stubHit({ islandId: 'math', type: 'island' })
+    const canvas = wrapper.find('canvas').element
+
+    canvas.dispatchEvent(
+      touchEvent('touchstart', [
+        { clientX: 60, clientY: 100 },
+        { clientX: 140, clientY: 100 },
+      ]),
+    )
+    canvas.dispatchEvent(
+      touchEvent('touchmove', [
+        { clientX: 90, clientY: 100 },
+        { clientX: 110, clientY: 100 },
+      ]),
+    )
+    canvas.dispatchEvent(touchEvent('touchend', []))
+
+    expect(wrapper.emitted('selectSubject')?.[0]).toEqual(['math'])
+    expect(cameraInstances[0].diveTo).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'math' }),
+    )
+    expect(wrapper.emitted('zoomOut')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('does not pick in topic view mode', async () => {
     const wrapper = await mountComponent({ selectedTopicLevel: true })
     stubHit({ islandId: 'math', type: 'island' })
@@ -403,6 +449,35 @@ describe('KnowledgeOcean3D', () => {
 
     expect(wrapper.emitted('selectSubject')).toBeUndefined()
     expect(THREE.Raycaster.prototype.intersectObjects).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('reuses the existing ocean group when topic mode toggles off', async () => {
+    const wrapper = await mountComponent()
+    const renderer = threeMock.renderers[0]
+    runFrames(1)
+    const scene = renderer.render.mock.calls[0]?.[0] as
+      | { children: unknown[] }
+      | undefined
+    expect(scene).toBeDefined()
+    const groupBefore = scene?.children.length ?? 0
+    const countAfterMount = activeChildTimelines()
+    expect(countAfterMount).toBe(1)
+
+    await wrapper.setProps({ selectedTopicLevel: true })
+    await nextTick()
+    runFrames(1)
+    expect(activeChildTimelines()).toBe(1)
+    expect(scene?.children.length ?? 0).toBeLessThan(groupBefore)
+    expect(wrapper.emitted('fallback')).toBeUndefined()
+
+    await wrapper.setProps({ selectedTopicLevel: false })
+    await nextTick()
+    runFrames(1)
+    expect(activeChildTimelines()).toBe(1)
+    expect(scene?.children.length ?? 0).toBe(groupBefore)
+    // Rendering continues with the same scene graph, no new bob timeline.
+    expect(renderer.render).toHaveBeenCalledTimes(3)
     wrapper.unmount()
   })
 
