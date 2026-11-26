@@ -7,7 +7,7 @@
  * Single-clock rule: transitions use createChildTimeline() from animeDriver.
  */
 import { PerspectiveCamera, Vector3 } from 'three'
-import { createChildTimeline } from '@/motion/animeDriver'
+import { createChildTimeline, getRootTimeline } from '@/motion/animeDriver'
 import type { Timeline } from 'animejs'
 
 /** Orbit camera state. */
@@ -68,6 +68,13 @@ export class CameraController {
   private transitionTimeline: Timeline | null = null
   private enabled = false
 
+  /** Remove a timeline from the shared root after it has been reverted. */
+  private releaseTimeline(timeline: Timeline): void {
+    timeline.revert()
+    getRootTimeline()?.remove(timeline, 'currentTime')
+    if (this.transitionTimeline === timeline) this.transitionTimeline = null
+  }
+
   constructor(
     camera: PerspectiveCamera,
     initialState: OrbitState = DEFAULT_PANORAMA,
@@ -123,19 +130,14 @@ export class CameraController {
       domElement.removeEventListener('touchend', this.onPointerUp)
     }
     this.previousPinchDistance = 0
-    if (this.transitionTimeline) {
-      const timeline = this.transitionTimeline
-      this.transitionTimeline = null
-      timeline.revert()
-    }
+    if (this.transitionTimeline) this.releaseTimeline(this.transitionTimeline)
   }
 
   /** Smoothly animate camera to a new position. */
   animateTo(target: Vector3, position: Vector3, duration: number = 800): Promise<void> {
-    // Cancel any ongoing transition
-    if (this.transitionTimeline) {
-      this.transitionTimeline.revert()
-    }
+    // Cancel any ongoing transition. A completed transition may already be
+    // detached while its Promise timeout is still pending.
+    if (this.transitionTimeline) this.releaseTimeline(this.transitionTimeline)
 
     // Calculate spherical coords from target + position
     const offset = position.clone().sub(target)
@@ -186,18 +188,17 @@ export class CameraController {
 
       // Resolve when animation completes
       timeline.add({}, { duration: 0 }, duration)
+      // Re-sync after adding the tweens so the shared root sees the real
+      // timeline duration; both the sync and the ticks stay on the render loop.
+      getRootTimeline()?.sync(timeline, 0)
       // Resolve after duration + 50ms, as in the original castle controller.
-      // The render loop's tickDriver advances the timeline itself.
-      setTimeout(() => {
-        if (this.transitionTimeline === timeline) {
-          // The child timeline only advances while the render loop ticks.
-          // Settle the endpoint once its Promise resolves so callers never
-          // observe a promised transition that left the camera behind.
-          this.writeState(radius, theta, phi, target)
-          this.transitionTimeline = null
-        }
-        resolve()
-      }, duration + 50)
+      // State writes come only from onUpdate while the render loop ticks.
+      // The completion callback detaches this timeline from the shared root
+      // once the render loop has actually finished it.
+      void timeline.then(() => {
+        if (this.transitionTimeline === timeline) this.releaseTimeline(timeline)
+      })
+      setTimeout(() => resolve(), duration + 50)
     })
   }
 

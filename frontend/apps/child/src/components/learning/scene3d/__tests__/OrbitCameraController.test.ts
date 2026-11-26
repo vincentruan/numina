@@ -47,6 +47,10 @@ describe('OrbitCameraController', () => {
     expect(controller.getTarget().y).toBeCloseTo(0)
     expect(controller.getTarget().z).toBeCloseTo(0)
     expect(controller.getPosition().z).toBeCloseTo(10)
+    // No wall-clock write: the timeout alone cannot move the camera.
+    void controller.animateTo(new Vector3(0, 0, 0), new Vector3(0, 0, 4), 20)
+    await vi.advanceTimersByTimeAsync(70)
+    expect(controller.getRadius()).toBe(10)
   })
 
   it('animateTo uses a child timeline driven by the root clock', async () => {
@@ -57,15 +61,20 @@ describe('OrbitCameraController', () => {
     const promise = controller.animateTo(new Vector3(0, 0, 0), new Vector3(0, 0, 10), 40)
     const root = getRootTimeline()
     expect(root).not.toBeNull()
-    expect(root?._head).toBeTruthy()
-    // The single root clock owns the transition; the timeout only settles the Promise.
     expect(vi.getTimerCount()).toBe(1)
     expect(controller.getRadius()).toBe(DEFAULT_PANORAMA.radius)
 
     tickDriver(20)
+    const halfway = controller.getRadius()
+    expect(halfway).toBeGreaterThan(10)
+    expect(halfway).toBeLessThan(DEFAULT_PANORAMA.radius)
+    expect(controller.getPosition().distanceTo(controller.getTarget())).toBeCloseTo(halfway)
+
     await vi.advanceTimersByTimeAsync(90)
-    await promise
+    expect(controller.getRadius()).toBeCloseTo(halfway)
+    tickDriver(40)
     expect(controller.getRadius()).toBeCloseTo(10)
+    await promise
   })
 
   it('pinch zoom changes radius without changing theta/phi', () => {
@@ -114,13 +123,35 @@ describe('OrbitCameraController', () => {
 
     const promise = controller.animateTo(new Vector3(0, 0, 0), new Vector3(0, 0, 6), 30)
     const root = getRootTimeline()
-    expect(root?._head).toBeTruthy()
+    expect(root).not.toBeNull()
     const radiusBeforeDispose = controller.getRadius()
-    const headBeforeDispose = root?._head
+    tickDriver(10)
+    const radiusAfterTick = controller.getRadius()
+    expect(radiusAfterTick).toBeLessThan(radiusBeforeDispose)
 
     controller.dispose(element)
-    expect(root?._head).toBe(headBeforeDispose)
+    tickDriver(100)
+    expect(controller.getRadius()).toBeCloseTo(radiusAfterTick)
+
+    // A completed transition is detached from the shared root by its
+    // completion callback, so a later animateTo starts from a clean root.
+    const next = controller.animateTo(new Vector3(0, 0, 0), new Vector3(0, 0, 5), 20)
+    tickDriver(120)
+    expect(controller.getRadius()).toBeCloseTo(5)
+    controller.dispose(element)
+    await next
+
+    // Restore the pre-dispose state so the final assertion checks that the
+    // reverted transition does not drift after further root ticks.
+    const restored = controller.animateTo(
+      new Vector3(0, 2, 0),
+      new Vector3(0, 2, radiusBeforeDispose),
+      20,
+    )
+    tickDriver(140)
     expect(controller.getRadius()).toBeCloseTo(radiusBeforeDispose)
+    controller.dispose(element)
+    await restored
 
     const afterDispose = controller.getStateSnapshot()
     element.dispatchEvent(touchEvent('touchstart', [{ clientX: 100, clientY: 100 }]))
