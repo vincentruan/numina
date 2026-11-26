@@ -33,7 +33,7 @@ import { useI18n } from 'vue-i18n'
 import {
   Scene, PerspectiveCamera, WebGLRenderer, DirectionalLight, AmbientLight,
   Mesh, Group, SphereGeometry, BoxGeometry, CylinderGeometry,
-  MeshStandardMaterial, Vector2, Vector3, Raycaster, Plane,
+  MeshStandardMaterial, Vector2, Vector3, Raycaster, Plane, type Intersection,
 } from 'three'
 import type { BalanceChallenge, ChallengeVerdict } from '@/types/learning-challenge'
 import ChallengeShell from './ChallengeShell.vue'
@@ -326,7 +326,7 @@ function onPointerDown(e: PointerEvent) {
   // R12: expanded hit radius fallback — 28px screen distance
   if (hits.length === 0) {
     const prox = findClosestByScreenDistance(ndc)
-    if (prox) hits = [{ object: prox, distance: 0 } as any]
+    if (prox) hits = [{ object: prox, distance: 0, point: prox.position.clone() } as Intersection]
   }
   if (hits.length > 0) {
     const mesh = hits[0].object as Mesh
