@@ -175,7 +175,7 @@ describe('LearningOcean3DPage', () => {
     const ocean = wrapper.findComponent({ name: 'KnowledgeOcean3D' })
     ocean.vm.$emit('selectSubject', 'mathematics')
     await wrapper.vm.$nextTick()
-    ocean.vm.$emit('selectDomain', { subject: 'mathematics', domain: 'fractions' })
+    ocean.vm.$emit('selectDomain', { subject: 'mathematics', domain: 'mathematics:fractions' })
     await wrapper.vm.$nextTick()
 
     const constellation = wrapper.findComponent({ name: 'TopicConstellation' })
@@ -201,12 +201,17 @@ describe('LearningOcean3DPage', () => {
     const ocean = wrapper.findComponent({ name: 'KnowledgeOcean3D' })
     ocean.vm.$emit('selectSubject', 'mathematics')
     await wrapper.vm.$nextTick()
-    ocean.vm.$emit('selectDomain', { subject: 'mathematics', domain: 'fractions' })
+    ocean.vm.$emit('selectDomain', { subject: 'mathematics', domain: 'mathematics:fractions' })
     await wrapper.vm.$nextTick()
 
     expect(wrapper.find('[data-test="constellation"]').exists()).toBe(true)
     expect(ocean.props('selectedTopicLevel')).toBe(true)
     expect(ocean.props('selectedSubject')).toBe('mathematics')
+    expect(ocean.props('selectedDomain')).toBe('fractions')
+    expect(wrapper.findComponent({ name: 'TopicConstellation' }).props('topics')).toEqual([
+      { id: 't1', displayName: '分数', masteryLevel: 'mastered' },
+      { id: 't2', displayName: '小数', masteryLevel: 'learning' },
+    ])
     expect(push).not.toHaveBeenCalled()
 
     await wrapper.find('[data-test="ocean3d-back"]').trigger('click')
@@ -226,7 +231,7 @@ describe('LearningOcean3DPage', () => {
     const ocean = wrapper.findComponent({ name: 'KnowledgeOcean3D' })
     ocean.vm.$emit('selectSubject', 'mathematics')
     await wrapper.vm.$nextTick()
-    ocean.vm.$emit('selectDomain', { subject: 'mathematics', domain: 'fractions' })
+    ocean.vm.$emit('selectDomain', { subject: 'mathematics', domain: 'mathematics:fractions' })
     await wrapper.vm.$nextTick()
 
     wrapper.findComponent({ name: 'TopicConstellation' }).vm.$emit('selectTopic', { id: 't1' })
@@ -242,6 +247,13 @@ describe('LearningOcean3DPage', () => {
     const ocean = wrapper.findComponent({ name: 'KnowledgeOcean3D' })
     ocean.vm.$emit('selectSubject', 'mathematics')
     await wrapper.vm.$nextTick()
+    ocean.vm.$emit('selectDomain', {
+      subject: 'mathematics',
+      domain: 'mathematics:fractions',
+    })
+    await wrapper.vm.$nextTick()
+    expect(ocean.props('selectedDomain')).toBe('fractions')
+
     ocean.vm.$emit('zoomOut')
     await wrapper.vm.$nextTick()
 
@@ -284,13 +296,51 @@ describe('LearningOcean3DPage', () => {
     expect(ocean.props('selectedTopicLevel')).toBe(false)
   })
 
+  it('keeps state stable for the real selectDomain + oceanNavigation event pair', async () => {
+    const { wrapper } = await mountPage()
+    await settled(wrapper)
+
+    const ocean = wrapper.findComponent({ name: 'KnowledgeOcean3D' })
+    ocean.vm.$emit('selectSubject', 'mathematics')
+    await wrapper.vm.$nextTick()
+
+    // The real component emits both events for one domain pick.
+    ocean.vm.$emit('selectDomain', {
+      subject: 'mathematics',
+      domain: 'mathematics:fractions',
+    })
+    ocean.vm.$emit('oceanNavigation', {
+      id: 'mathematics:fractions',
+      subject: 'mathematics',
+      x: 0,
+      z: 0,
+      worldRadius: 1,
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(ocean.props('selectedSubject')).toBe('mathematics')
+    expect(ocean.props('selectedDomain')).toBe('fractions')
+    expect(ocean.props('selectedTopicLevel')).toBe(true)
+    expect(
+      wrapper.findComponent({ name: 'TopicConstellation' }).props('topics'),
+    ).toHaveLength(2)
+    // Only zoomOut/reset (not a domain dive) may reset the camera.
+    expect(cameraSpies.resetCamera).not.toHaveBeenCalled()
+
+    ocean.vm.$emit('zoomOut')
+    await wrapper.vm.$nextTick()
+    expect(cameraSpies.resetCamera).toHaveBeenCalledTimes(1)
+    expect(ocean.props('selectedSubject')).toBe('')
+    expect(ocean.props('selectedDomain')).toBe('')
+  })
+
   it('keeps state page-local: remounting starts at L0 with an empty selection', async () => {
     const first = await mountPage()
     await settled(first.wrapper)
     const ocean = first.wrapper.findComponent({ name: 'KnowledgeOcean3D' })
     ocean.vm.$emit('selectSubject', 'mathematics')
     await first.wrapper.vm.$nextTick()
-    ocean.vm.$emit('selectDomain', { subject: 'mathematics', domain: 'fractions' })
+    ocean.vm.$emit('selectDomain', { subject: 'mathematics', domain: 'mathematics:fractions' })
     await first.wrapper.vm.$nextTick()
     expect(ocean.props('selectedTopicLevel')).toBe(true)
     first.wrapper.unmount()

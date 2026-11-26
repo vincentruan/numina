@@ -241,7 +241,14 @@ function onSelectSubject(subject: string): void {
 }
 
 function onSelectDomain(payload: { subject: string; domain: string }): void {
-  applyDomain(payload.subject, payload.domain)
+  // The 3D scene emits the composite domain id (`subject:domain`); the topic
+  // index stores the bare domain. Accept both shapes so either event source
+  // yields the same topic layer.
+  const prefix = `${payload.subject}:`
+  const domain = payload.domain.startsWith(prefix)
+    ? payload.domain.slice(prefix.length)
+    : payload.domain
+  applyDomain(payload.subject, domain)
 }
 
 /** One transition function for component events and camera gestures. */
