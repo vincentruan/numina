@@ -48,6 +48,7 @@ describe('createOceanWater', () => {
     expect(material.vertexShader).toContain('cos')
     expect(material.fragmentShader).toContain('uSeaColor')
     expect(material.fragmentShader).toContain('uHighlight')
+    expect(material.fragmentShader).toContain('#include <colorspace_fragment>')
     water.dispose()
   })
 
@@ -94,6 +95,10 @@ describe('createOceanWater', () => {
 
     water.dispose()
 
+    expect(geometrySpy).toHaveBeenCalledTimes(1)
+    expect(materialSpy).toHaveBeenCalledTimes(1)
+
+    water.dispose()
     expect(geometrySpy).toHaveBeenCalledTimes(1)
     expect(materialSpy).toHaveBeenCalledTimes(1)
   })

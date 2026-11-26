@@ -24,7 +24,6 @@ const HIGHLIGHT_STRENGTH = 0.18
 const VERTEX_SHADER = /* glsl */ `
   uniform float uTime;
   varying float vWave;
-  varying vec3 vWorldPosition;
 
   void main() {
     vec4 worldPosition = modelMatrix * vec4(position, 1.0);
@@ -33,7 +32,6 @@ const VERTEX_SHADER = /* glsl */ `
     float wave = waveA + waveB;
     worldPosition.y += wave;
     vWave = wave;
-    vWorldPosition = worldPosition.xyz;
     gl_Position = projectionMatrix * viewMatrix * worldPosition;
   }
 `
@@ -47,6 +45,7 @@ const FRAGMENT_SHADER = /* glsl */ `
     float crest = smoothstep(-0.08, 0.17, vWave);
     vec3 color = mix(uSeaColor, vec3(1.0), uHighlight * crest);
     gl_FragColor = vec4(color, 1.0);
+    #include <colorspace_fragment>
   }
 `
 
