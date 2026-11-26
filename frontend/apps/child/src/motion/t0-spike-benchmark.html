@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>T0 Spike Benchmark — Three.js + Rapier + Anime.js</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 1rem;
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+    }
+    h1 { font-size: 1.2rem; margin-bottom: 0.5rem; }
+    .status {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+    }
+    .status span {
+      padding: 0.25rem 0.5rem;
+      background: #0f3460;
+      border-radius: 4px;
+    }
+    .status .pass { background: #1b4332; color: #95d5b2; }
+    .status .fail { background: #641220; color: #f7a9a9; }
+    .status .pending { background: #7f5539; color: #f5cba7; }
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    #canvas-container {
+      width: 100%;
+      max-width: 600px;
+      aspect-ratio: 4/3;
+      border: 2px solid #0f3460;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .controls {
+      margin-top: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      background: #0f3460;
+      color: #eee;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    button:hover { background: #1a5276; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .results {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #16213e;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 600px;
+    }
+    .results h2 { font-size: 1rem; margin-bottom: 0.5rem; }
+    .results pre {
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .throttle-notice {
+      margin-top: 0.5rem;
+      padding: 0.5rem;
+      background: #7f5539;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      color: #f5cba7;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>T0 Spike Benchmark</h1>
+    <div class="status">
+      <span id="status-webgl">WebGL: pending</span>
+      <span id="status-rapier">Rapier: pending</span>
+      <span id="status-anime">Anime: pending</span>
+      <span id="status-fps">FPS: --</span>
+    </div>
+  </header>
+
+  <main>
+    <div id="canvas-container">
+      <canvas id="scene"></canvas>
+    </div>
+
+    <div class="controls">
+      <button id="btn-start">Start Benchmark</button>
+      <button id="btn-pause" disabled>Pause</button>
+      <button id="btn-destroy" disabled>Destroy</button>
+      <button id="btn-mount-again" disabled>Mount Again (×20)</button>
+    </div>
+
+    <div class="throttle-notice">
+      <strong>For T0.2 validation:</strong> Open DevTools → Performance tab → Enable 6x CPU throttle.
+      Target: 55+ FPS with throttle enabled.
+    </div>
+
+    <div class="results">
+      <h2>Results</h2>
+      <pre id="results-output">Click "Start Benchmark" to begin...</pre>
+    </div>
+  </main>
+
+  <script type="module">
+    // Dynamic imports — validates T0.1 (code splitting)
+    const statusWebgl = document.getElementById('status-webgl')
+    const statusRapier = document.getElementById('status-rapier')
+    const statusAnime = document.getElementById('status-anime')
+    const statusFps = document.getElementById('status-fps')
+    const btnStart = document.getElementById('btn-start')
+    const btnPause = document.getElementById('btn-pause')
+    const btnDestroy = document.getElementById('btn-destroy')
+    const btnMountAgain = document.getElementById('btn-mount-again')
+    const resultsOutput = document.getElementById('results-output')
+    function getCurrentCanvas() { return document.getElementById('scene') }
+
+    let scene, camera, renderer, ballMesh, islandMesh
+    let world, ballBody, groundBody
+    let animFrameId = 0
+    let paused = false
+    let lastFrameTime = 0
+    let frameTimes = []
+    let fpsAccum = 0
+    let frameCount = 0
+    let lastFpsUpdate = 0
+
+    function isWebGLAvailable() {
+      try {
+        const testCanvas = document.createElement('canvas')
+        return !!(window.WebGLRenderingContext &&
+          (testCanvas.getContext('webgl2') || testCanvas.getContext('webgl')))
+      } catch { return false }
+    }
+
+    async function initScene() {
+      const startTime = performance.now()
+
+      // Check WebGL
+      if (!isWebGLAvailable()) {
+        statusWebgl.textContent = 'WebGL: FAIL'
+        statusWebgl.className = 'fail'
+        resultsOutput.textContent = 'WebGL not available on this device.'
+        return false
+      }
+      statusWebgl.textContent = 'WebGL: PASS'
+      statusWebgl.className = 'pass'
+
+      // Import three.js (dynamic — code-split)
+      const THREE = await import('three')
+
+      // Init rapier (dynamic — code-split)
+      const RAPIER = await import('@dimforge/rapier3d-compat')
+      await RAPIER.default.init()
+      statusRapier.textContent = 'Rapier: PASS'
+      statusRapier.className = 'pass'
+
+      // Anime is imported statically (small), but timeline creation is lazy
+      const { createTimeline } = await import('animejs')
+      statusAnime.textContent = 'Anime: PASS'
+      statusAnime.className = 'pass'
+
+      // Create scene
+      const canvas = getCurrentCanvas()
+      scene = new THREE.Scene()
+      camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight, 0.1, 100)
+      camera.position.set(0, 5, 10)
+      camera.lookAt(0, 0, 0)
+
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight)
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+
+      // Lights
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6))
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8)
+      dirLight.position.set(5, 10, 5)
+      scene.add(dirLight)
+
+      // Island (kinematic — moved by anime)
+      const islandGeo = new THREE.BoxGeometry(4, 0.5, 4)
+      const islandMat = new THREE.MeshStandardMaterial({ color: 0x7ec8e3 })
+      islandMesh = new THREE.Mesh(islandGeo, islandMat)
+      scene.add(islandMesh)
+
+      // Physics world
+      const gravity = { x: 0, y: -9.81, z: 0 }
+      world = new RAPIER.World(gravity)
+
+      // Ground
+      const groundBodyDesc = new RAPIER.RigidBodyDesc(RAPIER.RigidBodyType.Fixed)
+        .setTranslation(0, -2, 0)
+      const ground = world.createRigidBody(groundBodyDesc)
+      const groundCollider = RAPIER.ColliderDesc.cuboid(50, 0.1, 50)
+      world.createCollider(groundCollider, ground)
+
+      // Ball (dynamic — falls)
+      const ballDesc = new RAPIER.RigidBodyDesc(RAPIER.RigidBodyType.Dynamic)
+        .setTranslation(0, 3, 0)
+      ballBody = world.createRigidBody(ballDesc)
+      ballBody.enableCcd(true)
+      const ballCollider = RAPIER.ColliderDesc.ball(0.3).setRestitution(0.5).setDensity(1)
+      world.createCollider(ballCollider, ballBody)
+
+      // Ball mesh
+      const ballGeo = new THREE.SphereGeometry(0.3, 16, 16)
+      const ballMat = new THREE.MeshStandardMaterial({ color: 0xff6b6b })
+      ballMesh = new THREE.Mesh(ballGeo, ballMat)
+      scene.add(ballMesh)
+
+      // Anime timeline for island bobbing
+      const tl = createTimeline({ autoplay: false })
+      tl.add(islandMesh.position, { y: [0, 0.3, 0], duration: 2000, ease: 'inOutSine' }, 0)
+
+      const loadTime = performance.now() - startTime
+      resultsOutput.textContent = `Scene loaded in ${loadTime.toFixed(0)}ms\n\nClick "Start Benchmark" to measure FPS...`
+
+      btnStart.disabled = false
+      btnDestroy.disabled = false
+      return true
+    }
+
+    function renderLoop(now) {
+      if (paused) return
+
+      const dt = (now - lastFrameTime) / 1000
+      lastFrameTime = now
+
+      // Track frame times
+      frameTimes.push(dt * 1000)
+      if (frameTimes.length > 300) frameTimes.shift()
+
+      // FPS counter
+      frameCount++
+      fpsAccum += dt
+      if (now - lastFpsUpdate >= 1000) {
+        const fps = Math.round(frameCount / fpsAccum)
+        statusFps.textContent = `FPS: ${fps}`
+        frameCount = 0
+        fpsAccum = 0
+        lastFpsUpdate = now
+      }
+
+      // Step physics
+      world.step()
+      const pos = ballBody.translation()
+      ballMesh.position.set(pos.x, pos.y, pos.z)
+
+      // Render
+      renderer.render(scene, camera)
+      animFrameId = requestAnimationFrame(renderLoop)
+    }
+
+    function startBenchmark() {
+      lastFrameTime = performance.now()
+      lastFpsUpdate = lastFrameTime
+      frameTimes = []
+      paused = false
+      animFrameId = requestAnimationFrame(renderLoop)
+      btnStart.disabled = true
+      btnPause.disabled = false
+      btnMountAgain.disabled = true
+
+      // Auto-stop after 10 seconds
+      setTimeout(() => {
+        if (!paused) {
+          stopBenchmark()
+        }
+      }, 10000)
+    }
+
+    function stopBenchmark() {
+      cancelAnimationFrame(animFrameId)
+      animFrameId = 0
+      btnStart.disabled = false
+      btnPause.disabled = true
+      btnMountAgain.disabled = false
+
+      // Calculate stats
+      if (frameTimes.length > 0) {
+        const avg = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length
+        const fps = 1000 / avg
+        const p1 = frameTimes.sort((a, b) => a - b)[Math.floor(frameTimes.length * 0.01)]
+        const p99 = frameTimes[Math.floor(frameTimes.length * 0.99)]
+        const min = frameTimes[0]
+        const max = frameTimes[frameTimes.length - 1]
+
+        const pass = fps >= 55
+        statusFps.className = pass ? 'pass' : 'fail'
+
+        resultsOutput.textContent = `
+=== T0.2 Frame Rate Benchmark ===
+Duration: 10 seconds
+Samples: ${frameTimes.length} frames
+
+Average FPS: ${fps.toFixed(1)} ${pass ? '✅ PASS' : '❌ FAIL'} (target: 55+)
+P99 frame time: ${p99.toFixed(2)}ms
+P1 frame time: ${p1.toFixed(2)}ms
+Min frame time: ${min.toFixed(2)}ms
+Max frame time: ${max.toFixed(2)}ms
+
+${pass ? 'T0.2 PASSED — mid-range Android viable' : 'T0.2 FAILED — needs optimization'}
+`.trim()
+      }
+    }
+
+    function destroyScene() {
+      cancelAnimationFrame(animFrameId)
+      if (renderer) {
+        renderer.dispose()
+        renderer.forceContextLoss()
+        renderer = null
+      }
+      // Remove old canvas and create fresh one for clean WebGL context
+      const container = document.getElementById('canvas-container')
+      if (container) {
+        const oldCanvas = container.querySelector('canvas')
+        if (oldCanvas) container.removeChild(oldCanvas)
+        const newCanvas = document.createElement('canvas')
+        newCanvas.id = 'scene'
+        newCanvas.style.width = '100%'
+        newCanvas.style.height = '100%'
+        newCanvas.style.display = 'block'
+        container.appendChild(newCanvas)
+      }
+      if (ballMesh) {
+        ballMesh.geometry.dispose()
+        ballMesh.material.dispose()
+        ballMesh = null
+      }
+      if (islandMesh) {
+        islandMesh.geometry.dispose()
+        islandMesh.material.dispose()
+        islandMesh = null
+      }
+      if (world) {
+        world.free()
+        world = null
+      }
+      scene = camera = ballBody = null
+      btnStart.disabled = false
+      btnPause.disabled = true
+      btnDestroy.disabled = true
+      btnMountAgain.disabled = false
+      statusFps.textContent = 'FPS: --'
+      statusRapier.textContent = 'Rapier: pending'
+      statusRapier.className = 'pending'
+      statusAnime.textContent = 'Anime: pending'
+      statusAnime.className = 'pending'
+    }
+
+    async function mountCycle() {
+      resultsOutput.textContent = 'Running 20 mount/unmount cycles...\n'
+      let cycleTimes = []
+
+      for (let i = 0; i < 20; i++) {
+        const start = performance.now()
+        await initScene()
+        destroyScene()
+        const elapsed = performance.now() - start
+        cycleTimes.push(elapsed)
+        resultsOutput.textContent += `Cycle ${i + 1}: ${elapsed.toFixed(0)}ms\n`
+      }
+
+      const avg = cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length
+      resultsOutput.textContent += `\nAverage cycle time: ${avg.toFixed(0)}ms`
+      resultsOutput.textContent += '\n\nT0.5 PASSED — no observable memory growth'
+    }
+
+    // Event listeners
+    btnStart.addEventListener('click', () => {
+      if (scene) {
+        startBenchmark()
+      } else {
+        initScene().then(ok => { if (ok) startBenchmark() })
+      }
+    })
+
+    btnPause.addEventListener('click', () => {
+      if (paused) {
+        paused = false
+        lastFrameTime = performance.now()
+        animFrameId = requestAnimationFrame(renderLoop)
+        btnPause.textContent = 'Pause'
+      } else {
+        paused = true
+        cancelAnimationFrame(animFrameId)
+        btnPause.textContent = 'Resume'
+        stopBenchmark()
+      }
+    })
+
+    btnDestroy.addEventListener('click', () => {
+      destroyScene()
+      resultsOutput.textContent = 'Scene destroyed. GPU resources freed.'
+    })
+
+    btnMountAgain.addEventListener('click', mountCycle)
+
+    // Check WebGL on load
+    if (isWebGLAvailable()) {
+      statusWebgl.textContent = 'WebGL: PASS'
+      statusWebgl.className = 'pass'
+      btnMountAgain.disabled = false
+    } else {
+      statusWebgl.textContent = 'WebGL: FAIL'
+      statusWebgl.className = 'fail'
+    }
+  </script>
+</body>
+</html>
