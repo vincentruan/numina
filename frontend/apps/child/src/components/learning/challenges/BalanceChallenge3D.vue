@@ -326,7 +326,7 @@ function onPointerDown(e: PointerEvent) {
   // R12: expanded hit radius fallback — 28px screen distance
   if (hits.length === 0) {
     const prox = findClosestByScreenDistance(ndc)
-    if (prox) hits = [{ object: prox, distance: 0 } as Intersection]
+    if (prox) hits = [{ object: prox, distance: 0, point: prox.position.clone() } as Intersection]
   }
   if (hits.length > 0) {
     const mesh = hits[0].object as Mesh
