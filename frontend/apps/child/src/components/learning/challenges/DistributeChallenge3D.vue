@@ -259,7 +259,7 @@ function onPointerDown(e: PointerEvent): void {
   // R12: expanded hit radius fallback — 28px screen distance
   if (intersects.length === 0) {
     const prox = findClosestByScreenDistance(mouse.x, mouse.y)
-    if (prox) intersects = [{ object: prox, distance: 0 } as any]
+    if (prox) intersects = [{ object: prox, distance: 0 } as THREE.Intersection]
   }
   if (intersects.length > 0) {
     const hit = intersects[0].object as THREE.Mesh
