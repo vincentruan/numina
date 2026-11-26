@@ -87,6 +87,8 @@ describe('createOceanLabels', () => {
     expect(sprite.position.z).toBe(-3)
     expect(sprite.renderOrder).toBe(20)
     expect(sprite.scale.x / sprite.scale.y).toBeCloseTo(256 / 72)
+    expect(sprite.scale.x).toBeLessThanOrEqual(256 / 1000)
+    expect(sprite.frustumCulled).toBe(false)
 
     const material = materialOf(sprite)
     expect(material.map).toBeInstanceOf(THREE.CanvasTexture)

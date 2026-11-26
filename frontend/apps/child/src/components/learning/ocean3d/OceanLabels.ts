@@ -38,6 +38,9 @@ const LABEL_BASE_RENDER_ORDER = 20
 /** Clears the island top (y = 0.08) and fog disc (y = 0.34). */
 const LABEL_HEIGHT_OFFSET = 1.2
 const LABEL_FONT = '600 32px system-ui, sans-serif'
+/** Screen-space divisor for `sizeAttenuation: false` sprites: 256/1000 keeps
+ *  labels readable without covering the scene (including on phones). */
+const LABEL_SCALE_DIVISOR = 1000
 const PILL_PADDING = 16
 const PILL_RADIUS = 18
 
@@ -125,7 +128,8 @@ export function createOceanLabels(
 
     const sprite = new THREE.Sprite(material)
     sprite.position.set(node.x, node.worldRadius * 2 + LABEL_HEIGHT_OFFSET, node.z)
-    sprite.scale.set(TEXTURE_WIDTH / 100, TEXTURE_HEIGHT / 100, 1)
+    sprite.frustumCulled = false
+    sprite.scale.set(TEXTURE_WIDTH / LABEL_SCALE_DIVISOR, TEXTURE_HEIGHT / LABEL_SCALE_DIVISOR, 1)
     sprite.renderOrder = LABEL_BASE_RENDER_ORDER
 
     return {
