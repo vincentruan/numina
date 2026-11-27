@@ -19,12 +19,19 @@
 <script setup lang="ts">
 defineOptions({ name: 'CastlePanorama' })
 
-import { ref, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue'
+import {
+  ref,
+  computed,
+  onMounted,
+  onBeforeUnmount,
+  onActivated,
+  onDeactivated,
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Mesh } from 'three'
 import type { CastleIndex, CastleTower, CastleWindow } from '@/api/learning'
 import { getContinentTheme } from '@/data/continentThemes'
-import { tickDriver } from '@/motion/animeDriver'
+import { useSceneLifecycle } from '../scene3d/useSceneLifecycle'
 import { useReducedMotion } from '@/composables/useReducedMotion'
 import { CameraController, frameCastle } from './CameraController'
 import {
@@ -56,17 +63,24 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 
 let scene: CastleScene | null = null
 let cameraController: CameraController | null = null
-let animFrameId = 0
+const handle = useSceneLifecycle()
+let lifecycleMounted = false
+let contextLost = false
 let renderer: unknown = null
 let camera: unknown = null
-let threeScene: unknown = null
-let lastFrameTime = 0
 let raycaster: unknown = null
 let pointerNdc: { x: number; y: number } | null = null
 let dropAbort: AbortController | null = null
 
 /** Tower labels projected to screen — computed during render. */
-const towerLabels = ref<Array<{ subject: string; icon: string; name: string; style: Record<string, string> }>>([])
+const towerLabels = ref<
+  Array<{
+    subject: string
+    icon: string
+    name: string
+    style: Record<string, string>
+  }>
+>([])
 
 /** Subject display names for labels. */
 const subjectLabel = computed(() => {
@@ -103,11 +117,8 @@ async function mount(): Promise<void> {
     antialias: true,
     alpha: true,
   })
-  newRenderer.setSize(width, height)
-  newRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   newRenderer.shadowMap.enabled = false
   renderer = newRenderer
-  threeScene = newScene
 
   // Lights
   newScene.add(new THREE.AmbientLight(0xffffff, 0.75))
@@ -138,12 +149,29 @@ async function mount(): Promise<void> {
   // Pointer tracking for tap-to-select
   canvas.addEventListener('pointerup', onPointerUp)
 
-  // WebGL context loss → notify parent for fallback
-  canvas.addEventListener('webglcontextlost', onContextLost)
+  // The shared handle owns the single rAF loop, resize observer, and
+  // webglcontextlost listener.
+  handle.mount(canvas, container, {
+    THREE,
+    scene: newScene,
+    camera: newCamera,
+    renderer: newRenderer,
+    onFrame,
+    onContextLost,
+  })
+  lifecycleMounted = true
+}
 
-  // Start loop
-  lastFrameTime = performance.now()
-  animFrameId = requestAnimationFrame(renderLoop)
+function onFrame(): void {
+  // Handle pending tap
+  if (pointerNdc && scene && camera && raycaster) {
+    handlePick()
+    pointerNdc = null
+  }
+
+  // Update tower label positions; rendering is done by the lifecycle handle
+  // after the shared clock has ticked.
+  updateLabels()
 }
 
 function onPointerUp(e: PointerEvent): void {
@@ -158,8 +186,8 @@ function onPointerUp(e: PointerEvent): void {
 
 function onContextLost(e: Event): void {
   e.preventDefault()
+  contextLost = true
   console.error('[CastlePanorama] WebGL context lost')
-  cancelAnimationFrame(animFrameId)
 }
 
 /**
@@ -183,7 +211,8 @@ async function dropNewBrick(): Promise<void> {
 
   // The floor group sits at y = floorIndex * FLOOR_HEIGHT + FLOOR_HEIGHT/2
   const floorGroup = group.children.find(
-    (child) => (child.userData as { floorIndex?: number }).floorIndex === floorIndex,
+    (child) =>
+      (child.userData as { floorIndex?: number }).floorIndex === floorIndex,
   )
   if (!floorGroup) return
 
@@ -220,36 +249,15 @@ async function dropNewBrick(): Promise<void> {
   }
 }
 
-function renderLoop(now: number): void {
-  const dt = (now - lastFrameTime) / 1000
-  lastFrameTime = now
-
-  tickDriver(now)
-
-  // Handle pending tap
-  if (pointerNdc && scene && camera && raycaster) {
-    handlePick()
-    pointerNdc = null
-  }
-
-  // Update tower label positions
-  updateLabels()
-
-  if (renderer && threeScene && camera) {
-    const r = renderer as { render: (s: unknown, c: unknown) => void }
-    r.render(threeScene, camera)
-  }
-
-  void dt
-  animFrameId = requestAnimationFrame(renderLoop)
-}
-
 function handlePick(): void {
   if (!pointerNdc || !camera || !raycaster || !scene) return
 
   const THREE_raycaster = raycaster as {
     setFromCamera: (coords: { x: number; y: number }, cam: unknown) => void
-    intersectObjects: (objs: unknown[], recursive: boolean) => Array<{ object: unknown }>
+    intersectObjects: (
+      objs: unknown[],
+      recursive: boolean,
+    ) => Array<{ object: unknown }>
   }
   THREE_raycaster.setFromCamera(pointerNdc, camera)
 
@@ -290,7 +298,12 @@ function updateLabels(): void {
   const cam = camera as { updateMatrixWorld: () => void }
   cam.updateMatrixWorld()
 
-  const newLabels: Array<{ subject: string; icon: string; name: string; style: Record<string, string> }> = []
+  const newLabels: Array<{
+    subject: string
+    icon: string
+    name: string
+    style: Record<string, string>
+  }> = []
 
   // Neighbouring towers are only ~4 units apart, so their labels collide at
   // this zoom. Stagger alternate labels vertically instead of letting them
@@ -324,23 +337,15 @@ function updateLabels(): void {
   towerLabels.value = newLabels
 }
 
-function resize(): void {
-  const container = containerRef.value
-  if (!container || !renderer || !camera) return
-
-  const width = container.clientWidth
-  const height = container.clientHeight
-
-  const r = renderer as { setSize: (w: number, h: number) => void }
-  r.setSize(width, height)
-  const cam = camera as { aspect: number; updateProjectionMatrix: () => void }
-  cam.aspect = width / height
-  cam.updateProjectionMatrix()
+function onVisibilityChange(): void {
+  if (!lifecycleMounted || contextLost) return
+  handle.setDocumentVisibilityPaused(document.hidden)
 }
 
 function teardown(): void {
-  cancelAnimationFrame(animFrameId)
-  animFrameId = 0
+  handle.destroy()
+  lifecycleMounted = false
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 
   // Stop any in-flight brick drop before the world is torn down
   dropAbort?.abort()
@@ -349,9 +354,7 @@ function teardown(): void {
   const canvas = canvasRef.value
   if (canvas) {
     canvas.removeEventListener('pointerup', onPointerUp)
-    canvas.removeEventListener('webglcontextlost', onContextLost)
   }
-  window.removeEventListener('resize', resize)
 
   if (cameraController) {
     cameraController.dispose(canvas ?? undefined)
@@ -370,25 +373,24 @@ function teardown(): void {
     renderer = null
   }
 
-  threeScene = null
   camera = null
 }
 
 onMounted(async () => {
   await mount()
-  window.addEventListener('resize', resize)
+  if (!lifecycleMounted) return
+  // mount() clears the handle's pause flags — apply the initial visibility
+  // only after mounting so a hidden background tab stays paused.
+  if (document.hidden) handle.setDocumentVisibilityPaused(true)
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onActivated(() => {
-  if (renderer && !animFrameId) {
-    lastFrameTime = performance.now()
-    animFrameId = requestAnimationFrame(renderLoop)
-  }
+  if (lifecycleMounted && !contextLost) handle.resume()
 })
 
 onDeactivated(() => {
-  cancelAnimationFrame(animFrameId)
-  animFrameId = 0
+  if (lifecycleMounted) handle.pause()
 })
 
 onBeforeUnmount(() => {
@@ -402,7 +404,9 @@ defineExpose({
     const group = scene.towers.get(subject)
     if (!group) return
     const center = getTowerCenter(group)
-    const floors = props.castle.towers.find((tw) => tw.subject === subject)?.floors.length ?? 1
+    const floors =
+      props.castle.towers.find((tw) => tw.subject === subject)?.floors.length ??
+      1
     await cameraController.transitionToTower(center, floors * 2)
   },
   /** Return to the full panorama view. */
