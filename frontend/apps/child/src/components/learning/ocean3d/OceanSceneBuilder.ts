@@ -39,7 +39,6 @@ export interface OceanSceneOptions {
 
 export interface OceanScene {
   root: Group
-  islands: OceanNode[]
   pickTargets: Object3D[]
   /** Bob timelines owned by this scene; reverted exactly once on dispose. */
   timelines: Timeline[]
@@ -61,10 +60,19 @@ function masteryLuminance(ratio: number): number {
   return 0.35 + 0.65 * Math.max(0, Math.min(1, ratio))
 }
 
+/** Keep a visible rim of the island top around the fog at zero mastery. */
+const FOG_RADIUS_RATIO = 0.88
+const FOG_HEIGHT = 0.26
+/** Read a live theme token so fog/ring colors follow light and dark modes. */
+function readThemeColor(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
+
 function buildFog(node: OceanNode, radius: number): Mesh {
-  const geometry = new CircleGeometry(radius * 1.04, 24)
+  const geometry = new CircleGeometry(radius * FOG_RADIUS_RATIO, 24)
   const material = new MeshStandardMaterial({
-    color: '#c8d8e0',
+    color: readThemeColor('--ocean-fog-color', '#c8d8e0'),
     transparent: true,
     opacity: fogOpacityForMastery(node.masteryRatio),
     depthWrite: false,
@@ -72,7 +80,7 @@ function buildFog(node: OceanNode, radius: number): Mesh {
   })
   const mesh = new Mesh(geometry, material)
   mesh.rotation.x = -Math.PI / 2
-  mesh.position.y = 0.34
+  mesh.position.y = FOG_HEIGHT
   mesh.userData.type = 'fog'
   return mesh
 }
@@ -87,9 +95,11 @@ function buildMasteryRing(node: OceanNode, radius: number): Mesh {
     -Math.PI / 2,
     Math.PI * 2 * Math.max(0, Math.min(1, node.masteryRatio)),
   )
+  const ringColor = readThemeColor('--ocean-land-color', '#e8d9a8')
+  const accentColor = readThemeColor('--color-brand-ochre', '#e8b94a')
   const material = new MeshStandardMaterial({
-    color: '#ffe6a3',
-    emissive: '#ffc94d',
+    color: ringColor,
+    emissive: accentColor,
     emissiveIntensity: masteryLuminance(node.masteryRatio),
     transparent: true,
     depthWrite: false,
@@ -214,7 +224,6 @@ export function buildOceanScene(
 
   const scene: OceanScene = {
     root,
-    islands: nodes,
     pickTargets,
     timelines: bobTimeline ? [bobTimeline] : [],
     dispose: () => disposeOceanScene(scene),
@@ -250,6 +259,5 @@ export function disposeOceanScene(scene: OceanScene): void {
     material.dispose()
   }
   scene.root.clear()
-  scene.islands = []
   scene.pickTargets.length = 0
 }

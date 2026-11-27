@@ -62,7 +62,6 @@ describe('buildOceanScene (L0)', () => {
     const nodes = layoutOceanNodes(subjects)
     const scene = buildOceanScene(nodes)
 
-    expect(scene.islands).toEqual(nodes)
     expect(scene.pickTargets).toHaveLength(nodes.length)
     expect(scene.root.children).toHaveLength(nodes.length)
 
@@ -160,6 +159,59 @@ describe('buildOceanScene (L0)', () => {
     disposeOceanScene(scene)
   })
 
+  it('keeps a visible island rim under the fog at zero mastery', () => {
+    const [node] = layoutOceanNodes([subjects[0]])
+    const zeroMastery = { ...node, masteryRatio: 0 }
+    const scene = buildOceanScene([zeroMastery])
+    const islandGroup = scene.root.children[0] as Group
+    const top = islandGroup.children.find(
+      (child) =>
+        child instanceof Mesh && child.userData.type === 'island',
+    ) as Mesh
+    const topRadius = (top.geometry as unknown as { parameters: { radiusTop: number } })
+      .parameters.radiusTop
+    const fog = islandGroup.children.find(
+      (child) => child instanceof Mesh && child.userData.type === 'fog',
+    ) as Mesh
+    const fogRadius = (fog.geometry as unknown as { parameters: { radius: number } })
+      .parameters.radius
+    expect((fog.material as { opacity: number }).opacity).toBe(1)
+    expect(fogRadius).toBeLessThan(topRadius)
+    expect(fog.position.y).toBeCloseTo(top.position.y + 0.18)
+    disposeOceanScene(scene)
+  })
+
+  it('reads fog and ring colors from clay theme tokens', () => {
+    vi.stubGlobal('getComputedStyle', () => ({
+      getPropertyValue: (name: string) => {
+        if (name === '--ocean-fog-color') return '#112233'
+        if (name === '--ocean-land-color') return '#445566'
+        if (name === '--color-brand-ochre') return '#778899'
+        return ''
+      },
+    }))
+    const [node] = layoutOceanNodes([subjects[0]])
+    const scene = buildOceanScene([node])
+    const group = scene.root.children[0] as Group
+    const fog = group.children.find(
+      (child) => child instanceof Mesh && child.userData.type === 'fog',
+    ) as Mesh
+    const ring = group.children.find(
+      (child) => child instanceof Mesh && child.userData.type === 'masteryRing',
+    ) as Mesh
+    expect(
+      (fog.material as unknown as { color: { getHexString(): string } }).color.getHexString(),
+    ).toBe('112233')
+    const ringMaterial = ring.material as unknown as {
+      color: { getHexString(): string }
+      emissive: { getHexString(): string }
+    }
+    expect(ringMaterial.color.getHexString()).toBe('445566')
+    expect(ringMaterial.emissive.getHexString()).toBe('778899')
+    disposeOceanScene(scene)
+    vi.unstubAllGlobals()
+  })
+
   it('encodes mastery in the ring arc', () => {
     const scene = buildOceanScene(layoutOceanNodes(subjects))
     const arcLengths = scene.root.children.map((islandGroup) => {
@@ -252,10 +304,9 @@ describe('buildOceanScene (L1 domainMode)', () => {
     const nodes = domainNodes()
     const scene = buildOceanScene(nodes, { domainMode: true })
 
-    expect(scene.islands).toEqual(nodes)
     expect(scene.pickTargets).toHaveLength(nodes.length)
     for (let i = 0; i < nodes.length; i++) {
-      const target = scene.pickTargets[i] as Mesh
+      const target = scene.pickTargets[i] as Group
       const group = scene.root.children[i] as Group
       expect(target.userData.domainId).toBe(nodes[i].id)
       expect(target.userData.subject).toBe(nodes[i].subject)

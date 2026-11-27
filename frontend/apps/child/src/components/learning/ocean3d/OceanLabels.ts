@@ -15,19 +15,12 @@ export interface OceanLabelNode {
   worldRadius: number
 }
 
-export interface OceanLabel {
-  id: string
-  sprite: Sprite
-  setVisible(visible: boolean): void
-}
-
 export interface OceanLabelOptions {
   reducedMotion?: boolean
 }
 
 export interface OceanLabelSet {
   sprites: Sprite[]
-  labels: OceanLabel[]
   update(camera: PerspectiveCamera): void
   dispose(): void
 }
@@ -35,7 +28,7 @@ export interface OceanLabelSet {
 const TEXTURE_WIDTH = 256
 const TEXTURE_HEIGHT = 72
 const LABEL_BASE_RENDER_ORDER = 20
-/** Clears the island top (y = 0.08) and fog disc (y = 0.34). */
+/** Clears the island top (y = 0.08) and fog disc (y = 0.26). */
 const LABEL_HEIGHT_OFFSET = 1.2
 const LABEL_FONT = '600 32px system-ui, sans-serif'
 /** Screen-space divisor for `sizeAttenuation: false` sprites: 256/1000 keeps
@@ -79,13 +72,13 @@ function drawLabelCanvas(canvas: HTMLCanvasElement, text: string, color: string)
 
 /** Nearer labels sort last so they draw on top; input is left untouched. */
 export function sortLabelsByCameraDistance(
-  labels: OceanLabel[],
+  sprites: Sprite[],
   camera: PerspectiveCamera,
-): OceanLabel[] {
+): Sprite[] {
   const cameraPosition: Vector3 = camera.position
-  return [...labels].sort((a, b) => {
-    const aDistance = a.sprite.position.distanceToSquared(cameraPosition)
-    const bDistance = b.sprite.position.distanceToSquared(cameraPosition)
+  return [...sprites].sort((a, b) => {
+    const aDistance = a.position.distanceToSquared(cameraPosition)
+    const bDistance = b.position.distanceToSquared(cameraPosition)
     return bDistance - aDistance
   })
 }
@@ -103,7 +96,7 @@ export function createOceanLabels(
   const textures = (): CanvasTexture[] => [...textureCache.values()]
   const materials = (): SpriteMaterial[] => [...materialCache.values()]
 
-  const labels = nodes.map((node): OceanLabel => {
+  const labels = nodes.map((node): Sprite => {
     const cacheKey = `${node.icon} ${node.displayName}`
     let texture = textureCache.get(cacheKey)
     if (!texture) {
@@ -132,23 +125,16 @@ export function createOceanLabels(
     sprite.scale.set(TEXTURE_WIDTH / LABEL_SCALE_DIVISOR, TEXTURE_HEIGHT / LABEL_SCALE_DIVISOR, 1)
     sprite.renderOrder = LABEL_BASE_RENDER_ORDER
 
-    return {
-      id: node.id,
-      sprite,
-      setVisible(visible: boolean): void {
-        sprite.visible = visible
-      },
-    }
+    return sprite
   })
 
   let disposed = false
   return {
-    sprites: labels.map((label) => label.sprite),
-    labels,
+    sprites: labels,
     update(camera: PerspectiveCamera): void {
       if (disposed) return
-      sortLabelsByCameraDistance(labels, camera).forEach((label, index) => {
-        label.sprite.renderOrder = LABEL_BASE_RENDER_ORDER + index
+      sortLabelsByCameraDistance(labels, camera).forEach((sprite, index) => {
+        sprite.renderOrder = LABEL_BASE_RENDER_ORDER + index
       })
     },
     dispose(): void {

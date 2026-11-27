@@ -223,6 +223,56 @@ describe('LearningOcean3DPage', () => {
     expect(ocean.props('selectedTopicLevel')).toBe(false)
   })
 
+  it('pinch-out on the opaque 2D topic layer returns all the way to L0', async () => {
+    const { wrapper } = await mountPage()
+    await settled(wrapper)
+
+    const ocean = wrapper.findComponent({ name: 'KnowledgeOcean3D' })
+    ocean.vm.$emit('selectSubject', 'mathematics')
+    await wrapper.vm.$nextTick()
+    ocean.vm.$emit('selectDomain', {
+      subject: 'mathematics',
+      domain: 'mathematics:fractions',
+    })
+    await wrapper.vm.$nextTick()
+    expect(ocean.props('selectedTopicLevel')).toBe(true)
+
+    const layer = wrapper.find('[data-test="ocean3d-topic-layer"]')
+    const touch = (x: number, y: number) => ({ clientX: x, clientY: y })
+    await layer.trigger('touchstart', { touches: [touch(100, 100), touch(200, 100)] })
+    await layer.trigger('touchmove', { touches: [touch(60, 100), touch(280, 100)] })
+    await layer.trigger('touchend', { touches: [] })
+    await wrapper.vm.$nextTick()
+
+    expect(ocean.props('selectedSubject')).toBe('')
+    expect(ocean.props('selectedDomain')).toBe('')
+    expect(ocean.props('selectedTopicLevel')).toBe(false)
+    expect(cameraSpies.resetCamera).toHaveBeenCalledTimes(1)
+  })
+
+  it('single-finger moves on the 2D topic layer do not reset the camera', async () => {
+    const { wrapper } = await mountPage()
+    await settled(wrapper)
+
+    const ocean = wrapper.findComponent({ name: 'KnowledgeOcean3D' })
+    ocean.vm.$emit('selectSubject', 'mathematics')
+    await wrapper.vm.$nextTick()
+    ocean.vm.$emit('selectDomain', {
+      subject: 'mathematics',
+      domain: 'mathematics:fractions',
+    })
+    await wrapper.vm.$nextTick()
+
+    const layer = wrapper.find('[data-test="ocean3d-topic-layer"]')
+    await layer.trigger('touchstart', { touches: [{ clientX: 100, clientY: 100 }] })
+    await layer.trigger('touchmove', { touches: [{ clientX: 160, clientY: 120 }] })
+    await layer.trigger('touchend', { touches: [] })
+    await wrapper.vm.$nextTick()
+
+    expect(ocean.props('selectedTopicLevel')).toBe(true)
+    expect(cameraSpies.resetCamera).not.toHaveBeenCalled()
+  })
+
   it('routes topic selection to the existing 2D topic page', async () => {
     const { wrapper, router } = await mountPage()
     const push = vi.spyOn(router, 'push')
@@ -389,14 +439,17 @@ describe('LearningOcean3DPage', () => {
         title: expect.any(String),
         subtitle: expect.any(String),
         back: expect.any(String),
-        backToOcean: expect.any(String),
         retry: expect.any(String),
         error: expect.any(String),
         empty: expect.any(String),
         fallback: expect.any(String),
-        hint: expect.any(String),
       })
-      expect(ocean3d.topics).toContain('{count}')
+      expect(ocean3d).not.toHaveProperty('hint')
+      expect(ocean3d).not.toHaveProperty('topics')
+      expect(ocean3d).not.toHaveProperty('backToOcean')
+      expect(messages.learning.ocean.topics).toContain('{count}')
+      expect(messages.learning.ocean.zoomHint).toEqual(expect.any(String))
+      expect(messages.learning.ocean.backToOcean).toEqual(expect.any(String))
     }
   })
 

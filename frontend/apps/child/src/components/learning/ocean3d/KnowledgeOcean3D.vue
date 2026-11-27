@@ -5,19 +5,14 @@
     role="status"
   >
     <p class="knowledge-ocean-3d__message">
-      {{
-        t(
-          'learning.ocean3d.fallback',
-          '3D view is unavailable here. The standard ocean view is still available.',
-        )
-      }}
+      {{ t('learning.ocean3d.fallback') }}
     </p>
   </div>
   <div v-else ref="containerRef" class="knowledge-ocean-3d">
     <canvas
       ref="canvasRef"
       class="knowledge-ocean-3d__canvas"
-      :aria-label="t('learning.ocean.a11yLabel', 'Knowledge ocean map')"
+      :aria-label="t('learning.ocean.a11yLabel')"
       @dblclick="onDoubleClick"
       @pointerup="onPointerUp"
       @touchstart="onTouchStart"
@@ -28,8 +23,6 @@
 </template>
 
 <script setup lang="ts">
-defineOptions({ name: 'KnowledgeOcean3D' })
-
 import {
   ref,
   computed,
@@ -59,6 +52,8 @@ import { buildOceanScene, type OceanScene } from './OceanSceneBuilder'
 import { createOceanWater, type OceanWater } from './OceanWater'
 import { createOceanLabels, type OceanLabelSet } from './OceanLabels'
 import type { OceanCameraController } from './OceanCameraController'
+
+defineOptions({ name: 'KnowledgeOcean3D' })
 
 /** Node reference emitted with navigation events and accepted by the page. */
 export interface OceanNodeRef {
@@ -540,7 +535,7 @@ defineExpose({
   max-width: 32rem;
   margin: 0;
   text-align: center;
-  color: var(--color-text-primary, #16324a);
+  color: var(--ocean-label-color);
   font-size: 1rem;
   line-height: 1.6;
 }

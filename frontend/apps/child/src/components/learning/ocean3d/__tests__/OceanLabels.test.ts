@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
 import type { CanvasTexture, SpriteMaterial } from 'three'
 import { createOceanLabels, sortLabelsByCameraDistance, type OceanLabelNode } from '../OceanLabels'
-
 interface MockCanvasContext {
   clearRect: ReturnType<typeof vi.fn>
   beginPath: ReturnType<typeof vi.fn>
@@ -76,9 +75,6 @@ describe('createOceanLabels', () => {
     const set = createOceanLabels(THREE, [makeNode({ id: 'math', x: 2, z: -3, worldRadius: 0.7 })])
 
     expect(set.sprites).toHaveLength(1)
-    expect(set.labels).toHaveLength(1)
-    expect(set.labels[0].id).toBe('math')
-    expect(set.labels[0].sprite).toBe(set.sprites[0])
 
     const sprite = set.sprites[0]
     expect(sprite).toBeInstanceOf(THREE.Sprite)
@@ -126,27 +122,27 @@ describe('createOceanLabels', () => {
       makeNode({ id: 'far', z: -8 }),
       makeNode({ id: 'mid', z: 0 }),
     ])
-    const [near, far, mid] = set.labels
+    const [near, far, mid] = set.sprites
     const input = [far, near, mid]
 
     const sorted = sortLabelsByCameraDistance(input, camera)
-    expect(sorted.map((label) => label.id)).toEqual(['far', 'mid', 'near'])
-    expect(input.map((label) => label.id)).toEqual(['far', 'near', 'mid'])
+    expect(sorted.map((sprite) => sprite.position.z)).toEqual([-8, 0, 8])
+    expect(input.map((sprite) => sprite.position.z)).toEqual([-8, 8, 0])
 
     set.update(camera)
-    expect(far.sprite.renderOrder).toBe(20)
-    expect(mid.sprite.renderOrder).toBe(21)
-    expect(near.sprite.renderOrder).toBe(22)
+    expect(far.renderOrder).toBe(20)
+    expect(mid.renderOrder).toBe(21)
+    expect(near.renderOrder).toBe(22)
   })
 
-  it('toggles sprite visibility per label', () => {
+  it('keeps sprite visibility writable by the caller', () => {
     const set = createOceanLabels(THREE, [makeNode({ id: 'a' }), makeNode({ id: 'b' })])
 
-    set.labels[0].setVisible(false)
+    set.sprites[0].visible = false
     expect(set.sprites[0].visible).toBe(false)
     expect(set.sprites[1].visible).toBe(true)
 
-    set.labels[0].setVisible(true)
+    set.sprites[0].visible = true
     expect(set.sprites[0].visible).toBe(true)
   })
 
@@ -177,6 +173,5 @@ describe('createOceanLabels', () => {
     for (const spy of materialSpies) expect(spy).toHaveBeenCalledTimes(1)
     for (const spy of textureSpies) expect(spy).toHaveBeenCalledTimes(1)
     expect(set.sprites).toHaveLength(0)
-    expect(set.labels).toHaveLength(0)
   })
 })
