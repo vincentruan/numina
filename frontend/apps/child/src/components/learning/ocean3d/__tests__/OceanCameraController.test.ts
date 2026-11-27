@@ -101,11 +101,13 @@ describe('createOceanCameraController', () => {
     await advance(DURATION)
     await dive
 
+    const ascendFn = vi.spyOn(controller, 'ascend')
     const ascend = controller.ascend()
     expect(getRootTimeline()).not.toBeNull()
     await advance(DURATION)
     await ascend
 
+    expect(ascendFn).toHaveBeenCalledTimes(1)
     let state = controller.getStateSnapshot()
     expect(state.target.toArray()).toEqual([0, 0, 0])
     expect(state.radius).toBeCloseTo(22)
@@ -113,6 +115,7 @@ describe('createOceanCameraController', () => {
     const reset = controller.reset()
     await advance(DURATION)
     await reset
+    expect(ascendFn).toHaveBeenCalledTimes(2)
     state = controller.getStateSnapshot()
     expect(state.target.toArray()).toEqual([0, 0, 0])
     expect(state.radius).toBeCloseTo(22)

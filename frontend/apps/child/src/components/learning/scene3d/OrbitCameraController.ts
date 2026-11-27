@@ -10,6 +10,7 @@ import { PerspectiveCamera, Vector3 } from 'three'
 import { createChildTimeline, getRootTimeline } from '@/motion/animeDriver'
 import type { Timeline } from 'animejs'
 
+
 /** Orbit camera state. */
 export interface OrbitState {
   /** Spherical coordinates: radius from target. */
@@ -57,6 +58,8 @@ const FRAME_MARGIN = 1.35
 const MIN_RADIUS = 2
 const MAX_RADIUS = 80
 
+/** Bounded target coordinates for mouse/three-finger pan. */
+const MAX_PAN_OFFSET = 40
 export class CameraController {
   private camera: PerspectiveCamera
   private state: OrbitState
@@ -65,6 +68,8 @@ export class CameraController {
   private isDragging = false
   private previousMouse = { x: 0, y: 0 }
   private previousPinchDistance = 0
+  private panning = false
+  private previousThreeFinger = { x: 0, y: 0 }
   private transitionTimeline: Timeline | null = null
   private enabled = false
 
@@ -95,6 +100,7 @@ export class CameraController {
     domElement.addEventListener('mousedown', this.onPointerDown)
     domElement.addEventListener('mousemove', this.onPointerMove)
     domElement.addEventListener('mouseup', this.onPointerUp)
+    domElement.addEventListener('contextmenu', this.onContextMenu)
     domElement.addEventListener('mouseleave', this.onPointerUp)
     domElement.addEventListener('touchstart', this.onTouchStart, {
       passive: false,
@@ -124,6 +130,7 @@ export class CameraController {
       domElement.removeEventListener('mousedown', this.onPointerDown)
       domElement.removeEventListener('mousemove', this.onPointerMove)
       domElement.removeEventListener('mouseup', this.onPointerUp)
+      domElement.removeEventListener('contextmenu', this.onContextMenu)
       domElement.removeEventListener('mouseleave', this.onPointerUp)
       domElement.removeEventListener('touchstart', this.onTouchStart)
       domElement.removeEventListener('touchmove', this.onTouchMove)
@@ -221,6 +228,27 @@ export class CameraController {
     await this.animateTo(target, offset, 800)
   }
 
+  /** Translate the orbit target along the camera right/up plane, bounded. */
+  pan(dx: number, dy: number): void {
+    const { radius, theta, phi } = this.state
+    const step = 1 / radius
+    const right = new Vector3(Math.cos(theta), 0, -Math.sin(theta))
+    const up = new Vector3(
+      -Math.sin(theta) * Math.cos(phi),
+      Math.sin(phi),
+      -Math.cos(theta) * Math.cos(phi),
+    )
+    const delta = right.multiplyScalar(-dx * step).add(up.multiplyScalar(dy * step))
+    const clamp = (value: number): number =>
+      Math.max(-MAX_PAN_OFFSET, Math.min(MAX_PAN_OFFSET, value))
+    const target = this.state.target
+    this.writeState(radius, theta, phi, {
+      x: clamp(target.x + delta.x),
+      y: clamp(target.y + delta.y),
+      z: clamp(target.z + delta.z),
+    })
+  }
+
   /** Get current camera position. */
   getPosition(): Vector3 {
     return this.camera.position.clone()
@@ -285,21 +313,30 @@ export class CameraController {
     return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY)
   }
 
+  private onContextMenu = (e: MouseEvent): void => {
+    if (e.button === 2) e.preventDefault()
+  }
+
   private onPointerDown = (e: MouseEvent): void => {
-    this.isDragging = true
+    // Right/middle drag pans; the left button keeps the castle orbit behavior.
+    this.panning = e.button === 1 || e.button === 2
+    this.isDragging = !this.panning
+    if (!this.isDragging) return
     this.previousMouse = { x: e.clientX, y: e.clientY }
   }
 
   private onPointerMove = (e: MouseEvent): void => {
-    if (!this.isDragging) return
     const dx = e.clientX - this.previousMouse.x
     const dy = e.clientY - this.previousMouse.y
-    this.rotate(dx, dy)
+    if (this.panning) this.pan(dx, dy)
+    else if (this.isDragging) this.rotate(dx, dy)
+    else return
     this.previousMouse = { x: e.clientX, y: e.clientY }
   }
 
   private onPointerUp = (): void => {
     this.isDragging = false
+    this.panning = false
     this.previousPinchDistance = 0
   }
 
@@ -308,6 +345,14 @@ export class CameraController {
       e.preventDefault()
       this.isDragging = true
       this.previousMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    } else if (e.touches.length === 3) {
+      e.preventDefault()
+      this.isDragging = false
+      this.panning = true
+      this.previousThreeFinger = {
+        x: (e.touches[0].clientX + e.touches[1].clientX + e.touches[2].clientX) / 3,
+        y: (e.touches[0].clientY + e.touches[1].clientY + e.touches[2].clientY) / 3,
+      }
     } else if (this.pinchZoom && e.touches.length === 2) {
       e.preventDefault()
       this.isDragging = false
@@ -316,6 +361,16 @@ export class CameraController {
   }
 
   private onTouchMove = (e: TouchEvent): void => {
+    if (this.panning && e.touches.length === 3) {
+      e.preventDefault()
+      const center = {
+        x: (e.touches[0].clientX + e.touches[1].clientX + e.touches[2].clientX) / 3,
+        y: (e.touches[0].clientY + e.touches[1].clientY + e.touches[2].clientY) / 3,
+      }
+      this.pan(center.x - this.previousThreeFinger.x, center.y - this.previousThreeFinger.y)
+      this.previousThreeFinger = center
+      return
+    }
     if (this.pinchZoom && e.touches.length === 2 && this.previousPinchDistance > 0) {
       e.preventDefault()
       const distance = this.pinchDistance(e.touches)

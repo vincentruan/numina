@@ -10,7 +10,9 @@ import {
   fogOpacityForMastery,
   layoutOceanDomains,
   layoutOceanNodes,
+  toWorldRadius,
 } from '../oceanGeometry'
+import { composeDomainId, parseDomainId } from '../types'
 import { layoutIslands } from '@/utils/islandLayout'
 
 function makeSubject(
@@ -58,11 +60,9 @@ describe('layoutOceanNodes', () => {
     }
 
     // The upstream 2D layout enforces a minimum Euclidean separation of
-    // 0.15 in normalized units. Round-trip that into world units: world
-    // spacing = normalized Δ * 2 * OCEAN_HALF_SPAN * (1 - margin), while
-    // radius = normalized radius * 2 * OCEAN_HALF_SPAN. Because the margin
-    // (0.15) exceeds the largest normalized radius (0.07), the mapped islands
-    // cannot overlap.
+    // 0.15 in normalized units. Both spacing and radius now use the same
+    // margin scale, so centers stay at least 0.15 * 2 * bound apart while
+    // radii stay below 0.07 * 2 * bound — islands cannot overlap.
     const raw = layoutIslands(
       subjects.map(({ id, terrain, topicCount }) => ({
         id,
@@ -77,9 +77,7 @@ describe('layoutOceanNodes', () => {
       const position = rawById.get(node.id)!
       expect(node.x).toBeCloseTo((position.x - 0.5) * 2 * bound)
       expect(node.z).toBeCloseTo((position.y - 0.5) * 2 * bound)
-      expect(node.worldRadius).toBeCloseTo(
-        position.radius * 2 * OCEAN_HALF_SPAN,
-      )
+      expect(node.worldRadius).toBeCloseTo(toWorldRadius(position.radius))
     }
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
@@ -92,7 +90,9 @@ describe('layoutOceanNodes', () => {
           nodes[i].x - nodes[j].x,
           nodes[i].z - nodes[j].z,
         )
-        expect(distance).toBeGreaterThan(0.2)
+        expect(distance).toBeGreaterThan(
+          nodes[i].worldRadius + nodes[j].worldRadius,
+        )
       }
     }
   })
@@ -128,7 +128,7 @@ describe('layoutOceanNodes', () => {
       terrain: 'logic',
       x: 0,
       z: 0,
-      worldRadius: 0.07 * 2 * OCEAN_HALF_SPAN,
+      worldRadius: toWorldRadius(0.07),
       masteryRatio: 0.3,
     })
   })
@@ -154,7 +154,7 @@ describe('layoutOceanDomains', () => {
     for (const node of nodes) {
       expect(Math.abs(node.x)).toBeLessThanOrEqual(bound)
       expect(Math.abs(node.z)).toBeLessThanOrEqual(bound)
-      expect(node.worldRadius).toBeCloseTo(0.07 * 2 * OCEAN_HALF_SPAN)
+      expect(node.worldRadius).toBeCloseTo(toWorldRadius(0.07))
     }
   })
 
@@ -166,6 +166,17 @@ describe('layoutOceanDomains', () => {
     expect(layoutOceanDomains(domains)).toEqual(
       layoutOceanDomains([...domains].reverse()),
     )
+  })
+})
+
+
+describe('ocean domain id helpers', () => {
+  it('composes and parses composite ids without splitting unrelated subjects', () => {
+    expect(composeDomainId('math', 'fractions')).toBe('math:fractions')
+    expect(parseDomainId('math:fractions', 'math')).toBe('fractions')
+    expect(parseDomainId('fractions', 'math')).toBe('fractions')
+    expect(parseDomainId('physics:fractions', 'math')).toBe('physics:fractions')
+    expect(parseDomainId('math:', 'math')).toBe('')
   })
 })
 

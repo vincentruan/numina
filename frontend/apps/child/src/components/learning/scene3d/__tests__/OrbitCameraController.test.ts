@@ -110,6 +110,75 @@ describe('OrbitCameraController', () => {
     controller.dispose(element)
   })
 
+  it('pan moves the target and keeps the camera radius', () => {
+    const camera = new PerspectiveCamera(60, 1, 0.1, 100)
+    const controller = new CameraController(camera)
+    const before = controller.getTarget()
+    const radius = controller.getRadius()
+
+    controller.pan(10, -5)
+    const after = controller.getTarget()
+    expect(after.equals(before)).toBe(false)
+    expect(controller.getPosition().distanceTo(after)).toBeCloseTo(radius)
+    expect(Math.abs(after.x)).toBeLessThanOrEqual(40)
+    expect(Math.abs(after.y)).toBeLessThanOrEqual(40)
+    expect(Math.abs(after.z)).toBeLessThanOrEqual(40)
+
+    controller.pan(10000, 10000)
+    const clamped = controller.getTarget()
+    expect(Math.abs(clamped.x)).toBeLessThanOrEqual(40)
+    expect(Math.abs(clamped.y)).toBeLessThanOrEqual(40)
+    expect(Math.abs(clamped.z)).toBeLessThanOrEqual(40)
+    controller.dispose()
+  })
+
+  it('right/middle mouse drag pans and left drag still orbits', () => {
+    const camera = new PerspectiveCamera(60, 1, 0.1, 100)
+    const controller = new CameraController(camera)
+    const element = document.createElement('div')
+    controller.enable(element)
+    const before = controller.getStateSnapshot()
+
+    element.dispatchEvent(new MouseEvent('mousedown', { button: 2, clientX: 100, clientY: 100 }))
+    element.dispatchEvent(new MouseEvent('mousemove', { clientX: 120, clientY: 90 }))
+    element.dispatchEvent(new MouseEvent('mouseup', { button: 2 }))
+    expect(controller.getTarget().equals(before.target)).toBe(false)
+    expect(controller.getStateSnapshot().theta).toBeCloseTo(before.theta)
+
+    const afterPan = controller.getStateSnapshot()
+    element.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: 100, clientY: 100 }))
+    element.dispatchEvent(new MouseEvent('mousemove', { clientX: 120, clientY: 90 }))
+    element.dispatchEvent(new MouseEvent('mouseup', { button: 0 }))
+    expect(controller.getStateSnapshot().theta).not.toBeCloseTo(afterPan.theta)
+
+    controller.dispose(element)
+  })
+
+  it('three-finger drag pans', () => {
+    const camera = new PerspectiveCamera(60, 1, 0.1, 100)
+    const controller = new CameraController(camera)
+    const element = document.createElement('div')
+    controller.enable(element)
+    const before = controller.getTarget()
+
+    element.dispatchEvent(
+      touchEvent('touchstart', [
+        { clientX: 90, clientY: 100 },
+        { clientX: 100, clientY: 100 },
+        { clientX: 110, clientY: 100 },
+      ]),
+    )
+    element.dispatchEvent(
+      touchEvent('touchmove', [
+        { clientX: 110, clientY: 110 },
+        { clientX: 120, clientY: 110 },
+        { clientX: 130, clientY: 110 },
+      ]),
+    )
+    expect(controller.getTarget().equals(before)).toBe(false)
+    controller.dispose(element)
+  })
+
   it('dispose removes listeners, stops rotation, and reverts transition timeline', async () => {
     const camera = new PerspectiveCamera(60, 1, 0.1, 100)
     const controller = new CameraController(camera)

@@ -42,6 +42,7 @@ import type {
 } from 'three'
 import { isWebGLAvailable } from '@/composables/useWebGLAvailable'
 import { useReducedMotion } from '@/composables/useReducedMotion'
+import { usePinchGesture } from '@/composables/usePinchGesture'
 import { useSceneLifecycle } from '../scene3d/useSceneLifecycle'
 import type {
   OceanDomain,
@@ -52,17 +53,11 @@ import { buildOceanScene, type OceanScene } from './OceanSceneBuilder'
 import { createOceanWater, type OceanWater } from './OceanWater'
 import { createOceanLabels, type OceanLabelSet } from './OceanLabels'
 import type { OceanCameraController } from './OceanCameraController'
+import type { OceanNodeRef } from './types'
 
 defineOptions({ name: 'KnowledgeOcean3D' })
 
-/** Node reference emitted with navigation events and accepted by the page. */
-export interface OceanNodeRef {
-  id: string
-  subject?: string
-  x: number
-  z: number
-  worldRadius: number
-}
+export type { OceanNodeRef } from './types'
 
 const props = defineProps<{
   subjects: OceanSubject[]
@@ -123,10 +118,6 @@ const activeNodes = computed(() =>
 /** Pending pointer picks are consumed by onFrame (never picked synchronously). */
 let pendingPick: { x: number; y: number; kind: 'preview' | 'select' } | null =
   null
-let pinchStart = 0
-let pinchedOut = false
-let pinchedIn = false
-let pinchResetTimer: ReturnType<typeof setTimeout> | null = null
 
 /** Find the group carrying island/domain metadata from any child mesh. */
 function pickMetadata(object: Object3D | null): Record<string, unknown> | null {
@@ -213,49 +204,20 @@ function onDoubleClick(event: MouseEvent): void {
 function onPointerUp(event: PointerEvent): void {
   emit('interacted')
   if (viewMode.value === 'topic' || contextLost || !lifecycleMounted) return
-  if (pinchedOut || pinchedIn) return
+  if (pinch.isPinching.value) return
   pendingPick = { x: event.clientX, y: event.clientY, kind: 'preview' }
 }
 
-function onTouchStart(event: TouchEvent): void {
-  emit('interacted')
-  if (viewMode.value === 'topic' || contextLost) return
-  if (event.touches.length === 2) {
-    const first = event.touches[0]
-    const second = event.touches[1]
-    pinchStart = Math.hypot(
-      first.clientX - second.clientX,
-      first.clientY - second.clientY,
-    )
-    pinchedOut = false
-    pinchedIn = false
-  }
-}
-
-function onTouchMove(event: TouchEvent): void {
-  if (viewMode.value === 'topic' || contextLost || event.touches.length !== 2)
-    return
-  const first = event.touches[0]
-  const second = event.touches[1]
-  const distance = Math.hypot(
-    first.clientX - second.clientX,
-    first.clientY - second.clientY,
-  )
-  if (pinchStart <= 0) {
-    pinchStart = distance
-    return
-  }
-  const ratio = distance / pinchStart
-  if (ratio > 1.15 && !pinchedOut) {
-    pinchedOut = true
-    pinchStart = distance
+const pinch = usePinchGesture({
+  onPinchOut: () => {
+    if (viewMode.value === 'topic' || contextLost) return
     emit('zoomOut')
     emit('oceanNavigation', null)
     void cameraController?.ascend()
-  } else if (ratio < 1 / 1.15 && !pinchedIn) {
-    pinchedIn = true
-    pinchStart = distance
-    const data = pickAt(first.clientX, first.clientY)
+  },
+  onPinchIn: (touch) => {
+    if (viewMode.value === 'topic' || contextLost) return
+    const data = pickAt(touch.clientX, touch.clientY)
     if (data && typeof data.islandId === 'string') {
       const node = toNodeRef(data)
       if (node) {
@@ -264,19 +226,22 @@ function onTouchMove(event: TouchEvent): void {
         void cameraController?.diveTo(node)
       }
     }
-  }
+  },
+})
+
+function onTouchStart(event: TouchEvent): void {
+  emit('interacted')
+  if (viewMode.value === 'topic' || contextLost) return
+  pinch.onTouchStart(event)
+}
+
+function onTouchMove(event: TouchEvent): void {
+  if (viewMode.value === 'topic' || contextLost) return
+  pinch.onTouchMove(event)
 }
 
 function onTouchEnd(): void {
-  if (!pinchedOut && !pinchedIn) return
-  pinchStart = 0
-  if (pinchResetTimer !== null) clearTimeout(pinchResetTimer)
-  // Keep the gesture flag through the synthetic pointerup that follows.
-  pinchResetTimer = setTimeout(() => {
-    pinchResetTimer = null
-    pinchedOut = false
-    pinchedIn = false
-  }, 0)
+  pinch.onTouchEnd()
 }
 
 function onFrame(now: number): void {
@@ -346,9 +311,7 @@ function rebuildOceanScene(): void {
     ...node,
     icon: 'icon' in node ? node.icon : '🧭',
   }))
-  labels = createOceanLabels(THREE, labelNodes, {
-    reducedMotion: reducedMotion.value,
-  })
+  labels = createOceanLabels(THREE, labelNodes)
   // Topic mode only hides the ocean; the group and sprites are re-added as-is
   // when the 2D constellation is closed.
   syncOceanVisibility()
@@ -452,10 +415,7 @@ onDeactivated(() => {
 
 onBeforeUnmount(() => {
   disposed = true
-  if (pinchResetTimer !== null) {
-    clearTimeout(pinchResetTimer)
-    pinchResetTimer = null
-  }
+  pinch.reset()
   handle.destroy()
   lifecycleMounted = false
   document.removeEventListener('visibilitychange', onVisibilityChange)

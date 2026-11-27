@@ -15,10 +15,6 @@ export interface OceanLabelNode {
   worldRadius: number
 }
 
-export interface OceanLabelOptions {
-  reducedMotion?: boolean
-}
-
 export interface OceanLabelSet {
   sprites: Sprite[]
   update(camera: PerspectiveCamera): void
@@ -48,7 +44,12 @@ function measureTextWidth(context: CanvasRenderingContext2D, text: string): numb
 }
 
 /** Rounded pill with the label text; no font is loaded by this module. */
-function drawLabelCanvas(canvas: HTMLCanvasElement, text: string, color: string): void {
+function drawLabelCanvas(
+  canvas: HTMLCanvasElement,
+  text: string,
+  color: string,
+  background: string,
+): void {
   canvas.width = TEXTURE_WIDTH
   canvas.height = TEXTURE_HEIGHT
 
@@ -62,8 +63,10 @@ function drawLabelCanvas(canvas: HTMLCanvasElement, text: string, color: string)
   const y = (TEXTURE_HEIGHT - TEXTURE_HEIGHT / 2) / 2
   context.beginPath()
   context.roundRect(x, y, pillWidth, TEXTURE_HEIGHT / 2, PILL_RADIUS)
-  context.fillStyle = 'rgba(255, 255, 255, 0.88)'
+  context.globalAlpha = 0.88
+  context.fillStyle = background
   context.fill()
+  context.globalAlpha = 1
   context.fillStyle = color
   context.textAlign = 'center'
   context.textBaseline = 'middle'
@@ -87,9 +90,9 @@ export function sortLabelsByCameraDistance(
 export function createOceanLabels(
   THREE: typeof import('three'),
   nodes: OceanLabelNode[],
-  _options: OceanLabelOptions = {},
 ): OceanLabelSet {
   const labelColor = readCssColor('--ocean-label-color', '#16324a')
+  const pillColor = readCssColor('--color-surface-card', '#fffaf0')
   const textureCache = new Map<string, CanvasTexture>()
   const materialCache = new Map<string, SpriteMaterial>()
 
@@ -101,7 +104,7 @@ export function createOceanLabels(
     let texture = textureCache.get(cacheKey)
     if (!texture) {
       const canvas = document.createElement('canvas')
-      drawLabelCanvas(canvas, cacheKey, labelColor)
+      drawLabelCanvas(canvas, cacheKey, labelColor, pillColor)
       texture = new THREE.CanvasTexture(canvas)
       texture.colorSpace = THREE.SRGBColorSpace
       textureCache.set(cacheKey, texture)

@@ -404,6 +404,18 @@ describe('LearningOcean3DPage', () => {
     expect(second.wrapper.find('[data-test="constellation"]').exists()).toBe(false)
   })
 
+  it('uses the shared EmptyState illustration for the empty result', async () => {
+    mockTopics.mockResolvedValueOnce([])
+    const { wrapper } = await mountPage()
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-test="ocean3d-empty"]').exists()).toBe(true)
+    })
+    const empty = wrapper.findComponent({ name: 'EmptyState' })
+    expect(empty.exists()).toBe(true)
+    expect(empty.props('text')).toBe('还没有知识点，让爸爸妈妈帮你布置吧！')
+    expect(empty.props('illustration')).toContain('<svg')
+  })
+
   it('shows loading, error with retry, and empty states', async () => {
     mockIndex.mockImplementation(
       () => new Promise<typeof progressRows>(() => {}),

@@ -10,6 +10,7 @@ import type {
   OceanDomain,
   OceanSubject,
 } from '@/components/learning/KnowledgeOcean.vue'
+import type { OceanCameraNode } from './types'
 
 /** Half-width (and half-depth) of the ocean plane in world units. */
 export const OCEAN_HALF_SPAN = 10
@@ -17,24 +18,16 @@ export const OCEAN_HALF_SPAN = 10
 /** Fraction of the ocean reserved as open water around the islands. */
 export const ISLAND_MARGIN_RATIO = 0.15
 
-export interface OceanIslandNode {
-  id: string
+export interface OceanIslandNode extends OceanCameraNode {
   displayName: string
   icon: string
   terrain: string
-  x: number
-  z: number
-  worldRadius: number
   masteryRatio: number
 }
 
-export interface OceanDomainNode {
-  id: string
+export interface OceanDomainNode extends OceanCameraNode {
   subject: string
   displayName: string
-  x: number
-  z: number
-  worldRadius: number
   masteryRatio: number
 }
 
@@ -43,9 +36,9 @@ function toWorld(value: number): number {
   return (value - 0.5) * 2 * OCEAN_HALF_SPAN * (1 - ISLAND_MARGIN_RATIO)
 }
 
-/** Normalized layout radius → world radius. */
-function toWorldRadius(radius: number): number {
-  return radius * 2 * OCEAN_HALF_SPAN
+/** Normalized layout radius → world radius, using the same margin as the centers. */
+export function toWorldRadius(radius: number): number {
+  return radius * 2 * OCEAN_HALF_SPAN * (1 - ISLAND_MARGIN_RATIO)
 }
 
 /** Deterministic subject layout with metadata retained for picking/rendering. */

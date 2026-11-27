@@ -18,8 +18,11 @@
       </button>
     </div>
 
-    <div v-else-if="subjects.length === 0" class="ocean3d-message" data-test="ocean3d-empty">
-      <p>{{ t('learning.ocean3d.empty') }}</p>
+    <div v-else-if="subjects.length === 0" data-test="ocean3d-empty">
+      <EmptyState
+        :illustration="noRecordsSvg"
+        :text="t('learning.ocean3d.empty')"
+      />
     </div>
 
     <template v-else>
@@ -104,15 +107,21 @@ import {
   getTopicIndex,
   type TopicIndexRow,
 } from '@/api/learning'
-import KnowledgeOcean3D, {
+import KnowledgeOcean3D from '@/components/learning/ocean3d/KnowledgeOcean3D.vue'
+import {
+  composeDomainId,
+  parseDomainId,
   type OceanNodeRef,
-} from '@/components/learning/ocean3d/KnowledgeOcean3D.vue'
+} from '@/components/learning/ocean3d/types'
 import TopicConstellation, {
   type ConstellationTopic,
   type ConstellationEdge,
 } from '@/components/learning/TopicConstellation.vue'
 import RoleShimmer from '@/components/RoleShimmer.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import { noRecordsSvg } from '@numina/assets/empty-states'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
+import { usePinchGesture } from '@/composables/usePinchGesture'
 import { getContinentTheme } from '@/data/continentThemes'
 import { domainLabel } from '@/utils/domainLabel'
 import type {
@@ -192,7 +201,7 @@ const domains = computed<OceanDomain[]>(() => {
     (row) => row.domain || '__other__',
   )
   return Array.from(byDomain.entries()).map(([domain, stats]) => ({
-    id: `${selectedSubject.value}:${domain}`,
+    id: composeDomainId(selectedSubject.value, domain),
     subject: selectedSubject.value,
     domain,
     displayName: domainLabel(t, domain),
@@ -252,11 +261,7 @@ function onSelectDomain(payload: { subject: string; domain: string }): void {
   // The 3D scene emits the composite domain id (`subject:domain`); the topic
   // index stores the bare domain. Accept both shapes so either event source
   // yields the same topic layer.
-  const prefix = `${payload.subject}:`
-  const domain = payload.domain.startsWith(prefix)
-    ? payload.domain.slice(prefix.length)
-    : payload.domain
-  applyDomain(payload.subject, domain)
+  applyDomain(payload.subject, parseDomainId(payload.domain, payload.subject))
 }
 
 /** One transition function for component events and camera gestures. */
@@ -300,44 +305,18 @@ function onBackToOcean(): void {
 }
 
 /** Pinch-out over the opaque 2D layer is the only gesture that reaches it. */
-let topicPinchStart = 0
-let topicPinchedOut = false
-let topicPinchResetTimer: ReturnType<typeof setTimeout> | null = null
-
-function touchDistance(event: TouchEvent): number {
-  const first = event.touches[0]
-  const second = event.touches[1]
-  return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY)
-}
+const topicPinch = usePinchGesture({ onPinchOut: applyZoomOut })
 
 function onTopicTouchStart(event: TouchEvent): void {
-  if (event.touches.length !== 2) return
-  topicPinchStart = touchDistance(event)
-  topicPinchedOut = false
+  topicPinch.onTouchStart(event)
 }
 
 function onTopicTouchMove(event: TouchEvent): void {
-  if (event.touches.length !== 2) return
-  const distance = touchDistance(event)
-  if (topicPinchStart <= 0) {
-    topicPinchStart = distance
-    return
-  }
-  if (distance / topicPinchStart > 1.15 && !topicPinchedOut) {
-    topicPinchedOut = true
-    onZoomOut()
-  }
+  topicPinch.onTouchMove(event)
 }
 
 function onTopicTouchEnd(): void {
-  if (!topicPinchedOut) return
-  topicPinchStart = 0
-  if (topicPinchResetTimer !== null) clearTimeout(topicPinchResetTimer)
-  // Ignore the synthetic click that follows a two-finger gesture.
-  topicPinchResetTimer = setTimeout(() => {
-    topicPinchResetTimer = null
-    topicPinchedOut = false
-  }, 0)
+  topicPinch.onTouchEnd()
 }
 
 function onZoomOut(): void {
@@ -368,7 +347,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', updateViewport)
-  if (topicPinchResetTimer !== null) clearTimeout(topicPinchResetTimer)
+  topicPinch.reset()
 })
 </script>
 

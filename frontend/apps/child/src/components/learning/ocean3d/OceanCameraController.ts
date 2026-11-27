@@ -6,16 +6,10 @@
  */
 import { PerspectiveCamera, Vector3 } from 'three'
 import { CameraController } from '../scene3d/OrbitCameraController'
-
-/** Structural shape needed to frame a level node. */
-export interface OceanCameraNode {
-  x: number
-  z: number
-  worldRadius: number
-}
+import type { OceanCameraTarget } from './types'
 
 export interface OceanCameraController {
-  diveTo(node: OceanCameraNode): Promise<void>
+  diveTo(node: OceanCameraTarget): Promise<void>
   ascend(): Promise<void>
   reset(): Promise<void>
   dispose(): void
@@ -49,7 +43,7 @@ function l0Position(): Vector3 {
 }
 
 /** L1 view position derived from the node and spherical framing constants. */
-function l1Position(node: OceanCameraNode, radius: number): Vector3 {
+function l1Position(node: OceanCameraTarget, radius: number): Vector3 {
   return new Vector3(
     node.x,
     radius * Math.cos(L1_PHI),
@@ -79,8 +73,10 @@ export function createOceanCameraController(
     { instant: options.instant ?? false },
   )
 
-  return {
-    diveTo(node: OceanCameraNode): Promise<void> {
+  const oceanController: OceanCameraController & {
+    getStateSnapshot(): OceanCameraState
+  } = {
+    diveTo(node: OceanCameraTarget): Promise<void> {
       const radius = Math.max(node.worldRadius * 3, MIN_L1_RADIUS)
       return controller.animateTo(
         new Vector3(node.x, 0, node.z),
@@ -96,11 +92,7 @@ export function createOceanCameraController(
       )
     },
     reset(): Promise<void> {
-      return controller.animateTo(
-        new Vector3(0, 0, 0),
-        l0Position(),
-        TRANSITION_MS,
-      )
+      return this.ascend()
     },
     dispose(): void {
       controller.dispose()
@@ -109,4 +101,6 @@ export function createOceanCameraController(
       return controller.getStateSnapshot()
     },
   }
+
+  return oceanController
 }

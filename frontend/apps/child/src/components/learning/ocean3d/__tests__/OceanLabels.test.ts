@@ -12,6 +12,7 @@ interface MockCanvasContext {
   measureText: ReturnType<typeof vi.fn>
   font: string
   fillStyle: string
+  globalAlpha: number
   textAlign: CanvasTextAlign
   textBaseline: CanvasTextBaseline
 }
@@ -28,6 +29,7 @@ function makeContext(): MockCanvasContext {
     measureText: vi.fn((text: string) => ({ width: text.length * 16 })),
     font: '',
     fillStyle: '',
+    globalAlpha: 1,
     textAlign: 'left',
     textBaseline: 'alphabetic',
   }
@@ -54,6 +56,7 @@ beforeEach(() => {
   vi.stubGlobal('getComputedStyle', () => ({
     getPropertyValue: (name: string) => {
       if (name === '--ocean-label-color') return '#16324a'
+      if (name === '--color-surface-card') return '#152828'
       if (name === '--ocean-label-outline') return 'rgba(255, 255, 255, 0.85)'
       return ''
     },
@@ -71,6 +74,32 @@ afterEach(() => {
 })
 
 describe('createOceanLabels', () => {
+  it('uses the theme surface card for the pill background, never pure white', () => {
+    const fillCalls: Array<{ fillStyle: string; globalAlpha: number }> = []
+    const contextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockImplementation(() => {
+        const context = makeContext()
+        ;(context.fill as ReturnType<typeof vi.fn>).mockImplementation(() => {
+          fillCalls.push({
+            fillStyle: context.fillStyle,
+            globalAlpha: context.globalAlpha,
+          })
+        })
+        contexts.push(context)
+        return context as unknown as CanvasRenderingContext2D
+      })
+
+    const set = createOceanLabels(THREE, [makeNode()])
+    const context = contexts[0]
+    expect(contextSpy).toHaveBeenCalled()
+
+    expect(fillCalls).toEqual([{ fillStyle: '#152828', globalAlpha: 0.88 }])
+    expect(context.fillStyle).toBe('#16324a')
+    expect(context.globalAlpha).toBe(1)
+    set.dispose()
+  })
+
   it('creates one constant-size sprite per node above its island', () => {
     const set = createOceanLabels(THREE, [makeNode({ id: 'math', x: 2, z: -3, worldRadius: 0.7 })])
 
@@ -111,6 +140,7 @@ describe('createOceanLabels', () => {
     expect(context.font).toContain('system-ui')
     expect(context.font).not.toContain('Inter')
     expect(context.fillStyle).toBe('#16324a')
+    expect(context.globalAlpha).toBe(1)
     set.dispose()
   })
 
